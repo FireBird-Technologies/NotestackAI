@@ -1,0 +1,38 @@
+/* Notestack design tokens. Strict palette: black, #217cff, white. Depth comes from blue glow
+   intensity and white opacity, never from new hues. */
+:root {
+  --black: #000000;
+  --blue: #217cff;
+  --white: #ffffff;
+
+  --blue-90: rgba(33, 124, 255, 0.9);
+  --blue-60: rgba(33, 124, 255, 0.6);
+  --blue-35: rgba(33, 124, 255, 0.35);
+  --blue-20: rgba(33, 124, 255, 0.2);
+  --blue-10: rgba(33, 124, 255, 0.1);
+  --blue-05: rgba(33, 124, 255, 0.05);
+
+  --text: var(--white);
+  --text-2: rgba(255, 255, 255, 0.72); /* passes AA on black */
+  --text-3: rgba(255, 255, 255, 0.56);
+  --line: rgba(255, 255, 255, 0.1);
+  --line-strong: rgba(255, 255, 255, 0.18);
+  --surface: rgba(255, 255, 255, 0.03);
+  --surface-2: rgba(255, 255, 255, 0.06);
+
+  --glow-sm: 0 0 12px var(--blue-35);
+  --glow-md: 0 0 24px var(--blue-35), 0 0 2px var(--blue-60);
+  --glow-lg: 0 0 60px var(--blue-20), 0 0 120px var(--blue-10);
+
+  --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --radius-sm: 8px;
+  --radius: 14px;
+  --radius-lg: 22px;
+  --gutter: 16px;
+  --max: 1160px;
+
+  color-scheme: dark;
+}

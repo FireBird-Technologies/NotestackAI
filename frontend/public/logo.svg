@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Notestack logo placeholder">
+  <!-- Placeholder: white tile with black silhouettes. Replace with the final mark. -->
+  <rect width="64" height="64" rx="14" fill="#ffffff"/>
+  <circle cx="26" cy="36" r="13" fill="#000000"/>
+  <ellipse cx="26" cy="36" rx="21" ry="5" fill="none" stroke="#000000" stroke-width="3" transform="rotate(-18 26 36)"/>
+  <path d="M46 10 l2.2 5.8 5.8 2.2 -5.8 2.2 -2.2 5.8 -2.2 -5.8 -5.8 -2.2 5.8 -2.2z" fill="#000000"/>
+</svg>
