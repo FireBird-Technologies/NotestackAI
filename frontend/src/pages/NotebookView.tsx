@@ -6,8 +6,16 @@ import { TelescopeIcon } from "../components/icons/Icons";
 
 type Doc = { id: string; title: string; url: string; published_at: string | null };
 type Notebook = { id: string; title: string; documents: Doc[] };
-type Citation = { marker: number; title: string; url: string; heading: string | null; span: string };
-type Turn = { role: "user" | "assistant"; text: string; citations?: Citation[]; status?: string };
+type Citation = {
+  marker: number;
+  title: string;
+  url: string;
+  path: string;
+  line_start: number;
+  line_end: number;
+  span: string;
+};
+type Turn = { role: "user" | "assistant"; text: string; citations?: Citation[]; status?: string; steps?: string[] };
 
 export default function NotebookView() {
   const { id = "" } = useParams();
@@ -38,6 +46,13 @@ export default function NotebookView() {
           if (event === "status") {
             if (d.chat_id) setChatId(d.chat_id as string);
             patchLast({ status: d.message as string });
+          } else if (event === "step") {
+            setTurns((t) => {
+              const last = t[t.length - 1];
+              return [...t.slice(0, -1), { ...last, status: d.message as string, steps: [...(last.steps ?? []), d.message as string] }];
+            });
+          } else if (event === "error") {
+            patchLast({ text: d.message as string, status: undefined });
           } else if (event === "answer") {
             patchLast({ text: d.text as string, citations: d.citations as Citation[], status: undefined });
           }
@@ -77,7 +92,17 @@ export default function NotebookView() {
           )}
           {turns.map((t, i) => (
             <div key={i} className={`turn turn-${t.role}`}>
-              {t.status && <p className="mono muted">{t.status}...</p>}
+              {t.steps && t.steps.length > 0 && (
+                <details className="agent-steps mono">
+                  <summary>{t.status ? `${t.status}...` : `${t.steps.length} steps through the archive`}</summary>
+                  <ol>
+                    {t.steps.map((s, j) => (
+                      <li key={j}>{s}</li>
+                    ))}
+                  </ol>
+                </details>
+              )}
+              {t.status && !t.steps?.length && <p className="mono muted">{t.status}...</p>}
               {t.text && <p>{t.text}</p>}
               {t.citations && t.citations.length > 0 && (
                 <ol className="cites">
@@ -85,9 +110,12 @@ export default function NotebookView() {
                     <li key={c.marker} value={c.marker}>
                       <a href={c.url} target="_blank" rel="noreferrer">
                         {c.title}
-                        {c.heading ? `: ${c.heading}` : ""}
-                      </a>
-                      <p className="muted cite-span">{c.span.slice(0, 220)}...</p>
+                      </a>{" "}
+                      <span className="mono muted">
+                        lines {c.line_start}
+                        {c.line_end > c.line_start ? ` to ${c.line_end}` : ""}
+                      </span>
+                      <p className="muted cite-span">{c.span.length > 220 ? `${c.span.slice(0, 220)}...` : c.span}</p>
                     </li>
                   ))}
                 </ol>

@@ -27,13 +27,13 @@ Every factual statement Notestack generates must trace back to the writer's own 
 | --- | --- |
 | Backend | FastAPI + SQLAlchemy 2 + Alembic (same stack as blog2video) |
 | Worker | arq on Redis (async jobs, progress events over Redis pub/sub, SSE to clients) |
-| Database | Postgres 16 + pgvector |
+| Database | Postgres 16 (no vector extension) |
 | Frontend | React + Vite + TypeScript, plain CSS with design tokens |
 | Renderer | Node service running Remotion (`renderer/`) |
 | Storage | Cloudflare R2 (S3 API) for raw HTML, audio, video, stills, compiled DSPy programs |
 | Email | Resend, behind a provider interface (mirrors blog2video `EmailService`) |
 | Auth | Google sign-in + email 6-digit code signup + password login, JWT access/refresh with `token_version` revocation (mirrors blog2video) |
-| LLM | Provider agnostic through DSPy + LiteLLM. Default Z.ai GLM-5.3 (fast tier GLM-5.3-Flash) via its OpenAI compatible endpoint. Embeddings use a separate provider (OpenAI text-embedding-3-small by default). Any LiteLLM model string works by env var. |
+| LLM | Provider agnostic through DSPy + LiteLLM. Default Z.ai GLM-5.3 (fast tier GLM-5.3-Flash) via its OpenAI compatible endpoint. Retrieval is agentic search over a file system corpus, not embeddings (see 3.2). Any LiteLLM model string works by env var. |
 | Billing | Three tiers defined in code (`app/services/plans.py`). `BILLING_ENABLED=false` for now: everyone gets the top tier limits free, checkout returns 409, pricing page shows "Free during early access". |
 | Blog | Typed `blogPosts.ts` content array, `/blogs` and `/blogs/:slug`, same shape as blog2video |
 
@@ -48,14 +48,14 @@ Every factual statement Notestack generates must trace back to the writer's own 
                      |                                               | enqueue (arq)
             +--------+----------+                          +---------v----------+
             | Cloudflare R2     |<-------------------------|  worker (arq)      |
-            | notestack-assets  |   put objects            |  ingest, chunk,    |
-            +--------+----------+                          |  embed, DSPy, TTS  |
+            | notestack-assets  |   put objects            |  ingest, corpus,   |
+            +--------+----------+                          |  DSPy, TTS         |
                      ^                                     +---------+----------+
                      | upload final render                           | POST /render
             +--------+----------+   progress callbacks     +---------v----------+
             | renderer (Remotion)|------------------------>|  api /internal/... |
             +-------------------+                          +--------------------+
-     Postgres + pgvector (api, worker)        Redis (queue, pub/sub, cache)
+     Postgres (api, worker)        Redis (queue, pub/sub, cache)
 ```
 
 ### 3.1 Storage pipeline (R2)
@@ -66,6 +66,9 @@ Key layout (`app/services/storage.py::keys`):
 
 ```
 ws/{workspace_id}/sources/{source_id}/documents/{document_id}/raw.html
+ws/{workspace_id}/corpus/manifest.json                           path -> sha256 of every corpus file
+ws/{workspace_id}/corpus/INDEX.md                                one line per post
+ws/{workspace_id}/corpus/sources/{site}/{date}-{slug}.md         clean post as markdown
 ws/{workspace_id}/uploads/{upload_id}/{filename}
 ws/{workspace_id}/artifacts/{artifact_id}/{variant}.{ext}      audio, video, stills
 ws/{workspace_id}/tts-cache/{sha256(script|voice|settings)}.mp3
@@ -87,7 +90,50 @@ Flows:
 The storage service is an S3 client with R2's endpoint, so MinIO in docker-compose stands in for R2
 locally with zero code changes.
 
-### 3.2 LLM layer
+### 3.2 Research corpus: file system instead of embeddings
+
+Each post is one markdown file (front matter, `# Title`, `## Section` headings) and the workspace
+has an `INDEX.md` with one line per post. Research is an agent loop (`dspy.ReAct`,
+`app/pipeline/research.py`) with three tools scoped to the notebook's files (`app/corpus.py`):
+
+| Tool | Does |
+| --- | --- |
+| `list_files(contains)` | Index lines for the notebook's posts: date, path, title, headings |
+| `search(pattern, path)` | Case insensitive regex grep, returns `path:line: text` |
+| `read(path, start_line, end_line)` | Numbered lines, 160 per call |
+
+The model searches with several phrasings, reads around the hits, and answers with citations of
+the form `(path, line_start, line_end)`. Before anything reaches the writer, every citation is read
+back from the file: citations that point outside the notebook, past the end of a file or at empty
+lines are dropped, markers are renumbered, and an answer left with no verified citation is replaced
+by "not in your posts". The UI streams each step ("Searching for pricing|paid tier", "Reading On
+pricing, lines 1 to 40").
+
+Why this over embeddings:
+- One vendor. Z.ai's international API has no embedding model, and there is no second key,
+  re-embedding job or dimension lock-in.
+- Citations are exact line ranges the model actually read, which is stronger grounding than
+  nearest-neighbour chunks.
+- Writers' archives are small (hundreds to a few thousand posts, a few MB of text), so grep over
+  local files takes milliseconds.
+- The corpus is plain markdown, so the same files feed podcast scripts, launch kits and a future
+  MCP server without conversion.
+
+Trade offs: each question costs several LLM steps instead of one (mitigated by
+`LLM_REASONING_EFFORT=low` and the `RESEARCH_MAX_STEPS` cap), and paraphrase matching depends on
+the model trying synonyms. If quality or latency needs it later, a Postgres full text index can be
+added as a fourth tool without changing the corpus.
+
+Storage and sync: R2 holds the corpus under `ws/{id}/corpus/` with a `manifest.json` of file hashes.
+The worker writes files to R2 and its own cache in one pass. The API calls `Corpus.sync()` before
+each research run, which reads the manifest and downloads only changed files into
+`CORPUS_CACHE_DIR`. Containers share nothing but R2.
+
+Brief items that assumed embeddings: voice similarity uses the LLM judge alone; the topic map is
+built from LLM extracted entities per post (Phase 2); resurfacing and SEO internal links search the
+corpus with the same tools.
+
+### 3.3 LLM layer
 
 `app/llm/provider.py` builds a `dspy.LM` from env:
 
@@ -97,8 +143,6 @@ LLM_FAST_MODEL=openai/glm-5.3-flash    # judges, cleanup, cheap passes
 LLM_API_BASE=https://api.z.ai/api/paas/v4
 LLM_API_KEY=...
 LLM_REASONING_EFFORT=low               # low | high | max
-EMBEDDING_MODEL=openai/text-embedding-3-small
-EMBEDDING_DIM=1024
 ```
 
 Z.ai considerations baked in:
@@ -107,16 +151,15 @@ Z.ai considerations baked in:
   `reasoning_effort=low` by default; modules that benefit (the groundedness judge) ask for
   `main_lm("high")`. Reasoning tokens count against `max_tokens`, so the default is 16K to leave
   room for the structured answer. Z.ai recommends temperature 1.0 for GLM-5.x.
-- 1M token context on GLM-5.3 means whole-notebook prompts (summaries, podcast scripts) rarely
-  need map-reduce; retrieval is still used for chat to keep citations tight and cost low.
-- Z.ai's international API does not offer an embedding model, so embeddings are configured
-  separately. The chosen model must accept a `dimensions` parameter so the pgvector column stays
-  fixed. Changing `EMBEDDING_DIM` requires a migration and re-embed.
+- 1M token context on GLM-5.3 means whole-notebook prompts (summaries, podcast scripts) can read
+  the files directly; chat uses the research agent to keep citations tight and cost low.
+- Tool calling runs through DSPy ReAct, so it works with any provider, not only ones with native
+  function calling.
 - Token usage from every call is written to `usage_events` (metering from day one).
 
 Swapping to Anthropic, OpenAI, Gemini or a local model is only an env change.
 
-### 3.3 Jobs and progress
+### 3.4 Jobs and progress
 
 Every long operation is a row in `jobs` (kind, status, progress, error, cost) plus an arq task.
 Workers publish progress to Redis channel `job:{id}`; `GET /api/jobs/{id}/events` streams it as SSE.
@@ -128,9 +171,9 @@ Implemented in `backend/app/models` and `alembic/versions/0001_initial.py`.
 
 - users, workspaces, workspace_members, subscriptions
 - email_verification_codes, update_emails, update_email_sends
-- sources, documents, chunks (pgvector `embedding`), notebooks, notebook_documents
+- sources, documents (with corpus `path`), notebooks, notebook_documents
 - voice_profiles, voice_consents
-- chats, messages, citations
+- chats, messages, citations (document, path, line range, verified quote)
 - artifacts, jobs (covers render_jobs and tts_jobs via `kind`), uploads
 - calendar_items, tracked_links, engagement_events
 - dspy_traces, usage_events
@@ -138,7 +181,7 @@ Implemented in `backend/app/models` and `alembic/versions/0001_initial.py`.
 ## 5. DSPy program design
 
 See brief Section 6. Signatures live in `backend/app/llm/signatures.py` with Pydantic output models.
-Phase 1 ships CleanAndSegment, GroundedAnswer and BuildVoiceProfile. The rest are stubs with typed
+Phase 1 ships CleanAndSegment, ResearchArchive (the file research agent) and BuildVoiceProfile. All grounded outputs cite `SourceRef(path, line_start, line_end)`. The rest are stubs with typed
 signatures so the schema contract is fixed early.
 
 ## 6. Plans

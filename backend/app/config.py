@@ -51,12 +51,9 @@ class Settings(BaseSettings):
     # GLM-5.x always reasons (it cannot be disabled); this sets how hard. low | high | max
     llm_reasoning_effort: str = "low"
 
-    # Embeddings are a separate provider: Z.ai's international API has no embedding model.
-    # LiteLLM picks up OPENAI_API_KEY etc. from env when embedding_api_key is empty.
-    embedding_model: str = "openai/text-embedding-3-small"
-    embedding_api_base: str = ""
-    embedding_api_key: str = ""
-    embedding_dim: int = 1024
+    # Corpus: posts as markdown files. R2 is the source of truth; each process keeps a disk cache.
+    corpus_cache_dir: str = ".corpus-cache"
+    research_max_steps: int = 10
 
     # ElevenLabs
     elevenlabs_api_key: str = ""

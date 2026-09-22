@@ -1047,3 +1047,20 @@
   color: var(--white);
   opacity: 0.85;
 }
+
+.agent-steps {
+  font-size: 0.75rem;
+  color: var(--text-2);
+}
+
+.agent-steps summary {
+  cursor: pointer;
+  color: var(--blue);
+}
+
+.agent-steps ol {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 2px;
+}

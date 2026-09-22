@@ -1,7 +1,7 @@
 # Local stack. MinIO stands in for Cloudflare R2 (same S3 API); in prod drop minio and set R2_* vars.
 services:
   postgres:
-    image: pgvector/pgvector:pg16
+    image: postgres:16-alpine
     environment:
       POSTGRES_USER: notestack
       POSTGRES_PASSWORD: notestack
@@ -35,6 +35,8 @@ services:
       R2_ENDPOINT_URL: ${R2_ENDPOINT_URL:-http://minio:9000}
       RENDERER_URL: http://renderer:3100
       API_URL: http://api:8000
+      CORPUS_CACHE_DIR: /cache/corpus
+    volumes: [apicache:/cache]
     ports: ["8000:8000"]
     depends_on:
       postgres: { condition: service_healthy }
@@ -50,6 +52,8 @@ services:
       R2_ENDPOINT_URL: ${R2_ENDPOINT_URL:-http://minio:9000}
       RENDERER_URL: http://renderer:3100
       API_URL: http://api:8000
+      CORPUS_CACHE_DIR: /cache/corpus
+    volumes: [workercache:/cache]
     depends_on: [api]
 
   renderer:
@@ -72,3 +76,5 @@ services:
 volumes:
   pgdata:
   miniodata:
+  apicache:
+  workercache:

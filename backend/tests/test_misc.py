@@ -1,7 +1,7 @@
 import uuid
 
 from app.llm.postprocess import clean_output, strip_em_dashes
-from app.pipeline.ingest import chunk_sections, html_to_sections, normalize_feed_url
+from app.pipeline.ingest import html_to_sections, normalize_feed_url
 from app.services.email import make_unsubscribe_token, verify_unsubscribe_token
 from app.services.storage import keys, safe_filename, workspace_owns_key
 
@@ -19,12 +19,11 @@ def test_normalize_feed_url():
     assert normalize_feed_url("https://blog.example.com/rss")[1] == "rss"
 
 
-def test_html_to_sections_and_chunking():
+def test_html_to_sections():
     html = "<h2>Intro</h2><p>" + "word " * 900 + "</p><p>Subscribe now</p><h2>Two</h2><p>Short.</p>"
     sections = html_to_sections(html)
     assert [h for h, _ in sections] == ["Intro", "Two"]
-    chunks = chunk_sections(sections)
-    assert len(chunks) >= 3 and all(n <= 350 for _, _, n in chunks)
+    assert "Subscribe now" not in str(sections)
 
 
 def test_storage_keys_are_workspace_scoped():

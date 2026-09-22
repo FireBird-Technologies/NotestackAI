@@ -4,14 +4,14 @@ Legend: [x] done in this scaffold, [ ] open
 
 ## Repo and infra
 - [x] Monorepo layout: `backend/`, `frontend/`, `renderer/`, `docs/`
-- [x] docker-compose: api, worker, postgres (pgvector), redis, minio (local R2 stand-in), renderer, frontend
+- [x] docker-compose: api, worker, postgres, redis, minio (local R2 stand-in), renderer, frontend
 - [x] `.env.example` covering every service
 - [x] CI: backend lint + tests, frontend typecheck + build, renderer typecheck
 - [ ] Production deploy target (Fly, Render or DO App Platform) and R2 bucket + custom domain
 - [ ] Sentry (api, worker, frontend)
 
 ## Backend core
-- [x] Settings (`app/config.py`), DB session, Alembic initial migration with pgvector
+- [x] Settings (`app/config.py`), DB session, Alembic initial migration
 - [x] Full data model from design doc Section 4
 - [x] Health endpoint, CORS, request id logging
 - [x] Jobs table + arq worker + Redis progress pub/sub + SSE endpoint
@@ -39,8 +39,9 @@ Legend: [x] done in this scaffold, [ ] open
 
 ## LLM (agnostic, Z.ai first)
 - [x] `dspy.LM` factory from env, Z.ai defaults
-- [x] Embeddings client with fixed dimensions
-- [x] Signatures + Pydantic outputs for CleanAndSegment, GroundedAnswer, BuildVoiceProfile, stubs for the rest
+- [x] File system corpus in R2 with manifest sync (`app/corpus.py`)
+- [x] Research agent: list/search/read tools, verified line citations, live step streaming
+- [x] Signatures + Pydantic outputs for CleanAndSegment, ResearchArchive, BuildVoiceProfile, stubs for the rest
 - [x] Em dash stripping post-processor
 - [ ] Dev sets and first optimization run (Phase 1)
 

@@ -18,7 +18,7 @@ docs/       Design doc and task lists
 ## Run locally
 
 ```bash
-cp .env.example .env            # fill LLM_API_KEY (Z.ai), EMBEDDING_API_KEY, GOOGLE_CLIENT_ID, RESEND_API_KEY
+cp .env.example .env            # fill LLM_API_KEY (Z.ai), GOOGLE_CLIENT_ID, RESEND_API_KEY
 docker compose up --build
 ```
 
@@ -31,7 +31,7 @@ Without Docker:
 
 ```bash
 cd backend && python -m venv .venv && .venv/Scripts/pip install -r requirements-dev.txt
-alembic upgrade head && uvicorn app.main:app --reload     # needs Postgres (pgvector) + Redis
+alembic upgrade head && uvicorn app.main:app --reload     # needs Postgres + Redis
 arq app.worker.WorkerSettings                              # second terminal
 cd frontend && npm install && npm run dev
 cd renderer && npm install && npm start                    # or: npm run studio
@@ -44,6 +44,7 @@ cd renderer && npm install && npm start                    # or: npm run studio
 | Cloudflare R2 storage (keys, presign, uploads) | `backend/app/services/storage.py`, `backend/app/routers/storage.py` |
 | Resend email + unsubscribe + campaigns | `backend/app/services/email.py`, `backend/app/worker.py` |
 | Google + email code auth, JWT revocation | `backend/app/auth.py`, `backend/app/routers/auth.py` |
+| Research over posts as files (no embeddings) | `backend/app/corpus.py`, `backend/app/pipeline/research.py` |
 | LLM provider (swap by env) | `backend/app/llm/provider.py`, `.env` `LLM_*` |
 | Three plans, billing off | `backend/app/services/plans.py`, `BILLING_ENABLED` |
 | Blog posts | `frontend/src/content/blogPosts.ts` (`/blogs`, `/blogs/:slug`) |
@@ -60,8 +61,6 @@ LLM_MODEL=anthropic/claude-sonnet-5  LLM_API_BASE=
 # OpenAI
 LLM_MODEL=openai/gpt-5  LLM_API_BASE=
 ```
-
-Changing `EMBEDDING_DIM` needs a new migration and a re-embed.
 
 ## Rules
 

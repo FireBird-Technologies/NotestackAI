@@ -14,15 +14,16 @@ class Section(BaseModel):
     text: str
 
 
-class CitedSentence(BaseModel):
-    sentence: str
-    chunk_ids: list[int] = Field(description="Indices of supporting passages from the context list")
+class SourceRef(BaseModel):
+    """A line range in a corpus file. Every generated fact points at one of these."""
+
+    path: str = Field(description="Corpus path of the post, exactly as the tools showed it")
+    line_start: int
+    line_end: int
 
 
-class GroundedAnswerOut(BaseModel):
-    answer: str = Field(description="Answer text with [n] markers that refer to passage indices")
-    sentences: list[CitedSentence]
-    unsupported: bool = Field(description="True if the passages do not contain enough to answer")
+class FileCitation(SourceRef):
+    marker: int = Field(description="The n in the [n] marker used in the answer")
 
 
 class VoiceProfileOut(BaseModel):
@@ -37,13 +38,13 @@ class VoiceProfileOut(BaseModel):
 
 class Claim(BaseModel):
     claim: str
-    chunk_ids: list[int]
+    sources: list[SourceRef]
 
 
 class ScriptLine(BaseModel):
     speaker: Literal["host_a", "host_b"]
     text: str
-    chunk_ids: list[int] = Field(default_factory=list)
+    sources: list[SourceRef] = Field(default_factory=list)
 
 
 class Scene(BaseModel):
@@ -72,14 +73,20 @@ class CleanAndSegment(dspy.Signature):
     sections: list[Section] = dspy.OutputField()
 
 
-class GroundedAnswer(dspy.Signature):
-    """Answer the question using ONLY the numbered passages. Every factual sentence must cite at least
-    one passage with [n]. If the passages do not support an answer, say so and set unsupported=true.
-    Never use em dashes."""
+class ResearchArchive(dspy.Signature):
+    """You are a research assistant working inside a writer's archive, which is a folder of markdown
+    posts. Find the answer by exploring the files: list_files to see what exists, search (a regex
+    grep; try several phrasings and synonyms) to locate relevant lines, then read the surrounding
+    lines before relying on them. Answer ONLY from text you read. Every factual sentence needs a
+    [n] marker, and every marker needs a citation with the file path and the line range you read.
+    If the archive does not cover the question, say so plainly and set unsupported=true.
+    Write in plain, warm prose. Never use em dashes."""
 
     question: str = dspy.InputField()
-    passages: list[str] = dspy.InputField(desc="Numbered passages from the writer's own posts")
-    result: GroundedAnswerOut = dspy.OutputField()
+    archive_guide: str = dspy.InputField(desc="How this notebook's files are laid out")
+    answer: str = dspy.OutputField(desc="Answer with [n] citation markers")
+    citations: list[FileCitation] = dspy.OutputField()
+    unsupported: bool = dspy.OutputField()
 
 
 class GroundednessJudge(dspy.Signature):
@@ -100,7 +107,7 @@ class BuildVoiceProfile(dspy.Signature):
 class ExtractClaims(dspy.Signature):
     """List the key claims of the post, each with the passages that support it."""
 
-    passages: list[str] = dspy.InputField()
+    passages: list[str] = dspy.InputField(desc="Post text with path and line numbers")
     claims: list[Claim] = dspy.OutputField()
 
 

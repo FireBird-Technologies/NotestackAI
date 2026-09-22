@@ -1,17 +1,18 @@
+import asyncio
 import json
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.auth import Ctx, get_ctx
 from app.config import settings
+from app.corpus import Corpus
 from app.llm.provider import provider_name
 from app.models import Chat, Citation, Document, Message, Notebook, NotebookDocument
-from app.pipeline.retrieval import grounded_answer, retrieve
+from app.pipeline.research import research
 from app.services.jobs import record_usage
 
 router = APIRouter(prefix="/api/notebooks", tags=["notebooks"])
@@ -99,6 +100,9 @@ def _sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
 
+_STEP_LABEL = {"list": "Scanning the archive", "search": "Searching for", "read": "Reading"}
+
+
 @router.post("/{notebook_id}/chat")
 async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)):
     nb = _get(ctx, notebook_id)
@@ -111,41 +115,71 @@ async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)
     db.add(Message(chat_id=chat_row.id, role="user", content=body.question))
     db.commit()
 
+    docs = db.scalars(
+        select(Document)
+        .join(NotebookDocument, NotebookDocument.document_id == Document.id)
+        .where(NotebookDocument.notebook_id == nb.id, Document.path.is_not(None))
+    ).all()
+    allowed = {d.path: d.title for d in docs}
+    by_path = {d.path: d for d in docs}
+    corpus = Corpus(ctx.workspace.id)
+
     async def stream():
-        yield _sse("status", {"chat_id": str(chat_row.id), "message": "Scanning your archive"})
-        hits = await run_in_threadpool(retrieve, db, ctx.workspace.id, body.question, nb.id)
-        yield _sse("status", {"message": f"Found {len(hits)} relevant passages"})
-        answer = await run_in_threadpool(grounded_answer, body.question, hits)
-        msg = Message(chat_id=chat_row.id, role="assistant", content=answer.text)
+        yield _sse("status", {"chat_id": str(chat_row.id), "message": "Opening the archive"})
+        loop = asyncio.get_running_loop()
+        steps: asyncio.Queue = asyncio.Queue()
+
+        def on_step(kind: str, detail: str) -> None:
+            loop.call_soon_threadsafe(steps.put_nowait, (kind, detail))
+
+        task = asyncio.create_task(asyncio.to_thread(research, corpus, allowed, body.question, on_step))
+        while not task.done() or not steps.empty():
+            try:
+                kind, detail = await asyncio.wait_for(steps.get(), timeout=0.25)
+            except TimeoutError:
+                continue
+            yield _sse("step", {"kind": kind, "message": f"{_STEP_LABEL.get(kind, kind)} {detail}".strip()})
+        try:
+            result = task.result()
+        except Exception:
+            yield _sse("error", {"message": "Lost signal while researching. Try again."})
+            return
+
+        msg = Message(chat_id=chat_row.id, role="assistant", content=result.text)
         db.add(msg)
         db.flush()
         citations = []
-        for marker, hit in answer.citations:
-            db.add(Citation(message_id=msg.id, chunk_id=hit.chunk.id, marker=marker, span=hit.chunk.text[:500]))
+        for c in result.citations:
+            doc = by_path.get(c.path)
+            if not doc:
+                continue
+            db.add(Citation(message_id=msg.id, document_id=doc.id, marker=c.marker, path=c.path,
+                            line_start=c.line_start, line_end=c.line_end, span=c.quote))
             citations.append({
-                "marker": marker,
-                "chunk_id": str(hit.chunk.id),
-                "document_id": str(hit.document.id),
-                "title": hit.document.title,
-                "url": hit.document.url,
-                "heading": hit.chunk.heading,
-                "span": hit.chunk.text[:500],
+                "marker": c.marker,
+                "document_id": str(doc.id),
+                "title": doc.title,
+                "url": doc.url,
+                "path": c.path,
+                "line_start": c.line_start,
+                "line_end": c.line_end,
+                "span": c.quote,
             })
         db.commit()
-        if answer.prompt_tokens or answer.completion_tokens:
+        if result.prompt_tokens or result.completion_tokens:
             record_usage(
                 db,
                 workspace_id=ctx.workspace.id,
                 kind="llm",
                 provider=provider_name(),
                 model=settings.llm_model,
-                quantity=answer.prompt_tokens + answer.completion_tokens,
+                quantity=result.prompt_tokens + result.completion_tokens,
                 unit="tokens",
             )
         yield _sse("answer", {
             "message_id": str(msg.id),
-            "text": answer.text,
-            "unsupported": answer.unsupported,
+            "text": result.text,
+            "unsupported": result.unsupported,
             "citations": citations,
         })
         yield _sse("done", {})

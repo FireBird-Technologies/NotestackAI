@@ -3,7 +3,6 @@ uvicorn[standard]==0.32.*
 sqlalchemy==2.0.*
 psycopg[binary]==3.2.*
 alembic==1.14.*
-pgvector==0.3.*
 pydantic==2.*
 pydantic-settings==2.*
 email-validator==2.*
@@ -19,4 +18,3 @@ redis==5.*
 dspy==2.6.*
 feedparser==6.*
 beautifulsoup4==4.*
-tiktoken==0.8.*

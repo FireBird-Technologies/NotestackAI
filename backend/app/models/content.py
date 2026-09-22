@@ -1,7 +1,6 @@
 import uuid
 from datetime import datetime
 
-from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     JSON,
     BigInteger,
@@ -17,7 +16,6 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.config import settings
 from app.db import Base
 from app.models.base import IdMixin, TimestampMixin
 
@@ -49,28 +47,11 @@ class Document(IdMixin, TimestampMixin, Base):
     url: Mapped[str] = mapped_column(String(1000))
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     raw_html_key: Mapped[str | None] = mapped_column(String(500))  # R2 key
+    # Corpus relative path of the clean markdown file, e.g. sources/ada-substack-com/2026-03-01-pricing.md
+    path: Mapped[str | None] = mapped_column(String(500), index=True)
     clean_text: Mapped[str] = mapped_column(Text, default="")
     content_hash: Mapped[str | None] = mapped_column(String(64))
     metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
-
-    chunks: Mapped[list["Chunk"]] = relationship(back_populates="document", cascade="all, delete-orphan")
-
-
-class Chunk(IdMixin, TimestampMixin, Base):
-    __tablename__ = "chunks"
-
-    workspace_id: Mapped[uuid.UUID] = _ws_fk()
-    document_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("documents.id", ondelete="CASCADE"), index=True
-    )
-    position: Mapped[int] = mapped_column(Integer)
-    heading: Mapped[str | None] = mapped_column(String(500))
-    text: Mapped[str] = mapped_column(Text)
-    token_count: Mapped[int] = mapped_column(Integer, default=0)
-    embedding: Mapped[list[float] | None] = mapped_column(Vector(settings.embedding_dim))
-    entities: Mapped[list] = mapped_column(JSON, default=list)
-
-    document: Mapped[Document] = relationship(back_populates="chunks")
 
 
 class Notebook(IdMixin, TimestampMixin, Base):
@@ -139,9 +120,12 @@ class Citation(IdMixin, Base):
     __tablename__ = "citations"
 
     message_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("messages.id", ondelete="CASCADE"))
-    chunk_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("chunks.id", ondelete="CASCADE"))
+    document_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("documents.id", ondelete="CASCADE"))
     marker: Mapped[int] = mapped_column(Integer)  # [1], [2] in the answer text
-    span: Mapped[str | None] = mapped_column(Text)  # quoted supporting text
+    path: Mapped[str] = mapped_column(String(500))
+    line_start: Mapped[int] = mapped_column(Integer)
+    line_end: Mapped[int] = mapped_column(Integer)
+    span: Mapped[str | None] = mapped_column(Text)  # verified text read back from the file
 
 
 class Artifact(IdMixin, TimestampMixin, Base):
@@ -241,7 +225,7 @@ class UsageEvent(IdMixin, TimestampMixin, Base):
 
     workspace_id: Mapped[uuid.UUID] = _ws_fk()
     job_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("jobs.id", ondelete="SET NULL"))
-    kind: Mapped[str] = mapped_column(String(20))  # llm | embedding | tts | render
+    kind: Mapped[str] = mapped_column(String(20))  # llm | tts | render
     provider: Mapped[str] = mapped_column(String(40))
     model: Mapped[str | None] = mapped_column(String(100))
     quantity: Mapped[float] = mapped_column(Float)  # tokens, characters or seconds
