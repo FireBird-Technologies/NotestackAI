@@ -21,7 +21,9 @@ declare global {
   }
 }
 
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
+const GOOGLE_CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID || import.meta.env.GOOGLE_CLIENT_ID) as
+  | string
+  | undefined;
 
 function GoogleButton({ onCredential }: { onCredential: (c: string) => void }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -47,7 +49,7 @@ function GoogleButton({ onCredential }: { onCredential: (c: string) => void }) {
   }, [onCredential]);
 
   if (!GOOGLE_CLIENT_ID) {
-    return <p className="mono muted auth-hint">Set VITE_GOOGLE_CLIENT_ID to enable Google sign in.</p>;
+    return <p className="mono muted auth-hint">Set GOOGLE_CLIENT_ID in .env to enable Google sign in.</p>;
   }
   return <div ref={ref} className="google-btn" />;
 }

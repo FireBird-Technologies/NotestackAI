@@ -1,10 +1,16 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+# One .env at the repo root serves every way of running the API; a backend/.env (or the
+# working directory's .env) overrides it. Real environment variables beat both.
+_ROOT_ENV = Path(__file__).resolve().parents[2] / ".env"
+
+
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=(_ROOT_ENV, ".env"), extra="ignore")
 
     env: str = "development"
     app_name: str = "Notestack"

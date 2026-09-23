@@ -1,4 +1,7 @@
+# Secrets: any .env at any depth, plus .env.local / .env.production etc. Templates stay tracked.
 .env
+.env.*
+!.env.example
 node_modules/
 dist/
 .venv/
