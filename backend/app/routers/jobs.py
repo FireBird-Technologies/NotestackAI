@@ -1,4 +1,3 @@
-import json
 import uuid
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -9,9 +8,9 @@ from sqlalchemy.orm import Session
 
 from app.auth import Ctx, get_ctx
 from app.config import settings
-from app.db import get_db
+from app.db import SessionLocal, get_db
 from app.models import Artifact, Job
-from app.services.jobs import record_usage, serialize_job, subscribe, update_job
+from app.services.jobs import record_usage, serialize_job, update_job, watch_job
 
 router = APIRouter(prefix="/api", tags=["jobs"])
 
@@ -30,17 +29,11 @@ def get_job(job_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
 
 @router.get("/jobs/{job_id}/events")
 async def job_events(job_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
-    job = _get(ctx, job_id)
-    snapshot = serialize_job(job)
+    _get(ctx, job_id)  # ownership check
 
     async def stream():
-        yield f"data: {json.dumps(snapshot)}\n\n"
-        if snapshot["status"] in {"done", "failed"}:
-            return
-        async for data in subscribe(job_id):
+        async for data in watch_job(SessionLocal, job_id):
             yield f"data: {data}\n\n"
-            if json.loads(data).get("status") in {"done", "failed"}:
-                return
 
     return StreamingResponse(stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
 

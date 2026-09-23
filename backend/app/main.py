@@ -3,8 +3,6 @@ import time
 import uuid
 from contextlib import asynccontextmanager
 
-from arq import create_pool
-from arq.connections import RedisSettings
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -19,7 +17,6 @@ log = logging.getLogger("notestack")
 async def lifespan(app: FastAPI):
     logging.basicConfig(level=logging.INFO)
     configure_default()
-    app.state.arq = await create_pool(RedisSettings.from_dsn(settings.redis_url))
     if settings.env == "development" and settings.r2_endpoint_url:
         try:
             from app.services.storage import storage as store
@@ -28,7 +25,6 @@ async def lifespan(app: FastAPI):
         except Exception:
             log.warning("could not ensure local bucket", exc_info=True)
     yield
-    await app.state.arq.aclose()
 
 
 app = FastAPI(title="Notestack API", version="0.1.0", lifespan=lifespan)

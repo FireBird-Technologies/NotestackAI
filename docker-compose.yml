@@ -13,10 +13,6 @@ services:
       interval: 5s
       retries: 10
 
-  redis:
-    image: redis:7-alpine
-    ports: ["6379:6379"]
-
   minio:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
@@ -31,7 +27,6 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql+psycopg://notestack:notestack@postgres:5432/notestack
-      REDIS_URL: redis://redis:6379/0
       R2_ENDPOINT_URL: ${R2_ENDPOINT_URL:-http://minio:9000}
       RENDERER_URL: http://renderer:3100
       API_URL: http://api:8000
@@ -40,15 +35,13 @@ services:
     ports: ["8000:8000"]
     depends_on:
       postgres: { condition: service_healthy }
-      redis: { condition: service_started }
 
   worker:
     build: ./backend
-    command: arq app.worker.WorkerSettings
+    command: python -m app.worker
     env_file: .env
     environment:
       DATABASE_URL: postgresql+psycopg://notestack:notestack@postgres:5432/notestack
-      REDIS_URL: redis://redis:6379/0
       R2_ENDPOINT_URL: ${R2_ENDPOINT_URL:-http://minio:9000}
       RENDERER_URL: http://renderer:3100
       API_URL: http://api:8000

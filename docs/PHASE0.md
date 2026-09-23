@@ -4,9 +4,9 @@ Legend: [x] done in this scaffold, [ ] open
 
 ## Repo and infra
 - [x] Monorepo layout: `backend/`, `frontend/`, `renderer/`, `docs/`
-- [x] docker-compose: api, worker, postgres, redis, minio (local R2 stand-in), renderer, frontend
+- [x] docker-compose: api, worker, postgres, minio (local R2 stand-in), renderer, frontend
 - [x] `.env.example` covering every service
-- [x] CI: backend lint + tests, frontend typecheck + build, renderer typecheck
+- [x] CI: backend lint + tests (with a Postgres service), frontend typecheck + build, renderer typecheck
 - [ ] Production deploy target (Fly, Render or DO App Platform) and R2 bucket + custom domain
 - [ ] Sentry (api, worker, frontend)
 
@@ -14,7 +14,8 @@ Legend: [x] done in this scaffold, [ ] open
 - [x] Settings (`app/config.py`), DB session, Alembic initial migration
 - [x] Full data model from design doc Section 4
 - [x] Health endpoint, CORS, request id logging
-- [x] Jobs table + arq worker + Redis progress pub/sub + SSE endpoint
+- [x] Postgres job queue (SKIP LOCKED claims, retries with backoff, stale recovery) + SSE progress
+- [x] Scheduled tasks in the worker behind advisory locks
 - [x] Usage metering table and helper (`record_usage`)
 
 ## Auth (mirrors blog2video)

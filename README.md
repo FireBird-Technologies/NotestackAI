@@ -9,7 +9,7 @@ overviews, videos and launch kits, all traced back to what the writer actually w
 ## Layout
 
 ```
-backend/    FastAPI + SQLAlchemy + Alembic, arq worker, DSPy (LLM agnostic, Z.ai first)
+backend/    FastAPI + SQLAlchemy + Alembic, Postgres job queue worker, DSPy (LLM agnostic, Z.ai first)
 frontend/   React + Vite + TS: night sky landing, pricing, blog, auth, Mission Control
 renderer/   Remotion compositions + render service that uploads to R2 via presigned PUT
 docs/       Design doc and task lists
@@ -31,8 +31,8 @@ Without Docker:
 
 ```bash
 cd backend && python -m venv .venv && .venv/Scripts/pip install -r requirements-dev.txt
-alembic upgrade head && uvicorn app.main:app --reload     # needs Postgres + Redis
-arq app.worker.WorkerSettings                              # second terminal
+alembic upgrade head && uvicorn app.main:app --reload     # needs Postgres only
+python -m app.worker                                       # second terminal
 cd frontend && npm install && npm run dev
 cd renderer && npm install && npm start                    # or: npm run studio
 ```

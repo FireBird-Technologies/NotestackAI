@@ -1,7 +1,7 @@
 import uuid
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 
@@ -66,12 +66,15 @@ def get_artifact(artifact_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
 
 
 @router.post("/{artifact_id}/render")
-async def render_artifact(artifact_id: uuid.UUID, body: RenderIn, request: Request, ctx: Ctx = Depends(get_ctx)):
+def render_artifact(artifact_id: uuid.UUID, body: RenderIn, ctx: Ctx = Depends(get_ctx)):
     a = _get(ctx, artifact_id)
-    fmt = COMPOSITIONS[body.composition]
-    job = create_job(ctx.db, ctx.workspace.id, "render", {"composition": body.composition})
-    job.artifact_id = a.id
     a.status = "rendering"
-    ctx.db.commit()
-    await request.app.state.arq.enqueue_job("render_task", str(a.id), str(job.id), body.composition, body.props, fmt)
+    job = create_job(
+        ctx.db,
+        ctx.workspace.id,
+        "render",
+        {"artifact_id": str(a.id), "composition": body.composition, "props": body.props,
+         "format": COMPOSITIONS[body.composition]},
+        artifact_id=a.id,
+    )
     return serialize_job(job)

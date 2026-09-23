@@ -8,6 +8,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -142,9 +143,14 @@ class Artifact(IdMixin, TimestampMixin, Base):
 
 
 class Job(IdMixin, TimestampMixin, Base):
-    """Covers ingest, tts and render jobs. kind decides which fields matter."""
+    """Covers ingest, tts and render jobs. kind decides which fields matter.
+
+    This table is also the queue: workers claim queued rows with FOR UPDATE SKIP LOCKED
+    (see app/worker.py), so no separate broker is needed.
+    """
 
     __tablename__ = "jobs"
+    __table_args__ = (Index("ix_jobs_queue", "status", "run_after", "created_at"),)
 
     workspace_id: Mapped[uuid.UUID] = _ws_fk()
     kind: Mapped[str] = mapped_column(String(30))  # ingest | tts | render | generate
@@ -157,6 +163,13 @@ class Job(IdMixin, TimestampMixin, Base):
     artifact_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("artifacts.id", ondelete="SET NULL"))
     cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # Queue bookkeeping
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    max_attempts: Mapped[int] = mapped_column(Integer, default=3)
+    run_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # retry backoff
+    locked_by: Mapped[str | None] = mapped_column(String(100))  # worker id while running
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # stale detection
 
 
 class Upload(IdMixin, TimestampMixin, Base):

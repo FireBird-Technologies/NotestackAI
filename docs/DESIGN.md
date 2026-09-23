@@ -26,7 +26,7 @@ Every factual statement Notestack generates must trace back to the writer's own 
 | Area | Decision |
 | --- | --- |
 | Backend | FastAPI + SQLAlchemy 2 + Alembic (same stack as blog2video) |
-| Worker | arq on Redis (async jobs, progress events over Redis pub/sub, SSE to clients) |
+| Worker | Postgres backed queue: the `jobs` table, claimed with `FOR UPDATE SKIP LOCKED`; progress on the row, streamed as SSE. No Redis. |
 | Database | Postgres 16 (no vector extension) |
 | Frontend | React + Vite + TypeScript, plain CSS with design tokens |
 | Renderer | Node service running Remotion (`renderer/`) |
@@ -45,9 +45,9 @@ Every factual statement Notestack generates must trace back to the writer's own 
             +-------------------+                          |  auth, notebooks,  |
                      ^                                     |  billing, storage  |
                      | presigned GET                       +---------+----------+
-                     |                                               | enqueue (arq)
+                     |                                               | insert queued job
             +--------+----------+                          +---------v----------+
-            | Cloudflare R2     |<-------------------------|  worker (arq)      |
+            | Cloudflare R2     |<-------------------------|  worker            |
             | notestack-assets  |   put objects            |  ingest, corpus,   |
             +--------+----------+                          |  DSPy, TTS         |
                      ^                                     +---------+----------+
@@ -55,7 +55,7 @@ Every factual statement Notestack generates must trace back to the writer's own 
             +--------+----------+   progress callbacks     +---------v----------+
             | renderer (Remotion)|------------------------>|  api /internal/... |
             +-------------------+                          +--------------------+
-     Postgres (api, worker)        Redis (queue, pub/sub, cache)
+     Postgres: data + job queue (api, worker)
 ```
 
 ### 3.1 Storage pipeline (R2)
@@ -159,11 +159,28 @@ Z.ai considerations baked in:
 
 Swapping to Anthropic, OpenAI, Gemini or a local model is only an env change.
 
-### 3.4 Jobs and progress
+### 3.4 Jobs and progress (Postgres, no Redis)
 
-Every long operation is a row in `jobs` (kind, status, progress, error, cost) plus an arq task.
-Workers publish progress to Redis channel `job:{id}`; `GET /api/jobs/{id}/events` streams it as SSE.
-No API request blocks for more than a few seconds.
+The `jobs` table is the queue, the progress record and the SSE source.
+
+- **Enqueue:** the API inserts a `queued` row (`create_job`). Nothing else.
+- **Claim:** `python -m app.worker` polls every `WORKER_POLL_SECONDS` and takes the oldest runnable
+  row with `SELECT ... FOR UPDATE SKIP LOCKED`, so any number of workers can share the table without
+  double running a job. Up to `WORKER_CONCURRENCY` jobs run at once in threads.
+- **Retry:** a handler that raises is requeued with backoff (30s, 60s, 120s... capped at 15 min)
+  until `max_attempts` (default 3), then marked `failed`.
+- **Heartbeat:** every progress update stamps `heartbeat_at`. A `running` job silent for
+  `JOB_STALE_SECONDS` (worker crashed, renderer died) is requeued by the stale sweeper.
+- **Hand off:** render jobs return `HANDED_OFF`; the renderer's progress callbacks keep the row
+  alive and mark it done.
+- **Progress to the browser:** `GET /api/jobs/{id}/events` re-reads the row about once a second and
+  sends only changes. Latency is at most a second, which is fine for progress bars.
+- **Schedules:** the worker runs the stale sweep (1 min), update email batch (5 min, gated to the
+  campaign send hour) and daily cleanup. Each takes a Postgres advisory lock, so with several
+  workers only one runs a given task.
+
+No request blocks for more than a few seconds. Add Redis back only if job volume makes polling a
+measurable load on Postgres; the handler code would not change.
 
 ## 4. Data model
 

@@ -3,7 +3,6 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
 # One .env at the repo root serves every way of running the API; a backend/.env (or the
 # working directory's .env) overrides it. Real environment variables beat both.
 _ROOT_ENV = Path(__file__).resolve().parents[2] / ".env"
@@ -19,7 +18,11 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173"
 
     database_url: str = "postgresql+psycopg://notestack:notestack@localhost:5432/notestack"
-    redis_url: str = "redis://localhost:6379/0"
+
+    # Worker (Postgres backed queue, see app/worker.py)
+    worker_concurrency: int = 4
+    worker_poll_seconds: float = 1.0
+    job_stale_seconds: int = 900  # a running job with no heartbeat for this long is retried
 
     # Auth
     jwt_secret: str = "change-me"

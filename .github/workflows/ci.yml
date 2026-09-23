@@ -5,6 +5,14 @@ jobs:
   backend:
     runs-on: ubuntu-latest
     defaults: { run: { working-directory: backend } }
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env: { POSTGRES_USER: notestack, POSTGRES_PASSWORD: notestack, POSTGRES_DB: notestack_test }
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U notestack" --health-interval 5s --health-retries 10
+    env:
+      TEST_POSTGRES_URL: postgresql+psycopg://notestack:notestack@localhost:5432/notestack_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

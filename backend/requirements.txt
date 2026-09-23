@@ -13,8 +13,6 @@ requests==2.*
 boto3==1.35.*
 resend==2.*
 httpx==0.28.*
-arq==0.26.*
-redis==5.*
 dspy==2.6.*
 feedparser==6.*
 beautifulsoup4==4.*

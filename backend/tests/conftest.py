@@ -31,7 +31,7 @@ def db_session():
 def client(db_session):
     app.dependency_overrides[get_db] = lambda: db_session
     ConsoleEmailProvider.sent.clear()
-    yield TestClient(app)  # no context manager: skips lifespan (no Redis needed)
+    yield TestClient(app)  # no context manager: skips lifespan
     app.dependency_overrides.clear()
 
 
