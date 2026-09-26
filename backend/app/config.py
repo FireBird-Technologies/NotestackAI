@@ -78,8 +78,8 @@ class Settings(BaseSettings):
     # ElevenLabs (premade voices by default; a consented clone can replace host A)
     elevenlabs_api_key: str = ""
     elevenlabs_model: str = "eleven_multilingual_v2"
-    elevenlabs_voice_a: str = "21m00Tcm4TlvDq8ikWAM"  # Rachel
-    elevenlabs_voice_b: str = "pNInz6obpgDQGcFMaJgB"  # Adam
+    elevenlabs_voice_a: str = "EXAVITQu4vr4xnSDxMaL"  # Sarah (premade)
+    elevenlabs_voice_b: str = "JBFqnCBsd6RMkjVDRZzb"  # George (premade)
 
     # Social publishing (Launchpad). Redirect URIs: {API_URL}/api/social/{x,linkedin}/callback
     social_token_key: str = ""  # Fernet key; derived from JWT_SECRET when empty

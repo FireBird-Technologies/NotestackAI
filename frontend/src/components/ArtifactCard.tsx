@@ -3,27 +3,8 @@ import { Link } from "react-router-dom";
 import { artifactsApi } from "../api/endpoints";
 import type { Artifact, Citation, Segment } from "../api/types";
 import { useJob } from "../hooks/useJob";
+import { Markdown } from "./Markdown";
 import { ConfirmButton, errorMessage, formatDate, formatDuration, JobProgress, StatusPill } from "./ui";
-
-/** Answer text with [n] markers turned into buttons that open the cited passage. */
-export function CitedText({ text, citations, onCite }: { text: string; citations: Citation[]; onCite?: (c: Citation) => void }) {
-  const byMarker = new Map(citations.map((c) => [c.marker, c]));
-  const parts = text.split(/(\[\d+\])/g);
-  return (
-    <>
-      {parts.map((part, i) => {
-        const m = part.match(/^\[(\d+)\]$/);
-        const cite = m ? byMarker.get(Number(m[1])) : undefined;
-        if (!cite) return <span key={i}>{part}</span>;
-        return (
-          <button key={i} type="button" className="cite-marker mono" title={cite.title} onClick={() => onCite?.(cite)}>
-            {cite.marker}
-          </button>
-        );
-      })}
-    </>
-  );
-}
 
 export function CitationList({ citations, onCite }: { citations: Citation[]; onCite?: (c: Citation) => void }) {
   if (!citations.length) return null;
@@ -80,13 +61,7 @@ function Body({ artifact, onCite }: { artifact: Artifact; onCite?: (c: Citation)
               ))}
             </div>
           ) : null}
-          {String(c.summary ?? "")
-            .split(/\n\n+/)
-            .map((p, i) => (
-              <p key={i}>
-                <CitedText text={p} citations={c.citations ?? []} onCite={onCite} />
-              </p>
-            ))}
+          <Markdown text={String(c.summary ?? "")} citations={c.citations ?? []} onCite={onCite} />
           <CitationList citations={c.citations ?? []} onCite={onCite} />
         </div>
       );

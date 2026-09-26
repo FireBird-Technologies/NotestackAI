@@ -115,7 +115,10 @@ class ResearchArchive(dspy.Signature):
     lines before relying on them. Answer ONLY from text you read. Every factual sentence needs a
     [n] marker, and every marker needs a citation with the file path and the line range you read.
     If the archive does not cover the question, say so plainly and set unsupported=true.
-    Write in plain, warm prose. Never use em dashes."""
+    Write in plain, warm prose formatted as Markdown: short paragraphs separated by blank lines,
+    bullet or numbered lists when comparing or listing things, **bold** for the key idea, and a
+    ### heading only when the answer has distinct parts. Put [n] markers right after the sentence
+    or list item they support. Never use em dashes."""
 
     question: str = dspy.InputField()
     archive_guide: str = dspy.InputField(desc="How this notebook's files are laid out")
@@ -190,7 +193,8 @@ class SummarizeNotebook(dspy.Signature):
 
     title: str = dspy.InputField()
     passages: list[str] = dspy.InputField(desc="Posts with path and numbered lines")
-    summary: str = dspy.OutputField(desc="3 to 6 paragraphs with [n] markers")
+    summary: str = dspy.OutputField(desc="Markdown: 3 to 6 short paragraphs or sections (### headings allowed), "
+                                         "blank lines between blocks, [n] markers after supported sentences")
     themes: list[str] = dspy.OutputField(desc="3 to 7 short theme names")
     citations: list[FileCitation] = dspy.OutputField()
 

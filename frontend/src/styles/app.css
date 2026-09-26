@@ -1076,3 +1076,191 @@
   display: grid;
   gap: 2px;
 }
+
+/* ---------- Landing: flare, shimmer, arrivals, demo video ---------- */
+
+/* A soft light rides along the horizon; small glints twinkle where it passes. */
+.horizon {
+  overflow: visible;
+}
+
+.horizon-flare {
+  position: absolute;
+  top: -3px;
+  left: 50%;
+  width: 16vw;
+  height: 3px;
+  margin-left: -8vw;
+  border-radius: 999px;
+  background: radial-gradient(50% 50% at 50% 50%, #ffffff 0%, var(--blue) 35%, transparent 70%);
+  filter: blur(0.5px);
+  box-shadow: 0 0 26px 4px var(--blue-60), 0 0 60px 8px var(--blue-20);
+  transform-origin: 50% 75vw;
+  animation: flare-ride 18s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  opacity: 0;
+}
+
+.horizon-flare::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 56px;
+  height: 56px;
+  margin: -28px 0 0 -28px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffffff 0%, rgba(255, 255, 255, 0.6) 10%, var(--blue-60) 26%, transparent 64%);
+}
+
+@keyframes flare-ride {
+  0% {
+    transform: rotate(-26deg);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: rotate(26deg);
+    opacity: 0;
+  }
+}
+
+.horizon-glint {
+  position: absolute;
+  top: -10px;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  background:
+    linear-gradient(90deg, transparent 45%, #ffffff 50%, transparent 55%),
+    linear-gradient(0deg, transparent 45%, #ffffff 50%, transparent 55%);
+  filter: drop-shadow(0 0 6px var(--blue)) drop-shadow(0 0 2px #ffffff);
+  opacity: 0;
+  animation: glint 18s ease-in-out infinite;
+}
+
+.horizon-glint.g1 {
+  left: 38%;
+  animation-delay: 5.2s;
+}
+
+.horizon-glint.g2 {
+  left: 50%;
+  top: -12px;
+  animation-delay: 8.8s;
+}
+
+.horizon-glint.g3 {
+  left: 62%;
+  animation-delay: 12.4s;
+}
+
+@keyframes glint {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(0.2) rotate(0deg);
+  }
+  4% {
+    opacity: 1;
+    transform: scale(1.1) rotate(45deg);
+  }
+  10% {
+    opacity: 0;
+    transform: scale(0.4) rotate(90deg);
+  }
+}
+
+/* A light sweep crosses the hero every few seconds, catching the headline. */
+.hero-sweep {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 42%, rgba(255, 255, 255, 0.035) 48%, var(--blue-05) 50%, transparent 55%);
+  background-size: 250% 100%;
+  animation: sweep 16s ease-in-out infinite;
+  mix-blend-mode: screen;
+}
+
+@keyframes sweep {
+  0% {
+    background-position: 130% 0;
+  }
+  45%,
+  100% {
+    background-position: -40% 0;
+  }
+}
+
+.glow-text.shimmer {
+  background: linear-gradient(100deg, #ffffff 35%, #cfe2ff 45%, #ffffff 50%, var(--blue) 55%, #ffffff 65%);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer 16s ease-in-out infinite;
+  filter: drop-shadow(0 0 18px var(--blue-35)) drop-shadow(0 0 40px var(--blue-20));
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  45%,
+  100% {
+    background-position: 0% 0;
+  }
+}
+
+/* Sections arrive out of the depth. */
+.arrive {
+  opacity: 0;
+  transform: perspective(900px) translateZ(-90px) translateY(28px);
+  filter: blur(4px);
+  transition:
+    opacity 1.4s ease,
+    transform 1.8s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 1.4s ease;
+  transition-delay: calc(var(--i, 0) * 260ms);
+}
+
+.arrive.arrived {
+  opacity: 1;
+  transform: none;
+  filter: none;
+}
+
+.demo-video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: var(--black);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .horizon-flare,
+  .horizon-glint,
+  .hero-sweep,
+  .glow-text.shimmer {
+    animation: none;
+  }
+
+  .horizon-flare {
+    opacity: 0.8;
+    transform: none;
+  }
+
+  .arrive {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}

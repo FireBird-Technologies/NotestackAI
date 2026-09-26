@@ -1,0 +1,521 @@
+/* ---------- Landing: feature tour ---------- */
+.showcase {
+  display: grid;
+  gap: clamp(64px, 12vh, 140px);
+  margin-top: 24px;
+}
+
+.showcase-row {
+  display: grid;
+  gap: 28px;
+  align-items: center;
+}
+
+@media (min-width: 900px) {
+  .showcase-row {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    gap: 56px;
+  }
+
+  .showcase-row.flip .showcase-copy {
+    order: 2;
+  }
+}
+
+.showcase-copy {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  justify-items: start;
+}
+
+.showcase-copy h3 {
+  font-size: clamp(1.5rem, 3vw, 2.1rem);
+  line-height: 1.12;
+}
+
+.showcase-copy ul {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.showcase-copy li {
+  position: relative;
+  padding-left: 22px;
+  color: var(--text-2);
+}
+
+.showcase-copy li::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 0.55em;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--blue);
+  box-shadow: 0 0 10px var(--blue);
+}
+
+.showcase-n {
+  color: var(--white);
+  opacity: 0.6;
+  margin-right: 6px;
+}
+
+.showcase-visual {
+  padding: 0;
+  overflow: hidden;
+  border-color: var(--blue-20);
+  box-shadow: var(--glow-lg);
+  aspect-ratio: 16 / 11;
+  background: radial-gradient(70% 60% at 50% 40%, var(--blue-10), transparent 70%), rgba(0, 0, 0, 0.6);
+}
+
+/* Visual primitives. Everything starts hidden and plays once the row is .arrived. */
+.fx {
+  height: 100%;
+  padding: clamp(16px, 3vw, 28px);
+  display: grid;
+  gap: 12px;
+  align-content: center;
+  font-size: 0.9rem;
+}
+
+.fx .mono {
+  font-size: 0.72rem;
+  color: var(--blue);
+}
+
+.fx > *,
+.fx-card,
+.fx-node,
+.fx-edge,
+.fx-cal span {
+  transition:
+    opacity 0.8s ease,
+    transform 0.9s cubic-bezier(0.22, 1, 0.36, 1),
+    stroke-dashoffset 1.2s ease,
+    background 0.6s ease,
+    border-color 0.6s ease,
+    box-shadow 0.6s ease;
+}
+
+.showcase-row:not(.arrived) .fx > * {
+  opacity: 0;
+  transform: translateY(14px);
+}
+
+.fx > *:nth-child(2) {
+  transition-delay: 0.35s;
+}
+
+.fx > *:nth-child(3) {
+  transition-delay: 0.7s;
+}
+
+.fx > *:nth-child(4) {
+  transition-delay: 1.05s;
+}
+
+.fx > *:nth-child(5) {
+  transition-delay: 1.3s;
+}
+
+/* Chat */
+.fx-bubble {
+  justify-self: end;
+  padding: 8px 14px;
+  border-radius: 14px 14px 4px 14px;
+  background: var(--blue-10);
+  border: 1px solid var(--blue-35);
+}
+
+.fx-steps {
+  display: grid;
+  gap: 2px;
+}
+
+.fx-answer {
+  line-height: 1.6;
+}
+
+.fx-cite {
+  display: inline-grid;
+  place-items: center;
+  min-width: 16px;
+  height: 16px;
+  margin-left: 3px;
+  border-radius: 5px;
+  font: 600 0.6rem var(--font-mono);
+  vertical-align: super;
+  background: var(--blue);
+  box-shadow: 0 0 10px var(--blue);
+}
+
+.fx-source {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+}
+
+.fx-line {
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--blue-20);
+  box-shadow: inset 3px 0 0 var(--blue);
+}
+
+/* Topic map */
+.fx-map {
+  padding: 8px;
+}
+
+.fx-map svg {
+  width: 100%;
+  height: 100%;
+}
+
+.fx-edge {
+  stroke: var(--white);
+  stroke-opacity: 0.3;
+  stroke-width: 0.4;
+  stroke-dasharray: 60;
+  stroke-dashoffset: 60;
+  transition-delay: var(--d);
+}
+
+.fx-halo {
+  fill: var(--blue);
+  opacity: 0.35;
+  filter: blur(2px);
+}
+
+.fx-node text {
+  fill: var(--white);
+  font: 500 3.6px var(--font-body);
+}
+
+.fx-node {
+  opacity: 0;
+  transition-delay: var(--d);
+}
+
+.showcase-row.arrived .fx-edge {
+  stroke-dashoffset: 0;
+}
+
+.showcase-row.arrived .fx-node {
+  opacity: 1;
+}
+
+.showcase-row.arrived .fx-halo {
+  animation: pulse-halo 4s ease-in-out infinite;
+}
+
+@keyframes pulse-halo {
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/* Audio */
+.fx-wave {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 110px;
+}
+
+.fx-wave span {
+  flex: 1;
+  height: 12%;
+  border-radius: 99px;
+  background: var(--blue);
+  box-shadow: 0 0 8px var(--blue-60);
+}
+
+.fx-wave span:nth-child(2n) {
+  background: var(--white);
+}
+
+.showcase-row.arrived .fx-wave span {
+  animation: bar 1.4s ease-in-out infinite alternate;
+  animation-delay: var(--d);
+}
+
+@keyframes bar {
+  from {
+    height: 12%;
+  }
+  to {
+    height: var(--h);
+  }
+}
+
+.fx-lines {
+  display: grid;
+  gap: 8px;
+}
+
+.fx-lines p {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.fx-host {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font: 600 0.65rem var(--font-mono);
+}
+
+.fx-host.a {
+  background: var(--blue);
+}
+
+.fx-host.b {
+  background: var(--white);
+  color: var(--black);
+}
+
+/* Video */
+.fx-video {
+  grid-template-columns: 0.55fr 1.2fr 0.8fr;
+  align-items: center;
+}
+
+.fx-frame {
+  display: grid;
+  gap: 6px;
+  align-content: end;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--blue-35);
+  background: radial-gradient(80% 60% at 50% 100%, var(--blue-20), transparent), var(--black);
+  box-shadow: 0 0 20px var(--blue-10);
+  font-size: 0.75rem;
+}
+
+.fx-frame b {
+  font-family: var(--font-display);
+  line-height: 1.2;
+}
+
+.v916 {
+  aspect-ratio: 9 / 16;
+}
+
+.v169 {
+  aspect-ratio: 16 / 9;
+}
+
+.v11 {
+  aspect-ratio: 1;
+}
+
+.fx-mini-wave {
+  display: block;
+  height: 18px;
+  background: repeating-linear-gradient(90deg, var(--blue) 0 3px, transparent 3px 6px);
+}
+
+/* Launch Kit */
+.fx-kit {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.fx-card {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line-strong);
+  background: rgba(0, 0, 0, 0.7);
+  transition-delay: var(--d);
+}
+
+.fx-card p {
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.showcase-row:not(.arrived) .fx-kit .fx-card {
+  opacity: 0;
+  transform: translateY(40px) rotate(var(--r));
+}
+
+/* Voice */
+.fx-profile {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--blue-35);
+  background: var(--blue-05);
+}
+
+.fx-slider {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.8rem;
+  color: var(--text-2);
+}
+
+.fx-slider i {
+  position: relative;
+  height: 4px;
+  border-radius: 99px;
+  background: var(--surface-2);
+}
+
+.fx-slider i::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: -3px;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  border-radius: 50%;
+  background: var(--white);
+  box-shadow: 0 0 10px var(--blue);
+  transition: left 1.2s cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: var(--d);
+}
+
+.showcase-row.arrived .fx-slider i::after {
+  left: var(--v);
+}
+
+.fx-clone {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fx-rec {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--white);
+  box-shadow: 0 0 8px var(--white);
+  animation: pill-pulse 1.4s ease-in-out infinite;
+}
+
+/* Launchpad */
+.fx-cal {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 5px;
+}
+
+.fx-cal span {
+  aspect-ratio: 1.3;
+  padding: 3px 5px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  font: 0.6rem var(--font-mono);
+  color: var(--text-3);
+}
+
+.fx-cal span.on {
+  transition-delay: var(--d);
+}
+
+.showcase-row.arrived .fx-cal span.on {
+  border-color: var(--blue);
+  background: var(--blue-20);
+  box-shadow: 0 0 12px var(--blue-35);
+  color: var(--white);
+}
+
+.fx-launch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.fx-launch span {
+  padding: 4px 10px;
+  border-radius: 99px;
+  border: 1px solid var(--blue-35);
+  color: var(--white);
+  font-size: 0.72rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .showcase-row .fx > *,
+  .showcase-row .fx-node,
+  .showcase-row .fx-card {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .fx-edge {
+    stroke-dashoffset: 0;
+  }
+
+  .fx-wave span,
+  .fx-halo,
+  .fx-rec {
+    animation: none !important;
+  }
+}
+
+/* Demo video sound controls */
+.demo-bar {
+  align-items: center;
+}
+
+.demo-sound {
+  border: 1px solid var(--blue-35);
+  border-radius: 999px;
+  padding: 3px 12px;
+  background: transparent;
+  color: var(--white);
+  font: inherit;
+  cursor: pointer;
+}
+
+.demo-sound:hover {
+  border-color: var(--blue);
+  box-shadow: var(--glow-sm);
+}
+
+.demo-stage {
+  position: relative;
+}
+
+.demo-unmute {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--blue-60);
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(6px);
+  color: var(--white);
+  font: 600 0.875rem var(--font-body);
+  cursor: pointer;
+  box-shadow: var(--glow-md);
+}
+
+.demo-unmute:hover {
+  background: var(--blue);
+}

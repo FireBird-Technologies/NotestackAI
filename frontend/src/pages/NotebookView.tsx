@@ -3,7 +3,8 @@ import { Link, useParams } from "react-router-dom";
 import { artifactsApi, notebooksApi, type GenerateBody } from "../api/endpoints";
 import { streamSSE } from "../api/stream";
 import type { Artifact, ChatSummary, Citation, Notebook } from "../api/types";
-import { ArtifactCard, CitationList, CitedText } from "../components/ArtifactCard";
+import { ArtifactCard, CitationList } from "../components/ArtifactCard";
+import { Markdown } from "../components/Markdown";
 import { DocPicker } from "../components/DocPicker";
 import { TelescopeIcon } from "../components/icons/Icons";
 import { Reader } from "../components/Reader";
@@ -295,11 +296,12 @@ export default function NotebookView() {
                 </details>
               )}
               {t.status && !t.steps?.length && <p className="mono muted">{t.status}...</p>}
-              {t.text && (
-                <p className="turn-text">
-                  {t.role === "assistant" ? <CitedText text={t.text} citations={t.citations ?? []} onCite={cite} /> : t.text}
-                </p>
-              )}
+              {t.text &&
+                (t.role === "assistant" ? (
+                  <Markdown text={t.text} citations={t.citations ?? []} onCite={cite} className="turn-md" />
+                ) : (
+                  <p className="turn-text">{t.text}</p>
+                ))}
               {t.citations && <CitationList citations={t.citations} onCite={cite} />}
             </div>
           ))}

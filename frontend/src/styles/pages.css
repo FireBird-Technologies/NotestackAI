@@ -1506,3 +1506,692 @@ select.input option {
     animation: none;
   }
 }
+
+/* Markdown in answers and summaries */
+.md {
+  display: grid;
+  gap: 0.85em;
+  line-height: 1.7;
+  font-size: 0.975rem;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.md > * {
+  margin: 0;
+}
+
+.md h3,
+.md h4,
+.md h5 {
+  font-family: var(--font-display);
+  line-height: 1.3;
+  margin-top: 0.4em;
+}
+
+.md h3 {
+  font-size: 1.15rem;
+}
+
+.md h4 {
+  font-size: 1.02rem;
+}
+
+.md h5 {
+  font-size: 0.95rem;
+  color: var(--text-2);
+}
+
+.md ul,
+.md ol {
+  padding-left: 1.4em;
+  display: grid;
+  gap: 0.4em;
+}
+
+.md li > ul,
+.md li > ol {
+  margin-top: 0.4em;
+}
+
+.md ul li::marker {
+  color: var(--blue);
+}
+
+.md ol li::marker {
+  color: var(--blue);
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+}
+
+.md strong {
+  color: var(--white);
+  font-weight: 650;
+}
+
+.md em {
+  color: var(--text-2);
+}
+
+.md a {
+  color: var(--white);
+  text-decoration-color: var(--blue-60);
+  text-underline-offset: 3px;
+}
+
+.md code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+
+.md pre {
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  overflow-x: auto;
+}
+
+.md pre code {
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+}
+
+.md blockquote {
+  padding: 4px 0 4px 16px;
+  border-left: 3px solid var(--blue);
+  color: var(--text-2);
+}
+
+.md hr {
+  border: none;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--blue-35), transparent);
+}
+
+.md-table {
+  overflow-x: auto;
+}
+
+.md table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.md th,
+.md td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.md th {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--blue);
+}
+
+.turn-md {
+  padding: 4px 2px;
+}
+
+.turn-assistant + .turn-user {
+  margin-top: 8px;
+}
+
+/* Topic map zoom and pan */
+.map-canvas {
+  position: relative;
+  overflow: hidden;
+}
+
+.map-svg {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  aspect-ratio: 900 / 620;
+}
+
+.map-svg:active {
+  cursor: grabbing;
+}
+
+.map-svg:focus-visible {
+  outline: 1px solid var(--blue-60);
+  outline-offset: -1px;
+}
+
+.map-controls {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 1;
+  display: grid;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.map-controls .icon-btn {
+  font: 600 1rem var(--font-mono);
+  color: var(--white);
+}
+
+.map-controls .icon-btn.mono {
+  font-size: 0.65rem;
+}
+
+.map-hint {
+  position: absolute;
+  left: 16px;
+  bottom: 10px;
+  z-index: 1;
+  font-size: 0.7rem;
+  pointer-events: none;
+}
+
+/* Voice page */
+.host-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.host-card select {
+  flex: 1;
+  min-width: 0;
+}
+
+.delivery summary {
+  cursor: pointer;
+}
+
+.delivery[open] {
+  display: grid;
+  gap: 10px;
+}
+
+.slider {
+  display: grid;
+  gap: 4px;
+  font-size: 0.85rem;
+}
+
+.slider input[type="range"] {
+  width: 100%;
+  accent-color: var(--blue);
+}
+
+.library-filters {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.library-filters .input:first-child {
+  grid-column: 1 / -1;
+}
+
+.library-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  max-height: 52vh;
+  overflow: auto;
+}
+
+.library-voice {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.library-voice:hover {
+  border-color: var(--blue-35);
+}
+
+.clone-tips {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}
+
+.reading-script {
+  max-height: 220px;
+  overflow: auto;
+  padding: 14px 16px;
+  border: 1px solid var(--blue-35);
+  border-radius: var(--radius-sm);
+  background: var(--blue-05);
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  line-height: 1.6;
+  display: grid;
+  gap: 10px;
+}
+
+.reading-script p {
+  margin: 0;
+}
+
+.takes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.take-player {
+  flex: 1;
+  height: 32px;
+  min-width: 160px;
+}
+
+.level {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.level-fill {
+  height: 100%;
+  background: var(--blue);
+  box-shadow: 0 0 10px var(--blue);
+  transition: width 0.08s linear;
+}
+
+/* ---------- Density pass: tighter spacing, pages fit the window instead of forcing a scroll ---------- */
+:root {
+  --main-pad-top: 20px;
+  --main-pad-bottom: 20px;
+}
+
+.shell-main {
+  padding: var(--main-pad-top) var(--gutter) var(--main-pad-bottom);
+}
+
+@media (min-width: 900px) {
+  .shell-main {
+    padding-left: 28px;
+    padding-right: 28px;
+  }
+
+  /* Beats `.shell > :not(.sky) { position: relative }`, so the nav stays put while content scrolls. */
+  .shell > .sidebar {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    padding: 14px 12px;
+    gap: 14px;
+  }
+
+  .side-link {
+    padding: 7px 10px;
+    font-size: 0.9rem;
+  }
+}
+
+.card {
+  padding: 18px;
+}
+
+.page-wrap,
+.mc {
+  gap: 14px;
+}
+
+.page-head,
+.mc-head {
+  margin-bottom: 0;
+  align-items: center;
+}
+
+.page-head h1,
+.mc-head h1 {
+  font-size: clamp(1.35rem, 2.6vw, 1.75rem);
+  margin-top: 4px;
+}
+
+.page-head .eyebrow,
+.mc-head .eyebrow {
+  font-size: 0.7rem;
+}
+
+.lede {
+  font-size: 0.9rem;
+  margin-top: -6px;
+}
+
+.stack {
+  gap: 10px;
+}
+
+.two-col,
+.grid-cards,
+.gallery,
+.mc-grid {
+  gap: 14px;
+  align-items: start; /* no stretched cards with dead space below short content */
+}
+
+.mc-card {
+  gap: 10px;
+}
+
+.empty-state {
+  padding: 32px 16px;
+  gap: 10px;
+}
+
+.empty-state.small {
+  padding: 20px 12px;
+}
+
+.empty-state .empty-art {
+  width: 72px;
+  height: 54px;
+}
+
+.artifact {
+  padding: 14px;
+  gap: 10px;
+}
+
+.video-short {
+  max-height: 360px;
+}
+
+.picker-list {
+  max-height: 260px;
+}
+
+.doc-row {
+  padding: 8px 0;
+}
+
+.source-row {
+  padding: 10px 12px;
+}
+
+.loading {
+  padding: 12px 0;
+}
+
+/* Notebook: exactly the window height, panes scroll inside. */
+@media (min-width: 1100px) {
+  .nbv {
+    height: calc(100vh - var(--main-pad-top) - var(--main-pad-bottom));
+    min-height: 480px;
+  }
+}
+
+.nbv-chat {
+  min-height: 360px;
+}
+
+/* Topic map: canvas fills the space left in the window, never taller. */
+@media (min-width: 1100px) {
+  .map-layout {
+    height: calc(100vh - 150px);
+    min-height: 420px;
+  }
+
+  .map-canvas,
+  .map-side {
+    height: 100%;
+    max-height: none;
+  }
+
+  .map-canvas {
+    display: grid;
+    place-items: center;
+  }
+
+  /* Keep the 900:620 aspect so pointer math matches the viewBox; fit inside the available box. */
+  .map-svg {
+    height: 100%;
+    width: auto;
+    max-width: 100%;
+    aspect-ratio: 900 / 620;
+  }
+}
+
+@media (max-width: 1099px) {
+  .map-svg {
+    max-height: 62vh;
+  }
+}
+
+/* Launch Kit: the post picker and kit list share the side column without pushing the page. */
+@media (min-width: 1100px) {
+  .kit-layout > aside {
+    position: sticky;
+    top: 0;
+    max-height: calc(100vh - var(--main-pad-top) - var(--main-pad-bottom));
+    overflow-y: auto;
+  }
+
+  .kit-layout .picker-list {
+    max-height: 220px;
+  }
+}
+
+/* Launchpad: a month fits on one screen. */
+.cal-day {
+  min-height: 72px;
+  padding: 4px 5px;
+  gap: 3px;
+}
+
+.cal-head {
+  margin-bottom: 8px;
+}
+
+.accounts {
+  gap: 8px;
+}
+
+/* Modals: compact padding, body scrolls instead of the page. */
+.modal {
+  gap: 12px;
+  padding: 18px;
+}
+
+/* ---------- Containment: text wraps inside its box instead of spilling past borders ---------- */
+.shell-main,
+.page-wrap > *,
+.mc > *,
+.two-col > *,
+.grid-cards > *,
+.gallery > *,
+.mc-grid > *,
+.kit-layout > *,
+.map-layout > *,
+.nbv > *,
+.stack > *,
+.row > *,
+.field,
+.artifact-head > div,
+.source-title,
+.nb-card,
+.library-voice,
+.host-card,
+.post-edit,
+.slide-edit,
+.resurface-row,
+.recent-list li,
+.recent-list a {
+  min-width: 0;
+}
+
+.card,
+.modal,
+.drawer,
+.md,
+.artifact-body,
+.cites,
+.transcript,
+.doc-title,
+.picker-title,
+.source-title,
+.nbv-doc,
+.kit-list,
+.topic-rank,
+.hooks,
+.claims,
+.seo dd,
+.account,
+.angle,
+.cite-span,
+.error-text,
+.notice {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+/* Small buttons may wrap to two lines rather than punch out of narrow panes. */
+.btn-small {
+  white-space: normal;
+  height: auto;
+  min-height: 34px;
+  padding: 6px 14px;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.btn {
+  max-width: 100%;
+}
+
+select.input,
+.input,
+.textarea {
+  max-width: 100%;
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+
+.row > select.input {
+  flex: 1 1 160px;
+}
+
+.chip {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.small-link,
+.source-card a.mono {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account {
+  max-width: 100%;
+}
+
+.account .mono {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 220px;
+  display: inline-block;
+  vertical-align: bottom;
+}
+
+.pill {
+  flex-shrink: 0;
+}
+
+.artifact-head h3,
+.nb-card h3,
+.kit-view h2 {
+  overflow-wrap: anywhere;
+}
+
+.metrics,
+.picker-actions,
+.artifact-actions {
+  flex-wrap: wrap;
+}
+
+.map-side h2,
+.map-side .doc-title {
+  overflow-wrap: anywhere;
+}
+
+.sidebar-user .mono {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reader-line span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Content uses the full width next to the sidebar (open or collapsed); centred only on very wide screens. */
+.page-wrap,
+.mc,
+.nbv {
+  width: 100%;
+  max-width: 1760px;
+  margin-inline: auto;
+}
+
+.shell-main {
+  width: 100%;
+}
+
+@media (min-width: 900px) {
+  .shell.collapsed .shell-main {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+}
+
+@media (min-width: 1100px) {
+  /* Wider screens give the side columns room instead of leaving it empty. */
+  .nbv {
+    grid-template-columns: minmax(240px, 300px) minmax(0, 1fr) minmax(320px, 400px);
+  }
+
+  .kit-layout {
+    grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+  }
+
+  .map-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  }
+}

@@ -2,6 +2,7 @@ import { Composition, Still } from "remotion";
 import { AudiogramSquare, audiogramDuration } from "./compositions/AudiogramSquare";
 import { CarouselSlide } from "./compositions/CarouselSlide";
 import { ExplainerLong, explainerDuration } from "./compositions/ExplainerLong";
+import { DEMO_DURATION, DEMO_FPS, LandingDemo } from "./compositions/LandingDemo";
 import { QuoteCard } from "./compositions/QuoteCard";
 import { ShortVertical, shortVerticalDuration } from "./compositions/ShortVertical";
 import {
@@ -42,6 +43,7 @@ const sampleAudiogram: AudiogramSquareProps = {
 export function Root() {
   return (
     <>
+      <Composition id="LandingDemo" component={LandingDemo} width={1920} height={1080} fps={DEMO_FPS} durationInFrames={DEMO_DURATION} />
       <Composition
         id="ShortVertical"
         component={ShortVertical}

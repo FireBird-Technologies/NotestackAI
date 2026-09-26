@@ -305,7 +305,16 @@ def test_audio_overview_and_limits(client, auth, run_jobs, feed, llm, monkeypatc
     connect(client, auth, run_jobs)
     doc = docs(client, auth)[0]
     monkeypatch.setattr(settings, "elevenlabs_api_key", "test")
-    monkeypatch.setattr(tts, "synthesize", lambda ws, text, voice: b"\x00" * 16000)  # 1 second at 128 kbps
+    calls = []
+
+    def fake_synth(ws, text, voice, vs=None, prev=None, nxt=None):
+        calls.append((text, voice, prev, nxt, vs.stability if vs else None))
+        return b"\x00" * 16000  # 1 second at 128 kbps
+
+    monkeypatch.setattr(tts, "synthesize", fake_synth)
+    client.put("/api/voice", json={"host_voices": {"host_a": "voiceA", "host_b": "voiceB"},
+                                   "delivery": {"host_b": {"stability": 0.9, "similarity_boost": 0.7,
+                                                           "style": 0.1, "speed": 1.1}}}, headers=auth)
     llm["PodcastScript"] = {"lines": [
         {"speaker": "host_a", "text": "Welcome in.", "sources": []},
         {"speaker": "host_b", "text": "Prices went up.", "sources": [{"path": doc["path"], "line_start": 12,
@@ -317,6 +326,11 @@ def test_audio_overview_and_limits(client, auth, run_jobs, feed, llm, monkeypatc
     done = client.get(f"/api/artifacts/{art['id']}", headers=auth).json()
     assert done["status"] == "ready", done["content"]
     assert done["content"]["duration_s"] == 2.0
+    # Each line hears its neighbour; hosts use their own voice and delivery settings.
+    by_text = {c[0]: c for c in calls}
+    assert by_text["Welcome in."][1] == "voiceA" and by_text["Welcome in."][3] == "Prices went up."
+    assert by_text["Prices went up."][1] == "voiceB" and by_text["Prices went up."][2] == "Welcome in."
+    assert by_text["Prices went up."][4] == 0.9
     assert done["url"] and client.get(done["url"].split("8000", 1)[1]).content == b"\x00" * 32000
 
     ws_id = db_session.get(Document, uuid.UUID(doc["id"])).workspace_id
@@ -610,3 +624,79 @@ def test_artifact_ownership(client, auth, db_session):
     db_session.add(other)
     db_session.commit()
     assert client.get(f"/api/artifacts/{other.id}", headers=auth).status_code == 404
+
+
+# Voice pipeline (ElevenLabs stubbed)
+
+
+def test_voice_library_preview_and_script(client, auth, monkeypatch, feed, run_jobs):
+    from app.config import settings
+    from app.services import tts
+
+    monkeypatch.setattr(settings, "elevenlabs_api_key", "test")
+    monkeypatch.setattr(tts, "search_library", lambda **kw: {"voices": [{
+        "public_owner_id": "owner-1", "voice_id": "lib-voice-1",
+                                                                          "name": "Narrator"}], "has_more": False})
+    monkeypatch.setattr(tts, "add_library_voice", lambda owner, vid, name: "added-" + vid)
+    monkeypatch.setattr(tts, "synthesize", lambda ws, text, voice, vs=None, *a: b"\x00" * 8000)
+
+    assert client.get("/api/voice/library", params={"gender": "female"}, headers=auth).json()["voices"][0]["name"] == \
+        "Narrator"
+    r = client.post("/api/voice/library/add", json={
+        "public_owner_id": "owner-1", "voice_id": "lib-voice-1", "name": "Narrator",
+                                                    "use_as": "host_b"}, headers=auth).json()
+    assert r["voice_id"] == "added-lib-voice-1" and r["host_voices"]["host_b"] == "added-lib-voice-1"
+
+    prev = client.post("/api/voice/preview", json={"voice_id": "added-lib-voice-1", "text": "Hello there",
+                                                   "delivery": {"stability": 0.3, "similarity_boost": 0.8,
+                                                                "style": 0, "speed": 0.9}}, headers=auth).json()
+    assert prev["seconds"] == 0.5 and client.get(prev["url"].split("8000", 1)[1]).status_code == 200
+
+    connect(client, auth, run_jobs)
+    script = client.get("/api/voice/reading-script", headers=auth).json()
+    assert script["words"] > 5 and script["title"]
+
+
+def test_voice_clone_multi_sample_sets_host_and_preview(client, auth, monkeypatch, run_jobs):
+    from app.config import settings
+    from app.services import tts
+
+    monkeypatch.setattr(settings, "elevenlabs_api_key", "test")
+    sent = {}
+
+    def fake_clone(name, samples, remove_background_noise=True, description=""):
+        sent.update(n=len(samples), noise=remove_background_noise, name=name)
+        return "clone-1"
+
+    monkeypatch.setattr(tts, "clone_voice", fake_clone)
+    monkeypatch.setattr(tts, "synthesize", lambda ws, text, voice, vs=None, *a: b"\x00" * 16000)
+    ids = []
+    for i in range(2):
+        start = client.post("/api/storage/uploads", json={"filename": f"take{i}.webm", "content_type": "audio/webm",
+                                                          "size_bytes": 4}, headers=auth).json()
+        client.put(start["upload_url"].split("8000", 1)[1], content=b"RIFF")
+        client.post(f"/api/storage/uploads/{start['upload_id']}/complete", headers=auth)
+        ids.append(start["upload_id"])
+    consent_text = client.get("/api/voice", headers=auth).json()["clone"]["consent_text"]
+    r = client.post("/api/voice/consent", json={"upload_ids": ids, "agreed": True, "consent_text": consent_text,
+                                                "remove_background_noise": False}, headers=auth)
+    assert r.status_code == 200, r.text
+    assert run_jobs()[0].status == "done"
+    assert sent == {"n": 2, "noise": False, "name": "Ada Lovelace (Notestack)"}
+    voice = client.get("/api/voice", headers=auth).json()
+    assert voice["clone"]["status"] == "ready" and voice["host_voices"]["host_a"] == "clone-1"
+    assert voice["clone"]["preview_url"]
+
+
+def test_tts_retries_rate_limits(monkeypatch):
+    from app.config import settings
+    from app.services import tts
+
+    monkeypatch.setattr(settings, "elevenlabs_api_key", "test")
+    monkeypatch.setattr(tts.time, "sleep", lambda s: None)
+    responses = [httpx.Response(429, json={"detail": "slow down"}), httpx.Response(200, content=b"mp3")]
+    monkeypatch.setattr(httpx, "request", lambda *a, **k: responses.pop(0))
+    assert tts._request("POST", "/text-to-speech/x").content == b"mp3"
+    monkeypatch.setattr(httpx, "request", lambda *a, **k: httpx.Response(401, json={"detail": {"message": "bad"}}))
+    with pytest.raises(tts.TTSError, match="API key"):
+        tts._request("GET", "/voices")

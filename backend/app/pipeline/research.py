@@ -64,7 +64,7 @@ def verify_citations(tools: ScopedTools, answer: str, citations) -> tuple[str, l
         return f"[{n}]" if n else ""
 
     text = _MARKER.sub(swap, answer)
-    text = re.sub(r"\s+([.,;:!?])", r"\1", text)
+    text = re.sub(r"[ \t]+([.,;:!?])", r"\1", text)  # keep line breaks: answers are Markdown
     return text.strip(), verified
 
 

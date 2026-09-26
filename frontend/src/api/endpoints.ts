@@ -8,10 +8,12 @@ import type {
   Doc,
   DocDetail,
   Job,
+  LibraryVoice,
   Notebook,
   NotebookSummary,
   Page,
   Platform,
+  Quota,
   ResurfaceItem,
   Settings,
   SocialAccounts,
@@ -20,6 +22,7 @@ import type {
   TopicMap,
   Usage,
   Voice,
+  Delivery,
   VoiceProfileData,
   VoiceState,
 } from "./types";
@@ -99,14 +102,31 @@ export const topicsApi = {
 
 export const voiceApi = {
   get: () => api<VoiceState>("/api/voice"),
-  update: (body: { profile?: VoiceProfileData; host_voices?: { host_a: string; host_b: string } }) =>
-    put<VoiceState>("/api/voice", body),
+  update: (body: {
+    profile?: VoiceProfileData;
+    host_voices?: Partial<{ host_a: string; host_b: string }>;
+    delivery?: Partial<{ host_a: Delivery; host_b: Delivery }>;
+  }) => put<VoiceState>("/api/voice", body),
   build: (document_ids: string[]) => post<Job>("/api/voice/build", { document_ids }),
   voices: () => api<Voice[]>("/api/voice/voices"),
-  consent: async (file: File, consent_text: string) => {
-    const { upload_id } = await uploadFile(file);
-    return post<VoiceState & { job: Job }>("/api/voice/consent", { upload_id, agreed: true, consent_text });
+  consent: async (files: File[], consent_text: string, remove_background_noise: boolean) => {
+    const upload_ids = [];
+    for (const f of files) upload_ids.push((await uploadFile(f)).upload_id);
+    return post<VoiceState & { job: Job }>("/api/voice/consent", { upload_ids, agreed: true, consent_text, remove_background_noise });
   },
+  library: (p: { search?: string; gender?: string; age?: string; accent?: string; language?: string; use_case?: string; page?: number }) =>
+    api<{ voices: LibraryVoice[]; has_more: boolean }>(`/api/voice/library${qs(p)}`),
+  addFromLibrary: (v: LibraryVoice, use_as?: "host_a" | "host_b") =>
+    post<VoiceState & { voice_id: string }>("/api/voice/library/add", {
+      public_owner_id: v.public_owner_id,
+      voice_id: v.voice_id,
+      name: v.name,
+      use_as,
+    }),
+  preview: (voice_id: string, opts: { text?: string; host?: "host_a" | "host_b"; delivery?: Delivery } = {}) =>
+    post<{ url: string; seconds: number }>("/api/voice/preview", { voice_id, ...opts }),
+  readingScript: () => api<{ title: string; text: string; words: number }>("/api/voice/reading-script"),
+  quota: () => api<Quota>("/api/voice/quota"),
   revoke: () => del<VoiceState>("/api/voice/consent"),
 };
 

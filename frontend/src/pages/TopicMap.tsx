@@ -1,15 +1,103 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import { useNavigate } from "react-router-dom";
 import { notebooksApi, topicsApi } from "../api/endpoints";
 import type { Job, TopicDetail, TopicMap as TopicMapData } from "../api/types";
 import { Reader } from "../components/Reader";
 import { EmptyState, errorMessage, formatDate, JobProgress, Loading, PageHeader } from "../components/ui";
 import { useJob } from "../hooks/useJob";
+import { playClick } from "../lib/sound";
 
 const W = 900;
 const H = 620;
 
 type P = { id: string; x: number; y: number; vx: number; vy: number; r: number };
+type View = { x: number; y: number; w: number; h: number };
+
+const HOME: View = { x: 0, y: 0, w: W, h: H };
+const MIN_W = W / 8;
+const MAX_W = W * 1.6;
+
+/** Wheel to zoom around the cursor, drag to pan, buttons and keys for the rest. */
+function useZoomPan(svgRef: RefObject<SVGSVGElement>) {
+  const [view, setView] = useState<View>(HOME);
+  const drag = useRef<{ px: number; py: number; view: View; moved: boolean } | null>(null);
+
+  const toSvg = useCallback(
+    (clientX: number, clientY: number, v: View) => {
+      const rect = svgRef.current!.getBoundingClientRect();
+      return { x: v.x + ((clientX - rect.left) / rect.width) * v.w, y: v.y + ((clientY - rect.top) / rect.height) * v.h };
+    },
+    [svgRef],
+  );
+
+  const scaleView = (v: View, factor: number, fx: number, fy: number): View => {
+    const w = Math.max(MIN_W, Math.min(MAX_W, v.w * factor));
+    const h = (w / W) * H;
+    // Keep the focus point fixed on screen while scaling.
+    return { x: fx - ((fx - v.x) * w) / v.w, y: fy - ((fy - v.y) * h) / v.h, w, h };
+  };
+
+  const zoomAt = useCallback((factor: number, cx?: number, cy?: number) => {
+    setView((v) => scaleView(v, factor, cx ?? v.x + v.w / 2, cy ?? v.y + v.h / 2));
+  }, []);
+
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      setView((v) => {
+        const p = toSvg(e.clientX, e.clientY, v);
+        return scaleView(v, Math.exp(Math.max(-0.4, Math.min(0.4, e.deltaY * 0.0015))), p.x, p.y);
+      });
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  });
+
+  const onPointerDown = (e: ReactPointerEvent<SVGSVGElement>) => {
+    if ((e.target as Element).closest(".map-node")) return;
+    drag.current = { px: e.clientX, py: e.clientY, view, moved: false };
+    svgRef.current?.setPointerCapture(e.pointerId);
+  };
+  const onPointerMove = (e: ReactPointerEvent<SVGSVGElement>) => {
+    const d = drag.current;
+    if (!d || !svgRef.current) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    const dx = ((e.clientX - d.px) / rect.width) * d.view.w;
+    const dy = ((e.clientY - d.py) / rect.height) * d.view.h;
+    if (Math.abs(dx) + Math.abs(dy) > 2) d.moved = true;
+    setView({ ...d.view, x: d.view.x - dx, y: d.view.y - dy });
+  };
+  const onPointerUp = (e: ReactPointerEvent<SVGSVGElement>) => {
+    drag.current = null;
+    if (svgRef.current?.hasPointerCapture(e.pointerId)) svgRef.current.releasePointerCapture(e.pointerId);
+  };
+  const onDoubleClick = (e: ReactMouseEvent<SVGSVGElement>) => {
+    if ((e.target as Element).closest(".map-node")) return;
+    const p = toSvg(e.clientX, e.clientY, view);
+    zoomAt(0.6, p.x, p.y);
+  };
+  const pan = (dx: number, dy: number) => setView((v) => ({ ...v, x: v.x + dx * v.w, y: v.y + dy * v.h }));
+  const reset = () => {
+    setView(HOME);
+  };
+  const focusOn = (x: number, y: number) =>
+    setView((v) => {
+      const w = Math.min(v.w, W / 2);
+      const h = (w / W) * H;
+      return { x: x - w / 2, y: y - h / 2, w, h };
+    });
+
+  return {
+    view,
+    zoomAt,
+    pan,
+    reset,
+    focusOn,
+    handlers: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp, onDoubleClick },
+  };
+}
 
 /** Small deterministic force layout: repulsion between all nodes, springs along edges, pull to center. */
 function layout(data: TopicMapData): Map<string, P> {
@@ -80,6 +168,8 @@ export default function TopicMap() {
   const [reading, setReading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const svgRef = useRef<SVGSVGElement>(null);
+  const { view, zoomAt, pan, reset, focusOn, handlers } = useZoomPan(svgRef);
 
   const load = () => topicsApi.map().then(setData, () => setError("Could not load the topic map."));
   useEffect(() => {
@@ -113,7 +203,15 @@ export default function TopicMap() {
     }
   };
 
-  const open = async (id: string) => setSelected(await topicsApi.get(id));
+  const open = async (id: string, center = false) => {
+    playClick("tap");
+    if (center) {
+      const p = positions.get(id);
+      if (p) focusOn(p.x, p.y);
+    }
+    setSelected(await topicsApi.get(id));
+  };
+  const scale = view.w / W; // keeps labels and strokes a constant size on screen
 
   return (
     <div className="page-wrap">
@@ -142,7 +240,39 @@ export default function TopicMap() {
       {data && data.nodes.length > 0 && (
         <div className="map-layout">
           <div className="card map-canvas">
-            <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Topic constellation">
+            <div className="map-controls">
+              <button className="icon-btn" onClick={() => zoomAt(0.75)} aria-label="Zoom in" title="Zoom in">
+                +
+              </button>
+              <button className="icon-btn" onClick={() => zoomAt(1.33)} aria-label="Zoom out" title="Zoom out">
+                -
+              </button>
+              <button className="icon-btn mono" onClick={reset} aria-label="Reset view" title="Reset view">
+                1:1
+              </button>
+            </div>
+            <p className="map-hint mono muted">Scroll to zoom · drag to pan · double click to dive in</p>
+            <svg
+              ref={svgRef}
+              viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
+              role="img"
+              aria-label="Topic constellation. Plus and minus zoom, arrow keys pan, 0 resets."
+              tabIndex={0}
+              className="map-svg"
+              {...handlers}
+              onKeyDown={(e) => {
+                const step = 0.12;
+                if (e.key === "+" || e.key === "=") zoomAt(0.8);
+                else if (e.key === "-") zoomAt(1.25);
+                else if (e.key === "0") reset();
+                else if (e.key === "ArrowLeft") pan(-step, 0);
+                else if (e.key === "ArrowRight") pan(step, 0);
+                else if (e.key === "ArrowUp") pan(0, -step);
+                else if (e.key === "ArrowDown") pan(0, step);
+                else return;
+                e.preventDefault();
+              }}
+            >
               <defs>
                 <radialGradient id="star" cx="50%" cy="50%" r="50%">
                   <stop offset="0%" stopColor="#ffffff" />
@@ -164,7 +294,7 @@ export default function TopicMap() {
                     y2={b.y}
                     stroke={lit ? "#217cff" : "#ffffff"}
                     strokeOpacity={lit ? 0.9 : focus ? 0.05 : 0.14}
-                    strokeWidth={lit ? 1.6 : 1}
+                    strokeWidth={(lit ? 1.6 : 1) * scale}
                   />
                 );
               })}
@@ -180,6 +310,7 @@ export default function TopicMap() {
                     onMouseEnter={() => setHover(n.id)}
                     onMouseLeave={() => setHover(null)}
                     onClick={() => open(n.id)}
+                    onDoubleClick={() => open(n.id, true)}
                     tabIndex={0}
                     role="button"
                     aria-label={`${n.name}, ${n.post_count} posts`}
@@ -187,7 +318,7 @@ export default function TopicMap() {
                   >
                     <circle cx={p.x} cy={p.y} r={p.r * 1.9} fill="url(#star)" opacity={active ? 0.9 : 0.45} />
                     <circle cx={p.x} cy={p.y} r={Math.max(3, p.r * 0.45)} fill="#ffffff" />
-                    <text x={p.x} y={p.y + p.r + 16} textAnchor="middle" className="map-label">
+                    <text x={p.x} y={p.y + p.r + 16 * scale} textAnchor="middle" className="map-label" style={{ fontSize: 12 * scale, strokeWidth: 4 * scale }}>
                       {n.name}
                     </text>
                   </g>
@@ -203,7 +334,7 @@ export default function TopicMap() {
                 <ol className="topic-rank">
                   {data.nodes.slice(0, 12).map((n) => (
                     <li key={n.id}>
-                      <button className="link-btn" onClick={() => open(n.id)}>
+                      <button className="link-btn" onClick={() => open(n.id, true)}>
                         {n.name}
                       </button>
                       <span className="mono muted"> {n.post_count}</span>

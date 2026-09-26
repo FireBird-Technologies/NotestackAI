@@ -37,6 +37,7 @@ from app.models import (
     Upload,
     User,
     VoiceConsent,
+    VoiceProfile,
     Workspace,
     WorkspaceMember,
 )
@@ -46,10 +47,10 @@ from app.pipeline.ingest import FeedNotFound, entry_from_upload, extract_article
 from app.services import launchpad, tts
 from app.services.email import email_service
 from app.services.email_verification import purge_old_codes
-from app.services.jobs import claim_next, create_job, retry_or_fail, stale_jobs, update_job
+from app.services.jobs import claim_next, create_job, record_usage, retry_or_fail, stale_jobs, update_job
 from app.services.plans import effective_plan
 from app.services.renderer import PermanentJobError, request_render
-from app.services.storage import storage
+from app.services.storage import keys, storage
 
 log = logging.getLogger("notestack.worker")
 
@@ -131,16 +132,41 @@ def handle_voice_clone(db: Session, job: Job):
     consent = db.get(VoiceConsent, uuid.UUID(job.params["consent_id"]))
     if not consent or consent.revoked_at:
         return Done({}, "Consent was revoked")
-    update_job(db, job, progress=0.2, message="Sending your sample to ElevenLabs")
-    head = storage.head(consent.sample_key) or {}
+    sample_keys = job.params.get("sample_keys") or [consent.sample_key]
+    update_job(db, job, progress=0.15, message=f"Sending {len(sample_keys)} recording(s) to ElevenLabs")
+    samples = []
+    for key in sample_keys:
+        head = storage.head(key) or {}
+        samples.append((key.rsplit("/", 1)[-1], storage.get_bytes(key), head.get("ContentType") or "audio/webm"))
+    owner = db.get(User, consent.user_id)
     try:
-        voice_id = tts.clone_voice(f"Notestack {consent.workspace_id}", storage.get_bytes(consent.sample_key),
-                                   consent.sample_key.rsplit("/", 1)[-1], head.get("ContentType") or "audio/webm")
+        voice_id = tts.clone_voice(f"{(owner.name if owner and owner.name else 'My')} (Notestack)", samples,
+                                   remove_background_noise=bool(job.params.get("remove_background_noise", True)))
     except tts.TTSError as exc:
         raise PermanentJobError(str(exc)) from exc
     consent.elevenlabs_voice_id = voice_id
     db.commit()
-    return Done({"voice_id": voice_id}, "Your voice is ready")
+
+    # Make the new voice host A and record a short preview so the writer can judge it straight away.
+    update_job(db, job, progress=0.7, message="Recording a preview in your voice")
+    vp = db.scalar(select(VoiceProfile).where(VoiceProfile.workspace_id == consent.workspace_id))
+    if not vp:
+        vp = VoiceProfile(workspace_id=consent.workspace_id)
+        db.add(vp)
+    vp.host_voices = {**(vp.host_voices or {}), "host_a": voice_id}
+    db.commit()
+    preview_text = job.params.get("preview_text") or (
+        "Hi, this is my Notestack voice. From now on, my audio overviews and videos can sound like me.")
+    preview_key = None
+    try:
+        clip = tts.synthesize(consent.workspace_id, preview_text[:600], voice_id)
+        preview_key = storage.put_bytes(keys.artifact(consent.workspace_id, consent.id, "voice-preview", "mp3"),
+                                        clip, "audio/mpeg")
+        record_usage(db, workspace_id=consent.workspace_id, kind="tts", provider="elevenlabs",
+                     quantity=round(tts.mp3_seconds(clip), 1), unit="seconds", job=job)
+    except tts.TTSError:
+        log.warning("voice preview failed for %s", voice_id, exc_info=True)
+    return Done({"voice_id": voice_id, "preview_key": preview_key}, "Your voice is ready and set as host A")
 
 
 def handle_resurface(db: Session, job: Job):

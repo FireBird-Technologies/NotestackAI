@@ -39,6 +39,13 @@ def host_voices(db: Session, workspace_id: uuid.UUID) -> tuple[str, str]:
     return voices.get("host_a") or settings.elevenlabs_voice_a, voices.get("host_b") or settings.elevenlabs_voice_b
 
 
+def host_settings(db: Session, workspace_id: uuid.UUID) -> dict[str, tts.VoiceSettings]:
+    """Per host delivery settings (stability, similarity, style, speed) saved on the Voice page."""
+    vp = db.scalar(select(VoiceProfile).where(VoiceProfile.workspace_id == workspace_id))
+    saved = ((vp.host_voices if vp else None) or {}).get("settings") or {}
+    return {h: tts.VoiceSettings.from_dict(saved.get(h)) for h in ("host_a", "host_b")}
+
+
 def _require_tts() -> None:
     if not settings.elevenlabs_api_key:
         raise PermanentJobError("Audio needs ELEVENLABS_API_KEY in .env")
@@ -64,20 +71,30 @@ def audio_overview(db: Session, job: Job, artifact: Artifact) -> dict:
         raise RuntimeError("The script came back empty")
     tools = tools_for(corpus, docs)
     voice_a, voice_b = host_voices(db, artifact.workspace_id)
+    delivery = host_settings(db, artifact.workspace_id)
+    script = [
+        tts.Line(text=ln["text"], voice_id=voice_b if ln.get("speaker") == "host_b" else voice_a,
+                 settings=delivery["host_b" if ln.get("speaker") == "host_b" else "host_a"])
+        for ln in lines
+    ]
+    update_job(db, job, progress=0.2, message=f"Recording {len(script)} lines")
+
+    def progress(done: int) -> None:
+        if done % 3 == 0 or done == len(script):
+            update_job(db, job, progress=0.2 + 0.75 * done / len(script),
+                       message=f"Recorded {done} of {len(script)} lines")
+
+    clips = tts.synthesize_many(artifact.workspace_id, script, on_done=progress)
     audio = bytearray()
     segments = []
     t = 0.0
-    for i, line in enumerate(lines):
-        voice = voice_a if line.get("speaker") == "host_a" else voice_b
-        clip = tts.synthesize(artifact.workspace_id, line["text"], voice)
+    for line, clip in zip(lines, clips, strict=True):
         seconds = tts.mp3_seconds(clip)
         segments.append({"speaker": line.get("speaker", "host_a"), "text": line["text"],
                          "start": round(t, 2), "end": round(t + seconds, 2),
                          "sources": verify_refs(tools, line.get("sources") or [])})
         audio += clip
         t += seconds
-        update_job(db, job, progress=0.2 + 0.75 * (i + 1) / len(lines),
-                   message=f"Recording line {i + 1} of {len(lines)}")
     key = keys.artifact(artifact.workspace_id, artifact.id, "audio", "mp3")
     storage.put_bytes(key, bytes(audio), "audio/mpeg")
     artifact.storage_key = key
@@ -129,13 +146,14 @@ def make_video(db: Session, job: Job, artifact: Artifact) -> None:
     audio = bytearray()
     cursor = 0.0
     voice_a, _ = host_voices(db, artifact.workspace_id)
+    narrator = host_settings(db, artifact.workspace_id)["host_a"]
     out_scenes = []
     for i, s in enumerate(scenes):
         narration = (s.get("narration") or "").strip()
         duration = _clamp(s.get("duration_hint_s"), 2.0, 20.0)
         if narration and settings.elevenlabs_api_key:
             update_job(db, job, progress=0.15 + 0.5 * i / len(scenes), message=f"Narrating scene {i + 1}")
-            clip, words = tts.synthesize_with_timestamps(artifact.workspace_id, narration, voice_a)
+            clip, words = tts.synthesize_with_timestamps(artifact.workspace_id, narration, voice_a, narrator)
             seconds = tts.mp3_seconds(clip)
             # Pad with silence so each clip starts exactly when its scene does.
             audio += _silence(cursor - tts.mp3_seconds(bytes(audio)))

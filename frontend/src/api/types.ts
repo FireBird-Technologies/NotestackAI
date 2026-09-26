@@ -142,17 +142,58 @@ export type VoiceState = {
   sample_doc_ids: string[];
   updated_at: string | null;
   host_voices: { host_a: string; host_b: string };
+  delivery: { host_a: Delivery; host_b: Delivery };
+  model: string;
+  models: Record<string, string>;
   clone: {
     allowed: boolean;
     consent_text: string;
-    status: "none" | "processing" | "ready";
+    status: "none" | "processing" | "ready" | "failed";
     voice_id: string | null;
     created_at: string | null;
+    error: string | null;
+    preview_url: string | null;
   };
   tts_configured: boolean;
 };
 
-export type Voice = { voice_id: string; name: string; category?: string | null; preview_url?: string | null };
+export type Delivery = { stability: number; similarity_boost: number; style: number; speed: number; use_speaker_boost?: boolean };
+
+export type Voice = {
+  voice_id: string;
+  name: string;
+  category?: string | null;
+  preview_url?: string | null;
+  description?: string | null;
+  labels?: Record<string, string>;
+};
+
+export type LibraryVoice = {
+  public_owner_id: string;
+  voice_id: string;
+  name: string;
+  description: string | null;
+  preview_url: string | null;
+  gender: string | null;
+  age: string | null;
+  accent: string | null;
+  language: string | null;
+  use_case: string | null;
+  descriptive: string | null;
+  category: string | null;
+  cloned_by_count: number | null;
+  free_users_allowed: boolean;
+  notice_period: number | null;
+};
+
+export type Quota = {
+  tier?: string;
+  character_count?: number;
+  character_limit?: number;
+  can_use_instant_voice_cloning?: boolean;
+  voice_slots_used?: number;
+  voice_limit?: number;
+};
 
 export type Platform = "x" | "linkedin" | "bluesky" | "substack_notes";
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { artifactsApi, jobsApi, launchpadApi, notebooksApi, sourcesApi, voiceApi } from "../api/endpoints";
 import type { Artifact, CalendarItem, Job, NotebookSummary, Source } from "../api/types";
@@ -9,6 +9,15 @@ import { useAuth } from "../hooks/useAuth";
 import { useJobMap } from "../hooks/useJob";
 import { AddSource } from "./Sources";
 import { PENDING_SOURCE_KEY } from "./Landing";
+import { ONBOARDED_KEY } from "./Welcome";
+
+function onboarded(): boolean {
+  try {
+    return localStorage.getItem(ONBOARDED_KEY) === "1";
+  } catch {
+    return true;
+  }
+}
 
 type Plan = { name: string };
 
@@ -39,6 +48,7 @@ export default function MissionControl() {
   const [hasVoice, setHasVoice] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const started = useRef(false);
+  const navigate = useNavigate();
 
   const refresh = useCallback(async () => {
     const [s, n, p, a, c, v] = await Promise.all([
@@ -50,12 +60,17 @@ export default function MissionControl() {
       voiceApi.get(),
     ]);
     setSources(s);
+    // First visit with nothing connected: run the guided setup once.
+    if (s.length === 0 && !onboarded()) {
+      navigate("/welcome", { replace: true });
+      return;
+    }
     setNotebooks(n);
     setPlan(p.plan);
     setRecent(a.items);
     setUpcoming(c.slice(0, 5));
     setHasVoice(Boolean(v.profile));
-  }, []);
+  }, [navigate]);
 
   const { jobs, watch } = useJobMap(() => refresh());
 
