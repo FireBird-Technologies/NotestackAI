@@ -204,7 +204,7 @@ export default function TopicMap() {
   };
 
   const open = async (id: string, center = false) => {
-    playClick("tap");
+    playClick();
     if (center) {
       const p = positions.get(id);
       if (p) focusOn(p.x, p.y);

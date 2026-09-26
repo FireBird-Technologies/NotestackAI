@@ -205,7 +205,7 @@ signatures so the schema contract is fixed early.
 
 | | Free | Writer | Studio |
 | --- | --- | --- | --- |
-| Price (when billing turns on) | $0 | $25/mo ($18.75/mo billed annually) | $49/mo ($36.75/mo billed annually) |
+| Price (when billing turns on) | $0 | $24.99/mo ($18.99/mo billed annually) | $48.99/mo ($36.99/mo billed annually) |
 | Sources | 1 | 3 | 10 |
 | Indexed posts | 5 | 500 | 5,000 |
 | Audio overview minutes / mo | 3 | 60 | 240 |

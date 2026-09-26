@@ -15,7 +15,7 @@ class Plan:
     id: str
     name: str
     tagline: str
-    price_monthly_usd: int
+    price_monthly_usd: float
     sources: int
     indexed_posts: int
     audio_minutes: int
@@ -51,7 +51,7 @@ PLANS: dict[str, Plan] = {
         id="writer",
         name="Writer",
         tagline="For writers publishing every week",
-        price_monthly_usd=25,
+        price_monthly_usd=24.99,
         sources=3,
         indexed_posts=500,
         audio_minutes=60,
@@ -72,7 +72,7 @@ PLANS: dict[str, Plan] = {
         id="studio",
         name="Studio",
         tagline="For publications and power users",
-        price_monthly_usd=49,
+        price_monthly_usd=48.99,
         sources=10,
         indexed_posts=5000,
         audio_minutes=240,
@@ -92,10 +92,22 @@ PLANS: dict[str, Plan] = {
 }
 
 
+def to_99(amount: float) -> float:
+    """Nearest price ending in .99 (18.74 -> 18.99, 36.74 -> 36.99)."""
+    return 0.0 if amount <= 0 else round(max(0.99, round(amount + 0.01) - 0.01), 2)
+
+
 def annual_prices(plan: Plan) -> tuple[float, float]:
-    """(effective monthly price, total billed per year) on annual billing."""
-    per_month = round(plan.price_monthly_usd * (1 - ANNUAL_DISCOUNT), 2)
+    """(effective monthly price, total billed per year) on annual billing, shown as .99 prices."""
+    per_month = to_99(plan.price_monthly_usd * (1 - ANNUAL_DISCOUNT))
     return per_month, round(per_month * 12, 2)
+
+
+def annual_savings_pct(plan: Plan) -> int:
+    if not plan.price_monthly_usd:
+        return 0
+    per_month, _ = annual_prices(plan)
+    return round((1 - per_month / plan.price_monthly_usd) * 100)
 
 
 def plan_dict(plan: Plan) -> dict:
@@ -103,6 +115,7 @@ def plan_dict(plan: Plan) -> dict:
     data["features"] = list(plan.features)
     data["price_annual_monthly_usd"], data["price_annual_usd"] = annual_prices(plan)
     data["annual_discount"] = ANNUAL_DISCOUNT
+    data["annual_savings_pct"] = annual_savings_pct(plan)
     return data
 
 

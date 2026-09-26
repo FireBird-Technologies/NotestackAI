@@ -10,6 +10,7 @@ type Plan = {
   price_monthly_usd: number;
   price_annual_monthly_usd?: number;
   price_annual_usd?: number;
+  annual_savings_pct?: number;
   features: string[];
 };
 
@@ -36,7 +37,7 @@ const FALLBACK: Plan[] = [
     id: "writer",
     name: "Writer",
     tagline: "For writers publishing every week",
-    price_monthly_usd: 25,
+    price_monthly_usd: 24.99,
     features: [
       "3 sources, 500 indexed posts",
       "60 min of audio overviews a month",
@@ -50,7 +51,7 @@ const FALLBACK: Plan[] = [
     id: "studio",
     name: "Studio",
     tagline: "For publications and power users",
-    price_monthly_usd: 49,
+    price_monthly_usd: 48.99,
     features: [
       "10 sources, 5,000 indexed posts",
       "240 min of audio overviews a month",
@@ -66,8 +67,18 @@ function money(n: number): string {
   return Number.isInteger(n) ? `$${n}` : `$${n.toFixed(2)}`;
 }
 
+/** Nearest .99 price, mirroring plans.to_99 on the backend. */
+function to99(amount: number): number {
+  return amount <= 0 ? 0 : Math.max(0.99, Math.round(amount + 0.01) - 0.01);
+}
+
 function annualMonthly(plan: Plan): number {
-  return plan.price_annual_monthly_usd ?? Math.round(plan.price_monthly_usd * (1 - ANNUAL_DISCOUNT) * 100) / 100;
+  return plan.price_annual_monthly_usd ?? to99(plan.price_monthly_usd * (1 - ANNUAL_DISCOUNT));
+}
+
+function savingsPct(plan: Plan): number {
+  if (!plan.price_monthly_usd) return 0;
+  return plan.annual_savings_pct ?? Math.round((1 - annualMonthly(plan) / plan.price_monthly_usd) * 100);
 }
 
 function annualTotal(plan: Plan): number {
@@ -78,6 +89,7 @@ export default function PricingTiers() {
   const [plans, setPlans] = useState<Plan[]>(FALLBACK);
   const [billingEnabled, setBillingEnabled] = useState(false);
   const [cycle, setCycle] = useState<Cycle>("monthly");
+  const bestSaving = Math.max(0, ...plans.map(savingsPct));
 
   useEffect(() => {
     api<{ billing_enabled: boolean; plans: Plan[] }>("/api/billing/plans")
@@ -104,7 +116,7 @@ export default function PricingTiers() {
             Monthly
           </button>
           <button type="button" role="radio" aria-checked={cycle === "annual"} className={cycle === "annual" ? "on" : ""} onClick={() => setCycle("annual")}>
-            Annual <span className="save mono">Save 25%</span>
+            Annual {bestSaving > 0 && <span className="save mono">Save {bestSaving}%</span>}
           </button>
         </div>
       </div>
