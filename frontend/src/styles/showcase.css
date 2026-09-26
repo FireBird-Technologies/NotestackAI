@@ -519,3 +519,68 @@
 .demo-unmute:hover {
   background: var(--blue);
 }
+
+/* Pricing: billing cycle toggle */
+.pricing-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.pricing-top .pricing-note {
+  margin: 0;
+}
+
+.cycle-toggle {
+  display: inline-flex;
+  padding: 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.cycle-toggle button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 16px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-2);
+  font: 600 0.875rem var(--font-body);
+  cursor: pointer;
+}
+
+.cycle-toggle button.on {
+  background: var(--blue);
+  color: var(--white);
+  box-shadow: var(--glow-sm);
+}
+
+.cycle-toggle .save {
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--blue-60);
+  font-size: 0.65rem;
+  color: var(--white);
+}
+
+.cycle-toggle button.on .save {
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+.tier-was {
+  margin-right: 8px;
+  font-size: 1.1rem;
+  text-decoration: line-through;
+  text-decoration-color: var(--blue);
+}
+
+.tier-billing {
+  font-size: 0.72rem;
+  margin-top: -4px;
+}

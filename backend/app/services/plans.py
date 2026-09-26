@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.models import Subscription, Workspace
 
+ANNUAL_DISCOUNT = 0.25  # annual billing: 25% off the monthly price
+
 
 @dataclass(frozen=True)
 class Plan:
@@ -31,24 +33,25 @@ PLANS: dict[str, Plan] = {
         tagline="For trying Notestack on your archive",
         price_monthly_usd=0,
         sources=1,
-        indexed_posts=50,
-        audio_minutes=10,
-        video_minutes=3,
-        launch_kits=5,
+        indexed_posts=5,
+        audio_minutes=3,
+        video_minutes=1,
+        launch_kits=2,
         voice_cloning=False,
         brand_kit=False,
         features=(
-            "1 source, 50 indexed posts",
+            "1 source, your 5 latest posts",
             "Grounded research chat with citations",
-            "10 min of audio overviews a month",
-            "5 Launch Kits a month",
+            "3 min of audio overviews a month",
+            "1 min of video a month",
+            "2 Launch Kits a month",
         ),
     ),
     "writer": Plan(
         id="writer",
         name="Writer",
         tagline="For writers publishing every week",
-        price_monthly_usd=19,
+        price_monthly_usd=25,
         sources=3,
         indexed_posts=500,
         audio_minutes=60,
@@ -89,9 +92,17 @@ PLANS: dict[str, Plan] = {
 }
 
 
+def annual_prices(plan: Plan) -> tuple[float, float]:
+    """(effective monthly price, total billed per year) on annual billing."""
+    per_month = round(plan.price_monthly_usd * (1 - ANNUAL_DISCOUNT), 2)
+    return per_month, round(per_month * 12, 2)
+
+
 def plan_dict(plan: Plan) -> dict:
     data = asdict(plan)
     data["features"] = list(plan.features)
+    data["price_annual_monthly_usd"], data["price_annual_usd"] = annual_prices(plan)
+    data["annual_discount"] = ANNUAL_DISCOUNT
     return data
 
 

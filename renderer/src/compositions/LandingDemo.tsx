@@ -23,6 +23,37 @@ const SCENES = [
 ] as const;
 const XFADE = 0.5; // seconds of overlap between scenes
 
+// Narration clip lengths (public/demo-vo/durations.json) so the music can duck under the voice.
+const VO_SECONDS: Record<(typeof SCENES)[number]["id"], number> = {
+  warp: 3.79, paste: 3.27, orbit: 6.3, research: 4.29, audio: 3.74, launchkit: 6.53, launchpad: 3.22, outro: 2.48,
+};
+
+/** Frame ranges where the narrator is speaking, in composition time. */
+const VO_WINDOWS: [number, number][] = (() => {
+  let cursor = 0;
+  return SCENES.map((scene) => {
+    const start = cursor + scene.vo;
+    cursor += scene.len - XFADE;
+    return [Math.round(start * 30), Math.round((start + VO_SECONDS[scene.id]) * 30)] as [number, number];
+  });
+})();
+
+const MUSIC = 0.5;
+const MUSIC_DUCKED = 0.17;
+
+/** Music level: full between lines, eased down around each line (0.3 s ramps). */
+function musicVolume(frame: number): number {
+  const ramp = 9;
+  let level = MUSIC;
+  for (const [a, b] of VO_WINDOWS) {
+    if (frame >= a - ramp && frame <= b + ramp) {
+      const into = interpolate(frame, [a - ramp, a, b, b + ramp], [0, 1, 1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+      level = Math.min(level, MUSIC - (MUSIC - MUSIC_DUCKED) * into);
+    }
+  }
+  return level;
+}
+
 export const DEMO_DURATION = S(SCENES.reduce((n, s) => n + s.len, 0) - XFADE * (SCENES.length - 1));
 
 const BLUE = theme.blue;
@@ -518,7 +549,7 @@ export function LandingDemo() {
   let cursor = 0;
   return (
     <AbsoluteFill style={{ backgroundColor: theme.black }}>
-      <SoundTrack src={staticFile("demo-vo/ambience.wav")} volume={0.32} />
+      <SoundTrack src={staticFile("demo-vo/music.wav")} volume={musicVolume} />
       {SCENES.map((scene, i) => {
         const from = cursor;
         cursor += S(scene.len - XFADE);

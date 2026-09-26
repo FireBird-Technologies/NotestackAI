@@ -205,12 +205,12 @@ signatures so the schema contract is fixed early.
 
 | | Free | Writer | Studio |
 | --- | --- | --- | --- |
-| Price (when billing turns on) | $0 | $19/mo | $49/mo |
+| Price (when billing turns on) | $0 | $25/mo ($18.75/mo billed annually) | $49/mo ($36.75/mo billed annually) |
 | Sources | 1 | 3 | 10 |
-| Indexed posts | 50 | 500 | 5,000 |
-| Audio overview minutes / mo | 10 | 60 | 240 |
-| Video render minutes / mo | 3 | 30 | 120 |
-| Launch Kits / mo | 5 | 50 | unlimited |
+| Indexed posts | 5 | 500 | 5,000 |
+| Audio overview minutes / mo | 3 | 60 | 240 |
+| Video render minutes / mo | 1 | 30 | 120 |
+| Launch Kits / mo | 2 | 50 | unlimited |
 | Voice profile | yes | yes | yes |
 | Voice cloning (with consent) | no | yes | yes |
 | Brand kit, no watermark | no | yes | yes |
