@@ -29,6 +29,7 @@ def serialize_job(job: Job) -> dict:
     return {
         "id": str(job.id),
         "kind": job.kind,
+        "params": job.params,
         "status": job.status,
         "progress": job.progress,
         "message": job.message,

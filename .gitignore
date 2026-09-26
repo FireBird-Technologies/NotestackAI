@@ -12,3 +12,11 @@ __pycache__/
 out/
 renderer/build/
 .corpus-cache/
+
+# Local SQLite database
+*.db
+*.db-wal
+*.db-shm
+
+# Local object storage (used when no R2 is configured)
+.storage/

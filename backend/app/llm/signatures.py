@@ -1,5 +1,5 @@
-"""Typed DSPy signatures with Pydantic outputs. Phase 1 modules are implemented; later ones are
-declared now so the output contract is fixed early."""
+"""Typed DSPy signatures with Pydantic outputs. Every module that produces facts cites SourceRefs,
+which are verified against the corpus before anything reaches the writer."""
 
 from typing import Literal
 
@@ -59,6 +59,41 @@ class Hook(BaseModel):
     text: str
     strength: float = Field(ge=0, le=1)
     rationale: str
+
+
+class TopicTag(BaseModel):
+    name: str = Field(description="Short topic name, 1 to 4 words, Title Case")
+    weight: float = Field(ge=0, le=1, description="How central the topic is to the post")
+
+
+class TopicGroup(BaseModel):
+    canonical: str = Field(description="The best name for the merged topic")
+    members: list[str] = Field(description="Every input name that means the same topic")
+    summary: str = Field(description="One sentence on what the writer says about it")
+
+
+class InternalLink(BaseModel):
+    path: str
+    anchor_text: str
+    reason: str
+
+
+class SeoPackOut(BaseModel):
+    title_options: list[str]
+    meta_description: str = Field(description="At most 155 characters")
+    slug: str
+    keywords: list[str]
+    internal_links: list[InternalLink] = Field(default_factory=list)
+
+
+class Slide(BaseModel):
+    heading: str
+    body: str
+
+
+class QuotePick(BaseModel):
+    quote: str = Field(description="Exact words from the passage, at most 220 characters")
+    source: SourceRef
 
 
 # Signatures
@@ -146,3 +181,71 @@ class PlatformAdapter(dspy.Signature):
     platform: Literal["x_thread", "linkedin", "substack_notes", "bluesky"] = dspy.InputField()
     platform_rules: str = dspy.InputField()
     posts: list[str] = dspy.OutputField()
+
+
+class SummarizeNotebook(dspy.Signature):
+    """Summarize what these posts say as a whole: the main arguments, how they connect and where the
+    writer changed their mind. Every factual sentence ends with a [n] marker and a citation to the
+    lines it came from. Plain, warm prose. Never use em dashes."""
+
+    title: str = dspy.InputField()
+    passages: list[str] = dspy.InputField(desc="Posts with path and numbered lines")
+    summary: str = dspy.OutputField(desc="3 to 6 paragraphs with [n] markers")
+    themes: list[str] = dspy.OutputField(desc="3 to 7 short theme names")
+    citations: list[FileCitation] = dspy.OutputField()
+
+
+class ExtractTopics(dspy.Signature):
+    """Name the topics this post is about, the way a reader would search for them."""
+
+    title: str = dspy.InputField()
+    text: str = dspy.InputField()
+    known_topics: list[str] = dspy.InputField(desc="Reuse one of these names when it fits")
+    topics: list[TopicTag] = dspy.OutputField(desc="3 to 8 topics")
+
+
+class ConsolidateTopics(dspy.Signature):
+    """Merge topic names that mean the same thing (plural/singular, synonyms, broader wording) and
+    write a one sentence summary per merged topic from the post titles given."""
+
+    topics: list[str] = dspy.InputField(desc="name (post count): sample post titles")
+    groups: list[TopicGroup] = dspy.OutputField()
+
+
+class SeoPack(dspy.Signature):
+    """Write search metadata for the post in the writer's voice and suggest links to their other
+    posts where a reader would want them. No em dashes."""
+
+    title: str = dspy.InputField()
+    passages: list[str] = dspy.InputField()
+    related_posts: str = dspy.InputField(desc="Other posts in the archive as date | path | title")
+    seo: SeoPackOut = dspy.OutputField()
+
+
+class CarouselSlides(dspy.Signature):
+    """Turn the post's key claims into a 6 to 9 slide carousel. Slide 1 is a hook, the last is a call to
+    read the post. Short, punchy, in the writer's voice. No em dashes."""
+
+    passages: list[str] = dspy.InputField()
+    voice_profile: str = dspy.InputField()
+    slides: list[Slide] = dspy.OutputField()
+
+
+class PickQuotes(dspy.Signature):
+    """Pick the most quotable lines, copied exactly from the passages."""
+
+    passages: list[str] = dspy.InputField()
+    n: int = dspy.InputField()
+    quotes: list[QuotePick] = dspy.OutputField()
+
+
+class EvergreenScore(dspy.Signature):
+    """Judge how well this post would land if reshared today. Evergreen means the ideas are not tied to
+    news, dates or a moment. Suggest a fresh angle for resharing it. No em dashes."""
+
+    title: str = dspy.InputField()
+    published: str = dspy.InputField()
+    excerpt: str = dspy.InputField()
+    score: float = dspy.OutputField(desc="0 (dated) to 1 (timeless)")
+    reason: str = dspy.OutputField()
+    angle: str = dspy.OutputField(desc="One line hook for resharing now")

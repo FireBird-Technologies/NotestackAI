@@ -79,13 +79,14 @@ export default function AuthPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [providers, setProviders] = useState<Providers | null>(null);
+  const [isNew, setIsNew] = useState(false);
   const { complete, user } = useAuth();
   const navigate = useNavigate();
   const next = safeNext(params.get("next"));
 
   useEffect(() => {
-    if (user) navigate(next, { replace: true });
-  }, [user, navigate, next]);
+    if (user) navigate(isNew ? "/welcome" : next, { replace: true });
+  }, [user, navigate, next, isNew]);
 
   useEffect(() => {
     authApi
@@ -107,7 +108,10 @@ export default function AuthPage() {
     setError(null);
     try {
       const result = await fn();
-      if (result) complete(result);
+      if (result) {
+        if (result.created) setIsNew(true);
+        complete(result);
+      }
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Something went wrong. Try again.");
     } finally {

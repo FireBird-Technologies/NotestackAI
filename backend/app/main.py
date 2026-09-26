@@ -1,4 +1,5 @@
 import logging
+import threading
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -8,7 +9,22 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.llm.provider import configure_default
-from app.routers import artifacts, auth, billing, jobs, notebooks, sources, storage, unsubscribe
+from app.routers import (
+    artifacts,
+    auth,
+    billing,
+    jobs,
+    launchpad,
+    notebooks,
+    resurface,
+    sources,
+    storage,
+    topics,
+    unsubscribe,
+    voice,
+)
+from app.routers import settings as settings_router
+from app.services.storage import storage as store
 
 log = logging.getLogger("notestack")
 
@@ -17,14 +33,19 @@ log = logging.getLogger("notestack")
 async def lifespan(app: FastAPI):
     logging.basicConfig(level=logging.INFO)
     configure_default()
-    if settings.env == "development" and settings.r2_endpoint_url:
+    if settings.env == "development" and (settings.r2_endpoint_url or settings.use_local_storage):
         try:
-            from app.services.storage import storage as store
-
-            store.ensure_bucket()  # MinIO locally
+            store.ensure_bucket()  # MinIO or the local storage folder
         except Exception:
             log.warning("could not ensure local bucket", exc_info=True)
+    stop = threading.Event()
+    if settings.worker_in_api:
+        from app.worker import start_background
+
+        start_background(stop)
+        log.info("worker running inside the API (RUN_WORKER_IN_API)")
     yield
+    stop.set()
 
 
 app = FastAPI(title="Notestack API", version="0.1.0", lifespan=lifespan)
@@ -53,6 +74,10 @@ def health():
     return {"ok": True, "llm": settings.llm_model, "billing_enabled": settings.billing_enabled}
 
 
-for r in (auth, billing, storage, sources, notebooks, artifacts, jobs, unsubscribe):
+for r in (auth, billing, storage, sources, notebooks, artifacts, jobs, unsubscribe, topics, voice, resurface,
+          launchpad, settings_router):
     app.include_router(r.router)
 app.include_router(sources.documents_router)
+app.include_router(launchpad.links_router)
+if settings.use_local_storage:
+    app.include_router(storage.local_router)

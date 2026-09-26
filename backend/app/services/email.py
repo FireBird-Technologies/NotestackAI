@@ -165,6 +165,21 @@ class EmailService:
             )
         )
 
+    def send_post_reminder(self, to: str, platform: str, content: str, url: str) -> bool:
+        body = (
+            f"Your {html.escape(platform)} post is scheduled for now. Copy it below and post it."
+            f"<pre style='white-space:pre-wrap;background:rgba(255,255,255,0.06);padding:16px;border-radius:8px'>"
+            f"{html.escape(content)}</pre>" + _button("Open Launchpad", url)
+        )
+        return self._send(
+            OutgoingEmail(
+                to=to,
+                subject=f"Time to post on {platform}",
+                html=_layout("Launch window open", body),
+                text=f"Time to post on {platform}:\n\n{content}\n\nLaunchpad: {url}",
+            )
+        )
+
     # Internal alerts
 
     def send_alert(self, subject: str, text: str) -> bool:

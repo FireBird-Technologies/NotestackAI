@@ -35,4 +35,5 @@ export const authApi = {
   forgotComplete: (email: string, code: string, password: string) =>
     post<LoginResult>("/api/auth/password/forgot/complete", { email, code, password }),
   logout: () => post<{ ok: true }>("/api/auth/logout"),
+  deleteAccount: () => post<{ ok: true }>("/api/auth/delete-account"),
 };

@@ -88,11 +88,53 @@ export async function api<T>(path: string, init: RequestInit = {}, retry = true)
 export const post = <T>(path: string, body?: unknown) =>
   api<T>(path, { method: "POST", body: body === undefined ? undefined : JSON.stringify(body) });
 
-/** Direct browser upload to Cloudflare R2 through a presigned PUT. */
+export const patch = <T>(path: string, body: unknown) => api<T>(path, { method: "PATCH", body: JSON.stringify(body) });
+
+export const put = <T>(path: string, body: unknown) => api<T>(path, { method: "PUT", body: JSON.stringify(body) });
+
+export const del = <T = { ok: true }>(path: string) => api<T>(path, { method: "DELETE" });
+
+/** Query string from an object, skipping empty values. */
+export function qs(params: Record<string, string | number | boolean | null | undefined>): string {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== null && v !== "") q.set(k, String(v));
+  const out = q.toString();
+  return out ? `?${out}` : "";
+}
+
+/** Direct browser upload to storage (R2, or the API's local disk store) through a presigned PUT. */
+const TYPES_BY_EXT: Record<string, string> = {
+  md: "text/markdown",
+  markdown: "text/markdown",
+  txt: "text/plain",
+  html: "text/html",
+  htm: "text/html",
+  pdf: "application/pdf",
+  mp3: "audio/mpeg",
+  m4a: "audio/mp4",
+  wav: "audio/wav",
+  webm: "audio/webm",
+  ogg: "audio/ogg",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+  svg: "image/svg+xml",
+};
+
+/** Browsers leave File.type empty for some extensions (.md on Windows) and use vendor names for others. */
+function contentType(file: File): string {
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+  const base = file.type.split(";")[0];
+  if (base === "audio/x-m4a") return "audio/mp4";
+  if (base === "audio/x-wav") return "audio/wav";
+  return base || TYPES_BY_EXT[ext] || "application/octet-stream";
+}
+
 export async function uploadFile(file: File): Promise<{ upload_id: string; key: string }> {
   const start = await post<{ upload_id: string; upload_url: string; headers: Record<string, string> }>(
     "/api/storage/uploads",
-    { filename: file.name, content_type: file.type, size_bytes: file.size },
+    { filename: file.name, content_type: contentType(file), size_bytes: file.size },
   );
   const put = await fetch(start.upload_url, { method: "PUT", headers: start.headers, body: file });
   if (!put.ok) throw new ApiError(put.status, "Upload to storage failed");

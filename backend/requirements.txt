@@ -16,3 +16,4 @@ httpx==0.28.*
 dspy==2.6.*
 feedparser==6.*
 beautifulsoup4==4.*
+pypdf==5.*

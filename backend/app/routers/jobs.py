@@ -22,6 +22,17 @@ def _get(ctx: Ctx, job_id: uuid.UUID) -> Job:
     return job
 
 
+@router.get("/jobs")
+def list_jobs(ctx: Ctx = Depends(get_ctx), active: bool = False, kind: str | None = None, limit: int = 20):
+    q = select(Job).where(Job.workspace_id == ctx.workspace.id)
+    if active:
+        q = q.where(Job.status.in_(["queued", "running"]))
+    if kind:
+        q = q.where(Job.kind.in_(kind.split(",")))
+    jobs = ctx.db.scalars(q.order_by(Job.created_at.desc()).limit(min(limit, 100))).all()
+    return [serialize_job(j) for j in jobs]
+
+
 @router.get("/jobs/{job_id}")
 def get_job(job_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
     return serialize_job(_get(ctx, job_id))
@@ -45,6 +56,7 @@ class ProgressIn(BaseModel):
     error: str | None = None
     render_seconds: float | None = None
     storage_key: str | None = None
+    storage_keys: list[str] | None = None  # carousels: one PNG per slide
 
 
 @router.post("/internal/jobs/{job_id}/progress", include_in_schema=False)
@@ -59,9 +71,16 @@ def renderer_progress(
     job = db.get(Job, job_id)
     if not job:
         raise HTTPException(404, "Job not found")
-    if body.status == "done" and job.artifact_id:
-        artifact = db.get(Artifact, job.artifact_id)
-        if artifact and body.storage_key:
+    artifact = db.get(Artifact, job.artifact_id) if job.artifact_id else None
+    if body.status == "failed" and artifact:
+        artifact.status = "failed"
+        artifact.content_json = {**(artifact.content_json or {}), "error": (body.error or "Render failed")[:500]}
+    if body.status == "done" and artifact:
+        if body.storage_keys:
+            artifact.content_json = {**(artifact.content_json or {}), "slide_keys": body.storage_keys}
+            artifact.storage_key = body.storage_keys[0]
+            artifact.status = "ready"
+        elif body.storage_key:
             artifact.storage_key = body.storage_key
             artifact.status = "ready"
         if body.render_seconds:

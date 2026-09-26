@@ -1,90 +1,67 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { api, ApiError, post } from "../api/client";
-import { streamSSE } from "../api/stream";
-import { PENDING_SOURCE_KEY } from "./Landing";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import { api } from "../api/client";
+import { artifactsApi, jobsApi, launchpadApi, notebooksApi, sourcesApi, voiceApi } from "../api/endpoints";
+import type { Artifact, CalendarItem, Job, NotebookSummary, Source } from "../api/types";
+import { CheckIcon } from "../components/icons/Icons";
+import { formatDate, JobProgress, StatusPill } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
+import { useJobMap } from "../hooks/useJob";
+import { AddSource } from "./Sources";
+import { PENDING_SOURCE_KEY } from "./Landing";
 
-type Job = { id: string; status: string; progress: number; message: string | null; error: string | null };
-type Source = {
-  id: string;
-  feed_url: string;
-  title: string | null;
-  platform: string;
-  sync_status: string;
-  document_count: number;
-};
-type Notebook = { id: string; title: string; description: string | null };
 type Plan = { name: string };
-type Doc = { id: string };
 
-export function AscentBar({ job }: { job: Job }) {
-  const pct = Math.round(job.progress * 100);
-  return (
-    <div className="ascent" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
-      <div className="ascent-track">
-        <div className="ascent-fill" style={{ width: `${pct}%` }} />
-      </div>
-      <div className="ascent-meta mono">
-        <span>{job.status === "failed" ? job.error ?? "Failed" : job.message ?? "Queued for launch"}</span>
-        <span>{pct}%</span>
-      </div>
-    </div>
-  );
-}
+const JOB_LABELS: Record<string, string> = {
+  ingest: "Syncing a source",
+  import_url: "Importing an article",
+  import_upload: "Importing a file",
+  topics: "Mapping topics",
+  voice_profile: "Building your voice profile",
+  voice_clone: "Cloning your voice",
+  resurface_scan: "Scoring evergreen posts",
+  summary: "Writing a summary",
+  audio_overview: "Recording an audio overview",
+  video: "Making a video",
+  quote_card: "Rendering a quote card",
+  carousel: "Rendering a carousel",
+  launch_kit: "Building a Launch Kit",
+  render: "Rendering",
+};
 
 export default function MissionControl() {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const [sources, setSources] = useState<Source[]>([]);
-  const [notebooks, setNotebooks] = useState<Notebook[]>([]);
+  const [notebooks, setNotebooks] = useState<NotebookSummary[]>([]);
+  const [recent, setRecent] = useState<Artifact[]>([]);
+  const [upcoming, setUpcoming] = useState<CalendarItem[]>([]);
   const [plan, setPlan] = useState<Plan | null>(null);
-  const [jobs, setJobs] = useState<Record<string, Job>>({});
-  const [url, setUrl] = useState("");
+  const [hasVoice, setHasVoice] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const started = useRef(false);
 
   const refresh = useCallback(async () => {
-    const [s, n, p] = await Promise.all([
-      api<Source[]>("/api/sources"),
-      api<Notebook[]>("/api/notebooks"),
+    const [s, n, p, a, c, v] = await Promise.all([
+      sourcesApi.list(),
+      notebooksApi.list(),
       api<{ plan: Plan }>("/api/billing/me"),
+      artifactsApi.list({ limit: 6 }),
+      launchpadApi.items({ start: new Date().toISOString(), status: "scheduled,draft" }),
+      voiceApi.get(),
     ]);
     setSources(s);
     setNotebooks(n);
     setPlan(p.plan);
+    setRecent(a.items);
+    setUpcoming(c.slice(0, 5));
+    setHasVoice(Boolean(v.profile));
   }, []);
 
-  const watch = useCallback(
-    (sourceId: string, job: Job) => {
-      setJobs((j) => ({ ...j, [sourceId]: job }));
-      streamSSE(`/api/jobs/${job.id}/events`, (_e, data) => {
-        const next = data as Job;
-        setJobs((j) => ({ ...j, [sourceId]: next }));
-        if (next.status === "done" || next.status === "failed") refresh();
-      }).catch(() => {
-        /* the job row still has the final state */
-      });
-    },
-    [refresh],
-  );
-
-  const addSource = useCallback(
-    async (value: string) => {
-      setError(null);
-      try {
-        const res = await post<{ source: Source; job: Job }>("/api/sources", { url: value });
-        setSources((s) => (s.some((x) => x.id === res.source.id) ? s : [...s, res.source]));
-        watch(res.source.id, res.job);
-      } catch (e) {
-        setError(e instanceof ApiError ? e.message : "Could not add that source.");
-      }
-    },
-    [watch],
-  );
+  const { jobs, watch } = useJobMap(() => refresh());
 
   useEffect(() => {
     refresh().catch(() => setError("Could not reach Mission Control. Is the API running?"));
+    jobsApi.active().then((active) => active.forEach((j) => watch(j.id, j)));
     if (started.current) return;
     started.current = true;
     let pending: string | null = null;
@@ -94,23 +71,27 @@ export default function MissionControl() {
     } catch {
       /* ignore */
     }
-    if (pending) addSource(pending);
-  }, [refresh, addSource]);
-
-  const onSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    if (url.trim()) addSource(url.trim());
-    setUrl("");
-  };
-
-  const createNotebookFromAll = async () => {
-    const nb = await post<Notebook>("/api/notebooks", { title: "My archive" });
-    const docs = await api<Doc[]>("/api/documents");
-    await post(`/api/notebooks/${nb.id}/documents`, { document_ids: docs.map((d) => d.id) });
-    navigate(`/app/notebooks/${nb.id}`);
-  };
+    if (pending) {
+      sourcesApi.connect(pending).then(
+        (res) => {
+          watch(res.job.id, res.job);
+          refresh();
+        },
+        (e) => setError(e instanceof Error ? e.message : "Could not add that source."),
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refresh]);
 
   const totalDocs = sources.reduce((n, s) => n + s.document_count, 0);
+  const activeJobs = Object.values(jobs).filter((j: Job) => j.status === "queued" || j.status === "running" || j.status === "failed");
+  const checklist = [
+    { done: sources.length > 0 && totalDocs > 0, label: "Connect your archive", to: "/app/sources" },
+    { done: hasVoice, label: "Build your voice profile", to: "/app/voice" },
+    { done: notebooks.length > 0, label: "Open a research notebook", to: "/app/notebooks" },
+    { done: recent.some((a) => a.type === "launch_kit"), label: "Make your first Launch Kit", to: "/app/launch-kit" },
+    { done: upcoming.length > 0, label: "Schedule a launch", to: "/app/launchpad" },
+  ];
 
   return (
     <div className="mc">
@@ -121,34 +102,58 @@ export default function MissionControl() {
         </div>
         {plan && <span className="badge">{plan.name} plan · early access</span>}
       </header>
+      {error && <p className="error-text">{error}</p>}
+
+      {checklist.some((c) => !c.done) && (
+        <section className="card checklist">
+          <p className="eyebrow">Pre-flight checklist</p>
+          <ol>
+            {checklist.map((c) => (
+              <li key={c.label} className={c.done ? "done" : ""}>
+                <span className="check-dot">{c.done && <CheckIcon size={14} />}</span>
+                <Link to={c.to}>{c.label}</Link>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
+
+      {activeJobs.length > 0 && (
+        <section className="card stack">
+          <h2>In flight</h2>
+          {activeJobs.map((j) => (
+            <div key={j.id}>
+              <p className="mono muted small">{JOB_LABELS[j.kind] ?? j.kind}</p>
+              <JobProgress job={j} compact />
+            </div>
+          ))}
+        </section>
+      )}
 
       <section className="mc-grid">
         <div className="card mc-card mc-sources">
-          <h2>Sources</h2>
-          <p className="muted">Connect a Substack, Ghost, Medium or any RSS feed.</p>
-          <form onSubmit={onSubmit} className="inline-form">
-            <input
-              className="input"
-              placeholder="yourname.substack.com"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              aria-label="Feed or Substack URL"
-            />
-            <button className="btn btn-primary" type="submit">
-              Connect
-            </button>
-          </form>
-          {error && <p className="error-text">{error}</p>}
+          <div className="row between">
+            <h2>Sources</h2>
+            <Link to="/app/sources" className="mono muted small-link">
+              Manage
+            </Link>
+          </div>
+          <AddSource
+            onAdded={(source, job) => {
+              setSources((list) => [...list.filter((s) => s.id !== source.id), source]);
+              watch(job.id, job);
+            }}
+          />
           <ul className="source-list">
             {sources.map((s) => (
               <li key={s.id} className="source-row">
                 <div className="source-title">
                   <strong>{s.title ?? s.feed_url}</strong>
                   <span className="mono muted">
-                    {s.platform} · {s.document_count} posts · {s.sync_status}
+                    {s.is_imports ? "imports" : s.platform} · {s.document_count} posts
                   </span>
                 </div>
-                {jobs[s.id] && jobs[s.id].status !== "done" && <AscentBar job={jobs[s.id]} />}
+                <StatusPill status={s.sync_status} />
               </li>
             ))}
             {sources.length === 0 && <li className="muted">No sources yet. A lone satellite, waiting for signal.</li>}
@@ -156,30 +161,69 @@ export default function MissionControl() {
         </div>
 
         <div className="card mc-card">
-          <h2>Notebooks</h2>
+          <div className="row between">
+            <h2>Notebooks</h2>
+            <Link to="/app/notebooks" className="mono muted small-link">
+              All
+            </Link>
+          </div>
           <p className="muted">{totalDocs} posts indexed across your sources.</p>
           <ul className="nb-list">
-            {notebooks.map((n) => (
+            {notebooks.slice(0, 6).map((n) => (
               <li key={n.id}>
                 <Link to={`/app/notebooks/${n.id}`} className="nb-link">
                   {n.title}
                 </Link>
+                <span className="mono muted"> {n.document_count} posts</span>
               </li>
             ))}
           </ul>
-          <button className="btn" onClick={createNotebookFromAll} disabled={totalDocs === 0}>
-            New notebook from all posts
-          </button>
+          <Link className="btn" to="/app/notebooks">
+            {notebooks.length ? "Open notebooks" : "Create a notebook"}
+          </Link>
         </div>
 
         <div className="card mc-card">
-          <h2>Recent launches</h2>
-          <p className="muted">Audio overviews, videos and launch kits will show up here.</p>
+          <div className="row between">
+            <h2>Recent launches</h2>
+            <Link to="/app/archive" className="mono muted small-link">
+              Archive
+            </Link>
+          </div>
+          {recent.length === 0 && <p className="muted">Audio overviews, videos and launch kits will show up here.</p>}
+          <ul className="recent-list">
+            {recent.map((a) => (
+              <li key={a.id}>
+                <Link to={a.type === "launch_kit" ? `/app/launch-kit?kit=${a.id}` : a.notebook_id ? `/app/notebooks/${a.notebook_id}` : "/app/archive"}>
+                  {a.title}
+                </Link>
+                <span className="row">
+                  <span className="mono muted">{formatDate(a.created_at)}</span>
+                  <StatusPill status={a.status} />
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
 
         <div className="card mc-card">
-          <h2>Launchpad</h2>
-          <p className="muted">Nothing scheduled. Quiet moon tonight.</p>
+          <div className="row between">
+            <h2>Launchpad</h2>
+            <Link to="/app/launchpad" className="mono muted small-link">
+              Calendar
+            </Link>
+          </div>
+          {upcoming.length === 0 && <p className="muted">Nothing scheduled. Quiet moon tonight.</p>}
+          <ul className="recent-list">
+            {upcoming.map((i) => (
+              <li key={i.id}>
+                <Link to={`/app/launchpad?item=${i.id}`}>
+                  <strong>{i.platform_label}</strong> <span className="muted">{i.content.slice(0, 70)}</span>
+                </Link>
+                <span className="mono muted">{formatDate(i.scheduled_at, true)}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
     </div>

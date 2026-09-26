@@ -17,12 +17,17 @@ class Settings(BaseSettings):
     api_url: str = "http://localhost:8000"
     cors_origins: str = "http://localhost:5173"
 
-    database_url: str = "postgresql+psycopg://notestack:notestack@localhost:5432/notestack"
+    # Local default is a SQLite file (relative to the working directory, normally backend/).
+    # Prod and docker-compose use Postgres: postgresql+psycopg://user:pass@host:5432/db
+    database_url: str = "sqlite:///./notestack.db"
 
     # Worker (Postgres backed queue, see app/worker.py)
     worker_concurrency: int = 4
     worker_poll_seconds: float = 1.0
     job_stale_seconds: int = 900  # a running job with no heartbeat for this long is retried
+    # Run the worker loop inside the API process (local dev: one command, no second terminal).
+    # None = on in development, off elsewhere.
+    run_worker_in_api: bool | None = None
 
     # Auth
     jwt_secret: str = "change-me"
@@ -43,7 +48,9 @@ class Settings(BaseSettings):
     unsubscribe_secret: str = "change-me-too"
     update_email_send_hour: int = 9
 
-    # Storage (Cloudflare R2, S3 compatible)
+    # Storage: auto = local disk when no R2 account or endpoint is set, else R2 (S3 compatible)
+    storage_backend: str = "auto"  # auto | r2 | local
+    local_storage_dir: str = ".storage"
     r2_account_id: str = ""
     r2_access_key_id: str = ""
     r2_secret_access_key: str = ""
@@ -68,8 +75,18 @@ class Settings(BaseSettings):
     corpus_cache_dir: str = ".corpus-cache"
     research_max_steps: int = 10
 
-    # ElevenLabs
+    # ElevenLabs (premade voices by default; a consented clone can replace host A)
     elevenlabs_api_key: str = ""
+    elevenlabs_model: str = "eleven_multilingual_v2"
+    elevenlabs_voice_a: str = "21m00Tcm4TlvDq8ikWAM"  # Rachel
+    elevenlabs_voice_b: str = "pNInz6obpgDQGcFMaJgB"  # Adam
+
+    # Social publishing (Launchpad). Redirect URIs: {API_URL}/api/social/{x,linkedin}/callback
+    social_token_key: str = ""  # Fernet key; derived from JWT_SECRET when empty
+    x_client_id: str = ""
+    x_client_secret: str = ""
+    linkedin_client_id: str = ""
+    linkedin_client_secret: str = ""
 
     # Renderer
     renderer_url: str = "http://localhost:3100"
@@ -77,6 +94,16 @@ class Settings(BaseSettings):
 
     # Billing
     billing_enabled: bool = False
+
+    @property
+    def worker_in_api(self) -> bool:
+        return self.env == "development" if self.run_worker_in_api is None else self.run_worker_in_api
+
+    @property
+    def use_local_storage(self) -> bool:
+        if self.storage_backend != "auto":
+            return self.storage_backend == "local"
+        return not (self.r2_account_id or self.r2_endpoint_url)
 
     @property
     def r2_endpoint(self) -> str:

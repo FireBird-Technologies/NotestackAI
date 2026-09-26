@@ -53,6 +53,9 @@ class Document(IdMixin, TimestampMixin, Base):
     clean_text: Mapped[str] = mapped_column(Text, default="")
     content_hash: Mapped[str | None] = mapped_column(String(64))
     metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    # Resurfacing: 0..1 from the EvergreenScore module (reason and angle live in metadata_json)
+    evergreen_score: Mapped[float | None] = mapped_column(Float)
+    last_resurfaced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Notebook(IdMixin, TimestampMixin, Base):
@@ -83,6 +86,7 @@ class VoiceProfile(IdMixin, TimestampMixin, Base):
     )
     profile_json: Mapped[dict] = mapped_column(JSON, default=dict)
     sample_doc_ids: Mapped[list] = mapped_column(JSON, default=list)
+    host_voices: Mapped[dict] = mapped_column(JSON, default=dict)  # {"host_a": voice_id, "host_b": voice_id}
 
 
 class VoiceConsent(IdMixin, TimestampMixin, Base):
@@ -188,10 +192,63 @@ class CalendarItem(IdMixin, TimestampMixin, Base):
     __tablename__ = "calendar_items"
 
     workspace_id: Mapped[uuid.UUID] = _ws_fk()
-    artifact_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("artifacts.id", ondelete="CASCADE"))
-    platform: Mapped[str] = mapped_column(String(30))
-    scheduled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    artifact_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("artifacts.id", ondelete="CASCADE"))
+    document_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("documents.id", ondelete="SET NULL"))
+    platform: Mapped[str] = mapped_column(String(30))  # x | linkedin | bluesky | substack_notes
+    scheduled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    # scheduled | publishing | posted | reminded | failed | draft
     status: Mapped[str] = mapped_column(String(20), default="scheduled")
+    content: Mapped[str] = mapped_column(Text, default="")
+    thread: Mapped[list] = mapped_column(JSON, default=list)  # extra posts after the first, for threads
+    social_account_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("social_accounts.id", ondelete="SET NULL")
+    )
+    remind_by_email: Mapped[bool] = mapped_column(Boolean, default=False)
+    external_id: Mapped[str | None] = mapped_column(String(200))
+    external_url: Mapped[str | None] = mapped_column(String(1000))
+    posted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    error: Mapped[str | None] = mapped_column(Text)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    metrics: Mapped[dict] = mapped_column(JSON, default=dict)  # likes, reposts, replies, impressions
+
+
+class SocialAccount(IdMixin, TimestampMixin, Base):
+    """A connected X, LinkedIn or Bluesky account. Tokens are Fernet encrypted (app/services/crypto.py)."""
+
+    __tablename__ = "social_accounts"
+    __table_args__ = (UniqueConstraint("workspace_id", "platform", "external_id"),)
+
+    workspace_id: Mapped[uuid.UUID] = _ws_fk()
+    platform: Mapped[str] = mapped_column(String(20))
+    handle: Mapped[str] = mapped_column(String(200))
+    external_id: Mapped[str] = mapped_column(String(200))
+    access_token: Mapped[str] = mapped_column(Text)
+    refresh_token: Mapped[str | None] = mapped_column(Text)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    scopes: Mapped[str | None] = mapped_column(String(500))
+    status: Mapped[str] = mapped_column(String(20), default="active")  # active | expired | revoked
+    avatar_url: Mapped[str | None] = mapped_column(String(1000))
+
+
+class Topic(IdMixin, TimestampMixin, Base):
+    __tablename__ = "topics"
+    __table_args__ = (UniqueConstraint("workspace_id", "slug"),)
+
+    workspace_id: Mapped[uuid.UUID] = _ws_fk()
+    name: Mapped[str] = mapped_column(String(200))
+    slug: Mapped[str] = mapped_column(String(200))
+    summary: Mapped[str | None] = mapped_column(Text)
+    post_count: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class DocumentTopic(Base):
+    __tablename__ = "document_topics"
+
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("documents.id", ondelete="CASCADE"), primary_key=True
+    )
+    topic_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("topics.id", ondelete="CASCADE"), primary_key=True)
+    weight: Mapped[float] = mapped_column(Float, default=1.0)
 
 
 class TrackedLink(IdMixin, TimestampMixin, Base):

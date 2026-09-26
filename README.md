@@ -4,7 +4,7 @@ Your archive, in orbit. Turn a Substack (or any feed) into a grounded research n
 overviews, videos and launch kits, all traced back to what the writer actually wrote.
 
 - Design doc: [docs/DESIGN.md](docs/DESIGN.md)
-- Phase 0 task list: [docs/PHASE0.md](docs/PHASE0.md)
+- Foundations task list: [docs/PHASE0.md](docs/PHASE0.md)
 
 ## Layout
 
@@ -27,15 +27,40 @@ docker compose up --build
   `127.0.0.1 minio` to your hosts file for browser uploads to work locally.
 - With `EMAIL_PROVIDER=console`, verification codes print in the `api` logs.
 
-Without Docker:
+Without Docker (one API process does everything):
 
 ```bash
 cd backend && python -m venv .venv && .venv/Scripts/pip install -r requirements-dev.txt
-alembic upgrade head && uvicorn app.main:app --reload     # needs Postgres only
-python -m app.worker                                       # second terminal
+alembic upgrade head && uvicorn app.main:app --reload     # SQLite at backend/notestack.db
 cd frontend && npm install && npm run dev
-cd renderer && npm install && npm start                    # or: npm run studio
+cd renderer && npm install && npm start                    # only needed for videos, quote cards, carousels
 ```
+
+- With `ENV=development` the API runs the job worker in process (`RUN_WORKER_IN_API`), so syncing,
+  topic mapping, audio and launch kits work without a second terminal. In production run
+  `python -m app.worker` separately and set `RUN_WORKER_IN_API=false`.
+- With no R2 settings, files live on local disk under `backend/.storage` and are served through
+  signed `/api/storage/local/...` URLs (range requests supported for audio and video seeking).
+- Audio needs `ELEVENLABS_API_KEY`; everything text based needs `LLM_API_KEY`.
+- Launchpad: Bluesky connects with an app password. X and LinkedIn need developer apps; the
+  redirect URIs are listed in `.env.example` and on the Launchpad page. Substack Notes has no API,
+  so those posts (and any post without a connected account) arrive as an email reminder at send time.
+
+## What is in the app
+
+| Menu | Does |
+| --- | --- |
+| Mission Control | Pre-flight checklist, jobs in flight, sources, notebooks, recent launches, upcoming posts |
+| Notebooks | Group posts, chat with cited answers (history kept), summaries, audio overviews, videos, quote cards |
+| Sources | Connect feeds (Substack archive included), import one URL, upload md/txt/html/pdf, read posts by line |
+| Topic map | LLM tagged topics per post, merged into a constellation; make a notebook from any topic |
+| Voice profile | Writing voice built from your posts (editable), host voices, consented voice cloning |
+| Video and audio | Audio overviews, 9:16 shorts, 16:9 explainers, 1:1 audiograms, quote cards |
+| Launch Kit | Hooks, X thread, LinkedIn, Substack Notes, Bluesky, SEO pack, carousel, quote cards, all editable |
+| Launchpad | Calendar and agenda, auto posting to X, LinkedIn and Bluesky, email reminders, tracked links, engagement |
+| Archive | Every generated artifact with filters, players, downloads, retry and delete |
+| Resurfacing | Evergreen scores and reshare angles for old posts, on this day, straight into a kit or the calendar |
+| Settings | Profile, workspace, brand kit, privacy, plan usage meters, connections, sign out everywhere, delete |
 
 ## Key choices
 

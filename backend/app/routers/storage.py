@@ -1,16 +1,17 @@
 """Browser uploads go straight to R2 with presigned PUTs; reads redirect to presigned GETs."""
 
+import mimetypes
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import RedirectResponse
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.auth import Ctx, get_ctx
 from app.config import settings
 from app.models import Upload
-from app.services.storage import keys, storage, workspace_owns_key
+from app.services.storage import LocalStorage, keys, safe_filename, storage, verify_local_sig, workspace_owns_key
 
 router = APIRouter(prefix="/api/storage", tags=["storage"])
 
@@ -23,6 +24,7 @@ ALLOWED_TYPES = {
     "audio/wav",
     "audio/webm",
     "audio/mp4",
+    "audio/ogg",
     "video/mp4",
     "application/pdf",
     "text/markdown",
@@ -89,3 +91,38 @@ def read_object(key: str, download: bool = False, ctx: Ctx = Depends(get_ctx)):
         raise HTTPException(404, "Not found")
     name = key.rsplit("/", 1)[-1] if download else None
     return RedirectResponse(storage.presign_get(key, download_name=name), status_code=302)
+
+
+# Local disk backend: the "presigned" URLs LocalStorage hands out point here.
+
+local_router = APIRouter(prefix="/api/storage/local", tags=["storage"], include_in_schema=False)
+
+
+def _local_path(method: str, key: str, exp: int, sig: str):
+    if not isinstance(storage, LocalStorage) or not verify_local_sig(method, key, exp, sig):
+        raise HTTPException(403, "Invalid or expired link")
+    try:
+        return storage.path(key)
+    except ValueError as exc:
+        raise HTTPException(404, "Not found") from exc
+
+
+@local_router.get("/{key:path}")
+def local_get(key: str, exp: int, sig: str, download: str | None = None):
+    path = _local_path("GET", key, exp, sig)
+    if not path.is_file():
+        raise HTTPException(404, "Not found")
+    media_type = mimetypes.guess_type(key)[0] or "application/octet-stream"
+    # FileResponse answers Range requests, so audio and video can seek.
+    return FileResponse(path, media_type=media_type, filename=safe_filename(download) if download else None,
+                        content_disposition_type="attachment" if download else "inline")
+
+
+@local_router.put("/{key:path}")
+async def local_put(key: str, exp: int, sig: str, request: Request):
+    _local_path("PUT", key, exp, sig)
+    body = await request.body()
+    if len(body) > settings.max_upload_bytes:
+        raise HTTPException(413, "File too large")
+    storage.put_bytes(key, body)
+    return {"ok": True, "size_bytes": len(body)}

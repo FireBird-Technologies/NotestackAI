@@ -10,7 +10,13 @@ import { readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { z } from "zod";
-import { quoteCardSchema, shortVerticalSchema } from "../src/schema";
+import {
+  audiogramSquareSchema,
+  carouselSlideSchema,
+  explainerLongSchema,
+  quoteCardSchema,
+  shortVerticalSchema,
+} from "../src/schema";
 
 const PORT = Number(process.env.PORT ?? 3100);
 const INTERNAL_TOKEN = process.env.INTERNAL_TOKEN ?? "internal-change-me";
@@ -18,17 +24,28 @@ const ENTRY = path.resolve(process.cwd(), "src/index.ts");
 
 const requestSchema = z.object({
   jobId: z.string(),
-  compositionId: z.enum(["ShortVertical", "QuoteCard"]),
+  compositionId: z.enum(["ShortVertical", "ExplainerLong", "AudiogramSquare", "QuoteCard", "CarouselSlide"]),
   props: z.record(z.unknown()),
   format: z.enum(["mp4", "png"]),
   uploadUrl: z.string().url(),
   uploadContentType: z.string(),
   callbackUrl: z.string().url(),
   storageKey: z.string(),
+  // Carousels: one still per entry, each uploaded to its own presigned URL.
+  stills: z
+    .array(z.object({ props: z.record(z.unknown()), uploadUrl: z.string().url(), storageKey: z.string() }))
+    .max(20)
+    .optional(),
 });
 type RenderRequest = z.infer<typeof requestSchema>;
 
-const propSchemas = { ShortVertical: shortVerticalSchema, QuoteCard: quoteCardSchema } as const;
+const propSchemas = {
+  ShortVertical: shortVerticalSchema,
+  ExplainerLong: explainerLongSchema,
+  AudiogramSquare: audiogramSquareSchema,
+  QuoteCard: quoteCardSchema,
+  CarouselSlide: carouselSlideSchema,
+} as const;
 
 let bundlePromise: Promise<string> | null = null;
 const getBundle = () => (bundlePromise ??= bundle({ entryPoint: ENTRY }));
@@ -45,7 +62,50 @@ async function report(req: RenderRequest, body: Record<string, unknown>) {
   }
 }
 
+async function upload(url: string, contentType: string, file: string) {
+  const put = await fetch(url, { method: "PUT", headers: { "Content-Type": contentType }, body: await readFile(file) });
+  if (!put.ok) throw new Error(`Storage upload failed: ${put.status}`);
+}
+
+async function runStills(req: RenderRequest) {
+  const started = Date.now();
+  const stills = req.stills ?? [];
+  const serveUrl = await getBundle();
+  const keys: string[] = [];
+  for (const [i, still] of stills.entries()) {
+    const out = path.join(tmpdir(), `${req.jobId}-${i}.png`);
+    try {
+      const inputProps = propSchemas[req.compositionId].parse(still.props);
+      const composition = await selectComposition({ serveUrl, id: req.compositionId, inputProps });
+      await renderStill({ composition, serveUrl, output: out, inputProps });
+      await upload(still.uploadUrl, req.uploadContentType, out);
+      keys.push(still.storageKey);
+      await report(req, { status: "running", progress: 0.1 + (0.85 * (i + 1)) / stills.length, message: `Slide ${i + 1} of ${stills.length}` });
+    } finally {
+      await rm(out, { force: true });
+    }
+  }
+  await report(req, {
+    status: "done",
+    progress: 1,
+    message: "Liftoff",
+    storage_key: keys[0],
+    storage_keys: keys,
+    render_seconds: (Date.now() - started) / 1000,
+  });
+}
+
 async function run(req: RenderRequest) {
+  if (req.stills?.length) {
+    try {
+      await report(req, { status: "running", progress: 0.05, message: "T-minus: bundling" });
+      await runStills(req);
+    } catch (err) {
+      console.error("render failed", req.jobId, err);
+      await report(req, { status: "failed", error: String(err).slice(0, 900), message: "Render failed" });
+    }
+    return;
+  }
   const started = Date.now();
   const out = path.join(tmpdir(), `${req.jobId}.${req.format}`);
   try {
@@ -79,13 +139,7 @@ async function run(req: RenderRequest) {
     }
 
     await report(req, { status: "running", progress: 0.95, message: "Uploading to storage" });
-    const data = await readFile(out);
-    const put = await fetch(req.uploadUrl, {
-      method: "PUT",
-      headers: { "Content-Type": req.uploadContentType },
-      body: data,
-    });
-    if (!put.ok) throw new Error(`R2 upload failed: ${put.status}`);
+    await upload(req.uploadUrl, req.uploadContentType, out);
 
     await report(req, {
       status: "done",

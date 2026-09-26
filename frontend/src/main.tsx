@@ -5,6 +5,10 @@ import App from "./App";
 import { AuthProvider } from "./hooks/useAuth";
 import "./styles/global.css";
 import "./styles/app.css";
+import "./styles/pages.css";
+import { installClickSounds } from "./lib/sound";
+
+installClickSounds();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

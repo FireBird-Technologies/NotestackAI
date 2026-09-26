@@ -24,7 +24,7 @@ export default function AuthCallback() {
       .redeemTicket(ticket)
       .then((result) => {
         complete(result);
-        navigate(next, { replace: true });
+        navigate(result.created ? "/welcome" : next, { replace: true });
       })
       .catch(() => {
         const error = new URLSearchParams({ error: "Google sign in expired. Try again." });
