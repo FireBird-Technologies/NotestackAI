@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     jwt_expiration_hours: int = 72
     jwt_refresh_expiration_days: int = 30
     google_client_id: str = ""
+    # Setting the secret switches Google sign in from the GIS popup to the redirect flow
+    # (server side code exchange). The redirect URI must be listed on the OAuth client.
+    google_client_secret: str = ""
+    google_redirect_uri: str = ""  # defaults to {api_url}/api/auth/google/callback
 
     # Email (Resend)
     email_provider: str = "console"  # resend | console
@@ -79,6 +83,10 @@ class Settings(BaseSettings):
         if self.r2_endpoint_url:
             return self.r2_endpoint_url
         return f"https://{self.r2_account_id}.r2.cloudflarestorage.com"
+
+    @property
+    def google_redirect_url(self) -> str:
+        return self.google_redirect_uri or f"{self.api_url.rstrip('/')}/api/auth/google/callback"
 
     @property
     def cors_origin_list(self) -> list[str]:

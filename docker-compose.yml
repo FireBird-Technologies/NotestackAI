@@ -30,6 +30,8 @@ services:
       R2_ENDPOINT_URL: ${R2_ENDPOINT_URL:-http://minio:9000}
       RENDERER_URL: http://renderer:3100
       API_URL: http://api:8000
+      # API_URL above is the in-network name; Google must redirect the browser to the published port.
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:8000/api/auth/google/callback}
       CORPUS_CACHE_DIR: /cache/corpus
     volumes: [apicache:/cache]
     ports: ["8000:8000"]

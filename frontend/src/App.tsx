@@ -3,6 +3,7 @@ import AppShell, { ComingSoon } from "./components/AppShell";
 import { PublicFooter, PublicNav } from "./components/PublicChrome";
 import PricingTiers from "./components/PricingTiers";
 import SkyCanvas from "./components/SkyCanvas";
+import AuthCallback from "./pages/AuthCallback";
 import AuthPage from "./pages/AuthPage";
 import { Blog, BlogPostPage } from "./pages/Blog";
 import Landing from "./pages/Landing";
@@ -32,6 +33,7 @@ export default function App() {
       <Route path="/blogs" element={<Blog />} />
       <Route path="/blogs/:slug" element={<BlogPostPage />} />
       <Route path="/auth" element={<AuthPage />} />
+      <Route path="/auth/callback" element={<AuthCallback />} />
       <Route path="/app" element={<AppShell />}>
         <Route index element={<MissionControl />} />
         <Route path="notebooks" element={<MissionControl />} />

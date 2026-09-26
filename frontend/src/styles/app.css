@@ -726,6 +726,18 @@
   min-height: 44px;
 }
 
+.google-redirect-btn {
+  width: 100%;
+  min-height: 44px;
+  background: var(--white);
+  color: var(--black);
+  border-color: var(--white);
+}
+
+.google-redirect-btn:hover {
+  box-shadow: var(--glow-md);
+}
+
 .auth-hint {
   text-align: center;
 }

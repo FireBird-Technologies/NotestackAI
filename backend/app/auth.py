@@ -32,6 +32,19 @@ def create_refresh_token(user_id: uuid.UUID, token_version: int) -> str:
     return _encode(user_id, token_version, "refresh", timedelta(days=settings.jwt_refresh_expiration_days))
 
 
+def create_login_ticket(user_id: uuid.UUID, token_version: int, created: bool) -> str:
+    """Short lived handoff from the OAuth callback redirect to the SPA, swapped for real tokens."""
+    now = datetime.now(UTC)
+    payload = {"sub": str(user_id), "tv": token_version, "typ": "ticket", "new": created, "iat": now,
+               "exp": now + timedelta(seconds=60)}
+    return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+
+
+def encode_signed(payload: dict, ttl: timedelta) -> str:
+    return jwt.encode({**payload, "exp": datetime.now(UTC) + ttl}, settings.jwt_secret,
+                      algorithm=settings.jwt_algorithm)
+
+
 def decode_token_full(token: str, expected_type: str = "access") -> dict:
     try:
         payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])

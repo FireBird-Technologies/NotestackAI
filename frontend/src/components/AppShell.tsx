@@ -1,4 +1,4 @@
-import { NavLink, Outlet, Navigate } from "react-router-dom";
+import { NavLink, Outlet, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import Logo from "./Logo";
 import SkyCanvas from "./SkyCanvas";
@@ -33,8 +33,12 @@ const NAV = [
 
 export default function AppShell() {
   const { user, loading, logout } = useAuth();
+  const location = useLocation();
   if (loading) return <div className="boot"><div className="orbit-loader"><span /></div></div>;
-  if (!user) return <Navigate to="/auth" replace />;
+  if (!user) {
+    const next = new URLSearchParams({ next: location.pathname + location.search });
+    return <Navigate to={`/auth?${next}`} replace />;
+  }
 
   return (
     <div className="shell">

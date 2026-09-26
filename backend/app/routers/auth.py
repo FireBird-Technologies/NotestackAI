@@ -1,12 +1,24 @@
-from datetime import UTC, datetime
+import secrets
+from datetime import UTC, datetime, timedelta
+from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, HTTPException
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import RedirectResponse
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 
-from app.auth import create_access_token, create_refresh_token, get_current_user, load_user_from_token
+from app.auth import (
+    create_access_token,
+    create_login_ticket,
+    create_refresh_token,
+    decode_token_full,
+    encode_signed,
+    get_current_user,
+    load_user_from_token,
+)
 from app.config import settings
 from app.db import get_db
 from app.models import AuthProvider, User, VerificationPurpose
@@ -32,18 +44,26 @@ def _serialize_user(user: User) -> dict:
     }
 
 
-def _finalize_login(db: Session, user: User, created: bool) -> dict:
+def _record_login(db: Session, user: User, created: bool) -> None:
     user.last_login_at = datetime.now(UTC)
     if created and not user.welcome_email_sent_at:
         if email_service.send_welcome(user.email, user.name, str(user.id)):
             user.welcome_email_sent_at = datetime.now(UTC)
     db.commit()
+
+
+def _login_result(user: User, created: bool) -> dict:
     return {
         "access_token": create_access_token(user.id, user.token_version),
         "refresh_token": create_refresh_token(user.id, user.token_version),
         "user": _serialize_user(user),
         "created": created,
     }
+
+
+def _finalize_login(db: Session, user: User, created: bool) -> dict:
+    _record_login(db, user, created)
+    return _login_result(user, created)
 
 
 # Google
@@ -72,6 +92,141 @@ def google_login(body: GoogleIn, db: Session = Depends(get_db)):
     except ident.IdentityError as exc:
         raise _err(exc) from exc
     return _finalize_login(db, resolved.user, resolved.created)
+
+
+def _safe_next(path: str | None) -> str:
+    """Only same site paths, so the redirect flow cannot be turned into an open redirect."""
+    if not path or not path.startswith("/") or path.startswith("//") or "\\" in path:
+        return "/app"
+    return path
+
+
+@router.get("/providers")
+def providers():
+    """Which Google flow the auth page should render: 'redirect', 'popup', or null when off."""
+    if not settings.google_client_id:
+        return {"google": None}
+    return {"google": "redirect" if settings.google_client_secret else "popup"}
+
+
+# Google redirect flow (authorization code, exchanged server side)
+
+GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+STATE_COOKIE = "ns_oauth_state"
+STATE_TTL = timedelta(minutes=10)
+
+
+def _frontend(path: str, **fragment: str) -> RedirectResponse:
+    url = f"{settings.frontend_url.rstrip('/')}{path}"
+    if fragment:
+        url += "#" + urlencode(fragment)
+    response = RedirectResponse(url, status_code=302)
+    response.delete_cookie(STATE_COOKIE, path="/api/auth/google")
+    return response
+
+
+def _auth_error(message: str) -> RedirectResponse:
+    return _frontend("/auth", error=message)
+
+
+def exchange_google_code(code: str) -> dict:
+    """Trade the authorization code for tokens and return the verified ID token claims."""
+    res = httpx.post(
+        GOOGLE_TOKEN_URL,
+        data={
+            "code": code,
+            "client_id": settings.google_client_id,
+            "client_secret": settings.google_client_secret,
+            "redirect_uri": settings.google_redirect_url,
+            "grant_type": "authorization_code",
+        },
+        timeout=10,
+    )
+    res.raise_for_status()
+    return google_id_token.verify_oauth2_token(
+        res.json()["id_token"], google_requests.Request(), settings.google_client_id
+    )
+
+
+@router.get("/google/start")
+def google_start(next: str | None = None):
+    if not (settings.google_client_id and settings.google_client_secret):
+        return _auth_error("Google sign in is not configured.")
+    nonce = secrets.token_urlsafe(24)
+    state = encode_signed({"typ": "oauth_state", "nonce": nonce, "next": _safe_next(next)}, STATE_TTL)
+    params = {
+        "client_id": settings.google_client_id,
+        "redirect_uri": settings.google_redirect_url,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "state": state,
+        "nonce": nonce,
+        "prompt": "select_account",
+    }
+    response = RedirectResponse(f"{GOOGLE_AUTH_URL}?{urlencode(params)}", status_code=302)
+    # Binds the state to this browser (login CSRF). Lax so it survives the top level return from Google.
+    response.set_cookie(
+        STATE_COOKIE,
+        nonce,
+        max_age=int(STATE_TTL.total_seconds()),
+        path="/api/auth/google",
+        httponly=True,
+        secure=settings.env != "development",
+        samesite="lax",
+    )
+    return response
+
+
+@router.get("/google/callback")
+def google_callback(
+    request: Request,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    db: Session = Depends(get_db),
+):
+    if error:
+        return _auth_error("Google sign in was cancelled." if error == "access_denied" else "Google sign in failed.")
+    if not code or not state:
+        return _auth_error("Google sign in failed. Try again.")
+    try:
+        saved = decode_token_full(state, expected_type="oauth_state")
+    except HTTPException:
+        return _auth_error("Google sign in expired. Try again.")
+    cookie = request.cookies.get(STATE_COOKIE)
+    if not cookie or not secrets.compare_digest(cookie, saved.get("nonce", "")):
+        return _auth_error("Google sign in expired. Try again.")
+    try:
+        info = exchange_google_code(code)
+    except (httpx.HTTPError, KeyError, ValueError):
+        return _auth_error("Google sign in failed. Try again.")
+    if info.get("nonce") != saved["nonce"]:
+        return _auth_error("Google sign in failed. Try again.")
+    if not info.get("email_verified"):
+        return _auth_error("Google email is not verified.")
+    try:
+        resolved = ident.resolve_or_create_google_user(
+            db, email=info["email"], google_id=info["sub"], name=info.get("name"), avatar_url=info.get("picture")
+        )
+    except ident.IdentityError as exc:
+        db.rollback()
+        return _auth_error(exc.message)
+    _record_login(db, resolved.user, resolved.created)
+    ticket = create_login_ticket(resolved.user.id, resolved.user.token_version, resolved.created)
+    # Fragment, not query: it never reaches servers or referrers, and the ticket dies in 60s.
+    return _frontend("/auth/callback", ticket=ticket, next=saved["next"])
+
+
+class TicketIn(BaseModel):
+    ticket: str
+
+
+@router.post("/ticket")
+def redeem_ticket(body: TicketIn, db: Session = Depends(get_db)):
+    user = load_user_from_token(db, body.ticket, expected_type="ticket")
+    created = bool(decode_token_full(body.ticket, expected_type="ticket").get("new"))
+    return _login_result(user, created)
 
 
 # Email signup (6 digit code)

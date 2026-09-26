@@ -1,4 +1,4 @@
-const BASE = import.meta.env.VITE_API_URL ?? "";
+export const BASE = import.meta.env.VITE_API_URL ?? "";
 const ACCESS = "ns_access";
 const REFRESH = "ns_refresh";
 
