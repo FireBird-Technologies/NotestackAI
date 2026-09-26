@@ -63,6 +63,8 @@ class Settings(BaseSettings):
     # LLM (LiteLLM model strings; Z.ai GLM by default)
     llm_model: str = "openai/glm-5.3"
     llm_fast_model: str = "openai/glm-5.3-flash"
+    # Chat triage (small talk, off topic, follow up rewriting). Empty = LLM_FAST_MODEL.
+    llm_triage_model: str = ""
     llm_api_base: str = "https://api.z.ai/api/paas/v4"
     llm_api_key: str = ""
     llm_temperature: float = 1.0  # Z.ai recommends 1.0 for GLM-5.x

@@ -13,7 +13,7 @@ from app.config import settings
 from app.corpus import Corpus
 from app.llm.provider import provider_name
 from app.models import Artifact, Chat, Citation, Document, DocumentTopic, Message, Notebook, NotebookDocument, Topic
-from app.pipeline.research import research
+from app.pipeline.research import Turn, research
 from app.routers.sources import serialize_document
 from app.services.artifacts import latest_jobs, serialize_artifact
 from app.services.jobs import record_usage
@@ -219,7 +219,7 @@ def _sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
 
-_STEP_LABEL = {"list": "Scanning the archive", "search": "Searching for", "read": "Reading"}
+_STEP_LABEL = {"list": "Scanning the archive", "search": "Searching for", "read": "Reading", "think": ""}
 
 
 @router.post("/{notebook_id}/chat")
@@ -232,6 +232,11 @@ async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)
         db.add(chat_row)
         db.flush()
     chat_row.updated_at = datetime.now(UTC)  # keeps the history list newest first
+    # Memory: the chat so far (before this message), oldest first, capped to the last few turns.
+    prior = db.scalars(
+        select(Message).where(Message.chat_id == chat_row.id).order_by(Message.created_at.desc()).limit(8)
+    ).all()
+    history = [Turn(m.role, m.content) for m in reversed(prior)]
     db.add(Message(chat_id=chat_row.id, role="user", content=body.question))
     db.commit()
 
@@ -252,7 +257,8 @@ async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)
         def on_step(kind: str, detail: str) -> None:
             loop.call_soon_threadsafe(steps.put_nowait, (kind, detail))
 
-        task = asyncio.create_task(asyncio.to_thread(research, corpus, allowed, body.question, on_step))
+        task = asyncio.create_task(asyncio.to_thread(
+            research, corpus, allowed, body.question, on_step, history, nb.title))
         while not task.done() or not steps.empty():
             try:
                 kind, detail = await asyncio.wait_for(steps.get(), timeout=0.25)

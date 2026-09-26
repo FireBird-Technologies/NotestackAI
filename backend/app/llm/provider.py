@@ -52,6 +52,14 @@ def fast_lm() -> dspy.LM:
     return _build(settings.llm_fast_model, effort="low", temperature=None, max_tokens=8000)
 
 
+@lru_cache
+def triage_lm() -> dspy.LM:
+    """Cheap model that decides whether a chat message needs research at all."""
+    if not settings.llm_triage_model:
+        return fast_lm()
+    return _build(settings.llm_triage_model, effort="low", temperature=0.2, max_tokens=2000)
+
+
 def configure_default() -> None:
     dspy.configure(lm=main_lm(), adapter=dspy.JSONAdapter())
 

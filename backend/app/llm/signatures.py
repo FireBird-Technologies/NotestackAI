@@ -120,7 +120,9 @@ class ResearchArchive(dspy.Signature):
     ### heading only when the answer has distinct parts. Put [n] markers right after the sentence
     or list item they support. Never use em dashes."""
 
-    question: str = dspy.InputField()
+    question: str = dspy.InputField(desc="A standalone question (follow ups already resolved)")
+    conversation: str = dspy.InputField(desc="Recent turns of this chat, oldest first. Use it for context "
+                                              "and to avoid repeating yourself; cite only what you read now")
     archive_guide: str = dspy.InputField(desc="How this notebook's files are laid out")
     answer: str = dspy.OutputField(desc="Answer with [n] citation markers")
     citations: list[FileCitation] = dspy.OutputField()
@@ -253,3 +255,25 @@ class EvergreenScore(dspy.Signature):
     score: float = dspy.OutputField(desc="0 (dated) to 1 (timeless)")
     reason: str = dspy.OutputField()
     angle: str = dspy.OutputField(desc="One line hook for resharing now")
+
+
+class TriageMessage(dspy.Signature):
+    """Triage a chat message sent to a research assistant that answers ONLY from one writer's archive of
+    posts. Decide what it needs before any expensive research runs.
+    - archive: needs facts, ideas, quotes or opinions from the writer's posts (including follow ups
+      like "say more", "what about 2023?", "compare that with pricing").
+    - chitchat: greetings, thanks, reactions, small talk.
+    - about_app: how to use Notestack itself (sources, notebooks, audio, launch kits).
+    - off_topic: general knowledge, coding, math, news, or anything the posts cannot answer.
+    For archive, rewrite the message into a standalone question using the conversation, and pick depth:
+    quick for a single fact or lookup, deep for synthesis across many posts. For the other kinds, write
+    a short, warm reply (1 to 3 sentences) that answers or gently steers back to what the archive can
+    do, suggesting one concrete question. Never use em dashes."""
+
+    conversation: str = dspy.InputField(desc="Recent turns, oldest first")
+    message: str = dspy.InputField()
+    notebook: str = dspy.InputField(desc="Notebook title and some of its post titles")
+    kind: Literal["archive", "chitchat", "about_app", "off_topic"] = dspy.OutputField()
+    standalone_question: str = dspy.OutputField(desc="For archive: the question with follow ups resolved")
+    depth: Literal["quick", "deep"] = dspy.OutputField()
+    reply: str = dspy.OutputField(desc="For non archive kinds: the reply to show. Empty for archive")
