@@ -119,13 +119,54 @@ export type Artifact = {
   job: Job | null;
 };
 
-export type TopicNode = { id: string; name: string; summary: string | null; post_count: number };
+export type TopicStatus = "rising" | "steady" | "dormant";
+
+export type TopicNode = {
+  id: string;
+  name: string;
+  summary: string | null;
+  post_count: number;
+  first_at: string | null;
+  last_at: string | null;
+  recent_posts: number;
+  momentum: number;
+  status: TopicStatus;
+  recency: number; // 0 = only written about at the start of the archive, 1 = written about most recently
+  timeline: number[];
+  galaxy: number;
+};
+
+export type Galaxy = { id: number; name: string; topic_ids: string[]; post_count: number; size: number };
+
 export type TopicMap = {
   nodes: TopicNode[];
   edges: { source: string; target: string; weight: number }[];
+  galaxies: Galaxy[];
+  insights: {
+    rising: { id: string; name: string; momentum: number }[];
+    dormant: { id: string; name: string; last_at: string | null; post_count: number }[];
+    pairs: { a: string; b: string; a_id: string; b_id: string; posts: number }[];
+  };
+  archive: { start: string | null; end: string | null; recent_from: string | null; posts: number };
   has_untagged_posts: boolean;
 };
-export type TopicDetail = TopicNode & { posts: (Doc & { weight: number })[] };
+
+export type TopicDetail = {
+  id: string;
+  name: string;
+  summary: string | null;
+  post_count: number;
+  first_at: string | null;
+  last_at: string | null;
+  recent_posts: number;
+  momentum: number;
+  status: TopicStatus;
+  timeline: number[];
+  timeline_start: string;
+  timeline_end: string;
+  related: { id: string; name: string; shared_posts: number }[];
+  posts: (Doc & { weight: number })[];
+};
 
 export type VoiceProfileData = {
   tone: string[];

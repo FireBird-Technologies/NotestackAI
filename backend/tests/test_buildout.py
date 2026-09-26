@@ -263,6 +263,14 @@ def test_topic_map_and_notebook_from_topic(client, auth, run_jobs, feed, llm):
     assert len(graph["edges"]) == 2
     detail = client.get(f"/api/topics/{names['Writing Business']['id']}", headers=auth).json()
     assert len(detail["posts"]) == 2
+    # Insight: Habits was only written about in 2024, long before the archive's recent window.
+    assert names["Habits"]["status"] == "dormant" and names["Pricing"]["recent_posts"] == 1
+    assert len(names["Pricing"]["timeline"]) == 12 and sum(names["Writing Business"]["timeline"]) == 2
+    assert graph["galaxies"] and graph["galaxies"][0]["name"] == "Writing Business"
+    assert graph["insights"]["dormant"][0]["name"] == "Habits"
+    assert graph["insights"]["pairs"][0]["posts"] == 1
+    assert {r["name"] for r in detail["related"]} == {"Pricing", "Habits"}
+    assert detail["first_at"] < detail["last_at"]
     nb = client.post(f"/api/notebooks/from-topic/{names['Pricing']['id']}", headers=auth).json()
     assert nb["added"] == 1
 
