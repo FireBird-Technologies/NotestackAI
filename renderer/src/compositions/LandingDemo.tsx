@@ -235,7 +235,7 @@ function Paste() {
               boxShadow: `0 0 ${30 + press * 40}px ${BLUE}`,
             }}
           >
-            Launch my archive
+            Start Exploring
             <div style={{ position: "absolute", inset: -ring * 60, borderRadius: 999, border: `2px solid ${BLUE}`, opacity: 1 - ring }} />
           </div>
         </div>

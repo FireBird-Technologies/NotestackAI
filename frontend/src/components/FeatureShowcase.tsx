@@ -249,7 +249,7 @@ export default function FeatureShowcase() {
             </ul>
             {i === FEATURES.length - 1 && (
               <Link to="/auth?mode=signup" className="btn btn-primary">
-                Launch my archive
+                Start Exploring
               </Link>
             )}
           </div>

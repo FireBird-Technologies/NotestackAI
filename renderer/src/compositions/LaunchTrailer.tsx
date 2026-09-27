@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
-import { AbsoluteFill, Audio as SoundTrack, Easing, interpolate, random, Sequence, spring, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, Audio as SoundTrack, Easing, Img, interpolate, random, Sequence, spring, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
 import { theme } from "../theme";
 import { Flare, WarpField } from "./LandingDemo";
 import { LAUNCH_BPM, LAUNCH_SCENES, LAUNCH_SECONDS, type LaunchSceneId } from "./launchTimeline";
@@ -628,10 +628,8 @@ function Outro() {
         </div>
         <AbsoluteFill style={{ background: "radial-gradient(45% 45% at 50% 50%, rgba(0,0,0,0.55), transparent 80%)" }} />
         <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", textAlign: "center" }}>
-          <div style={{ width: 128, height: 128, borderRadius: 32, background: WHITE, display: "grid", placeItems: "center", opacity: logo, transform: `scale(${logo})`, boxShadow: `0 0 90px ${BLUE}, 0 0 30px ${WHITE}` }}>
-            <div style={{ width: 48, height: 48, borderRadius: "50%", background: "#000", boxShadow: "20px -20px 0 -11px #000" }} />
-          </div>
-          <h1 style={{ margin: "34px 0 0", fontFamily: theme.display, fontWeight: 700, fontSize: 150, lineHeight: 1, color: WHITE, opacity: name, transform: `translateY(${(1 - name) * 30}px)`, textShadow: `0 0 50px ${BLUE}` }}>
+          {/* The navbar mark (frontend/public/logo.svg, copied to public/logo.svg). */}
+          <Img src={staticFile("logo.svg")} width={144} height={144} style={{ borderRadius: 32, opacity: logo, transform: `scale(${logo})`, boxShadow: `0 0 90px ${BLUE}, 0 0 30px ${WHITE}` }} />          <h1 style={{ margin: "34px 0 0", fontFamily: theme.display, fontWeight: 700, fontSize: 150, lineHeight: 1, color: WHITE, opacity: name, transform: `translateY(${(1 - name) * 30}px)`, textShadow: `0 0 50px ${BLUE}` }}>
             Notestack <span style={{ color: BLUE, textShadow: `0 0 30px ${BLUE}` }}>AI</span>
           </h1>
           <div style={{ marginTop: 44, display: "flex", gap: 6 }}>

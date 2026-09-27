@@ -199,7 +199,7 @@ export default function Landing() {
                 inputMode="url"
               />
               <button type="submit" className="btn btn-primary">
-                Launch my archive
+                Start Exploring
                 <ArrowRightIcon size={18} />
               </button>
             </form>
