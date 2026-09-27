@@ -3,8 +3,11 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
+from sqlalchemy.orm import Session
+
 from app.auth import Ctx, get_ctx
 from app.config import settings
+from app.db import get_db
 from app.services.billing import billing_status, create_checkout_url, create_portal_url
 from app.services.plans import PLAN_ORDER, PLANS, effective_plan, plan_dict
 
@@ -50,10 +53,28 @@ def portal(ctx: Ctx = Depends(get_ctx)):
     return {"url": create_portal_url(ctx.db, ctx.workspace)}
 
 
+class ConfirmIn(BaseModel):
+    session_id: str
+
+
+@router.post("/confirm")
+def confirm(body: ConfirmIn, ctx: Ctx = Depends(get_ctx)):
+    """Called when the app lands back from Checkout, so the new plan applies even if the webhook is late."""
+    if not settings.billing_enabled:
+        raise HTTPException(409, {"code": "billing_disabled", "message": "Billing is not available yet."})
+    from app.services import stripe_billing
+
+    stripe_billing.confirm_checkout(ctx.db, ctx.workspace, body.session_id)
+    return billing_status(ctx.db, ctx.workspace)
+
+
 @router.post("/webhook")
-async def webhook(request: Request):
-    """TODO(stripe): verify the Stripe-Signature header against STRIPE_WEBHOOK_SECRET, then map events to
-    services.billing.apply_subscription (workspace id from client_reference_id, plan from metadata)."""
+async def webhook(request: Request, db: Session = Depends(get_db)):
+    """Stripe events. The signature is checked against the raw body, so nothing in front of the API may
+    rewrite it. Point the Stripe endpoint at {API_URL}/api/billing/webhook."""
     if not settings.billing_enabled:
         return {"ignored": True}
-    raise HTTPException(501, "Webhook not wired yet")
+    from app.services import stripe_billing
+
+    event = stripe_billing.parse_event(await request.body(), request.headers.get("stripe-signature"))
+    return {"received": True, "result": stripe_billing.handle_event(db, event)}

@@ -165,18 +165,16 @@ def return_urls() -> tuple[str, str]:
 
 
 def create_checkout_url(db: Session, user: User, workspace: Workspace, plan: Plan, cycle: str) -> str:
-    """Return the hosted checkout URL for plan on the monthly or annual cycle.
+    """Hosted Stripe Checkout for plan on the monthly or annual cycle, or an in place plan change (which may
+    return Stripe's invoice page when the bank wants 3D Secure). See services/stripe_billing.py."""
+    from app.services import stripe_billing
 
-    TODO(stripe): create a Checkout Session in subscription mode with the price for (plan.id, cycle),
-    customer_email=user.email, client_reference_id=str(workspace.id), metadata={"plan": plan.id},
-    success_url/cancel_url from return_urls(), and return session.url.
-    """
-    raise HTTPException(501, {"code": "checkout_not_wired", "message": "Checkout is almost ready. Check back soon."})
+    success, cancel = return_urls()
+    return stripe_billing.start_checkout(db, user, workspace, plan, cycle, success, cancel)
 
 
 def create_portal_url(db: Session, workspace: Workspace) -> str:
-    """Return the customer portal URL for managing or cancelling a subscription.
+    """Stripe customer portal: change card, switch or cancel the plan, download invoices."""
+    from app.services import stripe_billing
 
-    TODO(stripe): billing_portal.Session.create(customer=sub.provider_customer_id, return_url=.../app/settings).
-    """
-    raise HTTPException(501, {"code": "portal_not_wired", "message": "Billing management is almost ready."})
+    return stripe_billing.portal_url(db, workspace, f"{settings.frontend_url.rstrip('/')}/app/settings")

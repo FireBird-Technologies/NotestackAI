@@ -70,3 +70,13 @@ class Subscription(IdMixin, TimestampMixin, Base):
     provider_customer_id: Mapped[str | None] = mapped_column(String(100))
     provider_subscription_id: Mapped[str | None] = mapped_column(String(100))
     current_period_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class BillingEvent(Base):
+    """Stripe webhook events already handled, so a retried delivery never sends a second email."""
+
+    __tablename__ = "billing_events"
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)  # Stripe event id (evt_...)
+    type: Mapped[str] = mapped_column(String(80))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

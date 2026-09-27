@@ -181,6 +181,29 @@ class EmailService:
             )
         )
 
+    # Billing
+
+    def send_payment_action(self, to: str, kind: str, url: str) -> bool:
+        """kind: 'confirm' (the bank wants 3D Secure for a renewal) or 'failed' (card declined; Stripe retries)."""
+        if kind == "confirm":
+            title, subject = "Confirm your payment", "Your bank needs you to confirm your Notestack payment"
+            body = ("Your bank asked for a quick confirmation (3D Secure) before your Notestack renewal can go "
+                    "through. It takes a few seconds, and your plan stays active meanwhile.")
+            cta = "Confirm payment"
+        else:
+            title, subject = "Your payment did not go through", "Your Notestack payment failed"
+            body = ("We could not charge your card for Notestack. We will retry automatically over the next few "
+                    "days; update your card to keep your plan without interruption.")
+            cta = "Update payment"
+        return self._send(
+            OutgoingEmail(
+                to=to,
+                subject=subject,
+                html=_layout(title, html.escape(body) + _button(cta, url)),
+                text=f"{body}\n\n{cta}: {url}",
+            )
+        )
+
     # Internal alerts
 
     def send_alert(self, subject: str, text: str) -> bool:

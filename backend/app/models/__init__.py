@@ -21,11 +21,12 @@ from app.models.content import (
     VoiceProfile,
 )
 from app.models.email import EmailVerificationCode, UpdateEmail, UpdateEmailSend, VerificationPurpose
-from app.models.user import AuthProvider, Subscription, User, Workspace, WorkspaceMember
+from app.models.user import AuthProvider, BillingEvent, Subscription, User, Workspace, WorkspaceMember
 
 __all__ = [
     "Artifact",
     "AuthProvider",
+    "BillingEvent",
     "CalendarItem",
     "Chat",
     "Citation",

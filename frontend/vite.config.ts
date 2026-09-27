@@ -6,7 +6,12 @@ import { sitemapPlugin } from "./seo/sitemap";
 const SITE_URL = process.env.SITE_URL ?? "https://notestack.ai";
 
 export default defineConfig({
-  plugins: [react(), sitemapPlugin(SITE_URL)],
+  plugins: [
+    react(),
+    sitemapPlugin(SITE_URL),
+    // Link preview tags need absolute URLs: fill %SITE_URL% in index.html.
+    { name: "site-url", transformIndexHtml: (html) => html.replaceAll("%SITE_URL%", SITE_URL.replace(/\/$/, "")) },
+  ],
   // Read the shared root .env. Only these prefixes reach the browser; the Google client ID is
   // public by design, so it can be shared with the backend under its plain name.
   envDir: "..",

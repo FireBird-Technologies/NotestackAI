@@ -124,7 +124,8 @@ def effective_plan(db: Session, workspace: Workspace) -> Plan:
     if not settings.billing_enabled:
         return PLANS["studio"]
     sub = db.query(Subscription).filter_by(workspace_id=workspace.id).one_or_none()
-    if not sub or sub.status not in {"active", "trialing"}:
+    # past_due keeps the plan while Stripe retries the card (grace period); unpaid or canceled drop to Free.
+    if not sub or sub.status not in {"active", "trialing", "past_due"}:
         return PLANS["free"]
     return PLANS.get(sub.plan, PLANS["free"])
 
