@@ -3,6 +3,7 @@ import { AudiogramSquare, audiogramDuration } from "./compositions/AudiogramSqua
 import { CarouselSlide } from "./compositions/CarouselSlide";
 import { ExplainerLong, explainerDuration } from "./compositions/ExplainerLong";
 import { DEMO_DURATION, DEMO_FPS, LandingDemo } from "./compositions/LandingDemo";
+import { LAUNCH_DURATION, LAUNCH_FPS, LaunchTrailer } from "./compositions/LaunchTrailer";
 import { QuoteCard } from "./compositions/QuoteCard";
 import { ShortVertical, shortVerticalDuration } from "./compositions/ShortVertical";
 import {
@@ -43,6 +44,7 @@ const sampleAudiogram: AudiogramSquareProps = {
 export function Root() {
   return (
     <>
+      <Composition id="LaunchTrailer" component={LaunchTrailer} width={1920} height={1080} fps={LAUNCH_FPS} durationInFrames={LAUNCH_DURATION} />
       <Composition id="LandingDemo" component={LandingDemo} width={1920} height={1080} fps={DEMO_FPS} durationInFrames={DEMO_DURATION} />
       <Composition
         id="ShortVertical"

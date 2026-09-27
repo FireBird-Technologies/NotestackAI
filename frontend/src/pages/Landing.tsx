@@ -18,6 +18,8 @@ import {
 } from "../components/icons/Icons";
 
 export const PENDING_SOURCE_KEY = "ns_pending_source";
+// Bump after re-rendering public/demo.mp4 so browsers and the CDN fetch the new file.
+const DEMO_VERSION = 2;
 
 const FEATURES = [
   {
@@ -92,8 +94,8 @@ function DemoVideo() {
         <video
           ref={ref}
           className="demo-video"
-          src="/demo.mp4"
-          poster="/demo-poster.jpg"
+          src={`/demo.mp4?v=${DEMO_VERSION}`}
+          poster={`/demo-poster.jpg?v=${DEMO_VERSION}`}
           autoPlay
           muted
           loop

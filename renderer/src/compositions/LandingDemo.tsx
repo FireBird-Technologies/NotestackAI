@@ -62,7 +62,7 @@ const ease = Easing.bezier(0.22, 1, 0.36, 1);
 // Shared pieces
 
 /** 3D starfield flying toward the camera. `speed` can ramp for warp streaks. */
-function WarpField({ speed, count = 420, streak = 0 }: { speed: number; count?: number; streak?: number }) {
+export function WarpField({ speed, count = 420, streak = 0 }: { speed: number; count?: number; streak?: number }) {
   const frame = useCurrentFrame();
   const { width, height } = useVideoConfig();
   const cx = width / 2;
@@ -103,7 +103,7 @@ function WarpField({ speed, count = 420, streak = 0 }: { speed: number; count?: 
 }
 
 /** A diagonal light flare that sweeps across, with a hot core and anamorphic streak. */
-function Flare({ at, duration = 24, y = 50 }: { at: number; duration?: number; y?: number }) {
+export function Flare({ at, duration = 24, y = 50 }: { at: number; duration?: number; y?: number }) {
   const frame = useCurrentFrame();
   const p = interpolate(frame, [at, at + duration], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: ease });
   if (p <= 0 || p >= 1) return null;
