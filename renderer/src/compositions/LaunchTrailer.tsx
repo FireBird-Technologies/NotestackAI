@@ -544,11 +544,11 @@ function Intro() {
         <Galaxy seed="far-4" x={260} y={200} size={60} tilt={0.7} />
       </div>
       <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", textAlign: "center", gap: 28 }}>
-        <h1 style={{ margin: 0, fontFamily: theme.display, fontWeight: 600, fontSize: 96, color: WHITE, opacity: a, transform: `translateY(${(1 - a) * 30}px)` }}>
-          Every writer carries a universe.
+        <h1 style={{ margin: 0, fontFamily: theme.display, fontWeight: 600, fontSize: 80, color: WHITE, opacity: a, transform: `translateY(${(1 - a) * 30}px)` }}>
+          You have written more than you remember.
         </h1>
         <h2 style={{ margin: 0, fontFamily: theme.display, fontWeight: 500, fontSize: 64, color: "rgba(255,255,255,0.75)", opacity: b, transform: `translateY(${(1 - b) * 24}px)` }}>
-          Most of it is <span style={{ color: WHITE, textShadow: `0 0 30px ${BLUE}, 0 0 70px ${BLUE}` }}>still uncharted.</span>
+          Whole worlds of ideas, <span style={{ color: WHITE, textShadow: `0 0 30px ${BLUE}, 0 0 70px ${BLUE}` }}>still uncharted.</span>
         </h2>
         <p style={{ margin: "30px 0 0", fontFamily: theme.mono, fontSize: 24, letterSpacing: 8, color: BLUE, opacity: c }}>A JOURNEY OF KNOWLEDGE</p>
       </AbsoluteFill>

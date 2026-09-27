@@ -19,7 +19,7 @@ import {
 
 export const PENDING_SOURCE_KEY = "ns_pending_source";
 // Bump after re-rendering public/demo.mp4 so browsers and the CDN fetch the new file.
-const DEMO_VERSION = 2;
+const DEMO_VERSION = 3;
 
 const FEATURES = [
   {

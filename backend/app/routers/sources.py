@@ -10,7 +10,7 @@ from app.corpus import INDEX, Corpus, CorpusError
 from app.models import Document, Job, NotebookDocument, Source, Upload
 from app.pipeline.ingest import IMPORTS_FEED, FeedNotFound, discover_feed, imports_source, rebuild_index
 from app.services.jobs import create_job, serialize_job
-from app.services.plans import effective_plan
+from app.services.plans import effective_plan, plan_limit_error
 from app.services.storage import storage
 
 router = APIRouter(prefix="/api/sources", tags=["sources"])
@@ -73,7 +73,7 @@ async def create_source(body: SourceIn, ctx: Ctx = Depends(get_ctx)):
         .where(Source.workspace_id == ctx.workspace.id, Source.feed_url != IMPORTS_FEED)
     )
     if count >= plan.sources:
-        raise HTTPException(402, {"code": "plan_limit", "message": f"Your plan includes {plan.sources} sources."})
+        raise plan_limit_error(plan, "sources", f"Your plan includes {plan.sources} sources.")
     source = Source(workspace_id=ctx.workspace.id, feed_url=found.feed_url, platform=found.platform,
                     site_url=found.site_url, title=found.title)
     ctx.db.add(source)

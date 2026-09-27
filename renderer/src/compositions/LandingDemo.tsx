@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
-import { AbsoluteFill, Audio as SoundTrack, Easing, interpolate, random, Sequence, spring, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, Audio as SoundTrack, Easing, Img, interpolate, random, Sequence, spring, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
 import { theme } from "../theme";
 
 /** Landing page product demo: a trip through the Notestack galaxy. 1920x1080, 30 fps, ~32 s.
@@ -16,7 +16,7 @@ const SCENES = [
   { id: "paste", len: 9.4, vo: 0.4 },
   { id: "orbit", len: 7.6, vo: 0.4 },
   { id: "research", len: 5.6, vo: 0.4 },
-  { id: "audio", len: 5.1, vo: 0.4 },
+  { id: "audio", len: 5.8, vo: 0.4 },
   { id: "launchkit", len: 7.8, vo: 0.4 },
   { id: "launchpad", len: 4.6, vo: 0.4 },
   { id: "outro", len: 4.2, vo: 0.5 },
@@ -25,7 +25,7 @@ const XFADE = 0.5; // seconds of overlap between scenes
 
 // Narration clip lengths (public/demo-vo/durations.json) so the music can duck under the voice.
 const VO_SECONDS: Record<(typeof SCENES)[number]["id"], number> = {
-  warp: 3.74, paste: 8.1, orbit: 6.3, research: 4.29, audio: 3.74, launchkit: 6.53, launchpad: 3.22, outro: 2.48,
+  warp: 3.69, paste: 8.34, orbit: 5.96, research: 4.39, audio: 4.57, launchkit: 5.83, launchpad: 3.14, outro: 2.56,
 };
 
 /** Frame ranges where the narrator is speaking, in composition time. */
@@ -563,9 +563,8 @@ function Outro() {
     <AbsoluteFill>
       <WarpField speed={interpolate(frame, [0, 60, 114], [0.5, 2, 12])} streak={interpolate(frame, [70, 114], [0, 1], { extrapolateLeft: "clamp" })} />
       <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", textAlign: "center", gap: 30 }}>
-        <div style={{ width: 120, height: 120, borderRadius: 30, background: theme.white, display: "grid", placeItems: "center", opacity: s, transform: `scale(${s})`, boxShadow: `0 0 80px ${BLUE}` }}>
-          <div style={{ width: 44, height: 44, borderRadius: "50%", background: theme.black, boxShadow: `18px -18px 0 -10px ${theme.black}` }} />
-        </div>
+        {/* The navbar mark (frontend/public/logo.svg, copied to public/logo.svg). */}
+        <Img src={staticFile("logo.svg")} width={128} height={128} style={{ borderRadius: 30, opacity: s, transform: `scale(${s})`, boxShadow: `0 0 80px ${BLUE}` }} />
         <h1 style={{ margin: 0, fontFamily: theme.display, fontSize: 120, color: theme.white, opacity: s, textShadow: `0 0 40px ${BLUE}` }}>Notestack</h1>
         <p style={{ margin: 0, fontFamily: theme.body, fontSize: 40, color: "rgba(255,255,255,0.8)", opacity: cta }}>Your knowledge, in orbit.</p>
         <p style={{ margin: 0, padding: "18px 40px", borderRadius: 999, background: BLUE, color: theme.white, fontFamily: theme.body, fontWeight: 600, fontSize: 32, opacity: cta, boxShadow: `0 0 40px ${BLUE}` }}>

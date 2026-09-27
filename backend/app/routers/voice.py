@@ -12,7 +12,7 @@ from app.config import settings
 from app.models import Document, Job, Upload, VoiceConsent, VoiceProfile
 from app.services import tts
 from app.services.jobs import create_job, record_usage, serialize_job
-from app.services.plans import effective_plan
+from app.services.plans import effective_plan, plan_limit_error
 from app.services.storage import storage
 
 router = APIRouter(prefix="/api/voice", tags=["voice"])
@@ -246,8 +246,9 @@ async def quota(ctx: Ctx = Depends(get_ctx)):
 
 @router.post("/consent")
 def give_consent(body: ConsentIn, request: Request, ctx: Ctx = Depends(get_ctx)):
-    if not effective_plan(ctx.db, ctx.workspace).voice_cloning:
-        raise HTTPException(402, {"code": "plan_limit", "message": "Voice cloning is on the Writer and Studio plans."})
+    plan = effective_plan(ctx.db, ctx.workspace)
+    if not plan.voice_cloning:
+        raise plan_limit_error(plan, "voice_cloning", "Voice cloning is on the Writer and Studio plans.")
     if not body.agreed or body.consent_text.strip() != CONSENT_TEXT:
         raise HTTPException(400, "Please read and accept the consent statement.")
     if not settings.elevenlabs_api_key:

@@ -2,6 +2,7 @@
 
 from dataclasses import asdict, dataclass
 
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -126,3 +127,31 @@ def effective_plan(db: Session, workspace: Workspace) -> Plan:
     if not sub or sub.status not in {"active", "trialing"}:
         return PLANS["free"]
     return PLANS.get(sub.plan, PLANS["free"])
+
+
+PLAN_ORDER = ["free", "writer", "studio"]
+
+
+def next_plan(plan: Plan) -> Plan | None:
+    i = PLAN_ORDER.index(plan.id)
+    return PLANS[PLAN_ORDER[i + 1]] if i + 1 < len(PLAN_ORDER) else None
+
+
+def upgrade_for(plan: Plan, kind: str | None = None) -> str | None:
+    """Cheapest plan above this one that raises the limit named by kind (or simply the next tier)."""
+    for pid in PLAN_ORDER[PLAN_ORDER.index(plan.id) + 1:]:
+        candidate = PLANS[pid]
+        if kind is None:
+            return pid
+        if kind == "voice_cloning" and candidate.voice_cloning:
+            return pid
+        current, better = getattr(plan, kind, 0), getattr(candidate, kind, 0)
+        if better < 0 or (isinstance(better, (int, float)) and better > current):
+            return pid
+    return None
+
+
+def plan_limit_error(plan: Plan, kind: str, message: str) -> HTTPException:
+    """402 the frontend turns into the out of fuel popup."""
+    return HTTPException(402, {"code": "plan_limit", "message": message, "kind": kind,
+                               "plan": plan.id, "upgrade_to": upgrade_for(plan, kind)})

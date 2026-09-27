@@ -2,12 +2,11 @@
 
 from datetime import UTC, datetime
 
-from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import Artifact, UsageEvent, Workspace
-from app.services.plans import Plan, effective_plan
+from app.services.plans import Plan, effective_plan, plan_limit_error
 
 
 def month_start(now: datetime | None = None) -> datetime:
@@ -59,6 +58,5 @@ def check_limit(db: Session, workspace: Workspace, kind: str, amount: float = 1)
              "launch_kits": plan.launch_kits}[kind]
     if limit >= 0 and used[kind] + amount > limit:
         label = kind.replace("_", " ")
-        raise HTTPException(402, {"code": "plan_limit",
-                                  "message": f"This would go over your {limit} {label} this month."})
+        raise plan_limit_error(plan, kind, f"This would go over your {limit} {label} this month.")
     return plan
