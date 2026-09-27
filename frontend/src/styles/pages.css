@@ -1627,6 +1627,160 @@ select.input option {
   line-height: 1.6;
 }
 
+/* Code blocks: language bar, copy, highlighting, collapse */
+.md-code {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.03);
+  overflow: hidden;
+  max-width: 100%;
+}
+
+.md-code-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px 6px 14px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(33, 124, 255, 0.06);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.md-code-copy,
+.md-code-more {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.md-code-copy:hover,
+.md-code-more:hover {
+  color: var(--white);
+  border-color: var(--blue-60);
+}
+
+.md-code pre {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  max-height: 520px;
+  overflow: auto;
+}
+
+.md-code.collapsed pre {
+  mask-image: linear-gradient(180deg, #000 70%, transparent);
+}
+
+.md-code-more {
+  display: block;
+  margin: 0 auto 10px;
+}
+
+.md pre code {
+  color: rgba(255, 255, 255, 0.82);
+  white-space: pre;
+  tab-size: 2;
+}
+
+.tok-kw {
+  color: var(--blue);
+  font-weight: 600;
+}
+
+.tok-str {
+  color: var(--white);
+}
+
+.tok-com {
+  color: var(--text-3);
+  font-style: italic;
+}
+
+.tok-num,
+.tok-prop {
+  color: color-mix(in srgb, var(--blue) 55%, var(--white));
+}
+
+.tok-fn {
+  color: var(--white);
+  font-weight: 600;
+}
+
+.tok-type {
+  color: var(--white);
+  text-decoration: underline;
+  text-decoration-color: var(--blue-35);
+  text-underline-offset: 3px;
+}
+
+/* Images */
+.md-figure {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.md-figure figcaption {
+  font-size: 0.8rem;
+}
+
+.md-img {
+  display: inline-block;
+  max-width: 100%;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  line-height: 0;
+  vertical-align: middle;
+}
+
+.md-img img {
+  display: block;
+  max-width: 100%;
+  max-height: 420px;
+  height: auto;
+  object-fit: contain;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.md-img:hover {
+  border-color: var(--blue-60);
+  box-shadow: 0 0 18px var(--blue-20);
+}
+
+.md-img-broken {
+  font-size: 0.8rem;
+  color: var(--text-3);
+}
+
+/* Task lists */
+.md li.md-task {
+  list-style: none;
+  margin-left: -1.2em;
+}
+
+.md li.md-task input {
+  accent-color: var(--blue);
+  margin: 0 8px 0 0;
+  vertical-align: -2px;
+}
+
+.md li.md-task.done {
+  color: var(--text-3);
+  text-decoration: line-through;
+}
+
 .md blockquote {
   padding: 4px 0 4px 16px;
   border-left: 3px solid var(--blue);

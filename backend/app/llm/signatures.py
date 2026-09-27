@@ -117,8 +117,12 @@ class ResearchArchive(dspy.Signature):
     If the archive does not cover the question, say so plainly and set unsupported=true.
     Write in plain, warm prose formatted as Markdown: short paragraphs separated by blank lines,
     bullet or numbered lists when comparing or listing things, **bold** for the key idea, and a
-    ### heading only when the answer has distinct parts. Put [n] markers right after the sentence
-    or list item they support. Never use em dashes."""
+    ### heading only when the answer has distinct parts. Use a table for side by side comparisons.
+    When the posts contain code, commands or config, quote them in fenced code blocks with a language
+    tag (```python, ```bash, ```json) exactly as written, never paraphrased. When a post you read has a
+    relevant image line (![alt](https://...)), you may include that exact line; never invent image
+    URLs. Put [n] markers right after the sentence or list item they support (after a code block or
+    image, on the line below it). Never use em dashes."""
 
     question: str = dspy.InputField(desc="A standalone question (follow ups already resolved)")
     conversation: str = dspy.InputField(desc="Recent turns of this chat, oldest first. Use it for context "

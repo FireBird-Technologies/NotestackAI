@@ -178,7 +178,8 @@ def test_crawl_uses_firecrawl_when_configured(monkeypatch):
     assert [e.title for e in entries] == ["Rendered Post"]
     assert entries[0].published_at.year == 2026
     body = entries[0].sections[0][1]
-    assert "See the docs." in body and "png" not in body
+    assert "See the docs." in body and "[the docs]" not in body
+    assert "![hero](https://x/y.png)" in [t for _, t in entries[0].sections][0]  # images kept for answers
 
 
 def test_firecrawl_is_main_path_except_substack(feed, monkeypatch):

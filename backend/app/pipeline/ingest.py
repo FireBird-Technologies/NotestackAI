@@ -168,7 +168,25 @@ def html_to_sections(html: str) -> list[tuple[str | None, str]]:
     for tag in soup(["script", "style", "nav", "footer", "form", "button", "iframe", "noscript", "svg"]):
         tag.decompose()
     sections: list[tuple[str | None, list[str]]] = [(None, [])]
-    for el in soup.find_all(["h1", "h2", "h3", "p", "li", "blockquote", "pre"]):
+    for el in soup.find_all(["h1", "h2", "h3", "p", "li", "blockquote", "pre", "img"]):
+        if el.name == "img":
+            # Keep images as Markdown so answers can show them (web images only, no tracking pixels).
+            src = (el.get("src") or el.get("data-src") or "").strip()
+            width = str(el.get("width") or "")
+            if src.startswith(("http://", "https://")) and not (width.isdigit() and int(width) < 50):
+                alt = re.sub(r"[\[\]\n]", " ", el.get("alt") or "").strip()
+                sections[-1][1].append(f"![{alt}]({src})")
+            continue
+        if el.name == "pre":
+            # Code keeps its line breaks, as a fenced block.
+            code = el.get_text().strip("\n")
+            if code.strip():
+                lang = next((c.split("-", 1)[1] for c in (el.find("code") or el).get("class") or []
+                             if c.startswith(("language-", "lang-"))), "")
+                sections[-1][1].append(f"```{lang}\n{code}\n```")
+            continue
+        if el.find_parent("pre"):
+            continue
         text = el.get_text(" ", strip=True)
         if not text or (len(text) < 120 and _DROP.search(text)):
             continue
@@ -177,6 +195,9 @@ def html_to_sections(html: str) -> list[tuple[str | None, str]]:
         else:
             sections[-1][1].append(text)
     return [(h, "\n\n".join(p)) for h, p in sections if p]
+
+
+_MD_IMAGE_LINE = re.compile(r"^!\[[^\]]*\]\(https?://[^)\s]+[^)]*\)$")
 
 
 def markdown_to_sections(text: str) -> list[tuple[str | None, str]]:
@@ -188,16 +209,32 @@ def markdown_to_sections(text: str) -> list[tuple[str | None, str]]:
             sections[-1][1].append(" ".join(para).strip())
             para.clear()
 
+    fence: list[str] | None = None  # lines of an open ``` block, kept verbatim
     for line in text.splitlines():
         stripped = line.strip()
+        if fence is not None:
+            fence.append(line)
+            if stripped.startswith("```"):
+                sections[-1][1].append("\n".join(fence))
+                fence = None
+            continue
+        if stripped.startswith("```"):
+            flush()
+            fence = [stripped]
+            continue
         heading = re.match(r"^#{1,3}\s+(.*)", stripped)
-        if heading:
+        if _MD_IMAGE_LINE.match(stripped):
+            flush()
+            sections[-1][1].append(stripped)  # images stay on their own line
+        elif heading:
             flush()
             sections.append((heading.group(1).strip(), []))
         elif not stripped:
             flush()
         else:
             para.append(stripped)
+    if fence is not None:  # unclosed fence: close it so the block still renders
+        sections[-1][1].append("\n".join([*fence, "```"]))
     flush()
     return [(h, "\n\n".join(p)) for h, p in sections if p]
 
@@ -239,13 +276,19 @@ class FeedEntry:
     sections: list[tuple[str | None, str]] | None = None  # set when the source is not HTML
 
 
-_MD_IMAGE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
-_MD_LINK = re.compile(r"\[([^\]]*)\]\([^)]*\)")
+_MD_IMAGE = re.compile(r"!\[([^\]]*)\]\(([^)\s]*)[^)]*\)")
+_MD_LINK = re.compile(r"(?<!!)\[([^\]]*)\]\([^)]*\)")
 
 
 def _clean_markdown(md: str) -> str:
-    """Firecrawl markdown to plain prose: drop images, keep link text."""
-    return _MD_LINK.sub(r"\1", _MD_IMAGE.sub("", md))
+    """Firecrawl markdown to prose: keep link text, keep web images on their own line (drop data: URIs
+    and relative paths, which would not load outside the site)."""
+
+    def image(m: re.Match) -> str:
+        alt, src = m.group(1).replace("\n", " ").strip(), m.group(2)
+        return f"\n\n![{alt}]({src})\n\n" if src.startswith(("http://", "https://")) else ""
+
+    return _MD_LINK.sub(r"\1", _MD_IMAGE.sub(image, md))
 
 
 def _firecrawl_entry(url: str) -> FeedEntry:
