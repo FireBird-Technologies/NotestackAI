@@ -146,6 +146,8 @@ def apply_subscription(db: Session, workspace_id, *, plan: str, status: str, pro
     if plan not in PLANS:
         raise ValueError(f"Unknown plan {plan}")
     sub = db.query(Subscription).filter_by(workspace_id=workspace_id).one_or_none()
+    workspace = db.get(Workspace, workspace_id)
+    before = effective_plan(db, workspace).indexed_posts if workspace else None
     if not sub:
         sub = Subscription(workspace_id=workspace_id)
         db.add(sub)
@@ -154,7 +156,21 @@ def apply_subscription(db: Session, workspace_id, *, plan: str, status: str, pro
     sub.provider_subscription_id = subscription_id or sub.provider_subscription_id
     sub.current_period_end = current_period_end
     db.commit()
+    if workspace and effective_plan(db, workspace).indexed_posts != before:
+        resync_sources(db, workspace_id)
     return sub
+
+
+def resync_sources(db: Session, workspace_id) -> None:
+    """The post limit changed: re-sync every feed so locked posts unlock on upgrade (or re-lock on downgrade)."""
+    from app.pipeline.ingest import IMPORTS_FEED
+    from app.services.jobs import create_job
+
+    for source in db.scalars(select(Source).where(Source.workspace_id == workspace_id,
+                                                  Source.feed_url != IMPORTS_FEED)):
+        source.sync_status = "pending"
+        create_job(db, workspace_id, "ingest", {"source_id": str(source.id)})
+    db.commit()
 
 
 def return_urls() -> tuple[str, str]:

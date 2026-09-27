@@ -575,12 +575,10 @@ def store_entries(
     return indexed, skipped, changed
 
 
-# Every plan reads the whole archive (up to this ceiling). Posts past the plan's indexed_posts are stored as locked:
-# listed with their title and text, but with no corpus file, so chat, notebooks and generation never see them.
-# Upgrading re-syncs and unlocks them without asking the writer to reconnect anything.
-ARCHIVE_SCAN_CAP = 5000
-# Sites without a feed are crawled page by page (Firecrawl scrapes when configured), so the ceiling is lower.
-SITE_SCAN_CAP = 500
+# A sync reads up to SCAN_CAP posts (or the plan's own limit, if higher). Posts past the plan's indexed_posts are
+# stored as locked: listed with their title and text, but with no corpus file, so chat, notebooks and generation
+# never see them. Upgrading re-syncs and unlocks them without asking the writer to reconnect anything.
+SCAN_CAP = 200
 
 
 def _newest_first(entries: list[FeedEntry]) -> list[FeedEntry]:
@@ -623,12 +621,12 @@ def store_locked(db: Session, source: Source, entries: list[FeedEntry]) -> tuple
 def ingest_source(db: Session, source: Source, job: Job, max_posts: int) -> dict:
     source.sync_status = "syncing"
     update_job(db, job, status="running", progress=0.02, message="Contacting your feed")
-    fetch_limit = ARCHIVE_SCAN_CAP
+    fetch_limit = max(SCAN_CAP, max_posts)
 
     if source.feed_url.startswith(SITE_PREFIX):
         update_job(db, job, message="Mapping your site")
         entries = crawl_site(
-            source.feed_url.removeprefix(SITE_PREFIX), max(SITE_SCAN_CAP, max_posts),
+            source.feed_url.removeprefix(SITE_PREFIX), fetch_limit,
             on_found=lambda n: update_job(db, job, progress=0.05, message=f"Found {n} pages, reading them"),
             on_post=lambda done, total: update_job(db, job, progress=0.05 + 0.05 * done / total,
                                                    message=f"Read {done} of {total} pages"),
