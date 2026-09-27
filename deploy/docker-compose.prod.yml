@@ -1,0 +1,62 @@
+# Production stack for a single DigitalOcean Droplet. The database is Neon (DATABASE_URL in .env.prod).
+#   cd /opt/notestack/deploy && docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
+# Caddy terminates HTTPS for API_DOMAIN and proxies to the API; the worker and renderer are internal.
+
+services:
+  api:
+    build: ../backend
+    restart: unless-stopped
+    env_file: .env.prod
+    # Migrations run against Neon on every start (no-op when up to date). Proxy headers let the API see the
+    # real client IP and https scheme behind Caddy.
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips='*'"
+    volumes:
+      - appdata:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+  worker:
+    build: ../backend
+    restart: unless-stopped
+    env_file: .env.prod
+    command: python -m app.worker
+    volumes:
+      - appdata:/data # same volume as the API, so both see the same stored files and corpus cache
+    depends_on:
+      api:
+        condition: service_healthy # the API has applied migrations by the time it is healthy
+
+  renderer:
+    build: ../renderer
+    restart: unless-stopped
+    environment:
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN} # must match the API's
+    profiles: ["render"] # optional: start with --profile render (needs about 2 GB of free RAM)
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment: # only what the Caddyfile needs, not the app secrets
+      API_DOMAIN: ${API_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+
+volumes:
+  appdata: {}
+  caddy_data: {}
+  caddy_config: {}
