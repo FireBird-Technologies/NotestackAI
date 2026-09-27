@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import type { BillingCycle } from "../api/endpoints";
 import type { Meter, PlanInfo } from "../api/types";
 import { useUpgrade } from "../hooks/useUpgrade";
-import { CheckIcon, RocketIcon } from "./icons/Icons";
+import { CheckIcon } from "./icons/Icons";
 import { annualMonthly, annualTotal, money } from "./PricingTiers";
 
 const ORDER = ["free", "writer", "studio"];
@@ -62,9 +62,6 @@ function Scene({ mode }: { mode: "explore" | "limit" | "welcome" }) {
           <circle cx="106" cy="76" r="3" className="upg-crater" />
           <path d="M8 104a92 20 0 0 0 184 0" className="upg-ring front" />
         </svg>
-        <span className="upg-rocket">
-          <RocketIcon size={22} />
-        </span>
       </div>
     </div>
   );
@@ -92,6 +89,11 @@ export default function UpgradeModal() {
   const { status, modal, close, checkout, busy, error } = useUpgrade();
   const [cycle, setCycle] = useState<BillingCycle>("annual");
   const panel = useRef<HTMLDivElement>(null);
+
+  // Every open starts on annual.
+  useEffect(() => {
+    if (modal) setCycle("annual");
+  }, [modal]);
 
   useEffect(() => {
     if (!modal) return;
@@ -165,7 +167,7 @@ export default function UpgradeModal() {
           <>
             <div className="upg-cycle">
               <div className="cycle-toggle" role="radiogroup" aria-label="Billing cycle">
-                {(["monthly", "annual"] as const).map((c) => (
+                {(["annual", "monthly"] as const).map((c) => (
                   <button key={c} type="button" role="radio" aria-checked={cycle === c} className={cycle === c ? "on" : ""} onClick={() => setCycle(c)}>
                     {c === "monthly" ? "Monthly" : "Annual"}
                     {c === "annual" && offers[0]?.annual_savings_pct > 0 && <span className="save mono">Save {offers[0].annual_savings_pct}%</span>}

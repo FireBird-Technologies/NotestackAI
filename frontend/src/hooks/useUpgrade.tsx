@@ -107,10 +107,14 @@ export function UpgradeProvider({ children }: { children: ReactNode }) {
     if (upgrade) setModal({ mode: "explore", highlight: upgrade === "1" ? null : upgrade });
     if (checkoutResult === "success") {
       setModal({ mode: "welcome" });
-      refresh();
+      // Apply the purchase now instead of waiting for Stripe's webhook, then show the new plan.
+      const sessionId = params.get("session_id");
+      if (sessionId) billingApi.confirm(sessionId).catch(() => undefined).finally(refresh);
+      else refresh();
     }
     params.delete("upgrade");
     params.delete("checkout");
+    params.delete("session_id");
     const rest = params.toString();
     navigate({ pathname: location.pathname, search: rest ? `?${rest}` : "" }, { replace: true });
     openingDone.current = true;

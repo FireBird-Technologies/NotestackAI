@@ -52,7 +52,8 @@ def test_free_plan_nudges_and_out_of_fuel_402(client, auth, billing_on, db_sessi
 
 
 def test_checkout_guards(client, auth, billing_on, db_session):
-    assert client.post("/api/billing/checkout", headers=auth, json={"plan": "writer"}).status_code == 501
+    r = client.post("/api/billing/checkout", headers=auth, json={"plan": "writer"})
+    assert r.status_code == 503 and r.json()["detail"]["code"] == "stripe_not_configured"  # no STRIPE_SECRET_KEY
     assert client.post("/api/billing/checkout", headers=auth, json={"plan": "free"}).status_code == 422
     ws = db_session.query(Workspace).one()
     apply_subscription(db_session, ws.id, plan="studio", status="active", customer_id="cus_1")

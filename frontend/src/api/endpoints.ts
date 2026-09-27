@@ -187,4 +187,5 @@ export const billingApi = {
   status: () => api<BillingStatus>("/api/billing/status"),
   checkout: (plan: string, cycle: BillingCycle) => post<{ url: string }>("/api/billing/checkout", { plan, cycle }),
   portal: () => post<{ url: string }>("/api/billing/portal"),
+  confirm: (sessionId: string) => post<BillingStatus>("/api/billing/confirm", { session_id: sessionId }),
 };

@@ -331,9 +331,11 @@ def handle_event(db: Session, event) -> str:
     if kind.startswith("invoice."):
         details = _get(_get(obj, "parent", {}), "subscription_details", {})  # newer API versions
         sub_id = _get(obj, "subscription") or _get(details, "subscription")
-        ws = _workspace_for(db, {"id": sub_id} if sub_id else None, customer_id=_get(obj, "customer"))
-        if ws and sub_id:
-            sync_subscription(db, ws, sc.v1.subscriptions.retrieve(sub_id))
+        # Read the subscription from Stripe: its metadata names the workspace even if an earlier event was missed.
+        stripe_sub = sc.v1.subscriptions.retrieve(sub_id) if sub_id else None
+        ws = _workspace_for(db, stripe_sub, customer_id=_get(obj, "customer"))
+        if ws and stripe_sub is not None:
+            sync_subscription(db, ws, stripe_sub)
         if first and kind in {"invoice.payment_action_required", "invoice.payment_failed"}:
             # The first invoice of a Checkout is handled on the Checkout page itself.
             if _get(obj, "billing_reason") != "subscription_create":
