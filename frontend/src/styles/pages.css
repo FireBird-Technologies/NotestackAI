@@ -1867,8 +1867,16 @@ select.input option {
   color: var(--white);
 }
 
+.map-controls .icon-btn {
+  padding: 0;
+  line-height: 1;
+}
+
+/* Trailing letter-spacing from .mono pushes "1:1" off centre in the round button. */
 .map-controls .icon-btn.mono {
   font-size: 0.65rem;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 .map-hint {
@@ -1881,6 +1889,132 @@ select.input option {
 }
 
 /* Voice page */
+.vp .vp-card {
+  max-width: 760px;
+  animation: welcome-in 0.35s ease both;
+}
+
+.vp-steps {
+  list-style: none;
+  margin: 0 0 20px;
+  padding: 0;
+  max-width: 760px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  font-size: 0.75rem;
+}
+
+.vp-steps button {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-3);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.vp-steps li.done button {
+  color: var(--text-2);
+}
+
+.vp-steps li.current button {
+  color: var(--white);
+}
+
+.vp-dot {
+  height: 3px;
+  border-radius: 999px;
+  background: var(--line-strong);
+  transition: background 0.3s, box-shadow 0.3s;
+}
+
+.vp-steps li.done .vp-dot {
+  background: var(--blue-60);
+}
+
+.vp-steps li.current .vp-dot {
+  background: var(--blue);
+  box-shadow: var(--glow-sm);
+}
+
+.vp-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.vp-choice {
+  display: grid;
+  gap: 6px;
+  padding: 18px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--white);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.vp-choice:hover,
+.vp-choice:focus-visible {
+  border-color: var(--blue-60);
+  box-shadow: var(--glow-sm);
+}
+
+.vp-hosts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.vp-how {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  counter-reset: vp-how;
+}
+
+.vp-how li {
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  counter-increment: vp-how;
+}
+
+.vp-how li::before {
+  content: counter(vp-how);
+  font: 600 0.75rem var(--font-mono);
+  color: var(--blue);
+}
+
+.vp-upgrade {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--blue-35);
+  border-radius: var(--radius-sm);
+  background: var(--blue-05);
+}
+
+.vp-upgrade p {
+  margin: 4px 0 0;
+}
+
 .host-card {
   display: grid;
   gap: 10px;
