@@ -12,6 +12,7 @@ import Launchpad from "./pages/Launchpad";
 import LaunchKit from "./pages/LaunchKit";
 import MissionControl from "./pages/MissionControl";
 import Notebooks from "./pages/Notebooks";
+import NotebookLMAlternative from "./pages/NotebookLMAlternative";
 import NotebookView from "./pages/NotebookView";
 import Resurface from "./pages/Resurface";
 import Settings from "./pages/Settings";
@@ -41,6 +42,7 @@ export default function App() {
     <Routes>
       <Route path="/" element={<Landing />} />
       <Route path="/pricing" element={<PricingPage />} />
+      <Route path="/notebooklm-alternative" element={<NotebookLMAlternative />} />
       <Route path="/blogs" element={<Blog />} />
       <Route path="/blogs/:slug" element={<BlogPostPage />} />
       <Route path="/auth" element={<AuthPage />} />

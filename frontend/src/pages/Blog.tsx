@@ -6,7 +6,7 @@ import { blogPosts, getPost } from "../content/blogPosts";
 import type { BlogPost, Mission } from "../content/seoTypes";
 import "../styles/blog.css";
 
-function useMeta(title: string, description: string, canonical?: string) {
+export function useMeta(title: string, description: string, canonical?: string) {
   useEffect(() => {
     document.title = title;
     const set = (selector: string, attr: string, value: string, create: () => HTMLElement) => {

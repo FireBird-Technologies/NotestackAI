@@ -10,6 +10,7 @@ import { blogPosts } from "../src/content/blogPosts";
 
 const STATIC_PAGES: { path: string; priority: string; changefreq: string }[] = [
   { path: "/", priority: "1.0", changefreq: "weekly" },
+  { path: "/notebooklm-alternative", priority: "0.9", changefreq: "monthly" },
   { path: "/pricing", priority: "0.8", changefreq: "monthly" },
   { path: "/blogs", priority: "0.9", changefreq: "weekly" },
 ];

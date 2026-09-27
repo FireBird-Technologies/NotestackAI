@@ -47,7 +47,9 @@ export function PublicFooter() {
           <div>
             <p className="eyebrow">Product</p>
             <Link to="/#features">Features</Link>
+            <Link to="/notebooklm-alternative">NotebookLM alternative</Link>
             <Link to="/pricing">Pricing</Link>
+            <Link to="/blogs">Blog</Link>
             <Link to="/auth">Sign in</Link>
           </div>
           <div>
@@ -59,10 +61,19 @@ export function PublicFooter() {
             ))}
           </div>
           <div>
-            <p className="eyebrow">Company</p>
-            <a href="https://blog2video.app" target="_blank" rel="noreferrer">
-              Blog2Video
+            <p className="eyebrow">More from Firebird</p>
+            <a href="https://blog2video.app" target="_blank" rel="noopener" title="Turn blogs, URLs and PDFs into videos">
+              Blog2Video: blog to video
             </a>
+            <a href="https://pdf2vid.com" target="_blank" rel="noopener" title="Turn any PDF into a narrated video">
+              PDF2Video: PDF to video
+            </a>
+            <a href="https://bloghub.app" target="_blank" rel="noopener" title="Free blog and newsletter directory">
+              BlogHub: blog directory
+            </a>
+          </div>
+          <div>
+            <p className="eyebrow">Company</p>
             <a href="mailto:hello@notestack.ai">Contact</a>
           </div>
         </div>

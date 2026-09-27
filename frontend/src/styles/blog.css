@@ -345,3 +345,89 @@
     transition: none;
   }
 }
+
+/* NotebookLM alternative page */
+.alt-page .mission-head {
+  max-width: 860px;
+}
+
+.alt-ctas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.alt-section {
+  margin-top: 56px;
+  display: grid;
+  gap: 14px;
+}
+
+.alt-section h2 {
+  font-size: clamp(1.5rem, 3vw, 2rem);
+}
+
+.alt-grid {
+  display: grid;
+  gap: 14px;
+}
+
+@media (min-width: 820px) {
+  .alt-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.alt-grid .card {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.alt-sister {
+  text-decoration: none;
+}
+
+.alt-sister:hover {
+  border-color: var(--blue-60);
+  box-shadow: var(--glow-md);
+}
+
+.alt-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+.alt-table th,
+.alt-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.alt-table thead th {
+  font: 600 0.72rem var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--blue);
+}
+
+.alt-table tbody th {
+  font-weight: 600;
+  color: var(--white);
+  width: 22%;
+}
+
+.alt-table td:nth-child(2) {
+  color: var(--white);
+  background: linear-gradient(90deg, var(--blue-10), transparent);
+}
+
+.eyebrow-link {
+  color: var(--white);
+  text-decoration: underline;
+  text-decoration-color: var(--blue);
+  text-underline-offset: 4px;
+}

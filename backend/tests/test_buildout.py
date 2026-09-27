@@ -139,6 +139,59 @@ def test_connect_rejects_missing_feed(client, auth, monkeypatch):
     assert r.json()["detail"]["code"] == "feed_not_found"
 
 
+ARTICLE = "<html><head><title>{t}</title></head><body><article><h1>{t}</h1><p>{body}</p></article></body></html>"
+
+
+def test_connect_site_without_feed_crawls_posts(client, auth, run_jobs, monkeypatch):
+    body = "A long paragraph about writing in public. " * 10
+    monkeypatch.setattr(httpx, "get", fake_web({
+        "https://site.example.com/blog/first": FakeResponse(200, ARTICLE.format(t="First", body=body), "text/html"),
+        "https://site.example.com/blog/second": FakeResponse(200, ARTICLE.format(t="Second", body=body), "text/html"),
+        "https://site.example.com/blog": FakeResponse(200, (
+            '<html><head><title>Site Blog</title></head><body><a href="/blog/first">1</a>'
+            '<a href="/blog/second">2</a><a href="/about">About</a><a href="/logo.png">x</a></body></html>'
+        ), "text/html"),
+    }))
+    r = client.post("/api/sources", json={"url": "https://site.example.com/blog"}, headers=auth)
+    assert r.status_code == 200, r.text
+    assert r.json()["source"]["platform"] == "website"
+    assert r.json()["source"]["feed_url"] == "site:https://site.example.com/blog"
+    jobs = run_jobs()
+    assert jobs[0].status == "done", jobs[0].error
+    assert {d["title"] for d in docs(client, auth)} == {"First", "Second"}
+
+
+def test_crawl_uses_firecrawl_when_configured(monkeypatch):
+    from app.pipeline import ingest
+    from app.services import firecrawl
+
+    monkeypatch.setattr(firecrawl, "enabled", lambda: True)
+    monkeypatch.setattr(firecrawl, "map_site", lambda url, limit: [
+        "https://js.example.com/", "https://js.example.com/blog/rendered-post", "https://js.example.com/privacy",
+    ])
+    text = "Rendered by JavaScript, still readable. " * 10
+    monkeypatch.setattr(firecrawl, "scrape", lambda url: {
+        "markdown": f"# Rendered Post\n\n{text}\n\n![hero](https://x/y.png) See [the docs](https://x).",
+        "metadata": {"title": "Rendered Post", "sourceURL": url, "publishedTime": "2026-05-01T10:00:00Z"},
+    })
+    entries = ingest.crawl_site("https://js.example.com", 10)
+    assert [e.title for e in entries] == ["Rendered Post"]
+    assert entries[0].published_at.year == 2026
+    body = entries[0].sections[0][1]
+    assert "See the docs." in body and "png" not in body
+
+
+def test_firecrawl_is_main_path_except_substack(feed, monkeypatch):
+    from app.pipeline import ingest
+    from app.services import firecrawl
+
+    monkeypatch.setattr(firecrawl, "enabled", lambda: True)
+    found = ingest.discover_feed("https://ada.example.com/feed")
+    assert (found.platform, found.feed_url, found.title) == ("website", "site:https://ada.example.com", "Ada Writes")
+    monkeypatch.setattr(httpx, "get", fake_web({"https://ada.substack.com/feed": FakeResponse(200, FEED)}))
+    assert ingest.discover_feed("ada.substack.com").platform == "substack"
+
+
 def test_connect_ingest_read_and_delete(client, auth, run_jobs, feed, db_session):
     source = connect(client, auth, run_jobs)
     assert source["title"] == "Ada Writes"

@@ -167,7 +167,7 @@ export default function Sources() {
               </header>
               {!s.is_imports && (
                 <a className="mono muted small-link" href={s.site_url ?? s.feed_url} target="_blank" rel="noreferrer">
-                  {s.feed_url}
+                  {s.feed_url.replace(/^site:/, "")}
                 </a>
               )}
               {job && (active || job.status === "failed") && <JobProgress job={job} compact />}

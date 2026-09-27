@@ -87,6 +87,8 @@ def handle_ingest(db: Session, job: Job):
         db.commit()
         if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code in (401, 403, 404, 410):
             raise PermanentJobError(f"The feed returned {exc.response.status_code}.") from exc
+        if isinstance(exc, FeedNotFound):
+            raise PermanentJobError(str(exc)) from exc
         raise
     _after_import(db, job, source.workspace_id, result.get("changed", []))
     return Done(result, f"All posts in orbit: {result['indexed']} new or updated")

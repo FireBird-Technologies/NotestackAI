@@ -70,6 +70,9 @@ class Settings(BaseSettings):
     typesafe_api_key: str = ""
     typesafe_model: str = "jev-latest"
     typesafe_url: str = "https://api.typesafe.ai"
+    # Firecrawl: crawls sites without an RSS feed and renders JavaScript pages. Empty = plain HTTP only.
+    firecrawl_api_key: str = ""
+    firecrawl_url: str = "https://api.firecrawl.dev"
     llm_api_base: str = "https://api.z.ai/api/paas/v4"
     llm_api_key: str = ""
     llm_temperature: float = 1.0  # Z.ai recommends 1.0 for GLM-5.x

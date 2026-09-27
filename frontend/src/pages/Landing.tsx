@@ -168,7 +168,12 @@ export default function Landing() {
       <main>
         <section className="hero">
           <div className="container hero-inner">
-            <p className="eyebrow">For writers, bloggers and newsletters</p>
+            <p className="eyebrow">
+              <Link to="/notebooklm-alternative" className="eyebrow-link">
+                The ultimate NotebookLM alternative
+              </Link>{" "}
+              for writers, bloggers and newsletters
+            </p>
             <h1 className="hero-title">
               Your knowledge,
               <br />

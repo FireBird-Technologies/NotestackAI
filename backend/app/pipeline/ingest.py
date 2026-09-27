@@ -2,6 +2,7 @@
 
 Three ways in, one pipeline out:
 - feeds (Substack, Ghost, Medium, any RSS/Atom), with Substack's archive API for posts past the feed
+- sites with no feed, crawled through their sitemap and links (Firecrawl renders JavaScript sites)
 - one article by URL
 - an uploaded file (markdown, text, HTML or PDF)
 All of them end in `store_entries`, which writes documents, raw HTML and corpus files.
@@ -13,6 +14,7 @@ import logging
 import re
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from time import mktime
@@ -26,6 +28,7 @@ from sqlalchemy.orm import Session
 
 from app.corpus import INDEX, Corpus, index_line, post_path, render_post, slugify
 from app.models import Document, Job, Source
+from app.services import firecrawl
 from app.services.jobs import update_job
 from app.services.storage import keys, storage
 
@@ -34,6 +37,7 @@ log = logging.getLogger(__name__)
 _DROP = re.compile(r"(subscribe|share this post|leave a comment|thanks for reading)", re.I)
 UA = {"User-Agent": "Mozilla/5.0 (compatible; NotestackBot/0.2; +https://notestack.ai)"}
 IMPORTS_FEED = "notestack:imports"
+SITE_PREFIX = "site:"  # feed_url of a source crawled as a website instead of read from a feed
 
 
 class FeedNotFound(ValueError):
@@ -83,8 +87,27 @@ class DiscoveredFeed:
     site_url: str
 
 
+_FEED_SUFFIX = re.compile(r"/(feed|rss|atom)(\.xml)?/?$|/[^/]+\.xml$", re.I)
+
+
+def _as_site(url: str, title: str | None, site: str) -> DiscoveredFeed:
+    start = _FEED_SUFFIX.sub("", url).rstrip("/") or site
+    return DiscoveredFeed(f"{SITE_PREFIX}{start}", "website", title, site)
+
+
 def discover_feed(url: str) -> DiscoveredFeed:
-    """Find a working feed for whatever the writer pasted, or raise FeedNotFound with a clear reason."""
+    """Pick how to read whatever the writer pasted, or raise FeedNotFound with a clear reason.
+
+    Substack keeps its feed plus archive API (complete and free). With Firecrawl configured, every
+    other site is crawled with it, since feeds often carry only excerpts or the latest few posts.
+    """
+    found = _discover_feed(url)
+    if firecrawl.enabled() and found.platform not in ("substack", "website"):
+        return _as_site(_with_scheme(url), found.title, found.site_url)
+    return found
+
+
+def _discover_feed(url: str) -> DiscoveredFeed:
     url = _with_scheme(url)
     guess, platform = normalize_feed_url(url)
     parsed_url = urlparse(url)
@@ -92,12 +115,15 @@ def discover_feed(url: str) -> DiscoveredFeed:
     candidates = [guess, url, f"{site}/feed", f"{site}/rss", f"{site}/rss.xml", f"{site}/feed.xml", f"{site}/atom.xml"]
     seen: set[str] = set()
     last: httpx.Response | None = None
+    page: httpx.Response | None = None  # the pasted address, when it is a working web page
     for candidate in candidates:
         if candidate in seen:
             continue
         seen.add(candidate)
         parsed, resp = _parse_feed(candidate)
         last = resp or last
+        if candidate == url and resp is not None and resp.status_code < 400:
+            page = resp
         if parsed:
             return DiscoveredFeed(candidate, _platform(candidate, parsed, platform), parsed.feed.get("title"), site)
         if resp is not None and resp.status_code < 400 and "html" in resp.headers.get("content-type", ""):
@@ -111,6 +137,11 @@ def discover_feed(url: str) -> DiscoveredFeed:
                         found, _ = _parse_feed(href)
                         if found:
                             return DiscoveredFeed(href, _platform(href, found, platform), found.feed.get("title"), site)
+    if page is not None and "html" in page.headers.get("content-type", ""):
+        # No feed, but the site is up: crawl it as a website instead.
+        soup = BeautifulSoup(page.text, "html.parser")
+        title = _meta(soup, "og:site_name", "og:title") or (soup.title.get_text(strip=True) if soup.title else None)
+        return _as_site(url, title, site)
     if last is not None and last.status_code == 404:
         raise FeedNotFound(f"{parsed_url.netloc} returned 404. Check the address in your browser.")
     raise FeedNotFound("We couldn't find a feed at that address.")
@@ -208,9 +239,45 @@ class FeedEntry:
     sections: list[tuple[str | None, str]] | None = None  # set when the source is not HTML
 
 
+_MD_IMAGE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
+_MD_LINK = re.compile(r"\[([^\]]*)\]\([^)]*\)")
+
+
+def _clean_markdown(md: str) -> str:
+    """Firecrawl markdown to plain prose: drop images, keep link text."""
+    return _MD_LINK.sub(r"\1", _MD_IMAGE.sub("", md))
+
+
+def _firecrawl_entry(url: str) -> FeedEntry:
+    data = firecrawl.scrape(url)
+    meta = data.get("metadata") or {}
+    text = _clean_markdown(data.get("markdown") or "")
+    heading = re.search(r"^#\s+(.+)$", text, re.M)
+    title = meta.get("ogTitle") or meta.get("title") or (heading.group(1).strip() if heading else url)
+    if isinstance(title, list):
+        title = title[0]
+    sections = markdown_to_sections(text)
+    if sections and sections[0][0] and heading and sections[0][0] == heading.group(1).strip():
+        sections[0] = (None, sections[0][1])
+    if not sections or sum(len(t) for _, t in sections) < 200:
+        raise FeedNotFound("We could not find article text on that page.")
+    published = None
+    for key in ("publishedTime", "article:published_time", "datePublished", "og:published_time", "modifiedTime"):
+        value = meta.get(key)
+        if published := _parse_date(value[0] if isinstance(value, list) else value):
+            break
+    final = meta.get("sourceURL") or meta.get("url") or url
+    return FeedEntry(title=str(title)[:1000], url=final, published_at=published, html="", sections=sections)
+
+
 def extract_article(url: str) -> FeedEntry:
-    """Fetch one web page and keep the article body."""
+    """Fetch one web page and keep the article body. Firecrawl first when configured (it renders JS)."""
     url = _with_scheme(url)
+    if firecrawl.enabled():
+        try:
+            return _firecrawl_entry(url)
+        except (firecrawl.FirecrawlError, httpx.HTTPError, FeedNotFound):
+            log.warning("firecrawl scrape failed for %s, falling back to plain HTTP", url, exc_info=True)
     resp = httpx.get(url, follow_redirects=True, timeout=30, headers=UA)
     if resp.status_code >= 400:
         raise FeedNotFound(f"That page returned {resp.status_code}.")
@@ -251,6 +318,92 @@ def fetch_feed(feed_url: str, limit: int) -> tuple[str | None, list[FeedEntry]]:
             )
         )
     return parsed.feed.get("title"), entries
+
+
+_NOT_POSTS = re.compile(
+    r"/(tag|tags|category|categories|author|authors|page|search|login|signin|signup|register|account|cart|"
+    r"privacy|terms|legal|cookies?|about|contact|pricing|careers|jobs|feed|rss|wp-admin|wp-json|cdn-cgi|_next)(/|$)",
+    re.I,
+)
+
+
+def _post_urls(links: list[str], start: str, limit: int) -> list[str]:
+    """Likely article pages among a site's links: same site, not the index itself, not utility pages."""
+    base = urlparse(start)
+    host = base.netloc.lower().removeprefix("www.")
+    prefix = base.path.rstrip("/")
+    out: list[str] = []
+    seen: set[str] = set()
+    for link in links:
+        p = urlparse(link)
+        path = p.path.rstrip("/")
+        if p.scheme not in ("http", "https") or p.netloc.lower().removeprefix("www.") != host:
+            continue
+        if not path or path == prefix or _NOT_POSTS.search(path + "/"):
+            continue
+        if re.search(r"\.(?!html?$)[a-z0-9]{2,5}$", path, re.I):  # files: images, pdf, xml
+            continue
+        clean = f"{p.scheme}://{p.netloc}{path}"
+        if clean not in seen:
+            seen.add(clean)
+            out.append(clean)
+    # Pasted a blog index like /blog: keep what lives under it when anything does.
+    if prefix:
+        under = [u for u in out if urlparse(u).path.startswith(prefix + "/")]
+        out = under or out
+    return out[:limit]
+
+
+def _plain_links(url: str) -> list[str]:
+    """Without Firecrawl: the sitemap plus links in the page HTML (misses posts rendered by JavaScript)."""
+    parsed = urlparse(url)
+    links: list[str] = []
+    for sitemap in (f"{parsed.scheme}://{parsed.netloc}/sitemap.xml", f"{parsed.scheme}://{parsed.netloc}/sitemap_index.xml"):
+        try:
+            resp = httpx.get(sitemap, follow_redirects=True, timeout=20, headers=UA)
+        except httpx.HTTPError:
+            continue
+        if resp.status_code < 400:
+            links += re.findall(r"<loc>\s*([^<\s]+)\s*</loc>", resp.text)
+    try:
+        resp = httpx.get(url, follow_redirects=True, timeout=20, headers=UA)
+        if resp.status_code < 400:
+            soup = BeautifulSoup(resp.text, "html.parser")
+            links += [urljoin(str(resp.url), a["href"]) for a in soup.find_all("a", href=True)]
+    except httpx.HTTPError:
+        pass
+    return links
+
+
+def crawl_site(url: str, limit: int, on_found=None, on_post=None) -> list[FeedEntry]:
+    """Find the posts on a site with no feed and read each one."""
+    if firecrawl.enabled():
+        links = firecrawl.map_site(url, max(limit * 4, 100))
+    else:
+        links = _plain_links(url)
+    urls = _post_urls(links, url, limit)
+    if not urls:
+        hint = "" if firecrawl.enabled() else " If the site builds its pages with JavaScript, set FIRECRAWL_API_KEY."
+        raise FeedNotFound(f"We could not find any posts on {urlparse(url).netloc}.{hint}")
+    if on_found:
+        on_found(len(urls))
+
+    def read(u: str) -> FeedEntry | None:
+        try:
+            return extract_article(u)
+        except (FeedNotFound, httpx.HTTPError, firecrawl.FirecrawlError):
+            return None
+
+    entries: list[FeedEntry] = []
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        for i, entry in enumerate(pool.map(read, urls)):
+            if entry:
+                entries.append(entry)
+            if on_post:
+                on_post(i + 1, len(urls))
+    if not entries:
+        raise FeedNotFound(f"We found {len(urls)} pages on {urlparse(url).netloc} but none had article text.")
+    return entries
 
 
 def fetch_substack_archive(site: str, known_urls: set[str], limit: int, on_page=None) -> list[FeedEntry]:
@@ -383,7 +536,17 @@ def ingest_source(db: Session, source: Source, job: Job, max_posts: int) -> dict
     source.sync_status = "syncing"
     update_job(db, job, status="running", progress=0.02, message="Contacting your feed")
 
-    title, entries = fetch_feed(source.feed_url, max_posts)
+    if source.feed_url.startswith(SITE_PREFIX):
+        update_job(db, job, message="Mapping your site")
+        entries = crawl_site(
+            source.feed_url.removeprefix(SITE_PREFIX), max_posts,
+            on_found=lambda n: update_job(db, job, progress=0.05, message=f"Found {n} pages, reading them"),
+            on_post=lambda done, total: update_job(db, job, progress=0.05 + 0.05 * done / total,
+                                                   message=f"Read {done} of {total} pages"),
+        )
+        title = None
+    else:
+        title, entries = fetch_feed(source.feed_url, max_posts)
     source.title = source.title or title
     if source.platform == "substack" and len(entries) < max_posts:
         site = f"{urlparse(source.feed_url).scheme}://{urlparse(source.feed_url).netloc}"
