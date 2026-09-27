@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # One .env at the repo root serves every way of running the API; a backend/.env (or the
@@ -104,8 +104,18 @@ class Settings(BaseSettings):
     renderer_url: str = "http://localhost:3100"
     internal_token: str = "internal-change-me"
 
-    # Billing
+    # Billing (Stripe). With BILLING_ENABLED=false everyone gets Studio limits and checkout is off.
     billing_enabled: bool = False
+    stripe_secret_key: str = Field("", validation_alias=AliasChoices("STRIPE_SECRET_KEY", "STRIPE_API_KEY", "STRIPE_SECRET"))
+    stripe_webhook_secret: str = Field(
+        "", validation_alias=AliasChoices("STRIPE_WEBHOOK_SECRET", "STRIPE_WEBHOOK_SIGNING_SECRET", "STRIPE_SIGNING_SECRET")
+    )
+    # Optional existing Price ids. Empty = Notestack finds or creates prices by lookup key
+    # (notestack_<plan>_<cycle>) from the plan table in services/plans.py.
+    stripe_price_writer_monthly: str = ""
+    stripe_price_writer_annual: str = ""
+    stripe_price_studio_monthly: str = ""
+    stripe_price_studio_annual: str = ""
 
     @field_validator("run_worker_in_api", mode="before")
     @classmethod

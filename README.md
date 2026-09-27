@@ -1,17 +1,58 @@
-# Notestack
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="marketing/logo/notestack-logo.svg">
+    <img src="marketing/logo/notestack-logo-dark.svg" alt="Notestack" height="64">
+  </picture>
+</p>
 
-Your knowledge, in orbit. Turn any blog, newsletter, site or folder of markdown into a grounded research notebook, audio
-overviews, videos and launch kits, all traced back to what the writer actually wrote.
+<h3 align="center">The ultimate NotebookLM alternative for writers, bloggers and newsletters.</h3>
+
+<p align="center">
+  Your knowledge, in orbit. <a href="https://notestack.ai">notestack.ai</a>
+  · <a href="https://notestack.ai/notebooklm-alternative">Notestack vs NotebookLM</a>
+  · <a href="https://notestack.ai/blogs">Blog</a>
+</p>
+
+<p align="center">
+  <a href="marketing/notestack-launch.mp4">
+    <img src="marketing/notestack-launch-poster.jpg" alt="Watch the Notestack launch trailer" width="820">
+  </a>
+  <br>
+  <sub>▶ Watch the launch trailer (82 s, sound on) · <a href="https://notestack.ai/demo.mp4">product demo (47 s)</a></sub>
+</p>
+
+Notestack turns any blog, newsletter, website or folder of markdown into a grounded research notebook, then into audio
+overviews, videos and launch kits, all traced back to the exact lines the writer actually wrote.
 
 - Design doc: [docs/DESIGN.md](docs/DESIGN.md)
 - Foundations task list: [docs/PHASE0.md](docs/PHASE0.md)
+
+## Why Notestack instead of NotebookLM
+
+NotebookLM is a great general research notebook. Notestack is built for people who publish: it starts from your whole
+archive, stays in sync with it, cites the exact lines behind every answer, and turns what you wrote into things you can ship.
+
+| | Notestack | NotebookLM |
+| --- | --- | --- |
+| Getting your writing in | Syncs any blog, newsletter or site (Substack, Ghost, WordPress, Medium, RSS, or crawled with Firecrawl), plus md, txt, html and pdf uploads | Add sources one at a time |
+| Stays in sync | New posts arrive automatically | Re-add sources by hand |
+| Citations | Exact line ranges, verified before you see them | Passage level citations |
+| Not in your sources | Says so; unverifiable claims are dropped | Grounded, passage citations |
+| Audio | Two hosts on ElevenLabs voices, or your consented voice clone | Two host overviews, Google voices |
+| Video | 9:16 shorts, 16:9 explainers, 1:1 audiograms, quote cards, in your brand | Video overviews |
+| Publishing | Launch Kits (threads, LinkedIn, Notes, Bluesky, SEO, carousels) and auto posting | Not a publishing tool |
+| Your voice | Voice profile learned from your posts, used in every draft | General purpose writing |
+| Seeing your archive | Topic constellation with rising and dormant topics, evergreen resurfacing | Mind maps per notebook |
+
+The full comparison lives at [notestack.ai/notebooklm-alternative](https://notestack.ai/notebooklm-alternative).
 
 ## Layout
 
 ```
 backend/    FastAPI + SQLAlchemy + Alembic, Postgres job queue worker, DSPy (LLM agnostic, Z.ai first)
 frontend/   React + Vite + TS: night sky landing, pricing, blog, auth, Mission Control
-renderer/   Remotion compositions + render service that uploads to R2 via presigned PUT
+renderer/   Remotion compositions + render service that uploads to R2 via presigned PUT; trailer and demo scripts
+marketing/  Launch trailer, poster and logo files
 docs/       Design doc and task lists
 ```
 
@@ -73,7 +114,7 @@ cd renderer && npm install && npm start                    # only needed for vid
 | LLM provider (swap by env) | `backend/app/llm/provider.py`, `.env` `LLM_*` |
 | Three plans, billing off | `backend/app/services/plans.py`, `BILLING_ENABLED` |
 | Blog posts | `frontend/src/content/blogPosts.ts` (`/blogs`, `/blogs/:slug`) |
-| Logo | replace `frontend/public/logo.svg` (white tile, black silhouettes) |
+| Logo | `frontend/public/logo.svg` (white tile, black ringed planet); lockups in `marketing/logo/` |
 | Sky background | `frontend/src/components/SkyCanvas.tsx` |
 
 ## Switching LLM providers
@@ -86,6 +127,32 @@ LLM_MODEL=anthropic/claude-sonnet-5  LLM_API_BASE=
 # OpenAI
 LLM_MODEL=openai/gpt-5  LLM_API_BASE=
 ```
+
+## Videos and brand
+
+| Asset | File | Rebuild |
+| --- | --- | --- |
+| Launch trailer (82 s, "Coming soon") | `marketing/notestack-launch.mp4` | `renderer/scripts/make_launch_vo.py`, then `make_launch_music.py`, then `npx remotion render src/index.ts LaunchTrailer ../marketing/notestack-launch.mp4` |
+| Landing demo (47 s) | `frontend/public/demo.mp4` | `renderer/scripts/make_demo_vo.py`, then `npx remotion render src/index.ts LandingDemo ../frontend/public/demo.mp4`, then bump `DEMO_VERSION` in `Landing.tsx` |
+| Logo | `marketing/logo/` (mark, lockup for dark and light backgrounds) | Mark is `frontend/public/logo.svg`; the renderer uses a copy at `renderer/public/logo.svg` |
+
+Narration is voiced on ElevenLabs (run the scripts from `backend/` with `PYTHONPATH=.`); music is synthesized, no samples.
+Preview any composition with `cd renderer && npm run studio`.
+
+## For AI agents
+
+`https://notestack.ai/llms.txt` tells assistants and crawlers what Notestack is, which pages answer which questions, and
+what not to index. It is generated on every build from `frontend/seo/sitemap.ts` alongside `sitemap.xml` and `robots.txt`,
+so new blog posts appear in all three automatically.
+
+## Roadmap
+
+- [ ] Complete the checkout flow
+- [ ] Delete a free tier knowledge base after one week, prompting the writer to upgrade to keep it
+- [ ] Onboarding message: the free tier indexes the first 5 posts; upgrade to index the rest
+- [ ] An inner "galaxy" view inside the topic map, using a statistical word model to link related pieces of knowledge
+- [ ] Make the main app view look good on mobile
+- [ ] Explore a whole website through its `llms.txt` and sitemap XML, so every post and page gets included
 
 ## Rules
 
