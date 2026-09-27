@@ -1464,6 +1464,68 @@ select.input option {
   padding: 0 28px;
 }
 
+.welcome-drop {
+  flex: 1 1 100%;
+  display: grid;
+  place-items: center;
+  gap: 4px;
+  padding: 28px 16px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-sm);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.welcome-drop:hover,
+.welcome-drop.over,
+.welcome-drop:focus-within {
+  border-color: var(--blue);
+  background: var(--blue-05);
+}
+
+.welcome-drop input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.welcome-files {
+  flex: 1 1 100%;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.welcome-files li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow-wrap: anywhere;
+}
+
+.welcome-cap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--blue-35);
+  border-radius: var(--radius-sm);
+  background: var(--blue-05);
+}
+
+.welcome-cap p {
+  margin: 4px 0 0;
+}
+
 .welcome-examples {
   display: flex;
   flex-wrap: wrap;

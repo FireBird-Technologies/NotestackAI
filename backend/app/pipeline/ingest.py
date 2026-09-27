@@ -578,29 +578,34 @@ def store_entries(
 def ingest_source(db: Session, source: Source, job: Job, max_posts: int) -> dict:
     source.sync_status = "syncing"
     update_job(db, job, status="running", progress=0.02, message="Contacting your feed")
+    # Fetch one past the plan cap so we can tell the user their archive holds more than was indexed.
+    fetch_limit = max_posts + 1
 
     if source.feed_url.startswith(SITE_PREFIX):
         update_job(db, job, message="Mapping your site")
         entries = crawl_site(
-            source.feed_url.removeprefix(SITE_PREFIX), max_posts,
+            source.feed_url.removeprefix(SITE_PREFIX), fetch_limit,
             on_found=lambda n: update_job(db, job, progress=0.05, message=f"Found {n} pages, reading them"),
             on_post=lambda done, total: update_job(db, job, progress=0.05 + 0.05 * done / total,
                                                    message=f"Read {done} of {total} pages"),
         )
         title = None
     else:
-        title, entries = fetch_feed(source.feed_url, max_posts)
+        title, entries = fetch_feed(source.feed_url, fetch_limit)
     source.title = source.title or title
-    if source.platform == "substack" and len(entries) < max_posts:
+    if source.platform == "substack" and len(entries) < fetch_limit:
         site = f"{urlparse(source.feed_url).scheme}://{urlparse(source.feed_url).netloc}"
         update_job(db, job, progress=0.05, message="Reading your Substack archive")
         try:
             entries += fetch_substack_archive(
-                site, {e.url for e in entries}, max_posts,
+                site, {e.url for e in entries}, fetch_limit,
                 on_page=lambda n: update_job(db, job, message=f"Found {len(entries) + n} posts in the archive"),
             )
         except (httpx.HTTPError, ValueError):
             log.warning("substack archive fetch failed for %s", site, exc_info=True)
+
+    capped = len(entries) > max_posts
+    entries = entries[:max_posts]
 
     def progress(done: int, total: int, post_title: str) -> None:
         update_job(db, job, progress=0.1 + 0.8 * done / total, message=f"{post_title[:80]} is in orbit")
@@ -612,7 +617,8 @@ def ingest_source(db: Session, source: Source, job: Job, max_posts: int) -> dict
     source.sync_error = None
     source.last_synced_at = datetime.now(UTC)
     db.commit()
-    return {"indexed": indexed, "skipped": skipped, "found": len(entries), "changed": [str(i) for i in changed]}
+    return {"indexed": indexed, "skipped": skipped, "found": len(entries), "limit": max_posts, "capped": capped,
+            "changed": [str(i) for i in changed]}
 
 
 def entry_from_upload(filename: str, content_type: str, data: bytes) -> FeedEntry:
