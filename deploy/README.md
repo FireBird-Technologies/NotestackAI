@@ -1,6 +1,8 @@
 # Deploying the backend to a DigitalOcean Droplet
 
-One Droplet runs the API, the job worker, Caddy (automatic HTTPS) and, optionally, the video renderer.
+One Droplet runs the API, the job worker and, optionally, the video renderer. HTTPS comes from the reverse
+proxy already on the Droplet (Nginx, see nginx-notestack.conf), or from the bundled Caddy (`CADDY=1`) on a
+Droplet with nothing else on ports 80 and 443.
 The database is Neon. The frontend is on Cloudflare Pages.
 
 ## First time
@@ -21,6 +23,17 @@ The database is Neon. The frontend is on Cloudflare Pages.
 5. **Frontend**: in Cloudflare Pages set `VITE_API_URL=https://api.notestack.ai`, then retry the deployment.
 6. **Google OAuth client**: redirect URI `https://api.notestack.ai/api/auth/google/callback`, JavaScript origin
    `https://notestackai.pages.dev`.
+
+## Sharing the Droplet with other backends (Nginx)
+
+The API listens on `127.0.0.1:8010` only (`API_PORT`). Point Nginx at it:
+
+```bash
+sudo cp /opt/notestack/deploy/nginx-notestack.conf /etc/nginx/sites-available/notestack
+sudo ln -s /etc/nginx/sites-available/notestack /etc/nginx/sites-enabled/notestack
+sudo nginx -t && sudo systemctl reload nginx
+sudo certbot --nginx -d api.notestack.ai
+```
 
 ## Every update
 
