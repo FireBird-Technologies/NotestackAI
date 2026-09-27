@@ -41,7 +41,7 @@ export function PublicFooter() {
       <div className="container footer-inner">
         <div className="footer-brand">
           <Logo />
-          <p className="muted">Your archive, in orbit.</p>
+          <p className="muted">Your knowledge, in orbit.</p>
         </div>
         <div className="footer-cols">
           <div>

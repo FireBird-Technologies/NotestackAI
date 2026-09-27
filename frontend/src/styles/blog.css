@@ -1,0 +1,347 @@
+/* ---------- Blog as missions: every post is a search for an answer ---------- */
+
+/* Index: mission log */
+.mission-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 16px;
+}
+
+@media (min-width: 760px) {
+  .mission-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1100px) {
+  .mission-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.mission-card {
+  position: relative;
+  display: grid;
+  gap: 12px;
+  height: 100%;
+  align-content: start;
+  text-decoration: none;
+  overflow: hidden;
+}
+
+.mission-card::before {
+  content: "";
+  position: absolute;
+  right: -40px;
+  top: -40px;
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--blue-20), transparent 70%);
+  transition: transform 0.4s ease;
+}
+
+.mission-card:hover::before {
+  transform: scale(1.4);
+}
+
+.mission-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.7rem;
+  color: var(--text-3);
+}
+
+.mission-no {
+  color: var(--blue);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+}
+
+.mission-q {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  line-height: 1.3;
+  color: var(--white);
+}
+
+.mission-q::before {
+  content: "> ";
+  color: var(--blue);
+}
+
+.mission-card .blog-card-title {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text-2);
+}
+
+.mission-foot {
+  margin-top: auto;
+  font-size: 0.7rem;
+}
+
+/* Post: header */
+.post.mission {
+  max-width: 1080px;
+}
+
+.mission-head {
+  display: grid;
+  gap: 14px;
+  max-width: 780px;
+}
+
+.mission-head .post-title {
+  margin: 4px 0 0;
+}
+
+.tx-label {
+  display: block;
+  font-size: 0.68rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--blue);
+  margin-bottom: 6px;
+}
+
+.transmission.incoming {
+  padding: 14px 18px;
+  border: 1px solid var(--blue-35);
+  border-radius: var(--radius-sm);
+  background: linear-gradient(90deg, var(--blue-10), transparent 70%);
+}
+
+.tx-query {
+  font-family: var(--font-mono);
+  font-size: 1.05rem;
+  color: var(--white);
+}
+
+.tx-query::after {
+  content: "_";
+  margin-left: 2px;
+  color: var(--blue);
+  animation: caret 1.1s steps(1) infinite;
+}
+
+@keyframes caret {
+  50% {
+    opacity: 0;
+  }
+}
+
+.answer-box {
+  padding: 16px 20px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line-strong);
+  background: rgba(0, 0, 0, 0.55);
+  box-shadow: inset 3px 0 0 var(--blue);
+}
+
+.answer-box p {
+  color: var(--white);
+  font-size: 1.05rem;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.answer-box.final {
+  border-color: var(--blue-60);
+  box-shadow: inset 3px 0 0 var(--blue), var(--glow-lg);
+}
+
+/* Post: flight path */
+.flight {
+  display: grid;
+  gap: 24px;
+  margin-top: 40px;
+}
+
+@media (min-width: 1100px) {
+  .flight {
+    grid-template-columns: 240px minmax(0, 1fr);
+    gap: 48px;
+    align-items: start;
+  }
+}
+
+.flight-map {
+  display: none;
+}
+
+@media (min-width: 1100px) {
+  .flight-map {
+    display: block;
+    position: sticky;
+    top: 96px;
+  }
+}
+
+.flight-map ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+  border-left: 1px solid var(--line);
+}
+
+.flight-map button {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  margin-left: -1px;
+  border: none;
+  border-left: 2px solid transparent;
+  background: transparent;
+  color: var(--text-3);
+  font: 0.85rem/1.35 var(--font-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+.flight-map button .mono {
+  font-size: 0.68rem;
+  padding-top: 2px;
+}
+
+.flight-map li.done button {
+  color: var(--text-2);
+}
+
+.flight-map li.on button {
+  color: var(--white);
+  border-left-color: var(--blue);
+  background: linear-gradient(90deg, var(--blue-10), transparent);
+}
+
+.flight-path {
+  position: relative;
+  padding-left: 40px;
+  margin-top: 0;
+  max-width: 760px;
+}
+
+.path-line {
+  position: absolute;
+  left: 11px;
+  top: 6px;
+  bottom: 0;
+  width: 2px;
+  background: repeating-linear-gradient(180deg, var(--line-strong) 0 6px, transparent 6px 12px);
+}
+
+.path-fill {
+  width: 100%;
+  background: linear-gradient(180deg, var(--blue-35), var(--blue));
+  box-shadow: 0 0 10px var(--blue-60);
+}
+
+.path-ship {
+  position: absolute;
+  left: 50%;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 50%;
+  background: var(--white);
+  box-shadow: 0 0 12px var(--white), 0 0 24px var(--blue);
+}
+
+.path-ship::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  width: 2px;
+  height: 28px;
+  margin-left: -1px;
+  background: linear-gradient(0deg, var(--white), transparent);
+  opacity: 0.6;
+}
+
+.waypoint {
+  position: relative;
+  margin-bottom: 56px;
+}
+
+.waypoint-node {
+  position: absolute;
+  left: -36px;
+  top: 4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--line-strong);
+  background: var(--black);
+  transition: all 0.4s ease;
+}
+
+.waypoint.reached .waypoint-node {
+  border-color: var(--blue);
+  background: var(--blue);
+  box-shadow: 0 0 14px var(--blue);
+}
+
+.waypoint-label {
+  font-size: 0.68rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-bottom: 4px;
+}
+
+.waypoint.reached .waypoint-label {
+  color: var(--blue);
+}
+
+.post-body a {
+  color: var(--white);
+  text-decoration: underline;
+  text-decoration-color: var(--blue);
+  text-underline-offset: 3px;
+}
+
+.post-body a:hover {
+  text-shadow: 0 0 12px var(--blue-60);
+}
+
+.post-body strong {
+  color: var(--white);
+}
+
+.post-body blockquote.transmission {
+  display: block;
+  font-size: 1.1rem;
+}
+
+.destination .waypoint-node {
+  width: 22px;
+  height: 22px;
+  left: -39px;
+  top: 0;
+  border-color: var(--white);
+  background: radial-gradient(circle, #fff 20%, var(--blue) 60%);
+  box-shadow: 0 0 20px var(--blue), 0 0 40px var(--blue-35);
+}
+
+.debrief {
+  margin-top: 16px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tx-query::after {
+    animation: none;
+  }
+
+  .waypoint-node,
+  .mission-card::before {
+    transition: none;
+  }
+}

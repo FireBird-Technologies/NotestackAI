@@ -13,7 +13,7 @@ const S = (seconds: number) => Math.round(seconds * DEMO_FPS);
 // each line starts `vo` seconds into its scene and ends with room to breathe before the crossfade.
 const SCENES = [
   { id: "warp", len: 5.2, vo: 0.6 },
-  { id: "paste", len: 4.6, vo: 0.4 },
+  { id: "paste", len: 9.4, vo: 0.4 },
   { id: "orbit", len: 7.6, vo: 0.4 },
   { id: "research", len: 5.6, vo: 0.4 },
   { id: "audio", len: 5.1, vo: 0.4 },
@@ -25,7 +25,7 @@ const XFADE = 0.5; // seconds of overlap between scenes
 
 // Narration clip lengths (public/demo-vo/durations.json) so the music can duck under the voice.
 const VO_SECONDS: Record<(typeof SCENES)[number]["id"], number> = {
-  warp: 3.79, paste: 3.27, orbit: 6.3, research: 4.29, audio: 3.74, launchkit: 6.53, launchpad: 3.22, outro: 2.48,
+  warp: 3.74, paste: 8.1, orbit: 6.3, research: 4.29, audio: 3.74, launchkit: 6.53, launchpad: 3.22, outro: 2.48,
 };
 
 /** Frame ranges where the narrator is speaking, in composition time. */
@@ -188,7 +188,7 @@ function Warp() {
       <WarpField speed={speed} streak={streak} />
       <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", textAlign: "center" }}>
         <h1 style={{ margin: 0, fontFamily: theme.display, fontSize: 150, lineHeight: 1, color: theme.white, opacity: title, transform: `scale(${0.8 + title * 0.2})` }}>
-          Your archive,
+          Your knowledge,
           <br />
           <span style={{ color: theme.white, textShadow: `0 0 30px ${BLUE}, 0 0 80px ${BLUE}` }}>in orbit.</span>
         </h1>
@@ -201,20 +201,24 @@ function Warp() {
   );
 }
 
+const SOURCES = ["Substack", "Ghost", "WordPress", "Medium", "Any RSS feed", "Your site", "Markdown files"];
+
+/** Step one: any blog, newsletter or site by URL, or markdown files dropped straight in. */
 function Paste() {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const url = typed("yourname.substack.com", frame, 18, 18);
-  const press = spring({ frame: frame - 62, fps, config: { damping: 10, mass: 0.5 } });
-  const ring = interpolate(frame, [64, 100], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const url = typed("yourblog.com", frame, 14, 12);
+  const drop = spring({ frame: frame - S(5.4), fps, config: { damping: 12 } });
+  const press = spring({ frame: frame - S(7.6), fps, config: { damping: 10, mass: 0.5 } });
+  const ring = interpolate(frame, [S(7.7), S(8.9)], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
   return (
     <AbsoluteFill>
       <WarpField speed={1.2} />
-      <Caption eyebrow="Step 01" title="Paste your Substack URL" />
-      <AbsoluteFill style={{ justifyContent: "center", alignItems: "center" }}>
-        <div style={{ ...panel, display: "flex", alignItems: "center", gap: 18, padding: 14, width: 1100, borderRadius: 999, marginTop: 120 }}>
+      <Caption eyebrow="Step 01" title="Point it at your writing" />
+      <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", flexDirection: "column", gap: 44, paddingTop: 120 }}>
+        <div style={{ ...panel, display: "flex", alignItems: "center", gap: 18, padding: 14, width: 1100, borderRadius: 999 }}>
           <div style={{ flex: 1, fontFamily: theme.body, fontSize: 40, color: url ? theme.white : "rgba(255,255,255,0.4)", paddingLeft: 30 }}>
-            {url || "yourname.substack.com"}
+            {url || "yourblog.com"}
             <span style={{ opacity: frame % 30 < 15 ? 1 : 0, color: BLUE }}>|</span>
           </div>
           <div
@@ -232,15 +236,54 @@ function Paste() {
             }}
           >
             Launch my archive
-            <div
-              style={{
-                position: "absolute",
-                inset: -ring * 60,
-                borderRadius: 999,
-                border: `2px solid ${BLUE}`,
-                opacity: 1 - ring,
-              }}
-            />
+            <div style={{ position: "absolute", inset: -ring * 60, borderRadius: 999, border: `2px solid ${BLUE}`, opacity: 1 - ring }} />
+          </div>
+        </div>
+
+        <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 14, maxWidth: 1300 }}>
+          {SOURCES.map((name, i) => {
+            const on = spring({ frame: frame - S(1.8) - i * 7, fps, config: { damping: 16 } });
+            return (
+              <span
+                key={name}
+                style={{
+                  padding: "12px 24px",
+                  borderRadius: 999,
+                  border: `1px solid ${on > 0.5 ? BLUE : "rgba(255,255,255,0.18)"}`,
+                  background: on > 0.5 ? `${BLUE}26` : "rgba(0,0,0,0.5)",
+                  boxShadow: on > 0.5 ? `0 0 18px ${BLUE}66` : "none",
+                  fontFamily: theme.mono,
+                  fontSize: 24,
+                  letterSpacing: 1,
+                  color: theme.white,
+                  opacity: 0.25 + on * 0.75,
+                  transform: `translateY(${(1 - on) * 16}px)`,
+                }}
+              >
+                {name}
+              </span>
+            );
+          })}
+        </div>
+
+        <div
+          style={{
+            ...panel,
+            display: "flex",
+            alignItems: "center",
+            gap: 22,
+            padding: "18px 28px",
+            borderRadius: 16,
+            opacity: drop,
+            transform: `translateY(${(1 - drop) * -120}px) rotate(${(1 - drop) * -6}deg)`,
+          }}
+        >
+          <div style={{ width: 54, height: 66, borderRadius: 8, border: `2px solid ${BLUE}`, display: "grid", placeItems: "center", fontFamily: theme.mono, fontSize: 18, color: BLUE }}>
+            .md
+          </div>
+          <div style={{ display: "grid", gap: 4 }}>
+            <span style={{ fontFamily: theme.body, fontSize: 30, color: theme.white }}>notes.md, essays.md, drafts.md</span>
+            <span style={{ fontFamily: theme.mono, fontSize: 20, color: "rgba(255,255,255,0.6)" }}>No feed? Drop in markdown, text, HTML or PDF</span>
           </div>
         </div>
       </AbsoluteFill>
@@ -524,7 +567,7 @@ function Outro() {
           <div style={{ width: 44, height: 44, borderRadius: "50%", background: theme.black, boxShadow: `18px -18px 0 -10px ${theme.black}` }} />
         </div>
         <h1 style={{ margin: 0, fontFamily: theme.display, fontSize: 120, color: theme.white, opacity: s, textShadow: `0 0 40px ${BLUE}` }}>Notestack</h1>
-        <p style={{ margin: 0, fontFamily: theme.body, fontSize: 40, color: "rgba(255,255,255,0.8)", opacity: cta }}>Your archive, in orbit.</p>
+        <p style={{ margin: 0, fontFamily: theme.body, fontSize: 40, color: "rgba(255,255,255,0.8)", opacity: cta }}>Your knowledge, in orbit.</p>
         <p style={{ margin: 0, padding: "18px 40px", borderRadius: 999, background: BLUE, color: theme.white, fontFamily: theme.body, fontWeight: 600, fontSize: 32, opacity: cta, boxShadow: `0 0 40px ${BLUE}` }}>
           Free during early access
         </p>

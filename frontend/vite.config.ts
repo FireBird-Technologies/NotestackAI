@@ -1,8 +1,12 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { sitemapPlugin } from "./seo/sitemap";
+
+// Public origin for sitemap.xml and robots.txt. Set SITE_URL in the deploy environment.
+const SITE_URL = process.env.SITE_URL ?? "https://notestack.ai";
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), sitemapPlugin(SITE_URL)],
   // Read the shared root .env. Only these prefixes reach the browser; the Google client ID is
   // public by design, so it can be shared with the backend under its plain name.
   envDir: "..",

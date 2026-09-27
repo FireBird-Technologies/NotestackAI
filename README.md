@@ -1,6 +1,6 @@
 # Notestack
 
-Your archive, in orbit. Turn a Substack (or any feed) into a grounded research notebook, audio
+Your knowledge, in orbit. Turn any blog, newsletter, site or folder of markdown into a grounded research notebook, audio
 overviews, videos and launch kits, all traced back to what the writer actually wrote.
 
 - Design doc: [docs/DESIGN.md](docs/DESIGN.md)

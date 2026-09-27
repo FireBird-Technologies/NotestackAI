@@ -12,7 +12,7 @@ import { PENDING_SOURCE_KEY } from "./Landing";
 type Step = "connect" | "indexing" | "goal" | "ready";
 type Goal = "ask" | "audio" | "launch";
 
-const EXAMPLES = ["yourname.substack.com", "blog.example.com", "medium.com/@you"];
+const EXAMPLES = ["yourblog.com", "yourname.substack.com", "medium.com/@you"];
 
 const GOALS: { id: Goal; title: string; body: string }[] = [
   { id: "ask", title: "Ask my archive", body: "Chat with everything you have written. Every answer cites the lines it came from." },
@@ -138,17 +138,17 @@ export default function Welcome() {
             <p className="eyebrow">Welcome aboard, {first}</p>
             <h1>Where do you publish?</h1>
             <p className="muted">
-              Paste your Substack, Ghost, Medium or blog address. We find the feed, pull in your archive and turn it into a research notebook you can
+              Paste any blog, newsletter or site: Substack, Ghost, WordPress, Medium or anything with a feed. We find the feed, pull in your archive and turn it into a research notebook you can
               question, hear and launch from.
             </p>
             <form onSubmit={submit} className="welcome-form">
               <input
                 className="input"
                 autoFocus
-                placeholder="yourname.substack.com"
+                placeholder="yourblog.com"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                aria-label="Blog or Substack address"
+                aria-label="Blog, newsletter or site address"
               />
               <button className="btn btn-primary" disabled={busy || !url.trim()}>
                 {busy ? "Finding your feed..." : "Connect"}
@@ -168,7 +168,7 @@ export default function Welcome() {
               </p>
             )}
             <p className="muted small">
-              No feed? You can <Link to="/app/sources">import single articles or upload files</Link> instead.
+              Writing in markdown or no feed? <Link to="/app/sources">Upload markdown, text, HTML or PDF files, or import single pages</Link> instead.
             </p>
           </section>
         )}

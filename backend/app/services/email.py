@@ -140,8 +140,9 @@ class EmailService:
         first = (name or "there").split(" ")[0]
         url = f"{settings.frontend_url}/app"
         body = (
-            f"Hi {html.escape(first)},<br><br>Your archive is about to come into orbit. Paste your Substack "
-            "URL and Notestack will index your posts, learn your voice and get your first audio overview ready."
+            f"Hi {html.escape(first)},<br><br>Your knowledge is about to come into orbit. Connect any blog, newsletter "
+            "or site, or upload your markdown files, and Notestack will index your posts, learn your voice and get "
+            "your first audio overview ready."
             + _button("Open Mission Control", url)
         )
         return self._send(

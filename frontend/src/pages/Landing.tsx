@@ -59,7 +59,7 @@ const FEATURES = [
 ];
 
 const STEPS = [
-  { n: "01", title: "Paste your Substack URL", body: "We find your feed and pull in your posts." },
+  { n: "01", title: "Point it at your writing", body: "Any blog, newsletter or site URL, or upload markdown, text, HTML and PDF files." },
   { n: "02", title: "Watch them come into orbit", body: "Posts are cleaned, indexed and embedded in minutes." },
   { n: "03", title: "Launch", body: "Ask, listen, render and publish, all grounded in what you wrote." },
 ];
@@ -83,7 +83,7 @@ function DemoVideo() {
   return (
     <div className="demo-frame card arrive">
       <div className="demo-bar mono">
-        <span>Mission log · 00:41</span>
+        <span>Mission log · 00:46</span>
         <button type="button" className="demo-sound" onClick={toggle} aria-pressed={!muted}>
           {muted ? "Play with sound" : "Mute"}
         </button>
@@ -99,7 +99,7 @@ function DemoVideo() {
           loop
           playsInline
           preload="metadata"
-          aria-label="Notestack product demo, narrated: paste your Substack, ask your archive, hear an audio overview and launch posts"
+          aria-label="Notestack product demo, narrated: connect any blog, site or markdown, ask your archive, hear an audio overview and launch posts"
         />
         {muted && (
           <button type="button" className="demo-unmute" onClick={toggle} aria-label="Play the demo with sound">
@@ -168,24 +168,24 @@ export default function Landing() {
       <main>
         <section className="hero">
           <div className="container hero-inner">
-            <p className="eyebrow">For Substack writers</p>
+            <p className="eyebrow">For writers, bloggers and newsletters</p>
             <h1 className="hero-title">
-              Your archive,
+              Your knowledge,
               <br />
               <span className="glow-text shimmer">in orbit.</span>
             </h1>
             <p className="hero-sub muted">
-              Notestack turns your posts into a research notebook you can question, podcasts you can publish and
-              launch kits for every platform. Every word traced back to what you actually wrote.
+              Notestack turns your blog, newsletter, site or markdown files into a research notebook you can question,
+              podcasts you can publish and launch kits for every platform. Every word traced back to what you actually wrote.
             </p>
             <form className="hero-form" onSubmit={onSubmit}>
               <label htmlFor="hero-url" className="sr-only">
-                Your Substack URL
+                Your blog, newsletter or site URL
               </label>
               <input
                 id="hero-url"
                 className="input"
-                placeholder="yourname.substack.com"
+                placeholder="yourblog.com or yourname.substack.com"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 autoComplete="url"
@@ -196,7 +196,10 @@ export default function Landing() {
                 <ArrowRightIcon size={18} />
               </button>
             </form>
-            <p className="mono hero-meta">Free during early access. 20+ posts indexed in under 3 minutes.</p>
+            <p className="mono hero-meta">
+              Works with Substack, Ghost, WordPress, Medium, any RSS feed or site, and markdown files.{" "}
+              <Link to="/auth?mode=signup">Upload files instead</Link>
+            </p>
           </div>
           <div className="horizon" aria-hidden="true">
             <span className="horizon-flare" />

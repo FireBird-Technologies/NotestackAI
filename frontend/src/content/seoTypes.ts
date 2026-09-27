@@ -14,6 +14,13 @@ export type DistributionAsset = {
   angle: string;
 };
 
+/** The reader's journey: the question they searched for and the answer they leave with. */
+export type Mission = {
+  question: string;
+  /** Two or three sentences. Shown up front (featured snippet) and again at the destination. */
+  answer: string;
+};
+
 export type BlogPost = {
   slug: string;
   title: string;
@@ -31,6 +38,9 @@ export type BlogPost = {
   primaryKeyword: string;
   keywordVariant: string;
   relatedPaths: string[];
+  /** Optional; derived from the title and description when absent. */
+  mission?: Mission;
+  /** Paragraphs, bullets, callouts and FAQ answers support inline [text](url) links and **bold**. */
   sections: BlogSection[];
   faq: FaqItem[];
   distributionPlan: DistributionAsset[];

@@ -1,9 +1,11 @@
+import { missionPosts } from "./missionPosts";
 import type { BlogPost } from "./seoTypes";
 
 // Newest first. Cover images live in public/blog/blog-cover-<slug>.png.
 // House rule: no em dashes anywhere in post copy (npm run check:copy enforces it).
 
 export const blogPosts: BlogPost[] = [
+  ...missionPosts,
   {
     slug: "turn-substack-archive-into-podcast",
     title: "How to Turn Your Substack Archive Into a Podcast Without Recording",

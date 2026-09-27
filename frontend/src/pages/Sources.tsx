@@ -55,7 +55,7 @@ export function AddSource({ onAdded }: { onAdded: (source: Source, job: Job) => 
         }}
       />
       <p className="muted">
-        {mode === "feed" && "Substack, Ghost, Medium, WordPress or any RSS feed. We find the feed and pull in your archive."}
+        {mode === "feed" && "Any blog, newsletter or site: Substack, Ghost, WordPress, Medium or anything with an RSS feed. We find the feed and pull in your archive."}
         {mode === "url" && "One article from anywhere on the web. It lands in Imported posts."}
         {mode === "file" && "Markdown, text, HTML or PDF. Handy for drafts and posts that never had a feed."}
       </p>
@@ -65,7 +65,7 @@ export function AddSource({ onAdded }: { onAdded: (source: Source, job: Job) => 
         ) : (
           <input
             className="input"
-            placeholder={mode === "feed" ? "yourname.substack.com" : "https://example.com/my-essay"}
+            placeholder={mode === "feed" ? "yourblog.com" : "https://example.com/my-essay"}
             value={value}
             onChange={(e) => setValue(e.target.value)}
             aria-label={mode === "feed" ? "Feed or site URL" : "Article URL"}
@@ -144,7 +144,7 @@ export default function Sources() {
 
   return (
     <div className="page-wrap">
-      <PageHeader eyebrow="Sources" title="Your archive, in orbit" />
+      <PageHeader eyebrow="Sources" title="Your knowledge, in orbit" />
       <AddSource onAdded={added} />
       {error && <p className="error-text">{error}</p>}
 
@@ -205,7 +205,7 @@ export default function Sources() {
         })}
       </section>
       {sources?.length === 0 && (
-        <EmptyState title="No sources yet" body="A lone satellite, waiting for signal. Connect your Substack above." />
+        <EmptyState title="No sources yet" body="A lone satellite, waiting for signal. Connect a blog or site above, or upload your markdown files." />
       )}
 
       {sources && sources.length > 0 && (
