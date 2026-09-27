@@ -63,7 +63,7 @@ const FALLBACK: Plan[] = [
   },
 ];
 
-function money(n: number): string {
+export function money(n: number): string {
   return Number.isInteger(n) ? `$${n}` : `$${n.toFixed(2)}`;
 }
 
@@ -72,7 +72,7 @@ function to99(amount: number): number {
   return amount <= 0 ? 0 : Math.max(0.99, Math.round(amount + 0.01) - 0.01);
 }
 
-function annualMonthly(plan: Plan): number {
+export function annualMonthly(plan: Plan): number {
   return plan.price_annual_monthly_usd ?? to99(plan.price_monthly_usd * (1 - ANNUAL_DISCOUNT));
 }
 
@@ -81,7 +81,7 @@ function savingsPct(plan: Plan): number {
   return plan.annual_savings_pct ?? Math.round((1 - annualMonthly(plan) / plan.price_monthly_usd) * 100);
 }
 
-function annualTotal(plan: Plan): number {
+export function annualTotal(plan: Plan): number {
   return plan.price_annual_usd ?? Math.round(annualMonthly(plan) * 12 * 100) / 100;
 }
 
@@ -146,7 +146,10 @@ export default function PricingTiers() {
                   </li>
                 ))}
               </ul>
-              <Link to="/auth?mode=signup" className={`btn ${featured ? "btn-primary" : ""} tier-cta`}>
+              <Link
+                to={billingEnabled && !free ? `/app?upgrade=${plan.id}` : "/auth?mode=signup"}
+                className={`btn ${featured ? "btn-primary" : ""} tier-cta`}
+              >
                 {billingEnabled && !free ? `Choose ${plan.name}` : "Start free"}
               </Link>
             </article>

@@ -310,3 +310,38 @@ export type Settings = {
   usage: Usage;
   integrations: { llm: boolean; elevenlabs: boolean; x: boolean; linkedin: boolean; storage: string; renderer: string };
 };
+
+export type PlanInfo = Plan & {
+  tagline: string;
+  price_monthly_usd: number;
+  price_annual_monthly_usd: number;
+  price_annual_usd: number;
+  annual_savings_pct: number;
+  features: string[];
+};
+
+export type Meter = { key: string; label: string; unit: string; used: number; limit: number; pct: number };
+
+/** tone: limit (low or out of fuel), upgrade (locked perk), action (use what you have). No `to` opens the upgrade popup. */
+export type Nudge = {
+  id: string;
+  tone: "limit" | "upgrade" | "action";
+  title: string;
+  body: string;
+  cta: string;
+  to: string | null;
+  priority: number;
+};
+
+export type BillingStatus = {
+  billing_enabled: boolean;
+  plan: PlanInfo;
+  plans: PlanInfo[];
+  next_plan: string | null;
+  can_upgrade: boolean;
+  has_billing_account: boolean;
+  period_end: string | null;
+  meters: Meter[];
+  since: string;
+  nudges: Nudge[];
+};

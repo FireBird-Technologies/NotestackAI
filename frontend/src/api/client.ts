@@ -5,12 +5,19 @@ const REFRESH = "ns_refresh";
 export class ApiError extends Error {
   status: number;
   code?: string;
-  constructor(status: number, message: string, code?: string) {
+  detail?: Record<string, unknown>;
+  constructor(status: number, message: string, code?: string, detail?: Record<string, unknown>) {
     super(message);
     this.status = status;
     this.code = code;
+    this.detail = detail;
   }
 }
+
+/** Fired on every 402 plan_limit so the upgrade popup opens wherever the request came from. */
+export const PLAN_LIMIT_EVENT = "ns:plan-limit";
+
+export type PlanLimitDetail = { message: string; kind?: string; plan?: string; upgrade_to?: string | null };
 
 function read(key: string): string | null {
   try {
@@ -48,6 +55,7 @@ export const tokens = {
 async function parseError(res: Response): Promise<ApiError> {
   let message = res.statusText || "Something went wrong";
   let code: string | undefined;
+  let extra: Record<string, unknown> | undefined;
   try {
     const body = await res.json();
     const detail = body.detail;
@@ -55,11 +63,15 @@ async function parseError(res: Response): Promise<ApiError> {
     else if (detail?.message) {
       message = detail.message;
       code = detail.code;
+      extra = detail;
     }
   } catch {
     /* non JSON */
   }
-  return new ApiError(res.status, message, code);
+  if (res.status === 402 && code === "plan_limit") {
+    window.dispatchEvent(new CustomEvent<PlanLimitDetail>(PLAN_LIMIT_EVENT, { detail: { ...extra, message } }));
+  }
+  return new ApiError(res.status, message, code, extra);
 }
 
 async function tryRefresh(): Promise<boolean> {

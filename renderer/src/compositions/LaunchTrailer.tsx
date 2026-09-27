@@ -1,7 +1,8 @@
 import type { CSSProperties, ReactNode } from "react";
-import { AbsoluteFill, Audio as SoundTrack, Easing, Img, interpolate, random, Sequence, spring, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, Audio as SoundTrack, Easing, interpolate, random, Sequence, spring, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
 import { theme } from "../theme";
 import { Flare, WarpField } from "./LandingDemo";
+import { Lockup } from "./Lockup";
 import { LAUNCH_BPM, LAUNCH_SCENES, LAUNCH_SECONDS, type LaunchSceneId } from "./launchTimeline";
 
 /** Launch trailer: a journey of knowledge through the galaxies of untapped potential.
@@ -137,15 +138,15 @@ function typed(text: string, frame: number, start: number, cps = 30): string {
 // ---------------------------------------------------------------- journey HUD
 
 const STOPS: { id: LaunchSceneId; short: string; name: string; line: string }[] = [
-  { id: "sources", short: "Sources", name: "The Source Nebula", line: "Any blog, newsletter, website or markdown, pulled into orbit." },
-  { id: "research", short: "Research", name: "The Research Cluster", line: "Answers cited to the exact lines you wrote." },
-  { id: "map", short: "Topic map", name: "The Constellation Field", line: "See which ideas are rising, and which went dark." },
-  { id: "voice", short: "Voice", name: "The Voice Pulsar", line: "Everything it makes still sounds like you." },
-  { id: "audio", short: "Audio", name: "The Audio Belt", line: "Two host audio overviews of any notebook." },
-  { id: "video", short: "Studio", name: "The Studio Galaxy", line: "Shorts, explainers, audiograms and quote cards." },
-  { id: "launchkit", short: "Launch Kit", name: "The Launch Kit Spiral", line: "Threads, LinkedIn, Notes, SEO and carousels." },
-  { id: "launchpad", short: "Launchpad", name: "The Launchpad", line: "Schedule and auto post to X, LinkedIn and Bluesky." },
-  { id: "resurface", short: "Resurface", name: "The Evergreen Belt", line: "Your best old posts, back in orbit." },
+  { id: "sources", short: "Sources", name: "The Source Nebula", line: "Everything you made, glowing back at you." },
+  { id: "research", short: "Research", name: "The Research Cluster", line: "The spark of a thought you forgot you had." },
+  { id: "map", short: "Topic map", name: "The Constellation Field", line: "Drift through your own ideas. Stay a while." },
+  { id: "voice", short: "Voice", name: "The Voice Pulsar", line: "It feels like you. Only braver." },
+  { id: "audio", short: "Audio", name: "The Audio Belt", line: "Lean back. Let it wash over you." },
+  { id: "video", short: "Studio", name: "The Studio Galaxy", line: "Color, motion, wonder. Watch it twice." },
+  { id: "launchkit", short: "Launch Kit", name: "The Launch Kit Spiral", line: "Your heart races. The good kind of nervous." },
+  { id: "launchpad", short: "Launchpad", name: "The Launchpad", line: "Three, two, one, and you are flying." },
+  { id: "resurface", short: "Resurface", name: "The Evergreen Belt", line: "An old favorite, shining again." },
 ];
 
 function Hud({ index }: { index: number }) {
@@ -158,8 +159,8 @@ function Hud({ index }: { index: number }) {
   const px = (i: number) => x0 + ((x1 - x0) * i) / (STOPS.length - 1);
   return (
     <AbsoluteFill style={{ opacity: inn }}>
-      <div style={{ position: "absolute", left: 80, top: 56, fontFamily: theme.mono, fontSize: 20, letterSpacing: 5, color: "rgba(255,255,255,0.6)" }}>
-        NOTESTACK EXPEDITION
+      <div style={{ position: "absolute", left: 80, top: 44 }}>
+        <Lockup size={44} glow={0.6} />
       </div>
       <div style={{ position: "absolute", right: 80, top: 56, fontFamily: theme.mono, fontSize: 20, letterSpacing: 5, color: BLUE }}>
         GALAXY {String(index + 1).padStart(2, "0")} / {String(STOPS.length).padStart(2, "0")}
@@ -200,8 +201,8 @@ function Stop({ id, children }: { id: LaunchSceneId; children: ReactNode }) {
   const visual = useIn(10, 17);
   return (
     <Space drift={1.4}>
-      <div style={{ position: "absolute", inset: 0, transform: `scale(${approach})`, transformOrigin: "1260px 520px" }}>
-        <Galaxy seed={`g-${id}`} x={1260} y={520} size={430} tilt={0.42 + random(`t-${id}`) * 0.3} arms={2 + (index % 2)} coreBoost={pulse * 0.25} />
+      <div style={{ position: "absolute", inset: 0, transform: `scale(${approach})`, transformOrigin: "1350px 520px" }}>
+        <Galaxy seed={`g-${id}`} x={1350} y={520} size={430} tilt={0.42 + random(`t-${id}`) * 0.3} arms={2 + (index % 2)} coreBoost={pulse * 0.25} />
       </div>
       <AbsoluteFill style={{ background: "linear-gradient(90deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.55) 38%, transparent 62%)" }} />
       <div style={{ position: "absolute", left: 120, top: 250, width: 700 }}>
@@ -225,6 +226,66 @@ function Stop({ id, children }: { id: LaunchSceneId; children: ReactNode }) {
 
 // ---------------------------------------------------------------- feature visuals (900 x 660 box)
 
+/** A ringed planet, like the one in the logo: lit sphere, atmosphere, and a tilted ring whose far
+ * side passes behind the body and near side in front. Drawn in its own layer above the orbits. */
+function Planet({ cx, cy, r }: { cx: number; cy: number; r: number }) {
+  const frame = useCurrentFrame();
+  const tilt = -18;
+  const rx = r * 1.75;
+  const ry = r * 0.36;
+  const shimmer = 0.75 + 0.25 * Math.sin(frame * 0.08);
+  const ring = (half: "back" | "front") => (
+    <path
+      d={half === "back" ? `M ${-rx} 0 A ${rx} ${ry} 0 0 1 ${rx} 0` : `M ${rx} 0 A ${rx} ${ry} 0 0 1 ${-rx} 0`}
+      fill="none"
+      stroke={half === "back" ? "#9cc4ff" : WHITE}
+      strokeOpacity={half === "back" ? 0.45 : 0.95}
+      strokeWidth={r * 0.1}
+      strokeLinecap="round"
+    />
+  );
+  return (
+    <svg width={900} height={660} style={{ position: "absolute", left: 0, top: 0, overflow: "visible", zIndex: 1 }}>
+      <defs>
+        <radialGradient id="planet-body" cx="36%" cy="32%" r="75%">
+          <stop offset="0%" stopColor="#ffffff" />
+          <stop offset="14%" stopColor="#bcd8ff" />
+          <stop offset="42%" stopColor={BLUE} />
+          <stop offset="78%" stopColor="#0b2f75" />
+          <stop offset="100%" stopColor="#020a1c" />
+        </radialGradient>
+        <radialGradient id="planet-air" cx="50%" cy="50%" r="50%">
+          <stop offset="78%" stopColor={BLUE} stopOpacity={0} />
+          <stop offset="90%" stopColor={BLUE} stopOpacity={0.55} />
+          <stop offset="100%" stopColor={BLUE} stopOpacity={0} />
+        </radialGradient>
+        <clipPath id="planet-clip">
+          <circle r={r} />
+        </clipPath>
+      </defs>
+      <g transform={`translate(${cx} ${cy})`}>
+        <circle r={r * 2.2} fill={BLUE} opacity={0.12 * shimmer} />
+        <g transform={`rotate(${tilt})`}>{ring("back")}</g>
+        <circle r={r} fill="url(#planet-body)" />
+        {/* Soft cloud bands, clipped to the sphere, drifting slowly. */}
+        <g clipPath="url(#planet-clip)" opacity={0.22}>
+          {[-0.45, -0.1, 0.3].map((y, i) => (
+            <ellipse key={i} cx={((frame * 0.6 + i * 40) % (r * 2)) - r} cy={y * r} rx={r * 1.1} ry={r * 0.09} fill={WHITE} />
+          ))}
+        </g>
+        {/* Night side. */}
+        <circle r={r} fill="url(#planet-shadow)" />
+        <radialGradient id="planet-shadow" cx="78%" cy="80%" r="70%">
+          <stop offset="0%" stopColor="#000" stopOpacity={0.55} />
+          <stop offset="100%" stopColor="#000" stopOpacity={0} />
+        </radialGradient>
+        <circle r={r * 1.14} fill="url(#planet-air)" />
+        <g transform={`rotate(${tilt})`}>{ring("front")}</g>
+      </g>
+    </svg>
+  );
+}
+
 function SourcesVisual() {
   const frame = useCurrentFrame();
   const kinds = ["Blog", "Newsletter", "Website", "Markdown", "PDF", "Substack", "Ghost", "WordPress"];
@@ -236,9 +297,9 @@ function SourcesVisual() {
       <svg width={900} height={660} style={{ position: "absolute", overflow: "visible" }}>
         <ellipse cx={cx} cy={cy} rx={330} ry={130} fill="none" stroke={`${BLUE}88`} strokeWidth={2} strokeDasharray="4 10" />
         <ellipse cx={cx} cy={cy} rx={220} ry={86} fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth={1.5} />
-        <circle cx={cx} cy={cy} r={74} fill="#000" stroke={BLUE} strokeWidth={3} style={{ filter: `drop-shadow(0 0 30px ${BLUE})` }} />
-        <circle cx={cx} cy={cy} r={40} fill={WHITE} opacity={0.9} style={{ filter: `drop-shadow(0 0 24px ${WHITE})` }} />
       </svg>
+      <Planet cx={cx} cy={cy} r={82} />
+
       {kinds.map((k, i) => {
         const arrive = interpolate(frame, [12 + i * 9, 50 + i * 9], [0, 1], { ...clamp, easing: ease });
         const ring = i % 2 ? 220 : 330;
@@ -545,10 +606,10 @@ function Intro() {
       </div>
       <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", textAlign: "center", gap: 28 }}>
         <h1 style={{ margin: 0, fontFamily: theme.display, fontWeight: 600, fontSize: 80, color: WHITE, opacity: a, transform: `translateY(${(1 - a) * 30}px)` }}>
-          You have written more than you remember.
+          At the edge of something vast.
         </h1>
         <h2 style={{ margin: 0, fontFamily: theme.display, fontWeight: 500, fontSize: 64, color: "rgba(255,255,255,0.75)", opacity: b, transform: `translateY(${(1 - b) * 24}px)` }}>
-          Whole worlds of ideas, <span style={{ color: WHITE, textShadow: `0 0 30px ${BLUE}, 0 0 70px ${BLUE}` }}>still uncharted.</span>
+          Curious. <span style={{ color: WHITE, textShadow: `0 0 30px ${BLUE}, 0 0 70px ${BLUE}` }}>A little breathless.</span>
         </h2>
         <p style={{ margin: "30px 0 0", fontFamily: theme.mono, fontSize: 24, letterSpacing: 8, color: BLUE, opacity: c }}>A JOURNEY OF KNOWLEDGE</p>
       </AbsoluteFill>
@@ -628,10 +689,9 @@ function Outro() {
         </div>
         <AbsoluteFill style={{ background: "radial-gradient(45% 45% at 50% 50%, rgba(0,0,0,0.55), transparent 80%)" }} />
         <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", textAlign: "center" }}>
-          {/* The navbar mark (frontend/public/logo.svg, copied to public/logo.svg). */}
-          <Img src={staticFile("logo.svg")} width={144} height={144} style={{ borderRadius: 32, opacity: logo, transform: `scale(${logo})`, boxShadow: `0 0 90px ${BLUE}, 0 0 30px ${WHITE}` }} />          <h1 style={{ margin: "34px 0 0", fontFamily: theme.display, fontWeight: 700, fontSize: 150, lineHeight: 1, color: WHITE, opacity: name, transform: `translateY(${(1 - name) * 30}px)`, textShadow: `0 0 50px ${BLUE}` }}>
-            Notestack <span style={{ color: BLUE, textShadow: `0 0 30px ${BLUE}` }}>AI</span>
-          </h1>
+          <div style={{ opacity: Math.min(1, logo), transform: `scale(${0.85 + 0.15 * logo}) translateY(${(1 - name) * 20}px)` }}>
+            <Lockup size={176} suffix="AI" glow={1 + pulse * 0.3} />
+          </div>
           <div style={{ marginTop: 44, display: "flex", gap: 6 }}>
             {letters.map((ch, i) => {
               const s = spring({ frame: frame - S(3.2) - i * 2, fps: LAUNCH_FPS, config: { damping: 11 } });

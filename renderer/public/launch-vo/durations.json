@@ -1,14 +1,14 @@
 {
-  "intro": 5.78,
-  "launch": 3.03,
-  "sources": 6.14,
+  "intro": 5.83,
+  "launch": 2.9,
+  "sources": 6.38,
   "research": 4.16,
-  "map": 6.12,
-  "voice": 4.57,
-  "audio": 3.69,
-  "video": 4.44,
-  "launchkit": 4.7,
-  "launchpad": 3.32,
-  "resurface": 4.23,
-  "outro": 5.17
+  "map": 4.47,
+  "voice": 3.56,
+  "audio": 3.19,
+  "video": 5.88,
+  "launchkit": 3.69,
+  "launchpad": 4.94,
+  "resurface": 4.44,
+  "outro": 6.3
 }

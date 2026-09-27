@@ -6,6 +6,7 @@ import { AuthProvider } from "./hooks/useAuth";
 import "./styles/global.css";
 import "./styles/app.css";
 import "./styles/pages.css";
+import "./styles/upgrade.css";
 import { installClickSounds } from "./lib/sound";
 
 installClickSounds();

@@ -6,6 +6,7 @@ import { settingsApi, type SettingsPatch } from "../api/endpoints";
 import type { Settings as SettingsData } from "../api/types";
 import { ConfirmButton, errorMessage, Loading, PageHeader } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
+import { useUpgrade } from "../hooks/useUpgrade";
 import { setSoundsEnabled, soundsEnabled } from "../lib/sound";
 
 function Meter({ label, used, limit, unit }: { label: string; used: number; limit: number; unit: string }) {
@@ -46,6 +47,7 @@ export default function Settings() {
   const logoRef = useRef<HTMLInputElement>(null);
   const [sounds, setSounds] = useState(soundsEnabled);
   const { logout } = useAuth();
+  const upgrade = useUpgrade();
   const navigate = useNavigate();
 
   const hydrate = (d: SettingsData) => {
@@ -177,6 +179,24 @@ export default function Settings() {
             <Meter label="Audio overviews" used={u.used.audio_minutes} limit={u.limits.audio_minutes} unit="min" />
             <Meter label="Video renders" used={u.used.video_minutes} limit={u.limits.video_minutes} unit="min" />
             <Meter label="Launch Kits" used={u.used.launch_kits} limit={u.limits.launch_kits} unit="" />
+            <p className="mono muted small">
+              Refills on the 1st of every month.
+            </p>
+            {s.billing_enabled && (
+              <div className="row">
+                {upgrade.status?.can_upgrade && (
+                  <button className="btn btn-primary btn-small" onClick={() => upgrade.openUpgrade()}>
+                    Upgrade now
+                  </button>
+                )}
+                {upgrade.status?.has_billing_account && (
+                  <button className="btn btn-small" disabled={upgrade.busy} onClick={() => upgrade.manageBilling()}>
+                    Manage billing
+                  </button>
+                )}
+              </div>
+            )}
+            {upgrade.error && !upgrade.modal && <p className="error-text">{upgrade.error}</p>}
             <p className="mono muted small">
               {s.plan.sources} sources · {s.plan.indexed_posts.toLocaleString()} indexed posts · {u.used.llm_tokens.toLocaleString()} LLM tokens this month
             </p>

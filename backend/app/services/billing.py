@@ -56,14 +56,15 @@ def build_nudges(db: Session, workspace: Workspace, plan: Plan, meters: list[dic
             if m["limit"] < 0 or m["key"] == "sources":
                 continue
             label = m["label"].lower()
+            amount = f"{m['limit']:g} min of {label}" if m["unit"] else f"{m['limit']:g} {label}"
             if m["pct"] >= 1:
                 out.append(_nudge(f"empty-{m['key']}-{month}", "limit", f"Out of {label} this month",
-                                  f"You have used all {m['limit']} {m['unit'] or label}. Upgrade to keep launching.",
-                                  "Refuel now", priority=100))
+                                  f"You have used all {amount}. Upgrade to keep launching.", "Refuel now",
+                                  priority=100))
             elif m["pct"] >= LOW_FUEL:
-                left = round(m["limit"] - m["used"], 1)
+                left = f"{m['limit'] - m['used']:g}" + (" min" if m["unit"] else "")
                 out.append(_nudge(f"low-{m['key']}-{month}", "limit", f"Running low on {label}",
-                                  f"Only {left:g} {m['unit'] or 'left'} left this month. Upgrade before you stall mid launch.",
+                                  f"Only {left} left this month. Upgrade before you stall mid launch.",
                                   "See plans", priority=90))
         if not plan.voice_cloning:
             out.append(_nudge("perk-voice", "upgrade", "Narrate in your own voice",
@@ -71,7 +72,8 @@ def build_nudges(db: Session, workspace: Workspace, plan: Plan, meters: list[dic
                               "Unlock voice", priority=40))
         if not plan.brand_kit:
             out.append(_nudge("perk-brand", "upgrade", "Put your brand on every render",
-                              "Your colors and logo on videos, quote cards and carousels.", "Unlock brand kit", priority=30))
+                              "Your colors and logo on videos, quote cards and carousels.", "Unlock brand kit",
+                              priority=30))
 
     sources = _count(db, Source, ws)
     if sources == 0:

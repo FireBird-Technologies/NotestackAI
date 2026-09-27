@@ -2,6 +2,7 @@ import { api, del, patch, post, put, qs, uploadFile } from "./client";
 import type {
   Artifact,
   ArtifactType,
+  BillingStatus,
   CalendarItem,
   ChatMessage,
   ChatSummary,
@@ -178,4 +179,12 @@ export const settingsApi = {
   get: () => api<Settings>("/api/settings"),
   update: (body: SettingsPatch) => patch<Settings>("/api/settings", body),
   usage: () => api<Usage>("/api/settings/usage"),
+};
+
+export type BillingCycle = "monthly" | "annual";
+
+export const billingApi = {
+  status: () => api<BillingStatus>("/api/billing/status"),
+  checkout: (plan: string, cycle: BillingCycle) => post<{ url: string }>("/api/billing/checkout", { plan, cycle }),
+  portal: () => post<{ url: string }>("/api/billing/portal"),
 };

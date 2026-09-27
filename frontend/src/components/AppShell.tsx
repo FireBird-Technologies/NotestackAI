@@ -1,8 +1,11 @@
 import { useState } from "react";
 import { NavLink, Outlet, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
+import { UpgradeProvider } from "../hooks/useUpgrade";
 import Logo from "./Logo";
+import { FuelGauge, NudgeDock } from "./Nudges";
 import SkyCanvas from "./SkyCanvas";
+import UpgradeModal from "./UpgradeModal";
 import {
   AsteroidIcon,
   CometIcon,
@@ -62,52 +65,58 @@ export default function AppShell() {
   }
 
   return (
-    <div className={`shell${collapsed ? " collapsed" : ""}`}>
-      <SkyCanvas intensity={0.35} />
-      <aside className="sidebar">
-        <div className="sidebar-top">
-          {collapsed ? (
-            <button type="button" className="sidebar-brand sidebar-brand-btn" onClick={toggle} aria-label="Expand sidebar" title="Expand sidebar">
-              <Logo size={28} />
+    <UpgradeProvider>
+      <div className={`shell${collapsed ? " collapsed" : ""}`}>
+        <SkyCanvas intensity={0.35} />
+        <aside className="sidebar">
+          <div className="sidebar-top">
+            {collapsed ? (
+              <button type="button" className="sidebar-brand sidebar-brand-btn" onClick={toggle} aria-label="Expand sidebar" title="Expand sidebar">
+                <Logo size={28} />
+              </button>
+            ) : (
+              <NavLink to="/" className="sidebar-brand">
+                <Logo size={28} />
+              </NavLink>
+            )}
+            <button
+              type="button"
+              className="icon-btn sidebar-toggle"
+              onClick={toggle}
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              aria-expanded={!collapsed}
+              title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
+                <path d="M9 4.5v15" />
+                <path d={collapsed ? "M13 10l2 2-2 2" : "M15 10l-2 2 2 2"} />
+              </svg>
             </button>
-          ) : (
-            <NavLink to="/" className="sidebar-brand">
-              <Logo size={28} />
-            </NavLink>
-          )}
-          <button
-            type="button"
-            className="icon-btn sidebar-toggle"
-            onClick={toggle}
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            aria-expanded={!collapsed}
-            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
-              <path d="M9 4.5v15" />
-              <path d={collapsed ? "M13 10l2 2-2 2" : "M15 10l-2 2 2 2"} />
-            </svg>
-          </button>
-        </div>
-        <nav aria-label="App">
-          {NAV.map(({ to, label, icon: Icon, end }) => (
-            <NavLink key={to} to={to} end={end} title={collapsed ? label : undefined} className={({ isActive }) => `side-link${isActive ? " active" : ""}`}>
-              <Icon />
-              <span className="side-label">{label}</span>
-            </NavLink>
-          ))}
-        </nav>
-        <div className="sidebar-user">
-          <span className="mono muted side-label">{user.email}</span>
-          <button className="link-btn" onClick={logout} title="Sign out">
-            Sign out
-          </button>
-        </div>
-      </aside>
-      <main className="shell-main">
-        <Outlet />
-      </main>
-    </div>
+          </div>
+          <nav aria-label="App">
+            {NAV.map(({ to, label, icon: Icon, end }) => (
+              <NavLink key={to} to={to} end={end} title={collapsed ? label : undefined} className={({ isActive }) => `side-link${isActive ? " active" : ""}`}>
+                <Icon />
+                <span className="side-label">{label}</span>
+              </NavLink>
+            ))}
+          </nav>
+          <FuelGauge collapsed={collapsed} />
+          <div className="sidebar-user">
+            <span className="mono muted side-label">{user.email}</span>
+            <button className="link-btn" onClick={logout} title="Sign out">
+              Sign out
+            </button>
+          </div>
+        </aside>
+        <main className="shell-main">
+          <Outlet />
+        </main>
+      </div>
+      {/* Outside .shell: its children get position: relative, and these are fixed overlays. */}
+      <NudgeDock />
+      <UpgradeModal />
+    </UpgradeProvider>
   );
 }

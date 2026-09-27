@@ -146,7 +146,7 @@ def upgrade_for(plan: Plan, kind: str | None = None) -> str | None:
         if kind == "voice_cloning" and candidate.voice_cloning:
             return pid
         current, better = getattr(plan, kind, 0), getattr(candidate, kind, 0)
-        if better < 0 or (isinstance(better, (int, float)) and better > current):
+        if better < 0 or (isinstance(better, int | float) and better > current):
             return pid
     return None
 
