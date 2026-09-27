@@ -1,15 +1,15 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { artifactsApi } from "../api/endpoints";
-import type { Artifact, LaunchKitContent, Platform } from "../api/types";
+import { artifactsApi, docsApi } from "../api/endpoints";
+import type { Artifact, Doc, LaunchKitContent, Platform } from "../api/types";
 import { ArtifactCard } from "../components/ArtifactCard";
 import { DocPicker } from "../components/DocPicker";
 import { ScheduleModal } from "../components/ScheduleModal";
-import { ConfirmButton, CopyButton, EmptyState, errorMessage, formatDate, JobProgress, Loading, PageHeader, StatusPill, Tabs } from "../components/ui";
+import { ConfirmButton, CopyButton, errorMessage, formatDate, JobProgress, Loading, PageHeader, StatusPill, Tabs } from "../components/ui";
 import { useJob } from "../hooks/useJob";
 
 type PostKey = keyof LaunchKitContent["posts"];
-type Tab = "hooks" | PostKey | "seo" | "carousel" | "quotes" | "claims";
+type Tab = "posts" | "hooks" | "visuals" | "seo";
 
 const PLATFORM_OF: Record<PostKey, { platform: Platform; label: string; limit: number; thread: boolean }> = {
   x_thread: { platform: "x", label: "X thread", limit: 280, thread: true },
@@ -175,7 +175,8 @@ function QuotesTab({ kit }: { kit: Artifact }) {
 
 function KitView({ kit: initial, onDeleted }: { kit: Artifact; onDeleted: () => void }) {
   const [kit, setKit] = useState(initial);
-  const [tab, setTab] = useState<Tab>("hooks");
+  const [tab, setTab] = useState<Tab>("posts");
+  const [platform, setPlatform] = useState<PostKey>("x_thread");
   const job = useJob(initial.job, () => artifactsApi.get(initial.id).then(setKit));
   useEffect(() => setKit(initial), [initial]);
   const c = kit.content as LaunchKitContent;
@@ -220,16 +221,23 @@ function KitView({ kit: initial, onDeleted }: { kit: Artifact; onDeleted: () => 
         <>
           <Tabs<Tab>
             tabs={[
+              { id: "posts", label: "Posts" },
               { id: "hooks", label: "Hooks", count: c.hooks?.length },
-              ...(Object.keys(PLATFORM_OF) as PostKey[]).map((k) => ({ id: k as Tab, label: PLATFORM_OF[k].label })),
+              { id: "visuals", label: "Visuals", count: (c.carousel?.length ?? 0) + (c.quotes?.length ?? 0) },
               { id: "seo", label: "SEO" },
-              { id: "carousel", label: "Carousel", count: c.carousel?.length },
-              { id: "quotes", label: "Quotes", count: c.quotes?.length },
-              { id: "claims", label: "Claims", count: c.claims?.length },
             ]}
             value={tab}
             onChange={setTab}
           />
+          {tab === "posts" && (
+            <div className="gen-chips" role="tablist" aria-label="Platform">
+              {(Object.keys(PLATFORM_OF) as PostKey[]).map((k) => (
+                <button key={k} type="button" role="tab" aria-selected={platform === k} className={`chip${platform === k ? " on" : ""}`} onClick={() => setPlatform(k)}>
+                  {PLATFORM_OF[k].label}
+                </button>
+              ))}
+            </div>
+          )}
           {tab === "hooks" && (
             <ol className="hooks">
               {(c.hooks ?? []).map((h, i) => (
@@ -243,7 +251,7 @@ function KitView({ kit: initial, onDeleted }: { kit: Artifact; onDeleted: () => 
               ))}
             </ol>
           )}
-          {tab in PLATFORM_OF && <PostsEditor kit={kit} keyName={tab as PostKey} onSave={(p) => savePosts(tab as PostKey, p)} />}
+          {tab === "posts" && <PostsEditor kit={kit} keyName={platform} onSave={(p) => savePosts(platform, p)} />}
           {tab === "seo" && (
             <dl className="seo">
               <dt>Title options</dt>
@@ -287,9 +295,17 @@ function KitView({ kit: initial, onDeleted }: { kit: Artifact; onDeleted: () => 
               </dd>
             </dl>
           )}
-          {tab === "carousel" && <CarouselTab kit={kit} />}
-          {tab === "quotes" && <QuotesTab kit={kit} />}
-          {tab === "claims" && (
+          {tab === "visuals" && (
+            <>
+              <h3>Carousel</h3>
+              <CarouselTab kit={kit} />
+              <h3>Quotes</h3>
+              <QuotesTab kit={kit} />
+            </>
+          )}
+          {tab === "posts" && (c.claims?.length ?? 0) > 0 && (
+            <details className="delivery">
+              <summary className="mono muted small">Fact check: {c.claims?.length} claims traced to the post</summary>
             <ol className="claims">
               {(c.claims ?? []).map((cl, i) => (
                 <li key={i}>
@@ -305,6 +321,7 @@ function KitView({ kit: initial, onDeleted }: { kit: Artifact; onDeleted: () => 
                 </li>
               ))}
             </ol>
+            </details>
           )}
         </>
       )}
@@ -312,91 +329,144 @@ function KitView({ kit: initial, onDeleted }: { kit: Artifact; onDeleted: () => 
   );
 }
 
+/** Pick a post card (one click generates), or reopen an earlier kit from the rail. */
 export default function LaunchKit() {
   const [params, setParams] = useSearchParams();
   const [kits, setKits] = useState<Artifact[] | null>(null);
-  const [post, setPost] = useState<string[]>(params.get("post") ? [params.get("post")!] : []);
+  const [newest, setNewest] = useState<Doc[] | null>(null);
+  const [post, setPost] = useState<string[]>([]);
+  const [searching, setSearching] = useState(false);
   const [active, setActive] = useState<Artifact | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const autoStarted = useRef(false);
 
   const load = useCallback(() => artifactsApi.list({ type: "launch_kit", limit: 100 }).then((p) => setKits(p.items)), []);
   useEffect(() => {
     load();
+    docsApi.list({ limit: 24 }).then((p) => setNewest(p.items.filter((d) => !d.locked).slice(0, 6)));
   }, [load]);
   useEffect(() => {
     const id = params.get("kit");
     if (id && active?.id !== id) artifactsApi.get(id).then(setActive, () => setActive(null));
-  }, [params, active?.id]);
+    if (!id && active) setActive(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params]);
 
-  const generate = async () => {
-    if (!post[0]) return;
-    setBusy(true);
+  const generate = async (documentId: string) => {
+    setBusy(documentId);
     setError(null);
     try {
-      const kit = await artifactsApi.generate({ type: "launch_kit", document_id: post[0] });
+      const kit = await artifactsApi.generate({ type: "launch_kit", document_id: documentId });
       setKits((k) => [kit, ...(k ?? [])]);
       setActive(kit);
       setParams({ kit: kit.id });
     } catch (e) {
       setError(errorMessage(e));
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
+  };
+
+  // ?post=<id> (from Resurfacing or a post page) starts the kit straight away.
+  useEffect(() => {
+    const id = params.get("post");
+    if (id && !autoStarted.current) {
+      autoStarted.current = true;
+      void generate(id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const open = (k: Artifact) => {
+    setActive(k);
+    setParams({ kit: k.id });
   };
 
   return (
     <div className="page-wrap">
-      <PageHeader eyebrow="Launch Kit" title="Everything you need to launch a post" />
-      <div className="kit-layout">
-        <aside className="stack">
-          <section className="card stack">
-            <h2>New kit</h2>
-            <p className="muted">Hooks, a thread, LinkedIn, Notes, Bluesky, SEO, a carousel and quote cards, in your voice and grounded in the post.</p>
-            <DocPicker selected={post} onChange={setPost} single />
-            {error && <p className="error-text">{error}</p>}
-            <button className="btn btn-primary" disabled={!post.length || busy} onClick={generate}>
-              {busy ? "Launching..." : "Generate Launch Kit"}
-            </button>
-          </section>
-          <section className="card">
-            <h2>Kits</h2>
-            {!kits && <Loading />}
+      <PageHeader eyebrow="Launch Kit" title="Everything you need to launch a post">
+        {active && (
+          <button className="btn btn-primary" onClick={() => setParams({})}>
+            New kit
+          </button>
+        )}
+      </PageHeader>
+      {error && <p className="error-text">{error}</p>}
+      {active ? (
+        <div className="kit-layout kit-open">
+          <aside className="card kit-rail">
+            <p className="eyebrow">Your kits</p>
             <ul className="kit-list">
               {kits?.map((k) => (
                 <li key={k.id}>
-                  <button
-                    className={`link-btn${active?.id === k.id ? " active" : ""}`}
-                    onClick={() => {
-                      setActive(k);
-                      setParams({ kit: k.id });
-                    }}
-                  >
+                  <button className={`link-btn${active.id === k.id ? " active" : ""}`} onClick={() => open(k)}>
                     {(k.content.post_title as string | undefined) ?? k.title}
                   </button>
                   <span className="mono muted"> {k.status === "ready" ? formatDate(k.created_at) : k.status}</span>
                 </li>
               ))}
-              {kits?.length === 0 && <li className="muted">No kits yet.</li>}
             </ul>
-          </section>
-        </aside>
-        <div>
-          {active ? (
-            <KitView
-              key={active.id}
-              kit={active}
-              onDeleted={() => {
-                setActive(null);
-                setParams({});
-                load();
-              }}
-            />
-          ) : (
-            <EmptyState title="Pick a post to launch" body="Or open a kit you made before." />
-          )}
+          </aside>
+          <KitView
+            key={active.id}
+            kit={active}
+            onDeleted={() => {
+              setParams({});
+              load();
+            }}
+          />
         </div>
-      </div>
+      ) : (
+        <>
+          <section className="card stack">
+            <div className="row between">
+              <h2>Pick a post to launch</h2>
+              <button className="link-btn small" onClick={() => setSearching(!searching)}>
+                {searching ? "Show newest posts" : "Search all posts"}
+              </button>
+            </div>
+            <p className="muted">Hooks, a thread, LinkedIn, Notes, Bluesky, SEO, a carousel and quote cards, in your voice and grounded in the post.</p>
+            {searching ? (
+              <>
+                <DocPicker selected={post} onChange={setPost} single />
+                <div className="row end">
+                  <button className="btn btn-primary" disabled={!post.length || busy !== null} onClick={() => generate(post[0])}>
+                    {busy ? "Launching..." : "Generate Launch Kit"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="post-cards">
+                {!newest && <Loading />}
+                {newest?.length === 0 && <p className="muted">No indexed posts yet. Connect a source first.</p>}
+                {newest?.map((d) => (
+                  <button key={d.id} type="button" className="post-card" disabled={busy !== null} onClick={() => generate(d.id)}>
+                    <span className="mono muted small">{formatDate(d.published_at)}</span>
+                    <strong className="clamp-3">{d.title}</strong>
+                    <span className="post-card-go">{busy === d.id ? "Launching..." : "Launch this post"}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+          {kits && kits.length > 0 && (
+            <section className="card">
+              <h2>Earlier kits</h2>
+              <ul className="kit-list">
+                {kits.map((k) => (
+                  <li key={k.id}>
+                    <button className="link-btn" onClick={() => open(k)}>
+                      {(k.content.post_title as string | undefined) ?? k.title}
+                    </button>
+                    <span className="mono muted"> {k.status === "ready" ? formatDate(k.created_at) : k.status}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </>
+      )}
     </div>
   );
 }

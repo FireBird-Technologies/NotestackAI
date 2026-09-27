@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { voiceApi } from "../api/endpoints";
-import type { Delivery, Job, LibraryVoice, Quota, Voice, VoiceDesignInput, VoiceDesignPreview, VoiceProfileData, VoiceState } from "../api/types";
+import type { Delivery, Job, LibraryVoice, Voice, VoiceDesignInput, VoiceDesignPreview, VoiceProfileData, VoiceState } from "../api/types";
 import { DocPicker } from "../components/DocPicker";
 import { ConfirmButton, errorMessage, formatDate, JobProgress, Loading, Modal, PageHeader, Tabs } from "../components/ui";
 import { useJob } from "../hooks/useJob";
@@ -435,7 +435,7 @@ function GenerateVoiceModal({
             </div>
           </div>
         )}
-        {!state.tts_configured && <p className="muted small">Set ELEVENLABS_API_KEY in .env to generate voices.</p>}
+        {!state.tts_configured && <p className="muted small">Voice generation is unavailable right now.</p>}
         {error && <p className="error-text">{error}</p>}
       </div>
     </Modal>
@@ -734,21 +734,20 @@ function CloneModal({ state, onClose, onDone }: { state: VoiceState; onClose: ()
   );
 }
 
-// The page: a three step flow. Writing voice first, then the two hosts, and cloning last.
+// The page: two steps. The writing voice builds itself, then the writer picks the two hosts.
+// Cloning lives in the "+ Add a voice" menu; a clone's status shows under the voice cards.
 
-type Step = "writing" | "hosts" | "clone";
+type Step = "writing" | "hosts";
 
 const STEPS: { id: Step; label: string }[] = [
   { id: "writing", label: "Writing voice" },
   { id: "hosts", label: "Speaking voices" },
-  { id: "clone", label: "Your own voice" },
 ];
 
 export default function VoiceProfile() {
   const [state, setState] = useState<VoiceState | null>(null);
   const [draft, setDraft] = useState<VoiceProfileData | null>(null);
   const [voices, setVoices] = useState<Voice[]>([]);
-  const [quota, setQuota] = useState<Quota>({});
   const [step, setStep] = useState<Step | null>(null);
   const [picking, setPicking] = useState(false);
   const [samples, setSamples] = useState<string[]>([]);
@@ -759,8 +758,8 @@ export default function VoiceProfile() {
   const [generating, setGenerating] = useState<Host | null>(null);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const autoBuilt = useRef(false);
   const { play, playing } = usePlayer();
-  const { openUpgrade } = useUpgrade();
 
   const load = () =>
     voiceApi.get().then((s) => {
@@ -768,13 +767,30 @@ export default function VoiceProfile() {
       setDraft(s.profile);
       setSamples(s.sample_doc_ids);
       setStep((cur) => cur ?? (s.profile ? "hosts" : "writing"));
+      return s;
     });
   const loadVoices = () => voiceApi.voices().then(setVoices, () => setVoices([]));
 
+  const startBuild = async (ids: string[]) => {
+    setPicking(false);
+    setError(null);
+    try {
+      setBuildJob(await voiceApi.build(ids));
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+  };
+
   useEffect(() => {
-    load();
+    // No writing voice yet: build one from the longest posts straight away instead of asking.
+    load().then((s) => {
+      if (!s.profile && !autoBuilt.current) {
+        autoBuilt.current = true;
+        void startBuild([]);
+      }
+    });
     loadVoices();
-    voiceApi.quota().then(setQuota, () => setQuota({}));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const build = useJob(buildJob, () => load());
@@ -786,22 +802,8 @@ export default function VoiceProfile() {
   if (!state || !step) return <Loading />;
   const building = build && (build.status === "queued" || build.status === "running");
   const cloneRunning = clone && (clone.status === "queued" || clone.status === "running");
-  const stepIndex = STEPS.findIndex((s) => s.id === step);
-  const done: Record<Step, boolean> = {
-    writing: Boolean(state.profile),
-    hosts: Boolean(state.profile) && stepIndex > 1,
-    clone: state.clone.status === "ready",
-  };
-
-  const startBuild = async (ids: string[]) => {
-    setPicking(false);
-    setError(null);
-    try {
-      setBuildJob(await voiceApi.build(ids));
-    } catch (e) {
-      setError(errorMessage(e));
-    }
-  };
+  const done: Record<Step, boolean> = { writing: Boolean(state.profile), hosts: Boolean(state.profile) && step === "hosts" };
+  const showClone = state.clone.status !== "none" || Boolean(clone);
 
   const saveProfile = async () => {
     setError(null);
@@ -835,20 +837,16 @@ export default function VoiceProfile() {
 
       {step === "writing" && (
         <section className="card stack vp-card">
-          <p className="eyebrow">Step 1 of 3</p>
-          <h2>Teach Notestack how you write</h2>
+          <h2>How you write</h2>
           <p className="muted">Launch Kits, carousels, hooks and scripts are all written in this voice, so they read like you wrote them.</p>
           {build && (building || build.status === "failed") && <JobProgress job={build} />}
-
           {!draft && !building && (
-            <div className="vp-choices">
-              <button className="vp-choice" onClick={() => startBuild([])}>
-                <strong>Let Notestack choose</strong>
-                <span className="muted small">We read your longest posts. One click, about a minute.</span>
+            <div className="row">
+              <button className="btn btn-primary" onClick={() => startBuild([])}>
+                Build my writing voice
               </button>
-              <button className="vp-choice" onClick={() => setPicking(true)}>
-                <strong>I'll pick my posts</strong>
-                <span className="muted small">Choose 5 to 10 posts that sound most like you.</span>
+              <button className="link-btn small" onClick={() => setPicking(true)}>
+                or pick the posts yourself
               </button>
             </div>
           )}
@@ -902,103 +900,46 @@ export default function VoiceProfile() {
 
       {step === "hosts" && (
         <section className="card stack vp-card">
-          <p className="eyebrow">Step 2 of 3</p>
-          <h2>Pick who reads your work aloud</h2>
-          <p className="muted">
-            Audio overviews are a conversation between two hosts, and videos are narrated by Host A. Tap a voice to use it, press play to hear it, or generate your own.
-          </p>
-          {!state.tts_configured && <p className="muted">Set ELEVENLABS_API_KEY in .env to generate audio.</p>}
+          <h2>Who reads your work aloud</h2>
+          <p className="muted">Audio overviews are a conversation between two hosts, and videos are narrated by Host A. Tap a voice to use it, or add your own.</p>
+          {!state.tts_configured && <p className="muted">Voice previews are unavailable right now.</p>}
           <VoicePicker state={state} voices={voices} onSaved={setState} onBrowse={setBrowsing} onGenerate={setGenerating} />
-          <div className="row between">
-            <button className="btn btn-small" onClick={() => setStep("writing")}>
-              Back
-            </button>
-            <button className="btn btn-primary" onClick={() => setStep("clone")}>
-              Last step: use your own voice
-            </button>
-          </div>
-        </section>
-      )}
 
-      {step === "clone" && (
-        <section className="card stack vp-card">
-          <p className="eyebrow">Step 3 of 3</p>
-          <h2>Make Host A sound exactly like you</h2>
-
-          {!state.clone.allowed && (
-            <>
-              <p className="muted">Clone your voice and every audio overview and video you make is narrated by you, not a stock voice.</p>
-              <ol className="vp-how">
-                <li>
-                  <strong>Read for 1 to 3 minutes</strong>
-                  <span className="muted small">We give you a passage from your own writing.</span>
-                </li>
-                <li>
-                  <strong>We build your voice</strong>
-                  <span className="muted small">Takes a few minutes. Only you can use it.</span>
-                </li>
-                <li>
-                  <strong>Everything sounds like you</strong>
-                  <span className="muted small">Your voice becomes Host A across overviews and videos.</span>
-                </li>
-              </ol>
-              <div className="vp-upgrade">
-                <div>
-                  <strong>Voice cloning is on the Writer and Studio plans</strong>
-                  <p className="muted small">Your writing voice and hosts are all set. Upgrade whenever you want to add your own.</p>
-                </div>
-                <button className="btn btn-primary" onClick={() => openUpgrade("writer")}>
-                  Upgrade to clone my voice
-                </button>
-              </div>
-            </>
-          )}
-
-          {state.clone.allowed && quota.can_use_instant_voice_cloning === false && (
-            <p className="muted small">Your ElevenLabs plan does not include instant voice cloning. Upgrade it at elevenlabs.io.</p>
-          )}
-          {state.clone.allowed && (state.clone.status === "none" || state.clone.status === "failed") && !cloneRunning && (
-            <>
-              <p className="muted">
-                Record one to three minutes of your own writing, read aloud. Your voice becomes Host A, so audio overviews and videos sound like you.
-              </p>
-              {state.clone.status === "failed" && state.clone.error && <p className="error-text">{state.clone.error}</p>}
+          {showClone && (
+            <div className="vp-clone">
+              <strong>Your cloned voice</strong>
+              {clone && (cloneRunning || clone.status === "failed") && <JobProgress job={clone} compact />}
+              {state.clone.status === "processing" && !clone && <p className="muted small">Your voice is being created. It becomes Host A when ready.</p>}
+              {state.clone.status === "failed" && state.clone.error && !cloneRunning && <p className="error-text">{state.clone.error}</p>}
               <div className="row">
-                <button className="btn btn-primary" onClick={() => setCloning(true)} disabled={!state.tts_configured}>
-                  Clone my voice
-                </button>
-              </div>
-            </>
-          )}
-          {clone && (cloneRunning || clone.status === "failed") && <JobProgress job={clone} />}
-          {state.clone.status === "processing" && !clone && <p className="muted">Your voice is being created.</p>}
-          {state.clone.status === "ready" && (
-            <>
-              <p className="muted">Your voice is live and set as Host A. Adjust its delivery in step 2.</p>
-              <div className="row">
-                {state.clone.preview_url && (
+                {state.clone.status === "ready" && state.clone.preview_url && (
                   <button className="btn btn-small" onClick={() => play(state.clone.preview_url!, "clone")}>
                     {playing === "clone" ? "Stop" : "Hear my voice"}
                   </button>
                 )}
-                <button className="btn btn-small" onClick={() => setCloning(true)}>
-                  Record again
-                </button>
-                <ConfirmButton
-                  confirmLabel="Revoke and delete my voice?"
-                  onConfirm={async () => {
-                    setState(await voiceApi.revoke());
-                    loadVoices();
-                  }}
-                >
-                  Revoke consent
-                </ConfirmButton>
+                {!cloneRunning && state.clone.allowed && (
+                  <button className="btn btn-small" onClick={() => setCloning(true)}>
+                    {state.clone.status === "failed" ? "Try again" : "Record again"}
+                  </button>
+                )}
+                {state.clone.status !== "none" && (
+                  <ConfirmButton
+                    confirmLabel="Revoke and delete my voice?"
+                    onConfirm={async () => {
+                      setState(await voiceApi.revoke());
+                      loadVoices();
+                    }}
+                  >
+                    Revoke consent
+                  </ConfirmButton>
+                )}
               </div>
-            </>
+            </div>
           )}
+
           <div className="row">
-            <button className="btn btn-small" onClick={() => setStep("hosts")}>
-              Back
+            <button className="btn btn-small" onClick={() => setStep("writing")}>
+              Back to writing voice
             </button>
           </div>
         </section>

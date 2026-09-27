@@ -165,6 +165,11 @@ def update_voice(body: ProfileIn, ctx: Ctx = Depends(get_ctx)):
 
 @router.post("/build")
 def build(body: BuildIn, ctx: Ctx = Depends(get_ctx)):
+    if not body.document_ids:  # the automatic build after a sync may already be running; follow that one
+        pending = ctx.db.scalar(select(Job).where(Job.workspace_id == ctx.workspace.id, Job.kind == "voice_profile",
+                                                  Job.status.in_(("queued", "running"))).limit(1))
+        if pending:
+            return serialize_job(pending)
     job = create_job(ctx.db, ctx.workspace.id, "voice_profile",
                      {"document_ids": [str(i) for i in body.document_ids]}, max_attempts=2)
     return serialize_job(job)

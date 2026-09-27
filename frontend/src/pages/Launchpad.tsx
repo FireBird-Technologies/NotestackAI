@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { launchpadApi } from "../api/endpoints";
 import type { CalendarItem, SocialAccounts } from "../api/types";
 import { PLATFORMS, ScheduleModal, toLocalInput } from "../components/ScheduleModal";
 import { ConfirmButton, CopyButton, errorMessage, formatDate, Loading, Modal, PageHeader, StatusPill, Tabs } from "../components/ui";
+import { ResurfaceIdeas } from "./Resurface";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -289,55 +290,42 @@ export default function Launchpad() {
       {notice && <p className="notice">{notice}</p>}
       {error && <p className="error-text">{error}</p>}
 
-      <section className="card accounts">
-        <div className="row between">
-          <h2>Connected accounts</h2>
-          <div className="row">
-            <button className="btn btn-small" onClick={() => connect("x")} disabled={!accounts?.available.x} title={accounts?.available.x ? "" : "Set X_CLIENT_ID and X_CLIENT_SECRET"}>
-              Connect X
-            </button>
-            <button className="btn btn-small" onClick={() => connect("linkedin")} disabled={!accounts?.available.linkedin} title={accounts?.available.linkedin ? "" : "Set LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET"}>
-              Connect LinkedIn
-            </button>
-            <button className="btn btn-small" onClick={() => setBluesky(true)}>
-              Connect Bluesky
-            </button>
-          </div>
-        </div>
-        <ul className="account-list">
-          {accounts?.accounts.map((a) => (
-            <li key={a.id} className="account">
-              {a.avatar_url && <img src={a.avatar_url} alt="" width={28} height={28} />}
-              <span>
-                <strong>{a.platform_label}</strong> <span className="mono muted">{a.handle}</span>
-              </span>
-              {a.status !== "active" && <StatusPill status={a.status === "expired" ? "failed" : a.status} />}
-              <ConfirmButton
-                onConfirm={async () => {
-                  await launchpadApi.disconnect(a.id);
-                  setAccounts(await launchpadApi.accounts());
-                }}
-              >
-                Disconnect
-              </ConfirmButton>
-            </li>
-          ))}
-          {accounts?.accounts.length === 0 && <li className="muted">No accounts yet. Posts for unconnected platforms and Substack Notes arrive as email reminders.</li>}
-        </ul>
-        {accounts && (!accounts.available.x || !accounts.available.linkedin) && (
-          <details className="muted small">
-            <summary>Setting up X or LinkedIn</summary>
-            <p>
-              Create a developer app, then add these redirect URIs and put the client id and secret in .env:
-            </p>
-            <ul className="mono">
-              <li>X: {accounts.redirect_uris.x}</li>
-              <li>LinkedIn: {accounts.redirect_uris.linkedin}</li>
-            </ul>
-          </details>
+      <section className="lp-accounts" aria-label="Connected accounts">
+        {accounts?.accounts.map((a) => (
+          <span key={a.id} className={`lp-chip${a.status !== "active" ? " warn" : ""}`}>
+            {a.avatar_url && <img src={a.avatar_url} alt="" width={18} height={18} />}
+            <strong>{a.platform_label}</strong> <span className="mono muted">{a.handle}</span>
+            {a.status !== "active" && <StatusPill status={a.status === "expired" ? "failed" : a.status} />}
+            <ConfirmButton
+              className="link-btn small"
+              onConfirm={async () => {
+                await launchpadApi.disconnect(a.id);
+                setAccounts(await launchpadApi.accounts());
+              }}
+            >
+              ×
+            </ConfirmButton>
+          </span>
+        ))}
+        {accounts?.available.x && !accounts.accounts.some((a) => a.platform === "x") && (
+          <button className="lp-chip add" onClick={() => connect("x")}>
+            + X
+          </button>
         )}
+        {accounts?.available.linkedin && !accounts.accounts.some((a) => a.platform === "linkedin") && (
+          <button className="lp-chip add" onClick={() => connect("linkedin")}>
+            + LinkedIn
+          </button>
+        )}
+        {!accounts?.accounts.some((a) => a.platform === "bluesky") && (
+          <button className="lp-chip add" onClick={() => setBluesky(true)}>
+            + Bluesky
+          </button>
+        )}
+        {accounts && accounts.accounts.length === 0 && <span className="muted small">Not connected? Posts arrive as email reminders instead.</span>}
       </section>
 
+      <div className="lp-layout">
       <section className="card">
         <div className="row between cal-head">
           <div className="row">
@@ -352,6 +340,14 @@ export default function Launchpad() {
           <Tabs tabs={[{ id: "month", label: "Month" }, { id: "agenda", label: "Agenda" }]} value={view} onChange={setView} />
         </div>
         {!items && <Loading />}
+        {items && items.length === 0 && (
+          <div className="lp-empty">
+            <p className="muted">Nothing scheduled this month.</p>
+            <Link className="btn btn-small" to="/app/launch-kit">
+              Schedule your latest Launch Kit
+            </Link>
+          </div>
+        )}
         {items && view === "month" && (
           <div className="cal-grid">
             {WEEKDAYS.map((d) => (
@@ -395,6 +391,12 @@ export default function Launchpad() {
         )}
         {items && <p className="mono muted small">{upcoming.length} upcoming in view</p>}
       </section>
+
+        <aside className="card stack lp-ideas" id="ideas">
+          <h2>Ideas worth resharing</h2>
+          <ResurfaceIdeas onScheduled={() => load()} />
+        </aside>
+      </div>
 
       {open && <ItemModal item={open} accounts={accounts} onClose={() => setOpen(null)} onChanged={changed} />}
       {composing && <ScheduleModal platform="x" posts={[""]} onClose={() => setComposing(false)} onScheduled={() => load()} />}

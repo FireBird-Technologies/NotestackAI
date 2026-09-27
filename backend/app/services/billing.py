@@ -112,7 +112,7 @@ def build_nudges(db: Session, workspace: Workspace, plan: Plan, meters: list[dic
                           "Open Launchpad", "/app/launchpad", priority=35))
     out.append(_nudge(f"act-resurface-{month}", "action", "Old posts, new orbit",
                       "Resurfacing finds evergreen posts worth sharing again this month.", "Find evergreen posts",
-                      "/app/resurface", priority=20))
+                      "/app/launchpad#ideas", priority=20))
     return sorted(out, key=lambda n: -n["priority"])
 
 

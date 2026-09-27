@@ -72,6 +72,29 @@ def create_notebook(body: NotebookIn, ctx: Ctx = Depends(get_ctx)):
     return {"id": str(nb.id), "title": nb.title, "added": added}
 
 
+ARCHIVE_TITLE = "All posts"
+
+
+def ensure_archive_notebook(ctx: Ctx) -> Notebook:
+    """The workspace's "All posts" notebook, topped up with every indexed post (locked posts are skipped)."""
+    nb = ctx.db.scalar(select(Notebook).where(Notebook.workspace_id == ctx.workspace.id, Notebook.is_archive.is_(True)))
+    if not nb:
+        nb = Notebook(workspace_id=ctx.workspace.id, title=ARCHIVE_TITLE, is_archive=True,
+                      description="Every indexed post in your archive, kept up to date.")
+        ctx.db.add(nb)
+        ctx.db.flush()
+    ids = list(ctx.db.scalars(select(Document.id).where(Document.workspace_id == ctx.workspace.id)))
+    _add_docs(ctx, nb, ids)
+    ctx.db.commit()
+    return nb
+
+
+@router.post("/archive")
+def archive_notebook(ctx: Ctx = Depends(get_ctx)):
+    nb = ensure_archive_notebook(ctx)
+    return {"id": str(nb.id), "title": nb.title}
+
+
 @router.post("/from-topic/{topic_id}")
 def notebook_from_topic(topic_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
     topic = ctx.db.scalar(select(Topic).where(Topic.id == topic_id, Topic.workspace_id == ctx.workspace.id))
@@ -89,7 +112,8 @@ def notebook_from_topic(topic_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
 @router.get("")
 def list_notebooks(ctx: Ctx = Depends(get_ctx)):
     rows = ctx.db.scalars(
-        select(Notebook).where(Notebook.workspace_id == ctx.workspace.id).order_by(Notebook.updated_at.desc())
+        select(Notebook).where(Notebook.workspace_id == ctx.workspace.id)
+        .order_by(Notebook.is_archive.desc(), Notebook.updated_at.desc())
     ).all()
     ids = [n.id for n in rows]
     doc_counts = dict(ctx.db.execute(
@@ -105,7 +129,7 @@ def list_notebooks(ctx: Ctx = Depends(get_ctx)):
     return [
         {"id": str(n.id), "title": n.title, "description": n.description, "summary": n.summary,
          "document_count": doc_counts.get(n.id, 0), "chat_count": chat_counts.get(n.id, 0),
-         "artifact_count": artifact_counts.get(n.id, 0),
+         "artifact_count": artifact_counts.get(n.id, 0), "is_archive": n.is_archive,
          "updated_at": n.updated_at.isoformat() if n.updated_at else None}
         for n in rows
     ]
@@ -114,6 +138,8 @@ def list_notebooks(ctx: Ctx = Depends(get_ctx)):
 @router.get("/{notebook_id}")
 def get_notebook(notebook_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
     nb = _get(ctx, notebook_id)
+    if nb.is_archive:  # posts synced since it was made join on open
+        ensure_archive_notebook(ctx)
     docs = ctx.db.scalars(
         select(Document)
         .join(NotebookDocument, NotebookDocument.document_id == Document.id)
@@ -125,6 +151,7 @@ def get_notebook(notebook_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
         "title": nb.title,
         "description": nb.description,
         "summary": nb.summary,
+        "is_archive": nb.is_archive,
         "documents": [serialize_document(d) for d in docs],
     }
 

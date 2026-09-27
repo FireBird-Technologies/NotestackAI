@@ -56,6 +56,8 @@ export const notebooksApi = {
   get: (id: string) => api<Notebook>(`/api/notebooks/${id}`),
   create: (title: string, document_ids: string[] = [], description?: string) =>
     post<{ id: string; title: string; added: number }>("/api/notebooks", { title, document_ids, description }),
+  /** The "All posts" notebook, created on first use. */
+  archive: () => post<{ id: string; title: string }>("/api/notebooks/archive"),
   fromTopic: (topicId: string) => post<{ id: string; title: string }>(`/api/notebooks/from-topic/${topicId}`),
   update: (id: string, body: { title?: string; description?: string }) => patch(`/api/notebooks/${id}`, body),
   remove: (id: string) => del(`/api/notebooks/${id}`),
@@ -72,6 +74,8 @@ export type GenerateBody = {
   type: ArtifactType;
   notebook_id?: string;
   document_id?: string;
+  /** No notebook or post: use the "All posts" notebook. */
+  archive?: boolean;
   format?: "deep_dive" | "brief" | "debate";
   minutes?: number;
   style?: "short" | "explainer" | "audiogram";

@@ -56,6 +56,8 @@ export type NotebookSummary = {
   document_count: number;
   chat_count: number;
   artifact_count: number;
+  /** The always-present "All posts" notebook. */
+  is_archive: boolean;
   updated_at: string | null;
 };
 
@@ -64,6 +66,7 @@ export type Notebook = {
   title: string;
   description: string | null;
   summary: string | null;
+  is_archive: boolean;
   documents: Doc[];
 };
 

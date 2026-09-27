@@ -63,7 +63,7 @@ function GoogleButton({ onCredential }: { onCredential: (c: string) => void }) {
   }, [onCredential]);
 
   if (!GOOGLE_CLIENT_ID) {
-    return <p className="mono muted auth-hint">Set GOOGLE_CLIENT_ID in .env to enable Google sign in.</p>;
+    return null;
   }
   return <div ref={ref} className="google-btn" />;
 }
@@ -171,9 +171,6 @@ export default function AuthPage() {
             <>
               {providers?.google === "redirect" && <GoogleRedirectButton next={next} />}
               {providers?.google === "popup" && <GoogleButton onCredential={onGoogle} />}
-              {providers && !providers.google && (
-                <p className="mono muted auth-hint">Set GOOGLE_CLIENT_ID in .env to enable Google sign in.</p>
-              )}
               {!providers && <div className="google-btn" />}
               <div className="auth-divider mono">
                 <span>or with email</span>
