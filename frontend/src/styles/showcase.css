@@ -603,7 +603,38 @@
 }
 
 .nebula {
-  cursor: zoom-in;
+  cursor: grab;
+}
+
+.map-svg.dragging,
+.map-svg.dragging .nebula,
+.map-svg.dragging .map-node {
+  cursor: grabbing;
+}
+
+.galaxy-core {
+  pointer-events: none;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: core-breathe 6s ease-in-out infinite;
+}
+
+.galaxy-heart {
+  pointer-events: none;
+  filter: drop-shadow(0 0 4px #ffffff) drop-shadow(0 0 10px #217cff);
+}
+
+@keyframes core-breathe {
+  50% {
+    opacity: 0.75;
+    transform: scale(0.94);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .galaxy-core {
+    animation: none;
+  }
 }
 
 .galaxy-label {

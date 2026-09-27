@@ -59,6 +59,10 @@ def workspace_owns_key(workspace_id: uuid.UUID, key: str) -> bool:
 class Storage:
     def __init__(self, bucket: str | None = None):
         self.bucket = bucket or settings.r2_bucket
+        self.prefix = settings.r2_prefix.strip("/") + "/" if settings.r2_prefix.strip("/") else ""
+
+    def _k(self, key: str) -> str:
+        return f"{self.prefix}{key}"
 
     @cached_property
     def client(self):
@@ -80,18 +84,18 @@ class Storage:
 
     def put_bytes(self, key: str, data: bytes, content_type: str | None = None) -> str:
         content_type = content_type or mimetypes.guess_type(key)[0] or "application/octet-stream"
-        self.client.put_object(Bucket=self.bucket, Key=key, Body=data, ContentType=content_type)
+        self.client.put_object(Bucket=self.bucket, Key=self._k(key), Body=data, ContentType=content_type)
         return key
 
     def put_text(self, key: str, text: str, content_type: str = "text/plain; charset=utf-8") -> str:
         return self.put_bytes(key, text.encode("utf-8"), content_type)
 
     def get_bytes(self, key: str) -> bytes:
-        return self.client.get_object(Bucket=self.bucket, Key=key)["Body"].read()
+        return self.client.get_object(Bucket=self.bucket, Key=self._k(key))["Body"].read()
 
     def head(self, key: str) -> dict | None:
         try:
-            return self.client.head_object(Bucket=self.bucket, Key=key)
+            return self.client.head_object(Bucket=self.bucket, Key=self._k(key))
         except ClientError as exc:
             if exc.response.get("Error", {}).get("Code") in {"404", "NoSuchKey", "NotFound"}:
                 return None
@@ -101,12 +105,12 @@ class Storage:
         return self.head(key) is not None
 
     def delete(self, key: str) -> None:
-        self.client.delete_object(Bucket=self.bucket, Key=key)
+        self.client.delete_object(Bucket=self.bucket, Key=self._k(key))
 
     def delete_prefix(self, prefix: str) -> int:
         deleted = 0
         paginator = self.client.get_paginator("list_objects_v2")
-        for page in paginator.paginate(Bucket=self.bucket, Prefix=prefix):
+        for page in paginator.paginate(Bucket=self.bucket, Prefix=self._k(prefix)):
             objects = [{"Key": o["Key"]} for o in page.get("Contents", [])]
             if objects:
                 self.client.delete_objects(Bucket=self.bucket, Delete={"Objects": objects})
@@ -114,7 +118,7 @@ class Storage:
         return deleted
 
     def presign_get(self, key: str, ttl: int | None = None, download_name: str | None = None) -> str:
-        params = {"Bucket": self.bucket, "Key": key}
+        params = {"Bucket": self.bucket, "Key": self._k(key)}
         if download_name:
             params["ResponseContentDisposition"] = f'attachment; filename="{safe_filename(download_name)}"'
         return self.client.generate_presigned_url(
@@ -124,14 +128,14 @@ class Storage:
     def presign_put(self, key: str, content_type: str, ttl: int | None = None) -> str:
         return self.client.generate_presigned_url(
             "put_object",
-            Params={"Bucket": self.bucket, "Key": key, "ContentType": content_type},
+            Params={"Bucket": self.bucket, "Key": self._k(key), "ContentType": content_type},
             ExpiresIn=ttl or settings.r2_presign_ttl_seconds,
         )
 
     def public_url(self, key: str) -> str | None:
         if not settings.r2_public_base_url:
             return None
-        return f"{settings.r2_public_base_url.rstrip('/')}/{key}"
+        return f"{settings.r2_public_base_url.rstrip('/')}/{self._k(key)}"
 
 
 def _local_sig(method: str, key: str, exp: int) -> str:

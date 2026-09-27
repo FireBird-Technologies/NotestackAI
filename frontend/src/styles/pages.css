@@ -842,7 +842,8 @@ select.input option {
 }
 
 .map-node {
-  cursor: pointer;
+  cursor: grab;
+  touch-action: none;
   transition: opacity 0.2s;
 }
 
@@ -1304,7 +1305,7 @@ select.input option {
   }
 
   .shell.collapsed {
-    grid-template-columns: 72px 1fr;
+    grid-template-columns: 64px 1fr;
   }
 
   .shell.collapsed .sidebar {
@@ -1314,6 +1315,28 @@ select.input option {
 
   .shell.collapsed .sidebar-top {
     flex-direction: column;
+  }
+
+  /* Collapsed: only the logo, which expands the sidebar again. */
+  .shell.collapsed .sidebar-toggle,
+  .shell.collapsed .sidebar nav,
+  .shell.collapsed .sidebar-user {
+    display: none;
+  }
+
+  .sidebar-brand-btn {
+    padding: 4px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    cursor: pointer;
+    transition: box-shadow 0.2s ease;
+  }
+
+  .sidebar-brand-btn:hover,
+  .sidebar-brand-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 1px var(--blue-60), 0 0 16px var(--blue-35);
   }
 
   .shell.collapsed .side-link {

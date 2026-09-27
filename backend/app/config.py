@@ -58,6 +58,8 @@ class Settings(BaseSettings):
     r2_bucket: str = "notestack-assets"
     r2_endpoint_url: str = ""  # override for MinIO locally; defaults to the R2 account endpoint
     r2_public_base_url: str = ""  # optional custom domain for public objects
+    # Folder inside the bucket, so Notestack can share a bucket with other apps. Empty = bucket root.
+    r2_prefix: str = ""
     r2_presign_ttl_seconds: int = 3600
     max_upload_bytes: int = 200 * 1024 * 1024
 

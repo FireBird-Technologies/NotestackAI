@@ -66,9 +66,15 @@ export default function AppShell() {
       <SkyCanvas intensity={0.35} />
       <aside className="sidebar">
         <div className="sidebar-top">
-          <NavLink to="/" className="sidebar-brand">
-            <Logo size={28} />
-          </NavLink>
+          {collapsed ? (
+            <button type="button" className="sidebar-brand sidebar-brand-btn" onClick={toggle} aria-label="Expand sidebar" title="Expand sidebar">
+              <Logo size={28} />
+            </button>
+          ) : (
+            <NavLink to="/" className="sidebar-brand">
+              <Logo size={28} />
+            </NavLink>
+          )}
           <button
             type="button"
             className="icon-btn sidebar-toggle"

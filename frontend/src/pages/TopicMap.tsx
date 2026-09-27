@@ -26,6 +26,26 @@ type View = { x: number; y: number; w: number; h: number };
 type ColorMode = "recency" | "momentum";
 
 const HOME: View = { x: 0, y: 0, w: W, h: H };
+const PINS_KEY = "notestack.topicmap.pins";
+
+type Pins = Record<string, { x: number; y: number }>;
+
+function readPins(ids: Set<string>): Pins {
+  try {
+    const all = JSON.parse(localStorage.getItem(PINS_KEY) || "{}") as Pins;
+    return Object.fromEntries(Object.entries(all).filter(([id]) => ids.has(id)));
+  } catch {
+    return {};
+  }
+}
+
+function writePins(pins: Pins) {
+  try {
+    localStorage.setItem(PINS_KEY, JSON.stringify(pins));
+  } catch {
+    // Storage blocked: positions just last for this visit.
+  }
+}
 const MIN_W = W / 8;
 const MAX_W = W * 1.6;
 
@@ -204,6 +224,7 @@ function useZoomPan(svgRef: RefObject<SVGSVGElement>) {
 
   return {
     view,
+    toSvg,
     zoomAt,
     pan,
     reset,
@@ -284,7 +305,10 @@ export default function TopicMap() {
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
   const svgRef = useRef<SVGSVGElement>(null);
-  const { view, zoomAt, pan, reset, focusOn, handlers } = useZoomPan(svgRef);
+  const { view, toSvg, zoomAt, pan, reset, focusOn, handlers } = useZoomPan(svgRef);
+  const [pins, setPins] = useState<Pins>({});
+  const [dragging, setDragging] = useState(false);
+  const justDragged = useRef(false);
 
   const load = () => topicsApi.map().then(setData, () => setError("Could not load the topic map."));
   useEffect(() => {
@@ -295,6 +319,17 @@ export default function TopicMap() {
   });
 
   const positions = useMemo(() => (data?.nodes.length ? layout(data) : new Map<string, P>()), [data]);
+  const placed = useMemo(() => {
+    const m = new Map<string, P>();
+    positions.forEach((p, id) => m.set(id, pins[id] ? { ...p, ...pins[id] } : p));
+    return m;
+  }, [positions, pins]);
+  useEffect(() => {
+    if (data) setPins(readPins(new Set(data.nodes.map((n) => n.id))));
+  }, [data]);
+  useEffect(() => {
+    if (!dragging && data) writePins(pins);
+  }, [pins, dragging, data]);
   const byId = useMemo(() => new Map((data?.nodes ?? []).map((n) => [n.id, n])), [data]);
   const neighbors = useMemo(() => {
     const m = new Map<string, Set<string>>();
@@ -312,14 +347,14 @@ export default function TopicMap() {
     return data.galaxies
       .filter((g) => g.size > 1)
       .map((g) => {
-        const pts = g.topic_ids.map((id) => positions.get(id)).filter(Boolean) as P[];
+        const pts = g.topic_ids.map((id) => placed.get(id)).filter(Boolean) as P[];
         const cx = pts.reduce((s, p) => s + p.x, 0) / Math.max(pts.length, 1);
         const cy = pts.reduce((s, p) => s + p.y, 0) / Math.max(pts.length, 1);
         const rx = Math.max(90, ...pts.map((p) => Math.abs(p.x - cx) + p.r)) + 50;
         const ry = Math.max(80, ...pts.map((p) => Math.abs(p.y - cy) + p.r)) + 45;
         return { ...g, cx, cy, rx, ry };
       });
-  }, [data, positions]);
+  }, [data, placed]);
 
   const brightest = useMemo(
     () => new Set((data?.nodes ?? []).slice().sort((a, b) => b.post_count - a.post_count).slice(0, 3).map((n) => n.id)),
@@ -342,6 +377,7 @@ export default function TopicMap() {
   const rebuild = async (full: boolean) => {
     setError(null);
     try {
+      if (full) setPins({});
       setJob(await topicsApi.rebuild(full));
     } catch (e) {
       setError(errorMessage(e));
@@ -351,11 +387,59 @@ export default function TopicMap() {
   const open = async (id: string, center = false) => {
     playClick();
     if (center) {
-      const p = positions.get(id);
+      const p = placed.get(id);
       if (p) focusOn(p.x, p.y);
     }
     setSelected(await topicsApi.get(id));
   };
+
+  const startDrag = (e: ReactPointerEvent, ids: string[]) => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    justDragged.current = false;
+    const v = view;
+    const origin = toSvg(e.clientX, e.clientY, v);
+    const start = Object.fromEntries(ids.map((id) => [id, placed.get(id)!]).filter(([, p]) => p)) as Record<string, P>;
+    let moved = false;
+    const move = (ev: PointerEvent) => {
+      const p = toSvg(ev.clientX, ev.clientY, v);
+      const dx = p.x - origin.x;
+      const dy = p.y - origin.y;
+      if (!moved) {
+        if (Math.hypot(dx, dy) < 4 * (v.w / W)) return;
+        moved = true;
+        setDragging(true);
+      }
+      setPins((prev) => {
+        const next = { ...prev };
+        for (const [id, s] of Object.entries(start)) next[id] = { x: s.x + dx, y: s.y + dy };
+        return next;
+      });
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+      if (moved) {
+        justDragged.current = true;
+        setDragging(false);
+      }
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+  };
+  /** A click that ends a drag is not a click. */
+  const wasDrag = () => {
+    const d = justDragged.current;
+    justDragged.current = false;
+    return d;
+  };
+  const resetPins = () => {
+    playClick();
+    setPins({});
+  };
+  const hasPins = Object.keys(pins).length > 0;
 
   const flyToGalaxy = (gid: number) => {
     const n = nebulae.find((g) => g.id === gid);
@@ -417,6 +501,11 @@ export default function TopicMap() {
               <button className="icon-btn mono" onClick={reset} aria-label="Reset view" title="Reset view">
                 1:1
               </button>
+              {hasPins && (
+                <button className="icon-btn mono" onClick={resetPins} aria-label="Reset star positions" title="Reset star positions">
+                  ↺
+                </button>
+              )}
             </div>
 
             <div className="map-hud mono" aria-live="polite">
@@ -430,7 +519,7 @@ export default function TopicMap() {
                 </>
               ) : (
                 <span className="muted">
-                  {data.nodes.length} stars · {galaxyCount} galaxies · scroll to zoom, drag to pan
+                  {data.nodes.length} stars · {galaxyCount} galaxies · scroll to zoom, drag space to pan, drag stars or galaxies to move them
                 </span>
               )}
             </div>
@@ -464,7 +553,7 @@ export default function TopicMap() {
               role="img"
               aria-label="Topic constellation. Plus and minus zoom, arrow keys pan, 0 resets."
               tabIndex={0}
-              className="map-svg"
+              className={`map-svg${dragging ? " dragging" : ""}`}
               style={{ aspectRatio: `${W} / ${H}` }}
               {...handlers}
               onKeyDown={(e) => {
@@ -491,6 +580,13 @@ export default function TopicMap() {
                   <stop offset="60%" stopColor="#217cff" stopOpacity="0.06" />
                   <stop offset="100%" stopColor="#217cff" stopOpacity="0" />
                 </radialGradient>
+                <radialGradient id="galaxy-core" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stopColor="#ffffff" stopOpacity="0.7" />
+                  <stop offset="12%" stopColor="#ffffff" stopOpacity="0.32" />
+                  <stop offset="40%" stopColor="#ffffff" stopOpacity="0.08" />
+                  <stop offset="70%" stopColor="#217cff" stopOpacity="0.05" />
+                  <stop offset="100%" stopColor="#217cff" stopOpacity="0" />
+                </radialGradient>
                 <linearGradient id="comet" x1="0" y1="0" x2="1" y2="0">
                   <stop offset="0%" stopColor="#ffffff" stopOpacity="0.85" />
                   <stop offset="100%" stopColor="#217cff" stopOpacity="0" />
@@ -500,8 +596,15 @@ export default function TopicMap() {
               <DeepField />
 
               {nebulae.map((g) => (
-                <g key={g.id} className="nebula" onClick={() => flyToGalaxy(g.id)}>
+                <g
+                  key={g.id}
+                  className="nebula"
+                  onPointerDown={(e) => startDrag(e, g.topic_ids)}
+                  onClick={() => !wasDrag() && flyToGalaxy(g.id)}
+                >
                   <ellipse cx={g.cx} cy={g.cy} rx={g.rx} ry={g.ry} fill="url(#nebula)" />
+                  <circle cx={g.cx} cy={g.cy} r={Math.min(g.rx, g.ry) * 0.75} fill="url(#galaxy-core)" className="galaxy-core" />
+                  <circle cx={g.cx} cy={g.cy} r={2.4 * scale} fill="#ffffff" className="galaxy-heart" />
                   <text
                     x={g.cx}
                     y={g.cy - g.ry + 18 * scale}
@@ -515,8 +618,8 @@ export default function TopicMap() {
               ))}
 
               {data.edges.map((e) => {
-                const a = positions.get(e.source);
-                const b = positions.get(e.target);
+                const a = placed.get(e.source);
+                const b = placed.get(e.target);
                 if (!a || !b) return null;
                 const lit = focus && (e.source === focus || e.target === focus);
                 const strength = e.weight / maxEdge;
@@ -537,7 +640,7 @@ export default function TopicMap() {
               })}
 
               {data.nodes.map((n) => {
-                const p = positions.get(n.id)!;
+                const p = placed.get(n.id)!;
                 const dim = focus && focus !== n.id && !neighbors.get(focus)?.has(n.id);
                 const active = selected?.id === n.id;
                 const color = starColor(n);
@@ -552,7 +655,8 @@ export default function TopicMap() {
                     opacity={dim ? 0.2 : 1}
                     onMouseEnter={() => setHover(n.id)}
                     onMouseLeave={() => setHover(null)}
-                    onClick={() => open(n.id)}
+                    onPointerDown={(e) => startDrag(e, [n.id])}
+                    onClick={() => !wasDrag() && open(n.id)}
                     onDoubleClick={() => open(n.id, true)}
                     tabIndex={0}
                     role="button"

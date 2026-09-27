@@ -8,6 +8,9 @@ os.environ["CORPUS_CACHE_DIR"] = tempfile.mkdtemp(prefix="notestack-corpus-")
 os.environ["RUN_WORKER_IN_API"] = "false"
 os.environ["LLM_API_KEY"] = ""
 os.environ["ELEVENLABS_API_KEY"] = ""
+os.environ["FIRECRAWL_API_KEY"] = ""
+os.environ["R2_PREFIX"] = ""
+os.environ["TYPESAFE_API_KEY"] = ""
 os.environ.setdefault("EMAIL_PROVIDER", "console")
 os.environ.setdefault("JWT_SECRET", "test-secret-that-is-at-least-32-bytes-long")
 os.environ.setdefault("BILLING_ENABLED", "false")
