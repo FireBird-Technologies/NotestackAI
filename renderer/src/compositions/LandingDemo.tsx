@@ -1,6 +1,8 @@
 import type { CSSProperties, ReactNode } from "react";
-import { AbsoluteFill, Audio as SoundTrack, Easing, Img, interpolate, random, Sequence, spring, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, Audio as SoundTrack, Easing, interpolate, random, Sequence, spring, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
 import { theme } from "../theme";
+import { DEMO_VO_SECONDS } from "./demoVo";
+import { Lockup } from "./Lockup";
 
 /** Landing page product demo: a trip through the Notestack galaxy. 1920x1080, 30 fps, ~32 s.
  * Scenes: warp in, paste URL, posts enter orbit, cited research, audio overview, Launch Kit,
@@ -9,24 +11,25 @@ import { theme } from "../theme";
 export const DEMO_FPS = 30;
 const S = (seconds: number) => Math.round(seconds * DEMO_FPS);
 
-// Scene lengths fit the narration (public/demo-vo/*.mp3, voiced by "Nora Vale, Mission Control"):
-// each line starts `vo` seconds into its scene and ends with room to breathe before the crossfade.
-const SCENES = [
+// Narration (public/demo-vo/*.mp3, voiced by "Nora Vale, Mission Control"): each line starts `vo`
+// seconds into its scene. Scenes keep their minimum length for the animation and stretch when a line
+// needs more room, so it always ends with a breath before the next scene's line.
+const BASE_SCENES = [
   { id: "warp", len: 5.2, vo: 0.6 },
   { id: "paste", len: 9.4, vo: 0.4 },
   { id: "orbit", len: 7.6, vo: 0.4 },
   { id: "research", len: 5.6, vo: 0.4 },
-  { id: "audio", len: 5.8, vo: 0.4 },
+  { id: "audio", len: 5.1, vo: 0.4 },
   { id: "launchkit", len: 7.8, vo: 0.4 },
   { id: "launchpad", len: 4.6, vo: 0.4 },
   { id: "outro", len: 4.2, vo: 0.5 },
 ] as const;
 const XFADE = 0.5; // seconds of overlap between scenes
+const BREATH = 0.8; // gap between the end of one line and the next scene's line (includes the crossfade)
 
-// Narration clip lengths (public/demo-vo/durations.json) so the music can duck under the voice.
-const VO_SECONDS: Record<(typeof SCENES)[number]["id"], number> = {
-  warp: 3.69, paste: 8.34, orbit: 5.96, research: 4.39, audio: 4.57, launchkit: 5.83, launchpad: 3.14, outro: 2.56,
-};
+// Narration clip lengths, written by scripts/make_demo_vo.py; the music ducks under them.
+const VO_SECONDS: Record<(typeof BASE_SCENES)[number]["id"], number> = DEMO_VO_SECONDS;
+const SCENES = BASE_SCENES.map((s) => ({ ...s, len: Math.max(s.len, s.vo + VO_SECONDS[s.id] + BREATH) }));
 
 /** Frame ranges where the narrator is speaking, in composition time. */
 const VO_WINDOWS: [number, number][] = (() => {
@@ -192,9 +195,9 @@ function Warp() {
           <br />
           <span style={{ color: theme.white, textShadow: `0 0 30px ${BLUE}, 0 0 80px ${BLUE}` }}>in orbit.</span>
         </h1>
-        <p style={{ marginTop: 40, fontFamily: theme.mono, fontSize: 30, letterSpacing: 4, color: "rgba(255,255,255,0.75)", opacity: sub }}>
-          NOTESTACK
-        </p>
+        <div style={{ marginTop: 44, opacity: sub }}>
+          <Lockup size={60} glow={0.7} />
+        </div>
       </AbsoluteFill>
       <Flare at={50} duration={30} y={46} />
     </AbsoluteFill>
@@ -214,7 +217,7 @@ function Paste() {
   return (
     <AbsoluteFill>
       <WarpField speed={1.2} />
-      <Caption eyebrow="Step 01" title="Point it at your writing" />
+      <Caption eyebrow="Step 01" title="Feel the pull of something new" />
       <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", flexDirection: "column", gap: 44, paddingTop: 120 }}>
         <div style={{ ...panel, display: "flex", alignItems: "center", gap: 18, padding: 14, width: 1100, borderRadius: 999 }}>
           <div style={{ flex: 1, fontFamily: theme.body, fontSize: 40, color: url ? theme.white : "rgba(255,255,255,0.4)", paddingLeft: 30 }}>
@@ -306,7 +309,7 @@ function Orbit() {
   return (
     <AbsoluteFill>
       <WarpField speed={0.8} />
-      <Caption eyebrow="Step 02" title="Watch your posts come into orbit" />
+      <Caption eyebrow="Step 02" title="Shimmering. Impossible to look away." />
       <svg width={width} height={height} style={{ position: "absolute" }}>
         <defs>
           <radialGradient id="planet" cx="40%" cy="35%" r="70%">
@@ -373,7 +376,7 @@ function Research() {
   return (
     <AbsoluteFill>
       <WarpField speed={0.6} count={260} />
-      <Caption eyebrow="Research" title="Ask your archive. Every answer cites you." />
+      <Caption eyebrow="Research" title="A spark. Suddenly, wide awake." />
       <div style={{ position: "absolute", left: 140, right: 140, top: 360, display: "grid", gridTemplateColumns: "1.25fr 1fr", gap: 40 }}>
         <div style={{ ...panel, padding: 36, display: "grid", gap: 22, alignContent: "start" }}>
           <div style={{ justifySelf: "end", padding: "14px 22px", borderRadius: "18px 18px 4px 18px", background: `${BLUE}22`, border: `1px solid ${BLUE}66`, fontFamily: theme.body, fontSize: 30, color: theme.white }}>
@@ -426,7 +429,7 @@ function Audio() {
   return (
     <AbsoluteFill>
       <WarpField speed={0.7} count={260} />
-      <Caption eyebrow="Audio overview" title="Two hosts. Your ideas. Grounded." />
+      <Caption eyebrow="Audio overview" title="Lean back. Let it wash over you." />
       <div style={{ position: "absolute", left: 140, right: 140, top: 380, display: "grid", gap: 40 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, height: 220 }}>
           {Array.from({ length: 64 }).map((_, i) => {
@@ -466,7 +469,7 @@ function LaunchKit() {
   return (
     <AbsoluteFill>
       <WarpField speed={0.9} count={260} />
-      <Caption eyebrow="Launch Kit" title="One post. Every platform. Your voice." />
+      <Caption eyebrow="Launch Kit" title="Your pulse quickens." />
       <div style={{ position: "absolute", left: 140, right: 140, top: 380, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 28 }}>
         {cards.map((c, i) => {
           const s = spring({ frame: frame - 10 - i * 7, fps, config: { damping: 14 } });
@@ -498,7 +501,7 @@ function Launchpad() {
   return (
     <AbsoluteFill>
       <WarpField speed={0.8} count={260} />
-      <Caption eyebrow="Launchpad" title="Schedule it. Watch it lift off." />
+      <Caption eyebrow="Launchpad" title="Three, two, one. Flying." />
       <div style={{ position: "absolute", left: 140, top: 360, display: "grid", gridTemplateColumns: "repeat(7, 120px)", gap: 12 }}>
         {Array.from({ length: 28 }).map((_, i) => {
           const on = lit.includes(i) && frame > 8 + lit.indexOf(i) * 6;
@@ -564,8 +567,9 @@ function Outro() {
       <WarpField speed={interpolate(frame, [0, 60, 114], [0.5, 2, 12])} streak={interpolate(frame, [70, 114], [0, 1], { extrapolateLeft: "clamp" })} />
       <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", textAlign: "center", gap: 30 }}>
         {/* The navbar mark (frontend/public/logo.svg, copied to public/logo.svg). */}
-        <Img src={staticFile("logo.svg")} width={128} height={128} style={{ borderRadius: 30, opacity: s, transform: `scale(${s})`, boxShadow: `0 0 80px ${BLUE}` }} />
-        <h1 style={{ margin: 0, fontFamily: theme.display, fontSize: 120, color: theme.white, opacity: s, textShadow: `0 0 40px ${BLUE}` }}>Notestack</h1>
+        <div style={{ opacity: Math.min(1, s), transform: `scale(${0.85 + 0.15 * s})` }}>
+          <Lockup size={150} />
+        </div>
         <p style={{ margin: 0, fontFamily: theme.body, fontSize: 40, color: "rgba(255,255,255,0.8)", opacity: cta }}>Your knowledge, in orbit.</p>
         <p style={{ margin: 0, padding: "18px 40px", borderRadius: 999, background: BLUE, color: theme.white, fontFamily: theme.body, fontWeight: 600, fontSize: 32, opacity: cta, boxShadow: `0 0 40px ${BLUE}` }}>
           Start free at notestack.ai

@@ -259,12 +259,16 @@ function Planet({ cx, cy, r }: { cx: number; cy: number; r: number }) {
           <stop offset="90%" stopColor={BLUE} stopOpacity={0.55} />
           <stop offset="100%" stopColor={BLUE} stopOpacity={0} />
         </radialGradient>
+        <radialGradient id="planet-halo" cx="50%" cy="50%" r="50%">
+          <stop offset="30%" stopColor={BLUE} stopOpacity={0.3} />
+          <stop offset="100%" stopColor={BLUE} stopOpacity={0} />
+        </radialGradient>
         <clipPath id="planet-clip">
           <circle r={r} />
         </clipPath>
       </defs>
       <g transform={`translate(${cx} ${cy})`}>
-        <circle r={r * 2.2} fill={BLUE} opacity={0.12 * shimmer} />
+        <circle r={r * 2.4} fill="url(#planet-halo)" opacity={shimmer} />
         <g transform={`rotate(${tilt})`}>{ring("back")}</g>
         <circle r={r} fill="url(#planet-body)" />
         {/* Soft cloud bands, clipped to the sphere, drifting slowly. */}

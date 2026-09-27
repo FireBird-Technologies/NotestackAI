@@ -2,7 +2,7 @@
 
 The screens show the product; the voice never explains it, it only says how it feels: exploring,
 excited, mesmerized. Also writes src/compositions/demoVo.ts; scenes stretch to fit their lines.
-Then run make_demo_music.py, which reads the same file to size the score.
+make_demo_music.py writes a 47.5 s score; raise its TOTAL and rerun it if the demo grows past that.
 
     cd backend && PYTHONPATH=. .venv/Scripts/python ../renderer/scripts/make_demo_vo.py
 """
