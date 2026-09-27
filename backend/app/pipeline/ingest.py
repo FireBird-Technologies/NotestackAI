@@ -418,8 +418,15 @@ def _plain_links(url: str) -> list[str]:
     return links
 
 
-def crawl_site(url: str, limit: int, on_found=None, on_post=None) -> list[FeedEntry]:
-    """Find the posts on a site with no feed and read each one."""
+def _title_from_url(u: str) -> str:
+    slug = urlparse(u).path.rstrip("/").rsplit("/", 1)[-1]
+    slug = re.sub(r"\.[a-z0-9]+$", "", slug)
+    return slug.replace("-", " ").replace("_", " ").strip().capitalize() or urlparse(u).netloc
+
+
+def crawl_site(url: str, limit: int, on_found=None, on_post=None, read_limit: int | None = None) -> list[FeedEntry]:
+    """Find the posts on a site with no feed and read each one. Past read_limit, pages are only listed (title from the
+    URL, no html): they show the writer what the rest of their archive holds without paying to read it."""
     if firecrawl.enabled():
         links = firecrawl.map_site(url, max(limit * 4, 100))
     else:
@@ -437,20 +444,24 @@ def crawl_site(url: str, limit: int, on_found=None, on_post=None) -> list[FeedEn
         except (FeedNotFound, httpx.HTTPError, firecrawl.FirecrawlError):
             return None
 
+    to_read = urls if read_limit is None else urls[:read_limit]
     entries: list[FeedEntry] = []
     with ThreadPoolExecutor(max_workers=4) as pool:
-        for i, entry in enumerate(pool.map(read, urls)):
+        for i, entry in enumerate(pool.map(read, to_read)):
             if entry:
                 entries.append(entry)
             if on_post:
-                on_post(i + 1, len(urls))
+                on_post(i + 1, len(to_read))
+    entries += [FeedEntry(title=_title_from_url(u), url=u, published_at=None, html="") for u in urls[len(to_read):]]
     if not entries:
         raise FeedNotFound(f"We found {len(urls)} pages on {urlparse(url).netloc} but none had article text.")
     return entries
 
 
-def fetch_substack_archive(site: str, known_urls: set[str], limit: int, on_page=None) -> list[FeedEntry]:
-    """Posts beyond the ~20 the RSS feed carries, through Substack's public archive API."""
+def fetch_substack_archive(site: str, known_urls: set[str], limit: int, on_page=None,
+                           body_budget: int | None = None) -> list[FeedEntry]:
+    """Posts beyond the ~20 the RSS feed carries, through Substack's public archive API. Only the first body_budget
+    posts get their body fetched; the rest are listed from the archive metadata alone (title, date, link)."""
     out: list[FeedEntry] = []
     offset = 0
     with httpx.Client(follow_redirects=True, timeout=30, headers=UA) as client:
@@ -468,6 +479,10 @@ def fetch_substack_archive(site: str, known_urls: set[str], limit: int, on_page=
                     continue
                 if len(out) + len(known_urls) >= limit:
                     break
+                if body_budget is not None and len(out) >= body_budget:
+                    out.append(FeedEntry(title=item.get("title") or "Untitled", url=url,
+                                         published_at=_parse_date(item.get("post_date")), html=""))
+                    continue
                 post = client.get(f"{site}/api/v1/posts/{item['slug']}")
                 if post.status_code >= 400:
                     continue
@@ -575,9 +590,9 @@ def store_entries(
     return indexed, skipped, changed
 
 
-# A sync reads up to SCAN_CAP posts (or the plan's own limit, if higher). Posts past the plan's indexed_posts are
-# stored as locked: listed with their title and text, but with no corpus file, so chat, notebooks and generation
-# never see them. Upgrading re-syncs and unlocks them without asking the writer to reconnect anything.
+# A sync discovers up to SCAN_CAP posts (or the plan's own limit, if higher) but only indexes the plan's
+# indexed_posts. The rest are listed, not indexed: title, date and link only, no text and no corpus file. They exist
+# to show the writer how much of their archive is waiting behind an upgrade. Upgrading re-syncs and indexes them.
 SCAN_CAP = 200
 
 
@@ -588,14 +603,11 @@ def _newest_first(entries: list[FeedEntry]) -> list[FeedEntry]:
 
 
 def store_locked(db: Session, source: Source, entries: list[FeedEntry]) -> tuple[int, set[str]]:
-    """Index posts beyond the plan limit without making them available. Returns (count, corpus paths to remove):
-    a post that was available before (a newer post pushed it out, or the plan went down) loses its corpus file."""
+    """List posts beyond the plan limit without indexing them: title, date and link only. Returns (count, corpus paths
+    to remove): a post that was indexed before (a newer post pushed it out, or the plan went down) loses its file."""
     locked = 0
     remove: set[str] = set()
     for entry in entries:
-        sections = entry.sections if entry.sections is not None else html_to_sections(entry.html)
-        if not sections:
-            continue
         doc = db.scalar(select(Document).where(Document.source_id == source.id, Document.url == entry.url))
         if not doc:
             doc = Document(id=uuid.uuid4(), workspace_id=source.workspace_id, source_id=source.id, url=entry.url)
@@ -605,14 +617,9 @@ def store_locked(db: Session, source: Source, entries: list[FeedEntry]) -> tuple
             doc.path = None
         doc.title = entry.title
         doc.published_at = entry.published_at
-        doc.content_hash = None  # forces a full store (corpus file, raw HTML) once the post unlocks
-        doc.clean_text = "\n\n".join(f"## {h}\n{t}" if h else t for h, t in sections)
-        doc.metadata_json = {
-            **(doc.metadata_json or {}),
-            "headings": [h for h, _ in sections if h],
-            "words": len(doc.clean_text.split()),
-            "locked": True,
-        }
+        doc.content_hash = None  # indexed from scratch once the plan allows it
+        doc.clean_text = ""
+        doc.metadata_json = {"locked": True}
         locked += 1
     db.commit()
     return locked, remove
@@ -630,6 +637,7 @@ def ingest_source(db: Session, source: Source, job: Job, max_posts: int) -> dict
             on_found=lambda n: update_job(db, job, progress=0.05, message=f"Found {n} pages, reading them"),
             on_post=lambda done, total: update_job(db, job, progress=0.05 + 0.05 * done / total,
                                                    message=f"Read {done} of {total} pages"),
+            read_limit=max_posts,
         )
         title = None
     else:
@@ -642,6 +650,7 @@ def ingest_source(db: Session, source: Source, job: Job, max_posts: int) -> dict
             entries += fetch_substack_archive(
                 site, {e.url for e in entries}, fetch_limit,
                 on_page=lambda n: update_job(db, job, message=f"Found {len(entries) + n} posts in the archive"),
+                body_budget=max(0, max_posts - len(entries)),
             )
         except (httpx.HTTPError, ValueError):
             log.warning("substack archive fetch failed for %s", site, exc_info=True)
@@ -658,7 +667,7 @@ def ingest_source(db: Session, source: Source, job: Job, max_posts: int) -> dict
     locked = 0
     if beyond:
         update_job(db, job, progress=0.85,
-                   message=f"Indexing {len(beyond)} more posts. Your plan makes the latest {max_posts} available")
+                   message=f"Found {len(beyond)} more posts. Your plan indexes the latest {max_posts}")
         locked, remove = store_locked(db, source, beyond)
         if remove:
             Corpus(source.workspace_id).write_files({INDEX: rebuild_index(db, source.workspace_id)}, remove=remove)

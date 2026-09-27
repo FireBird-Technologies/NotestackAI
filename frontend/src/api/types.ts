@@ -25,6 +25,8 @@ export type Source = {
   sync_error: string | null;
   last_synced_at: string | null;
   document_count: number;
+  /** Indexed but past the plan's post limit: listed, unlocked by upgrading. */
+  locked_count: number;
   is_imports: boolean;
 };
 
@@ -38,9 +40,11 @@ export type Doc = {
   published_at: string | null;
   words: number;
   evergreen_score: number | null;
+  /** Indexed but past the plan's post limit: preview only until the workspace upgrades. */
+  locked: boolean;
 };
 
-export type DocDetail = Doc & { lines: string[] };
+export type DocDetail = Doc & { lines: string[]; preview?: boolean; limit?: number };
 
 export type Page<T> = { total: number; items: T[] };
 

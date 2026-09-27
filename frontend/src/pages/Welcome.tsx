@@ -144,9 +144,34 @@ export default function Welcome() {
 
   const indexingDone = live?.status === "done";
   const indexingFailed = live?.status === "failed";
-  // The ingest job reports when the plan's post cap cut the archive short.
-  const capped = live?.result?.capped === true;
-  const capLimit = Number(live?.result?.limit ?? posts);
+  // Every post is indexed; the ingest job reports how many the plan makes available and how many are locked.
+  const locked = Number(live?.result?.locked ?? 0);
+  const capped = indexingDone && locked > 0;
+  const available = Number(live?.result?.available ?? posts);
+  const found = Number(live?.result?.found ?? posts);
+  const lockedNotice = capped ? (
+    <div className="welcome-cap">
+      <div>
+        <strong>
+          All {found} posts indexed. Your latest {available} are available on the free plan.
+        </strong>
+        <p className="muted small">
+          Upgrade to unlock the other {locked}, so answers, audio and Launch Kits draw on your whole archive. Nothing to
+          reconnect: they unlock the moment you upgrade.
+        </p>
+      </div>
+      <button
+        type="button"
+        className="btn btn-small"
+        onClick={() => {
+          markOnboarded();
+          navigate("/app?upgrade=1", { replace: true });
+        }}
+      >
+        Upgrade to unlock {locked}
+      </button>
+    </div>
+  ) : null;
   const first = (user.name ?? user.email).split(/[ @]/)[0];
 
   const finish = async (chosen: Goal | null) => {
@@ -288,6 +313,7 @@ export default function Welcome() {
             <p className="eyebrow">{source?.title ?? "Your archive"}</p>
             <h1>{indexingFailed ? "That did not land" : "Bringing your posts into orbit"}</h1>
             {live && <JobProgress job={live} />}
+            {lockedNotice}
             {indexingFailed ? (
               <div className="row">
                 <button className="btn btn-primary" onClick={() => setStep("connect")}>
@@ -310,26 +336,9 @@ export default function Welcome() {
 
         {step === "goal" && (
           <section className="card welcome-card">
-            <p className="eyebrow">{indexingDone ? (capped ? `${posts} posts indexed, free plan limit` : `${posts} posts indexed`) : "Still indexing in the background"}</p>
+            <p className="eyebrow">{indexingDone ? (capped ? `${available} of ${found} posts available` : `${posts} posts indexed`) : "Still indexing in the background"}</p>
             <h1>What should we launch first?</h1>
-            {capped && (
-              <div className="welcome-cap">
-                <div>
-                  <strong>Your free plan indexed your newest {capLimit} posts</strong>
-                  <p className="muted small">Your archive has more. Upgrade to bring every post into orbit, so answers, audio and Launch Kits draw on all of it.</p>
-                </div>
-                <button
-                  type="button"
-                  className="btn btn-small"
-                  onClick={() => {
-                    markOnboarded();
-                    navigate("/app?upgrade=1", { replace: true });
-                  }}
-                >
-                  Index everything
-                </button>
-              </div>
-            )}
+            {lockedNotice}
             <div className="goal-grid">
               {GOALS.map((g) => (
                 <button key={g.id} type="button" className={`goal${goal === g.id ? " on" : ""}`} onClick={() => setGoal(g.id)} aria-pressed={goal === g.id}>
@@ -350,26 +359,9 @@ export default function Welcome() {
         {step === "ready" && (
           <section className="card welcome-card">
             <p className="eyebrow">Pre-flight check complete</p>
-            <h1>{indexingDone ? `${posts} posts are in orbit` : "Almost there"}</h1>
+            <h1>{indexingDone ? `${capped ? available : posts} posts are in orbit` : "Almost there"}</h1>
             {!indexingDone && live && <JobProgress job={live} />}
-            {capped && (
-              <div className="welcome-cap">
-                <div>
-                  <strong>Your free plan indexed your newest {capLimit} posts</strong>
-                  <p className="muted small">Your archive has more. Upgrade to bring every post into orbit, so answers, audio and Launch Kits draw on all of it.</p>
-                </div>
-                <button
-                  type="button"
-                  className="btn btn-small"
-                  onClick={() => {
-                    markOnboarded();
-                    navigate("/app?upgrade=1", { replace: true });
-                  }}
-                >
-                  Index everything
-                </button>
-              </div>
-            )}
+            {lockedNotice}
             <p className="muted">
               {goal === "ask" && "We will put your whole archive in a notebook so you can start asking right away."}
               {goal === "audio" && "We will put your archive in a notebook with the audio studio ready."}

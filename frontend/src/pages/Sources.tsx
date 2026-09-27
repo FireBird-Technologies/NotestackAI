@@ -4,6 +4,7 @@ import type { Doc, Job, Source } from "../api/types";
 import { Reader } from "../components/Reader";
 import { ConfirmButton, EmptyState, errorMessage, formatDate, JobProgress, Loading, PageHeader, StatusPill, Tabs } from "../components/ui";
 import { useJobMap } from "../hooks/useJob";
+import { useUpgrade } from "../hooks/useUpgrade";
 
 type AddMode = "feed" | "url" | "file";
 
@@ -86,6 +87,7 @@ export function AddSource({ onAdded }: { onAdded: (source: Source, job: Job) => 
 
 export default function Sources() {
   const [sources, setSources] = useState<Source[] | null>(null);
+  const { openUpgrade } = useUpgrade();
   const [docs, setDocs] = useState<Doc[]>([]);
   const [total, setTotal] = useState(0);
   const [q, setQ] = useState("");
@@ -160,6 +162,7 @@ export default function Sources() {
                   <strong>{s.title ?? s.feed_url}</strong>
                   <span className="mono muted">
                     {s.is_imports ? "imports" : s.platform} · {s.document_count} posts
+                    {s.locked_count > 0 ? ` (${s.document_count - s.locked_count} available, ${s.locked_count} locked)` : ""}
                     {s.last_synced_at ? ` · synced ${formatDate(s.last_synced_at, true)}` : ""}
                   </span>
                 </div>
@@ -171,6 +174,17 @@ export default function Sources() {
                 </a>
               )}
               {job && (active || job.status === "failed") && <JobProgress job={job} compact />}
+              {s.locked_count > 0 && !active && (
+                <div className="welcome-cap locked-cap">
+                  <div>
+                    <strong>{s.locked_count} posts indexed and locked</strong>
+                    <p className="muted small">Your plan makes your latest posts available. Upgrade to unlock the whole archive.</p>
+                  </div>
+                  <button type="button" className="btn btn-small btn-primary" onClick={() => openUpgrade("indexed_posts")}>
+                    Upgrade to unlock
+                  </button>
+                </div>
+              )}
               {s.sync_status === "error" && s.sync_error && !active && <p className="error-text">{s.sync_error}</p>}
               <footer className="row">
                 {!s.is_imports && (
@@ -222,6 +236,11 @@ export default function Sources() {
                 <button className="link-btn doc-title" onClick={() => setReading(d.id)}>
                   {d.title}
                 </button>
+                {d.locked && (
+                  <span className="mono muted small" title="Indexed. Upgrade to use this post">
+                    Locked
+                  </span>
+                )}
                 <span className="mono muted">
                   {d.source_title ?? ""} · {formatDate(d.published_at)} · {d.words} words
                 </span>
