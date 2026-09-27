@@ -569,7 +569,7 @@ function Outro() {
         <h1 style={{ margin: 0, fontFamily: theme.display, fontSize: 120, color: theme.white, opacity: s, textShadow: `0 0 40px ${BLUE}` }}>Notestack</h1>
         <p style={{ margin: 0, fontFamily: theme.body, fontSize: 40, color: "rgba(255,255,255,0.8)", opacity: cta }}>Your knowledge, in orbit.</p>
         <p style={{ margin: 0, padding: "18px 40px", borderRadius: 999, background: BLUE, color: theme.white, fontFamily: theme.body, fontWeight: 600, fontSize: 32, opacity: cta, boxShadow: `0 0 40px ${BLUE}` }}>
-          Free during early access
+          Start free at notestack.ai
         </p>
       </AbsoluteFill>
       <Flare at={20} duration={34} y={42} />

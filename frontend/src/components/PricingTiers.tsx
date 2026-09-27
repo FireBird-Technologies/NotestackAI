@@ -105,12 +105,6 @@ export default function PricingTiers() {
   return (
     <div className="pricing">
       <div className="pricing-top">
-        {!billingEnabled && (
-          <p className="pricing-note">
-            <span className="badge">Early access</span>
-            <span className="muted">Every plan is free while we are in early access. No card needed.</span>
-          </p>
-        )}
         <div className="cycle-toggle" role="radiogroup" aria-label="Billing cycle">
           <button type="button" role="radio" aria-checked={cycle === "monthly"} className={cycle === "monthly" ? "on" : ""} onClick={() => setCycle("monthly")}>
             Monthly

@@ -21,7 +21,7 @@ def my_plan(ctx: Ctx = Depends(get_ctx)):
 @router.post("/checkout")
 def checkout(ctx: Ctx = Depends(get_ctx)):
     if not settings.billing_enabled:
-        raise HTTPException(409, {"code": "billing_disabled", "message": "Notestack is free during early access."})
+        raise HTTPException(409, {"code": "billing_disabled", "message": "Checkout is not available yet."})
     raise HTTPException(501, "Checkout provider not wired yet")
 
 

@@ -34,7 +34,7 @@ Every factual statement Notestack generates must trace back to the writer's own 
 | Email | Resend, behind a provider interface (mirrors blog2video `EmailService`) |
 | Auth | Google sign-in + email 6-digit code signup + password login, JWT access/refresh with `token_version` revocation (mirrors blog2video) |
 | LLM | Provider agnostic through DSPy + LiteLLM. Default Z.ai GLM-5.3 (fast tier GLM-5.3-Flash) via its OpenAI compatible endpoint. Retrieval is agentic search over a file system corpus, not embeddings (see 3.2). Any LiteLLM model string works by env var. |
-| Billing | Three tiers defined in code (`app/services/plans.py`). `BILLING_ENABLED=false` for now: everyone gets the top tier limits free, checkout returns 409, pricing page shows "Free during early access". |
+| Billing | Three tiers defined in code (`app/services/plans.py`). `BILLING_ENABLED=false` for now: everyone gets the top tier limits free, checkout returns 409, checkout is not wired up yet. |
 | Blog | Typed `blogPosts.ts` content array, `/blogs` and `/blogs/:slug`, same shape as blog2video |
 
 ## 3. Architecture

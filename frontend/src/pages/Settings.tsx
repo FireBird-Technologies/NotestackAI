@@ -172,8 +172,7 @@ export default function Settings() {
         <div className="stack">
           <Section title="Plan and usage">
             <p>
-              <strong>{s.plan.name}</strong>{" "}
-              <span className="badge">{s.billing_enabled ? "active" : "free during early access"}</span>
+              <strong>{s.plan.name}</strong> plan
             </p>
             <Meter label="Audio overviews" used={u.used.audio_minutes} limit={u.limits.audio_minutes} unit="min" />
             <Meter label="Video renders" used={u.used.video_minutes} limit={u.limits.video_minutes} unit="min" />

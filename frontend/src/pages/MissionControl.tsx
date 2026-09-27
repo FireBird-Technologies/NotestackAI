@@ -115,7 +115,7 @@ export default function MissionControl() {
           <p className="eyebrow">Mission Control</p>
           <h1>Good to see you, {(user?.name ?? user?.email ?? "").split(/[ @]/)[0]}</h1>
         </div>
-        {plan && <span className="badge">{plan.name} plan · early access</span>}
+        {plan && <span className="badge">{plan.name} plan</span>}
       </header>
       {error && <p className="error-text">{error}</p>}
 
