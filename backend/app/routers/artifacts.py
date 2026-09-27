@@ -60,8 +60,8 @@ def _target_title(ctx: Ctx, notebook_id: uuid.UUID | None, document_id: uuid.UUI
         if not doc.path:
             plan = effective_plan(ctx.db, ctx.workspace)
             raise plan_limit_error(plan, "indexed_posts",
-                                   f"This post is locked. Your plan makes your latest {plan.indexed_posts} posts "
-                                   "available; upgrade to use your whole archive.")
+                                   f"This post is not indexed. Your plan indexes your latest {plan.indexed_posts} "
+                                   "posts; upgrade to use your whole archive.")
         return doc.title
     if notebook_id:
         nb = ctx.db.scalar(select(Notebook).where(Notebook.id == notebook_id,

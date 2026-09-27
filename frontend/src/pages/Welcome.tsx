@@ -144,7 +144,7 @@ export default function Welcome() {
 
   const indexingDone = live?.status === "done";
   const indexingFailed = live?.status === "failed";
-  // Every post is indexed; the ingest job reports how many the plan makes available and how many are locked.
+  // The ingest job lists the whole archive but indexes only the plan's limit; the rest waits behind an upgrade.
   const locked = Number(live?.result?.locked ?? 0);
   const capped = indexingDone && locked > 0;
   const available = Number(live?.result?.available ?? posts);
@@ -153,11 +153,11 @@ export default function Welcome() {
     <div className="welcome-cap">
       <div>
         <strong>
-          All {found} posts indexed. Your latest {available} are available on the free plan.
+          We found {found} posts. The free plan indexed only your latest {available}.
         </strong>
         <p className="muted small">
-          Upgrade to unlock the other {locked}, so answers, audio and Launch Kits draw on your whole archive. Nothing to
-          reconnect: they unlock the moment you upgrade.
+          The other {locked} are sitting in your archive, unread. Until you upgrade, answers, audio overviews and Launch
+          Kits can only use {available} posts. Upgrade and all {found} are indexed automatically.
         </p>
       </div>
       <button
@@ -168,7 +168,7 @@ export default function Welcome() {
           navigate("/app?upgrade=1", { replace: true });
         }}
       >
-        Upgrade to unlock {locked}
+        Index all {found} posts
       </button>
     </div>
   ) : null;
@@ -336,7 +336,7 @@ export default function Welcome() {
 
         {step === "goal" && (
           <section className="card welcome-card">
-            <p className="eyebrow">{indexingDone ? (capped ? `${available} of ${found} posts available` : `${posts} posts indexed`) : "Still indexing in the background"}</p>
+            <p className="eyebrow">{indexingDone ? (capped ? `${available} of ${found} posts indexed` : `${posts} posts indexed`) : "Still indexing in the background"}</p>
             <h1>What should we launch first?</h1>
             {lockedNotice}
             <div className="goal-grid">

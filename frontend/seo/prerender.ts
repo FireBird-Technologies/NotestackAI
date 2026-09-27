@@ -182,7 +182,7 @@ function routes(): Rendered[] {
       description:
         "Notestack pricing: Free ($0), Writer ($24.99 a month, $18.99 billed annually) and Studio ($48.99 a month, $36.99 billed annually). Annual billing saves 24%.",
       body: page(
-        `<h1>Pick your trajectory</h1><ul><li><h2>Free</h2><p>$0. 1 source, whole archive indexed with your latest 5 posts available, 3 audio minutes, 1 video minute, 2 Launch Kits a month.</p></li><li><h2>Writer</h2><p>$24.99 a month ($18.99 a month billed annually). 3 sources, 500 posts, 60 audio minutes, 30 video minutes, 50 Launch Kits.</p></li><li><h2>Studio</h2><p>$48.99 a month ($36.99 a month billed annually). 10 sources, 5,000 posts, 240 audio minutes, 120 video minutes, unlimited Launch Kits.</p></li></ul><p><a href="/auth?mode=signup">Start free</a></p>`,
+        `<h1>Pick your trajectory</h1><ul><li><h2>Free</h2><p>$0. 1 source, your latest 5 posts indexed, 3 audio minutes, 1 video minute, 2 Launch Kits a month.</p></li><li><h2>Writer</h2><p>$24.99 a month ($18.99 a month billed annually). 3 sources, 500 posts, 60 audio minutes, 30 video minutes, 50 Launch Kits.</p></li><li><h2>Studio</h2><p>$48.99 a month ($36.99 a month billed annually). 10 sources, 5,000 posts, 240 audio minutes, 120 video minutes, unlimited Launch Kits.</p></li></ul><p><a href="/auth?mode=signup">Start free</a></p>`,
       ),
     },
     {

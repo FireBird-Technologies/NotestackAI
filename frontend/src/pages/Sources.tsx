@@ -162,7 +162,7 @@ export default function Sources() {
                   <strong>{s.title ?? s.feed_url}</strong>
                   <span className="mono muted">
                     {s.is_imports ? "imports" : s.platform} · {s.document_count} posts
-                    {s.locked_count > 0 ? ` (${s.document_count - s.locked_count} available, ${s.locked_count} locked)` : ""}
+                    {s.locked_count > 0 ? ` found, ${s.document_count - s.locked_count} indexed` : ""}
                     {s.last_synced_at ? ` · synced ${formatDate(s.last_synced_at, true)}` : ""}
                   </span>
                 </div>
@@ -177,11 +177,14 @@ export default function Sources() {
               {s.locked_count > 0 && !active && (
                 <div className="welcome-cap locked-cap">
                   <div>
-                    <strong>{s.locked_count} posts indexed and locked</strong>
-                    <p className="muted small">Your plan makes your latest posts available. Upgrade to unlock the whole archive.</p>
+                    <strong>{s.locked_count} posts not indexed</strong>
+                    <p className="muted small">
+                      Your plan only indexes your latest posts. Upgrade to index the rest so answers, audio and Launch Kits
+                      can use your whole archive.
+                    </p>
                   </div>
                   <button type="button" className="btn btn-small btn-primary" onClick={() => openUpgrade("indexed_posts")}>
-                    Upgrade to unlock
+                    Index all {s.document_count}
                   </button>
                 </div>
               )}
@@ -237,8 +240,8 @@ export default function Sources() {
                   {d.title}
                 </button>
                 {d.locked && (
-                  <span className="mono muted small" title="Indexed. Upgrade to use this post">
-                    Locked
+                  <span className="mono muted small" title="Upgrade to index this post">
+                    Not indexed
                   </span>
                 )}
                 <span className="mono muted">

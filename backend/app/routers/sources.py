@@ -35,7 +35,7 @@ def serialize_source(source: Source, doc_count: int = 0, locked_count: int = 0) 
         "sync_error": source.sync_error,
         "last_synced_at": source.last_synced_at.isoformat() if source.last_synced_at else None,
         "document_count": doc_count,
-        # Indexed but beyond the plan's post limit: listed, not usable until the workspace upgrades.
+        # Found but beyond the plan's post limit: listed, not indexed until the workspace upgrades.
         "locked_count": locked_count,
         "is_imports": source.feed_url == IMPORTS_FEED,
     }
@@ -159,7 +159,7 @@ documents_router = APIRouter(prefix="/api/documents", tags=["documents"])
 
 
 def is_locked(d: Document) -> bool:
-    """Indexed past the plan's post limit (see ingest.store_locked): visible, but not in the corpus."""
+    """Past the plan's post limit (see ingest.store_locked): listed with title and link only, not indexed."""
     return not d.path and bool((d.metadata_json or {}).get("locked"))
 
 
@@ -212,10 +212,9 @@ def get_document(document_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
         raise HTTPException(404, "Post not found")
     source = ctx.db.get(Source, doc.source_id) if doc.source_id else None
     if is_locked(doc):
-        # A preview only: the full post is part of what upgrading unlocks.
-        preview = [ln for ln in (doc.clean_text or "").splitlines() if ln.strip()][:3]
+        # Listed, not indexed: there is no text to show until the workspace upgrades.
         plan = effective_plan(ctx.db, ctx.workspace)
-        return {**serialize_document(doc, source), "lines": [f"# {doc.title}", "", *preview],
+        return {**serialize_document(doc, source), "lines": [f"# {doc.title}"],
                 "preview": True, "limit": plan.indexed_posts}
     lines: list[str] = []
     if doc.path:

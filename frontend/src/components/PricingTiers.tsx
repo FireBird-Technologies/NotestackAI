@@ -26,7 +26,7 @@ const FALLBACK: Plan[] = [
     tagline: "For trying Notestack on your archive",
     price_monthly_usd: 0,
     features: [
-      "1 source, whole archive indexed, latest 5 posts available",
+      "1 source, your latest 5 posts indexed",
       "Grounded research chat with citations",
       "3 min of audio overviews a month",
       "1 min of video a month",

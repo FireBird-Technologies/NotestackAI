@@ -74,14 +74,14 @@ export function Reader({
           {doc.preview && (
             <div className="welcome-cap locked-cap">
               <div>
-                <strong>This post is indexed but locked</strong>
+                <strong>This post is not indexed</strong>
                 <p className="muted small">
-                  Your plan makes your latest {doc.limit ?? 5} posts available. Upgrade to read it in full and use it in
-                  notebooks, audio, video and Launch Kits.
+                  Your plan indexes your latest {doc.limit ?? 5} posts. Upgrade to index this one and the rest of your
+                  archive, so you can ask about it and turn it into audio, video and Launch Kits.
                 </p>
               </div>
               <button type="button" className="btn btn-small btn-primary" onClick={() => openUpgrade("indexed_posts")}>
-                Upgrade to unlock
+                Upgrade to index it
               </button>
             </div>
           )}

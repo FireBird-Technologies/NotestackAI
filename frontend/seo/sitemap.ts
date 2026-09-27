@@ -96,7 +96,7 @@ differs from NotebookLM.
   SEO pack, carousel).
 - **Publishing:** a Launchpad calendar that auto posts to X, LinkedIn and Bluesky, plus a topic map of rising and
   dormant themes and evergreen resurfacing of old posts.
-- **Pricing (USD):** Free: 1 source, whole archive indexed with the latest 5 posts available, 3 audio minutes, 1 video minute, 2 launch kits a month.
+- **Pricing (USD):** Free: 1 source, latest 5 posts indexed, 3 audio minutes, 1 video minute, 2 launch kits a month.
   Writer: $24.99 a month ($18.99 a month billed annually): 3 sources, 500 posts, 60 audio minutes, 30 video minutes,
   50 launch kits. Studio: $48.99 a month ($36.99 a month billed annually): 10 sources, 5,000 posts, 240 audio
   minutes, 120 video minutes, unlimited launch kits. Annual billing saves 24%.

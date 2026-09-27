@@ -25,7 +25,7 @@ export type Source = {
   sync_error: string | null;
   last_synced_at: string | null;
   document_count: number;
-  /** Indexed but past the plan's post limit: listed, unlocked by upgrading. */
+  /** Found but past the plan's post limit: listed, not indexed until the workspace upgrades. */
   locked_count: number;
   is_imports: boolean;
 };
@@ -40,7 +40,7 @@ export type Doc = {
   published_at: string | null;
   words: number;
   evergreen_score: number | null;
-  /** Indexed but past the plan's post limit: preview only until the workspace upgrades. */
+  /** Found but past the plan's post limit: title and link only, not indexed until the workspace upgrades. */
   locked: boolean;
 };
 
