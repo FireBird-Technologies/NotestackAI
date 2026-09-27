@@ -1,0 +1,5 @@
+# Signed in and auth routes get the empty app shell (noindex), not the prerendered home page.
+/app/*    /app  200
+/auth     /app  200
+/auth/*   /app  200
+/welcome  /app  200

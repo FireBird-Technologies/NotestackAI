@@ -45,7 +45,7 @@ const missionOf = (post: BlogPost): Mission =>
 const INLINE = /(\[[^\]]+\]\([^)\s]+\))|(\*\*[^*]+\*\*)/g;
 
 /** Inline [text](url) links and **bold** inside post copy. External links open in a new tab and stay followed. */
-function Inline({ text }: { text: string }) {
+export function Inline({ text }: { text: string }) {
   const out: ReactNode[] = [];
   let last = 0;
   let i = 0;

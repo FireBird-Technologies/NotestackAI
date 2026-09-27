@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { prerenderPlugin } from "./seo/prerender";
 import { sitemapPlugin } from "./seo/sitemap";
 
 // Public origin for sitemap.xml and robots.txt. Set SITE_URL in the deploy environment.
@@ -9,6 +10,8 @@ export default defineConfig({
   plugins: [
     react(),
     sitemapPlugin(SITE_URL),
+    // Static HTML per public route for crawlers that do not run JavaScript. Must run after site-url fills index.html.
+    prerenderPlugin(SITE_URL),
     // Link preview tags need absolute URLs: fill %SITE_URL% in index.html.
     { name: "site-url", transformIndexHtml: (html) => html.replaceAll("%SITE_URL%", SITE_URL.replace(/\/$/, "")) },
   ],

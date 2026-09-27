@@ -1,5 +1,6 @@
 import type { Plugin } from "vite";
 import { blogPosts } from "../src/content/blogPosts";
+import { tools } from "../src/content/tools";
 
 /**
  * sitemap.xml and robots.txt, generated from src/content/blogPosts.ts on every build (and served live
@@ -13,6 +14,8 @@ const STATIC_PAGES: { path: string; priority: string; changefreq: string }[] = [
   { path: "/notebooklm-alternative", priority: "0.9", changefreq: "monthly" },
   { path: "/pricing", priority: "0.8", changefreq: "monthly" },
   { path: "/blogs", priority: "0.9", changefreq: "weekly" },
+  { path: "/tools", priority: "0.8", changefreq: "monthly" },
+  ...tools.map((t) => ({ path: `/tools/${t.slug}`, priority: "0.8", changefreq: "monthly" })),
 ];
 
 const escapeXml = (s: string) =>
@@ -106,6 +109,7 @@ differs from NotebookLM.
 - [Notestack vs NotebookLM](${base}/notebooklm-alternative): side by side comparison and FAQ
 - [Pricing](${base}/pricing): plans and limits
 - [Blog](${base}/blogs): guides on NotebookLM alternatives, AI for research and AI tools for writers
+- [Free tools](${base}/tools): ${tools.map((t) => `[${t.heroTitle}](${base}/tools/${t.slug})`).join(", ")} (free with sign in)
 
 ## Blog
 
