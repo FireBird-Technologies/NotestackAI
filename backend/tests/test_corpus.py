@@ -125,12 +125,14 @@ def test_react_agent_end_to_end_with_scripted_model(corpus_pair, monkeypatch):
     ])
     monkeypatch.setattr(research_mod, "main_lm", lambda: lm)
     monkeypatch.setattr(research_mod, "track_usage", _no_usage)
+    monkeypatch.setattr(research_mod, "triage", lambda *a: research_mod.Triage("archive", "What did I charge?",
+                                                                                "deep", ""))
     seen = []
     with dspy.context(adapter=dspy.ChatAdapter()):
         result = research_mod.research(
             reader, {p1: "On pricing"}, "What did I charge?", on_step=lambda k, d: seen.append(k)
         )
-    assert seen == ["search", "read"]
+    assert seen == ["think", "search", "read"]
     assert result.unsupported is False
     assert result.text.endswith("[1].")
     assert result.citations[0].path == p1 and "$5 to $8" in result.citations[0].quote

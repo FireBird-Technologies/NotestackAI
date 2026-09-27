@@ -708,3 +708,117 @@ def test_tts_retries_rate_limits(monkeypatch):
     monkeypatch.setattr(httpx, "request", lambda *a, **k: httpx.Response(401, json={"detail": {"message": "bad"}}))
     with pytest.raises(tts.TTSError, match="API key"):
         tts._request("GET", "/voices")
+
+
+# Chat: memory and triage (no LLM calls for chatter)
+
+
+def _no_research(monkeypatch):
+    import dspy
+
+    def boom(*a, **k):
+        raise AssertionError("research agent should not run")
+
+    monkeypatch.setattr(dspy, "ReAct", boom)
+
+
+def test_small_talk_needs_no_model(monkeypatch, tmp_path):
+    from app.corpus import Corpus
+    from app.pipeline import research as r
+
+    _no_research(monkeypatch)
+    monkeypatch.setattr(r, "triage", lambda *a: (_ for _ in ()).throw(AssertionError("no triage for chatter")))
+    out = r.research(Corpus(uuid.uuid4(), cache_dir=str(tmp_path)), {"a.md": "On Pricing"}, "thanks!",
+                     history=[r.Turn("user", "q"), r.Turn("assistant", "a")])
+    assert out.kind == "chitchat" and "helped" in out.text and out.prompt_tokens == 0
+
+
+def test_jev_triage_routes_off_topic_without_llm(monkeypatch, tmp_path):
+    from app.config import settings
+    from app.corpus import Corpus
+    from app.pipeline import research as r
+    from app.services import jev
+
+    _no_research(monkeypatch)
+    monkeypatch.setattr(settings, "typesafe_api_key", "sk-test")
+    seen = {}
+
+    def decide(state, questions, timeout=6.0):
+        seen.update(state=state, questions=questions)
+        return {"intent": jev.Choice("off_topic", 0.93, {}), "depth": jev.Choice("quick", 0.8, {})}
+
+    monkeypatch.setattr(jev, "decide", decide)
+    monkeypatch.setattr(r, "triage_llm", lambda *a: (_ for _ in ()).throw(AssertionError("LLM triage not needed")))
+    out = r.research(Corpus(uuid.uuid4(), cache_dir=str(tmp_path)), {"a.md": "On Pricing"},
+                     "Write me a python script", history=[r.Turn("user", "What did I say about pricing?")])
+    assert out.kind == "off_topic" and "On Pricing" in out.text
+    assert seen["questions"]["intent"]["criteria"]["archive"]
+    assert "pricing" in seen["state"]["conversation"]
+
+
+def test_jev_low_confidence_or_failure_still_researches(monkeypatch, tmp_path):
+    from app.config import settings
+    from app.pipeline import research as r
+    from app.services import jev
+
+    monkeypatch.setattr(settings, "typesafe_api_key", "sk-test")
+    monkeypatch.setattr(jev, "decide", lambda *a, **k: {"intent": jev.Choice("off_topic", 0.4, {}),
+                                                         "depth": jev.Choice("deep", 0.9, {})})
+    assert r.triage("hmm what about that", [], "nb").kind == "archive"
+
+    def down(*a, **k):
+        raise jev.JevError("down")
+
+    monkeypatch.setattr(jev, "decide", down)
+    monkeypatch.setattr(r, "triage_llm", lambda *a: r.Triage("archive", "standalone q", "quick", ""))
+    t = r.triage("tell me more", [], "nb")
+    assert t.question == "standalone q" and t.depth == "quick"
+
+
+def test_jev_request_shape(monkeypatch):
+    from app.config import settings
+    from app.services import jev
+
+    monkeypatch.setattr(settings, "typesafe_api_key", "sk-test")
+    captured = {}
+
+    def post(url, json, timeout, headers):
+        captured.update(url=url, body=json, headers=headers)
+        return httpx.Response(200, json={"answers": {"intent": {"type": "choice", "choice": "archive",
+                                                                "confidence": 0.9,
+                                                                "probabilities": {"archive": 0.9}}}})
+
+    monkeypatch.setattr(httpx, "post", post)
+    out = jev.decide("state", {"intent": {"instructions": "?", "criteria": {"archive": "x"}}})
+    assert out["intent"].choice == "archive"
+    assert captured["url"].endswith("/v1/systemone") and captured["headers"]["Authorization"] == "Bearer sk-test"
+    assert captured["body"]["questions"]["intent"]["type"] == "choice" and captured["body"]["model"] == "jev-latest"
+
+
+def test_chat_passes_history_as_memory(client, auth, run_jobs, feed, monkeypatch):
+    from app.pipeline.research import ResearchResult
+    from app.routers import notebooks as nbr
+
+    connect(client, auth, run_jobs)
+    doc = docs(client, auth)[0]
+    nb = client.post("/api/notebooks", json={"title": "N", "document_ids": [doc["id"]]}, headers=auth).json()
+    calls = []
+
+    def fake_research(corpus, allowed, question, on_step=None, history=None, notebook_title=""):
+        calls.append((question, [(t.role, t.text) for t in history or []], notebook_title))
+        return ResearchResult(f"answer to {question}", False, [])
+
+    monkeypatch.setattr(nbr, "research", fake_research)
+
+    def ask(q, chat_id=None):
+        body = client.post(f"/api/notebooks/{nb['id']}/chat", json={"question": q, "chat_id": chat_id},
+                           headers=auth).text
+        import json as _json
+        import re as _re
+        return _json.loads(_re.search(r"event: status\ndata: (.*)", body).group(1))["chat_id"]
+
+    chat_id = ask("What did I say about pricing?")
+    ask("Why?", chat_id)
+    assert calls[0][1] == [] and calls[0][2] == "N"
+    assert calls[1][1] == [("user", "What did I say about pricing?"),
+                           ("assistant", "answer to What did I say about pricing?")]

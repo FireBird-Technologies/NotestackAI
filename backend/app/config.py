@@ -1,6 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # One .env at the repo root serves every way of running the API; a backend/.env (or the
@@ -65,6 +66,10 @@ class Settings(BaseSettings):
     llm_fast_model: str = "openai/glm-5.3-flash"
     # Chat triage (small talk, off topic, follow up rewriting). Empty = LLM_FAST_MODEL.
     llm_triage_model: str = ""
+    # TypeSafe Jev classifier for chat triage. When set, triage uses Jev instead of an LLM call.
+    typesafe_api_key: str = ""
+    typesafe_model: str = "jev-latest"
+    typesafe_url: str = "https://api.typesafe.ai"
     llm_api_base: str = "https://api.z.ai/api/paas/v4"
     llm_api_key: str = ""
     llm_temperature: float = 1.0  # Z.ai recommends 1.0 for GLM-5.x
@@ -96,6 +101,12 @@ class Settings(BaseSettings):
 
     # Billing
     billing_enabled: bool = False
+
+    @field_validator("run_worker_in_api", mode="before")
+    @classmethod
+    def _blank_is_default(cls, value):
+        """RUN_WORKER_IN_API= (blank, as in .env.example) means "decide from ENV", not a parse error."""
+        return None if isinstance(value, str) and not value.strip() else value
 
     @property
     def worker_in_api(self) -> bool:

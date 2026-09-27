@@ -7,6 +7,8 @@ conversation, answers off topic and app questions directly, and turns follow ups
 questions. Only real archive questions run the research agent, with a small step budget for simple
 lookups and the full budget for synthesis."""
 
+import logging
+import random
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -18,8 +20,10 @@ from app.corpus import Corpus, ScopedTools
 from app.llm.postprocess import strip_em_dashes
 from app.llm.provider import main_lm, track_usage, triage_lm
 from app.llm.signatures import ResearchArchive, TriageMessage
+from app.services import jev
 
 _MARKER = re.compile(r"\[(\d+)\]")
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -98,8 +102,78 @@ class Triage:
     completion_tokens: int = 0
 
 
+JEV_INTENT = {
+    "archive": {
+        "what": "Needs facts, ideas, quotes, opinions or history from the writer's own posts, including follow "
+                "ups to the conversation like 'say more', 'why?', 'what about last year?'",
+        "examples": ["What have I written about pricing?", "Summarize my take on AI", "Tell me more about that"],
+    },
+    "chitchat": {
+        "what": "Greetings, thanks, reactions or small talk with no question about the posts",
+        "examples": ["hello there", "that was helpful, thanks", "you are great"],
+    },
+    "about_app": {
+        "what": "How to use Notestack itself: sources, notebooks, audio, video, launch kits, settings",
+        "examples": ["How do I add another Substack?", "Can you make a podcast from this?"],
+    },
+    "off_topic": {
+        "what": "General knowledge, coding, math, news, homework or tasks unrelated to the writer's posts",
+        "not_for": "Questions about what the writer wrote, even if the subject is general",
+        "examples": ["What is the capital of France?", "Write me a Python script", "Who won the game last night?"],
+    },
+}
+JEV_DEPTH = {
+    "quick": "A single fact, quote or lookup in one or two posts",
+    "deep": "Synthesis, comparison or change over time across many posts",
+}
+JEV_MIN_CONFIDENCE = 0.55  # below this, research anyway: a wasted search beats a wrong brush off
+
+
+def canned_reply(kind: str, allowed: dict[str, str]) -> str:
+    """Templated replies for messages that need no research (no model call)."""
+    titles = [t for t in allowed.values() if t]
+    sample = random.choice(titles) if titles else None
+    try_this = f' For example: "What is the main argument in {sample}?"' if sample else ""
+    if kind == "about_app":
+        return ("Add more Substacks, blogs or files on the Sources page, then group posts into notebooks. From "
+                "any notebook, the Studio panel on the right makes summaries, audio overviews, videos and quote "
+                "cards, and Launch Kit and Launchpad turn a post into scheduled social posts. In this chat I "
+                "answer questions about the posts in this notebook." + try_this)
+    if kind == "off_topic":
+        return ("I only answer from the posts in this notebook, so I cannot help with that one. Ask me about "
+                "something you have written instead." + try_this)
+    return "Happy to help. Ask me anything about the posts in this notebook." + try_this
+
+
+def triage_with_jev(message: str, history: list[Turn], notebook: str) -> Triage:
+    state = {"notebook": notebook, "conversation": conversation_text(history, limit=4), "message": message}
+    answers = jev.decide(state, {
+        "intent": {"instructions": "What does the latest message need from a research assistant that only "
+                                   "knows this writer's posts?", "criteria": JEV_INTENT},
+        "depth": {"instructions": "If it is about the posts, how much research does it need?",
+                  "criteria": JEV_DEPTH},
+    })
+    intent, depth = answers["intent"], answers["depth"]
+    kind = intent.choice if intent.choice in JEV_INTENT else "archive"
+    if kind != "archive" and intent.confidence < JEV_MIN_CONFIDENCE:
+        kind = "archive"
+    # Jev does not write text: the research agent resolves follow ups using the conversation it is given.
+    return Triage(kind, message, depth.choice if depth.choice in JEV_DEPTH else "deep", "")
+
+
 def triage(message: str, history: list[Turn], notebook: str) -> Triage:
-    """One cheap call: is this worth researching, and what exactly should be researched?"""
+    """Decide whether a message is worth researching. Jev when configured (fast, typed, no generation),
+    otherwise one cheap call on the triage LLM."""
+    if jev.configured():
+        try:
+            return triage_with_jev(message, history, notebook)
+        except jev.JevError:
+            log.warning("Jev triage failed, falling back to the LLM", exc_info=True)
+    return triage_llm(message, history, notebook)
+
+
+def triage_llm(message: str, history: list[Turn], notebook: str) -> Triage:
+    """One cheap LLM call: is this worth researching, and what exactly should be researched?"""
     lm = triage_lm()
     try:
         with track_usage(lm) as usage, dspy.context(lm=lm):
@@ -175,7 +249,9 @@ def research(
         on_step("think", "Reading the conversation")
     route = triage(question, history, notebook_brief(notebook_title, allowed))
     if route.kind != "archive":
-        return ResearchResult(route.reply, False, [], route.prompt_tokens, route.completion_tokens,
+        # App help is always the vetted template: a model would invent product facts.
+        reply = canned_reply(route.kind, allowed) if route.kind == "about_app" or not route.reply else route.reply
+        return ResearchResult(reply, False, [], route.prompt_tokens, route.completion_tokens,
                               kind=route.kind, question=question)
 
     corpus.sync()
