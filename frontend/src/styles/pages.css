@@ -1874,6 +1874,12 @@ select.input option {
     gap: 14px;
   }
 
+  /* Collapsed: just the logo (and the upgrade rocket), so nothing to scroll. */
+  .shell.collapsed > .sidebar {
+    overflow: hidden;
+    padding: 14px 10px;
+  }
+
   .side-link {
     padding: 7px 10px;
     font-size: 0.9rem;

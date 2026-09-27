@@ -17,3 +17,4 @@ dspy==2.6.*
 feedparser==6.*
 beautifulsoup4==4.*
 pypdf==5.*
+stripe==13.*

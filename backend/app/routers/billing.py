@@ -2,7 +2,6 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
-
 from sqlalchemy.orm import Session
 
 from app.auth import Ctx, get_ctx

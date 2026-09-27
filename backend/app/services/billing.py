@@ -6,7 +6,6 @@ Stripe goes in create_checkout_url, create_portal_url and the webhook route; eve
 
 from datetime import UTC, datetime
 
-from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 

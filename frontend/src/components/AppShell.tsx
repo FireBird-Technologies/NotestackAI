@@ -72,11 +72,11 @@ export default function AppShell() {
           <div className="sidebar-top">
             {collapsed ? (
               <button type="button" className="sidebar-brand sidebar-brand-btn" onClick={toggle} aria-label="Expand sidebar" title="Expand sidebar">
-                <Logo size={28} />
+                <Logo size={28} withWordmark={false} />
               </button>
             ) : (
               <NavLink to="/" className="sidebar-brand">
-                <Logo size={28} />
+                <Logo size={28} withWordmark={false} />
               </NavLink>
             )}
             <button

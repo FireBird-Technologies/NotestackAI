@@ -106,9 +106,14 @@ class Settings(BaseSettings):
 
     # Billing (Stripe). With BILLING_ENABLED=false everyone gets Studio limits and checkout is off.
     billing_enabled: bool = False
-    stripe_secret_key: str = Field("", validation_alias=AliasChoices("STRIPE_SECRET_KEY", "STRIPE_API_KEY", "STRIPE_SECRET"))
+    stripe_secret_key: str = Field(
+        "", validation_alias=AliasChoices("STRIPE_SECRET_KEY", "STRIPE_API_KEY", "STRIPE_SECRET")
+    )
     stripe_webhook_secret: str = Field(
-        "", validation_alias=AliasChoices("STRIPE_WEBHOOK_SECRET", "STRIPE_WEBHOOK_SIGNING_SECRET", "STRIPE_SIGNING_SECRET")
+        "",
+        validation_alias=AliasChoices(
+            "STRIPE_WEBHOOK_SECRET", "STRIPE_WEBHOOK_SIGNING_SECRET", "STRIPE_SIGNING_SECRET"
+        ),
     )
     # Optional existing Price ids. Empty = Notestack finds or creates prices by lookup key
     # (notestack_<plan>_<cycle>) from the plan table in services/plans.py.

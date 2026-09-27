@@ -226,11 +226,13 @@ def portal_url(db: Session, workspace: Workspace, return_url: str) -> str:
     if not row or not row.provider_customer_id:
         raise HTTPException(404, {"code": "no_billing_account", "message": "There is no billing account yet."})
     try:
-        session = client().v1.billing_portal.sessions.create({"customer": row.provider_customer_id, "return_url": return_url})
+        session = client().v1.billing_portal.sessions.create(
+            {"customer": row.provider_customer_id, "return_url": return_url}
+        )
     except stripe.InvalidRequestError as exc:
         log.error("stripe portal failed: %s", exc)
         raise HTTPException(503, {"code": "portal_unavailable",
-                                  "message": "Billing management is unavailable right now. Please try again soon."}) from exc
+                                  "message": "Billing management is unavailable. Please try again soon."}) from exc
     return session.url
 
 
@@ -327,7 +329,8 @@ def handle_event(db: Session, event) -> str:
         return "synced"
 
     if kind.startswith("invoice."):
-        sub_id = _get(obj, "subscription") or _get(_get(_get(obj, "parent", {}), "subscription_details", {}), "subscription")
+        details = _get(_get(obj, "parent", {}), "subscription_details", {})  # newer API versions
+        sub_id = _get(obj, "subscription") or _get(details, "subscription")
         ws = _workspace_for(db, {"id": sub_id} if sub_id else None, customer_id=_get(obj, "customer"))
         if ws and sub_id:
             sync_subscription(db, ws, sc.v1.subscriptions.retrieve(sub_id))
@@ -337,7 +340,8 @@ def handle_event(db: Session, event) -> str:
                 to = _get(obj, "customer_email") or _owner_email(db, ws)
                 url = _get(obj, "hosted_invoice_url") or f"{settings.frontend_url.rstrip('/')}/app/settings"
                 if to:
-                    email_service.send_payment_action(to, "confirm" if kind.endswith("action_required") else "failed", url)
+                    action = "confirm" if kind.endswith("action_required") else "failed"
+                    email_service.send_payment_action(to, action, url)
         return "synced" if ws else "unknown"
 
     if kind == "charge.dispute.created" and first:
