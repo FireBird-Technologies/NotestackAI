@@ -556,7 +556,7 @@ def store_entries(
             )
         doc.clean_text = "\n\n".join(f"## {h}\n{t}" if h else t for h, t in sections)
         doc.metadata_json = {
-            **(doc.metadata_json or {}),
+            **{k: v for k, v in (doc.metadata_json or {}).items() if k != "locked"},
             "headings": [h for h, _ in sections if h],
             "words": len(doc.clean_text.split()),
         }
@@ -575,16 +575,60 @@ def store_entries(
     return indexed, skipped, changed
 
 
+# Every plan reads the whole archive (up to this ceiling). Posts past the plan's indexed_posts are stored as locked:
+# listed with their title and text, but with no corpus file, so chat, notebooks and generation never see them.
+# Upgrading re-syncs and unlocks them without asking the writer to reconnect anything.
+ARCHIVE_SCAN_CAP = 5000
+# Sites without a feed are crawled page by page (Firecrawl scrapes when configured), so the ceiling is lower.
+SITE_SCAN_CAP = 500
+
+
+def _newest_first(entries: list[FeedEntry]) -> list[FeedEntry]:
+    """Dated posts newest first; undated ones (site crawls) keep their discovery order after them."""
+    dated = sorted((e for e in entries if e.published_at), key=lambda e: e.published_at.timestamp(), reverse=True)
+    return dated + [e for e in entries if not e.published_at]
+
+
+def store_locked(db: Session, source: Source, entries: list[FeedEntry]) -> tuple[int, set[str]]:
+    """Index posts beyond the plan limit without making them available. Returns (count, corpus paths to remove):
+    a post that was available before (a newer post pushed it out, or the plan went down) loses its corpus file."""
+    locked = 0
+    remove: set[str] = set()
+    for entry in entries:
+        sections = entry.sections if entry.sections is not None else html_to_sections(entry.html)
+        if not sections:
+            continue
+        doc = db.scalar(select(Document).where(Document.source_id == source.id, Document.url == entry.url))
+        if not doc:
+            doc = Document(id=uuid.uuid4(), workspace_id=source.workspace_id, source_id=source.id, url=entry.url)
+            db.add(doc)
+        if doc.path:
+            remove.add(doc.path)
+            doc.path = None
+        doc.title = entry.title
+        doc.published_at = entry.published_at
+        doc.content_hash = None  # forces a full store (corpus file, raw HTML) once the post unlocks
+        doc.clean_text = "\n\n".join(f"## {h}\n{t}" if h else t for h, t in sections)
+        doc.metadata_json = {
+            **(doc.metadata_json or {}),
+            "headings": [h for h, _ in sections if h],
+            "words": len(doc.clean_text.split()),
+            "locked": True,
+        }
+        locked += 1
+    db.commit()
+    return locked, remove
+
+
 def ingest_source(db: Session, source: Source, job: Job, max_posts: int) -> dict:
     source.sync_status = "syncing"
     update_job(db, job, status="running", progress=0.02, message="Contacting your feed")
-    # Fetch one past the plan cap so we can tell the user their archive holds more than was indexed.
-    fetch_limit = max_posts + 1
+    fetch_limit = ARCHIVE_SCAN_CAP
 
     if source.feed_url.startswith(SITE_PREFIX):
         update_job(db, job, message="Mapping your site")
         entries = crawl_site(
-            source.feed_url.removeprefix(SITE_PREFIX), fetch_limit,
+            source.feed_url.removeprefix(SITE_PREFIX), max(SITE_SCAN_CAP, max_posts),
             on_found=lambda n: update_job(db, job, progress=0.05, message=f"Found {n} pages, reading them"),
             on_post=lambda done, total: update_job(db, job, progress=0.05 + 0.05 * done / total,
                                                    message=f"Read {done} of {total} pages"),
@@ -604,20 +648,29 @@ def ingest_source(db: Session, source: Source, job: Job, max_posts: int) -> dict
         except (httpx.HTTPError, ValueError):
             log.warning("substack archive fetch failed for %s", site, exc_info=True)
 
-    capped = len(entries) > max_posts
-    entries = entries[:max_posts]
+    entries = _newest_first(entries)
+    available, beyond = entries[:max_posts], entries[max_posts:]
 
     def progress(done: int, total: int, post_title: str) -> None:
-        update_job(db, job, progress=0.1 + 0.8 * done / total, message=f"{post_title[:80]} is in orbit")
+        update_job(db, job, progress=0.1 + 0.7 * done / total, message=f"{post_title[:80]} is in orbit")
 
-    update_job(db, job, progress=0.1, message=f"Indexing {len(entries)} posts")
-    indexed, skipped, changed = store_entries(db, source, entries, progress)
+    update_job(db, job, progress=0.1, message=f"Indexing {len(available)} posts")
+    indexed, skipped, changed = store_entries(db, source, available, progress)
+
+    locked = 0
+    if beyond:
+        update_job(db, job, progress=0.85,
+                   message=f"Indexing {len(beyond)} more posts. Your plan makes the latest {max_posts} available")
+        locked, remove = store_locked(db, source, beyond)
+        if remove:
+            Corpus(source.workspace_id).write_files({INDEX: rebuild_index(db, source.workspace_id)}, remove=remove)
 
     source.sync_status = "ok"
     source.sync_error = None
     source.last_synced_at = datetime.now(UTC)
     db.commit()
-    return {"indexed": indexed, "skipped": skipped, "found": len(entries), "limit": max_posts, "capped": capped,
+    return {"indexed": indexed, "skipped": skipped, "found": len(entries), "limit": max_posts,
+            "capped": locked > 0, "locked": locked, "available": len(available),
             "changed": [str(i) for i in changed]}
 
 

@@ -23,12 +23,34 @@
   gap: 1rem;
 }
 
+/* Flat, opaque writing surface: overrides the pill shaped, see-through .input so the starfield does not show
+   through and the box edge is obvious. */
 .tool-input {
+  display: block;
   width: 100%;
+  height: auto;
   min-height: 14rem;
+  padding: 14px 16px;
   resize: vertical;
-  font: inherit;
-  line-height: 1.6;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: #0d0f14;
+  box-shadow: none;
+  color: var(--text);
+  font: 400 1rem/1.6 var(--font-body);
+}
+
+.tool-input:hover {
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.tool-input:focus {
+  border-color: var(--blue);
+  box-shadow: none;
+}
+
+.tool-input::placeholder {
+  color: var(--text-2);
 }
 
 .tool-output {

@@ -11,6 +11,7 @@ from app.services.artifacts import latest_jobs, serialize_artifact, start_artifa
 from app.services.jobs import create_job, serialize_job
 from app.services.renderer import COMPOSITIONS
 from app.services.storage import storage
+from app.services.plans import effective_plan, plan_limit_error
 from app.services.usage import check_limit
 
 router = APIRouter(prefix="/api/artifacts", tags=["artifacts"])
@@ -56,6 +57,11 @@ def _target_title(ctx: Ctx, notebook_id: uuid.UUID | None, document_id: uuid.UUI
                                                    Document.workspace_id == ctx.workspace.id))
         if not doc:
             raise HTTPException(404, "Post not found")
+        if not doc.path:
+            plan = effective_plan(ctx.db, ctx.workspace)
+            raise plan_limit_error(plan, "indexed_posts",
+                                   f"This post is locked. Your plan makes your latest {plan.indexed_posts} posts "
+                                   "available; upgrade to use your whole archive.")
         return doc.title
     if notebook_id:
         nb = ctx.db.scalar(select(Notebook).where(Notebook.id == notebook_id,

@@ -52,7 +52,9 @@ def _get(ctx: Ctx, notebook_id: uuid.UUID) -> Notebook:
 
 def _add_docs(ctx: Ctx, nb: Notebook, ids: list[uuid.UUID]) -> int:
     valid = set(ctx.db.scalars(
-        select(Document.id).where(Document.id.in_(ids), Document.workspace_id == ctx.workspace.id)
+        # Locked posts (beyond the plan's post limit) have no corpus file and cannot join a notebook.
+        select(Document.id).where(Document.id.in_(ids), Document.workspace_id == ctx.workspace.id,
+                                  Document.path.is_not(None))
     ).all())
     existing = set(ctx.db.scalars(select(NotebookDocument.document_id).where(NotebookDocument.notebook_id == nb.id)))
     for doc_id in valid - existing:

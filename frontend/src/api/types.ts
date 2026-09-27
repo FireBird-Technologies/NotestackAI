@@ -195,8 +195,13 @@ export type VoiceState = {
     error: string | null;
     preview_url: string | null;
   };
+  /** Voices this workspace generated with Voice Design. */
+  custom_voices: { voice_id: string; name: string; description?: string }[];
   tts_configured: boolean;
 };
+
+export type VoiceDesignInput = { prompt?: string; gender?: string; age?: string; persona?: string; pace?: string; accent?: string };
+export type VoiceDesignPreview = { generated_voice_id: string; url: string; seconds: number | null };
 
 export type Delivery = { stability: number; similarity_boost: number; style: number; speed: number; use_speaker_boost?: boolean };
 

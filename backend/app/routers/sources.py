@@ -24,7 +24,7 @@ class UploadImportIn(BaseModel):
     upload_id: uuid.UUID
 
 
-def serialize_source(source: Source, doc_count: int = 0) -> dict:
+def serialize_source(source: Source, doc_count: int = 0, locked_count: int = 0) -> dict:
     return {
         "id": str(source.id),
         "feed_url": source.feed_url,
@@ -35,6 +35,8 @@ def serialize_source(source: Source, doc_count: int = 0) -> dict:
         "sync_error": source.sync_error,
         "last_synced_at": source.last_synced_at.isoformat() if source.last_synced_at else None,
         "document_count": doc_count,
+        # Indexed but beyond the plan's post limit: listed, not usable until the workspace upgrades.
+        "locked_count": locked_count,
         "is_imports": source.feed_url == IMPORTS_FEED,
     }
 
@@ -91,7 +93,12 @@ def list_sources(ctx: Ctx = Depends(get_ctx)):
         .group_by(Source.id)
         .order_by(Source.created_at)
     ).all()
-    return [serialize_source(s, n) for s, n in rows]
+    locked = dict(ctx.db.execute(
+        select(Document.source_id, func.count(Document.id))
+        .where(Document.workspace_id == ctx.workspace.id, Document.path.is_(None))
+        .group_by(Document.source_id)
+    ).all())
+    return [serialize_source(s, n, locked.get(s.id, 0)) for s, n in rows]
 
 
 @router.post("/{source_id}/sync")
@@ -151,6 +158,11 @@ def import_upload(body: UploadImportIn, ctx: Ctx = Depends(get_ctx)):
 documents_router = APIRouter(prefix="/api/documents", tags=["documents"])
 
 
+def is_locked(d: Document) -> bool:
+    """Indexed past the plan's post limit (see ingest.store_locked): visible, but not in the corpus."""
+    return not d.path and bool((d.metadata_json or {}).get("locked"))
+
+
 def serialize_document(d: Document, source: Source | None = None) -> dict:
     meta = d.metadata_json or {}
     return {
@@ -163,6 +175,7 @@ def serialize_document(d: Document, source: Source | None = None) -> dict:
         "published_at": d.published_at.isoformat() if d.published_at else None,
         "words": meta.get("words") or len((d.clean_text or "").split()),
         "evergreen_score": d.evergreen_score,
+        "locked": is_locked(d),
     }
 
 
@@ -198,6 +211,12 @@ def get_document(document_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
     if not doc:
         raise HTTPException(404, "Post not found")
     source = ctx.db.get(Source, doc.source_id) if doc.source_id else None
+    if is_locked(doc):
+        # A preview only: the full post is part of what upgrading unlocks.
+        preview = [ln for ln in (doc.clean_text or "").splitlines() if ln.strip()][:3]
+        plan = effective_plan(ctx.db, ctx.workspace)
+        return {**serialize_document(doc, source), "lines": [f"# {doc.title}", "", *preview],
+                "preview": True, "limit": plan.indexed_posts}
     lines: list[str] = []
     if doc.path:
         corpus = Corpus(ctx.workspace.id)

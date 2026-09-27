@@ -57,6 +57,23 @@ class PreviewIn(BaseModel):
     delivery: DeliveryIn | None = None
 
 
+class DesignIn(BaseModel):
+    """Either picked options (Build from options) or a free description (Describe in your own words)."""
+    prompt: str | None = Field(None, max_length=1000)
+    gender: str = Field("", max_length=20)
+    age: str = Field("", max_length=20)
+    persona: str = Field("", max_length=30)
+    pace: str = Field("", max_length=20)
+    accent: str = Field("", max_length=40)
+
+
+class DesignSaveIn(BaseModel):
+    generated_voice_id: str = Field(min_length=5, max_length=100)
+    name: str = Field(min_length=1, max_length=60)
+    description: str = Field("", max_length=1000)
+    use_as: str | None = None  # "host_a" | "host_b"
+
+
 class LibraryAddIn(BaseModel):
     public_owner_id: str = Field(min_length=5, max_length=100)
     voice_id: str = Field(min_length=5, max_length=60)
@@ -116,6 +133,8 @@ def _serialize(ctx: Ctx) -> dict:
             "error": job.error if job and job.status == "failed" else None,
             "preview_url": storage.presign_get(preview_key) if preview_key else None,
         },
+        # Voices this workspace generated with Voice Design (the ElevenLabs account is shared across workspaces).
+        "custom_voices": voices.get("custom") or [],
         "tts_configured": bool(settings.elevenlabs_api_key),
         "model": tts.model_id(),
         "models": tts.MODELS,
@@ -209,6 +228,61 @@ async def preview(body: PreviewIn, ctx: Ctx = Depends(get_ctx)):
     record_usage(ctx.db, workspace_id=ctx.workspace.id, kind="tts", provider="elevenlabs",
                  quantity=round(tts.mp3_seconds(clip), 1), unit="seconds")
     return {"url": storage.presign_get(key), "seconds": round(tts.mp3_seconds(clip), 1)}
+
+
+def _design_description(body: DesignIn) -> str:
+    if body.prompt and body.prompt.strip():
+        text = body.prompt.strip()
+        if len(text) < 20:
+            raise HTTPException(400, "Describe the voice in at least 20 characters.")
+        return text
+    parts = [f"A {body.age} {body.gender} voice".replace("  ", " ") if body.gender or body.age else "A voice"]
+    if body.accent:
+        parts.append(f"with a {body.accent} accent")
+    sentence = " ".join(parts) + "."
+    if body.persona:
+        sentence += f" Sounds {body.persona}."
+    if body.pace:
+        sentence += f" Speaks at a {body.pace} pace."
+    return sentence + " Clear studio quality, suited to podcasts and narration."
+
+
+@router.post("/design")
+async def design(body: DesignIn, ctx: Ctx = Depends(get_ctx)):
+    """Three previews of a new voice. Nothing is saved until the writer picks one."""
+    if not settings.elevenlabs_api_key:
+        raise HTTPException(503, "Set ELEVENLABS_API_KEY in .env to generate voices.")
+    description = _design_description(body)
+    try:
+        previews = await run_in_threadpool(tts.design_voice, description)
+    except tts.TTSError as exc:
+        raise HTTPException(502, str(exc)) from exc
+    out = []
+    for p in previews:
+        key = f"ws/{ctx.workspace.id}/voice-previews/{uuid.uuid4().hex}.mp3"
+        storage.put_bytes(key, p["audio"], "audio/mpeg")
+        out.append({"generated_voice_id": p["generated_voice_id"], "url": storage.presign_get(key), "seconds": p["seconds"]})
+    record_usage(ctx.db, workspace_id=ctx.workspace.id, kind="voice_design", provider="elevenlabs",
+                 quantity=len(out), unit="previews")
+    return {"description": description, "previews": out}
+
+
+@router.post("/design/save")
+async def save_design(body: DesignSaveIn, ctx: Ctx = Depends(get_ctx)):
+    try:
+        voice_id = await run_in_threadpool(tts.create_designed_voice, body.name, body.description,
+                                           body.generated_voice_id)
+    except tts.TTSError as exc:
+        raise HTTPException(502, str(exc)) from exc
+    vp = _ensure_profile(ctx)
+    voices = dict(vp.host_voices or {})
+    voices["custom"] = [*(voices.get("custom") or []),
+                        {"voice_id": voice_id, "name": body.name, "description": body.description[:300]}]
+    if body.use_as in ("host_a", "host_b"):
+        voices[body.use_as] = voice_id
+    vp.host_voices = voices
+    ctx.db.commit()
+    return {"voice_id": voice_id, **_serialize(ctx)}
 
 
 @router.get("/reading-script")

@@ -91,8 +91,9 @@ def handle_ingest(db: Session, job: Job):
             raise PermanentJobError(str(exc)) from exc
         raise
     _after_import(db, job, source.workspace_id, result.get("changed", []))
-    if result.get("capped"):
-        return Done(result, f"First {result['limit']} posts in orbit: your plan's limit. Upgrade to index the rest")
+    if result.get("locked"):
+        return Done(result, f"All {result['found']} posts indexed. Your latest {result['available']} are available; "
+                            f"upgrade to unlock the other {result['locked']}")
     return Done(result, f"All posts in orbit: {result['indexed']} new or updated")
 
 

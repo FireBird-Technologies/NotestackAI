@@ -24,6 +24,8 @@ import type {
   Usage,
   Voice,
   Delivery,
+  VoiceDesignInput,
+  VoiceDesignPreview,
   VoiceProfileData,
   VoiceState,
 } from "./types";
@@ -129,6 +131,9 @@ export const voiceApi = {
   readingScript: () => api<{ title: string; text: string; words: number }>("/api/voice/reading-script"),
   quota: () => api<Quota>("/api/voice/quota"),
   revoke: () => del<VoiceState>("/api/voice/consent"),
+  design: (input: VoiceDesignInput) => post<{ description: string; previews: VoiceDesignPreview[] }>("/api/voice/design", input),
+  saveDesign: (body: { generated_voice_id: string; name: string; description: string; use_as?: "host_a" | "host_b" }) =>
+    post<VoiceState & { voice_id: string }>("/api/voice/design/save", body),
 };
 
 export type ItemBody = {
