@@ -18,3 +18,7 @@ feedparser==6.*
 beautifulsoup4==4.*
 pypdf==5.*
 stripe==13.*
+
+# Dev tools (tests, lint)
+pytest==8.*
+ruff==0.8.*

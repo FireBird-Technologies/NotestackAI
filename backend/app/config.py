@@ -20,6 +20,7 @@ class Settings(BaseSettings):
 
     # Local default is a SQLite file (relative to the working directory, normally backend/).
     # Prod and docker-compose use Postgres: postgresql+psycopg://user:pass@host:5432/db
+    # (plain postgres:// and postgresql:// URLs are rewritten to use psycopg, see below)
     database_url: str = "sqlite:///./notestack.db"
 
     # Worker (Postgres backed queue, see app/worker.py)
@@ -127,6 +128,18 @@ class Settings(BaseSettings):
     def _blank_is_default(cls, value):
         """RUN_WORKER_IN_API= (blank, as in .env.example) means "decide from ENV", not a parse error."""
         return None if isinstance(value, str) and not value.strip() else value
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def _use_psycopg_driver(cls, value):
+        """Accept plain postgres:// or postgresql:// URLs (as Neon, Heroku etc. hand out) and
+        point them at psycopg 3, the only Postgres driver installed. Query params pass through."""
+        if isinstance(value, str):
+            value = value.strip()
+            for prefix in ("postgres://", "postgresql://"):
+                if value.startswith(prefix):
+                    return "postgresql+psycopg://" + value[len(prefix):]
+        return value
 
     @property
     def worker_in_api(self) -> bool:

@@ -29,6 +29,18 @@ from app.services.storage import storage as store
 log = logging.getLogger("notestack")
 
 
+def _drop_color_message(record: logging.LogRecord) -> bool:
+    """litellm (via dspy) adds a secret redaction filter to uvicorn.error that formats the message
+    and clears record.args. uvicorn's colored formatter then swaps in its color_message template
+    and prints it with no args ("Uvicorn running on %s://%s:%d"). Without the template it prints
+    the already formatted, redacted message."""
+    record.__dict__.pop("color_message", None)
+    return True
+
+
+logging.getLogger("uvicorn.error").addFilter(_drop_color_message)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logging.basicConfig(level=logging.INFO)

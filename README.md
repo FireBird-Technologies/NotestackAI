@@ -71,7 +71,7 @@ docker compose up --build
 Without Docker (one API process does everything):
 
 ```bash
-cd backend && python -m venv .venv && .venv/Scripts/pip install -r requirements-dev.txt
+cd backend && python -m venv .venv && .venv/Scripts/pip install -r requirements.txt
 alembic upgrade head && uvicorn app.main:app --reload     # SQLite at backend/notestack.db
 cd frontend && npm install && npm run dev
 cd renderer && npm install && npm start                    # only needed for videos, quote cards, carousels
