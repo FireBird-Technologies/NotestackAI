@@ -266,7 +266,8 @@ async def design(body: DesignIn, ctx: Ctx = Depends(get_ctx)):
     for p in previews:
         key = f"ws/{ctx.workspace.id}/voice-previews/{uuid.uuid4().hex}.mp3"
         storage.put_bytes(key, p["audio"], "audio/mpeg")
-        out.append({"generated_voice_id": p["generated_voice_id"], "url": storage.presign_get(key), "seconds": p["seconds"]})
+        out.append({"generated_voice_id": p["generated_voice_id"], "url": storage.presign_get(key),
+                    "seconds": p["seconds"]})
     record_usage(ctx.db, workspace_id=ctx.workspace.id, kind="voice_design", provider="elevenlabs",
                  quantity=len(out), unit="previews")
     return {"description": description, "previews": out}

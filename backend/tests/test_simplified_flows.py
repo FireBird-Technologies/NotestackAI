@@ -7,7 +7,7 @@ from app.models import Job
 from tests.test_buildout import auth, connect, docs, feed, llm  # noqa: F401  (fixtures)
 
 
-def test_archive_notebook_is_created_once_and_listed_first(client, auth, run_jobs, feed):
+def test_archive_notebook_is_created_once_and_listed_first(client, auth, run_jobs, feed):  # noqa: F811
     connect(client, auth, run_jobs)
     client.post("/api/notebooks", json={"title": "Newer"}, headers=auth)
     first = client.post("/api/notebooks/archive", headers=auth).json()
@@ -23,14 +23,14 @@ def test_archive_notebook_is_created_once_and_listed_first(client, auth, run_job
     assert nb["is_archive"] and len(nb["documents"]) == len(indexed)
 
 
-def test_generate_from_whole_archive_uses_the_archive_notebook(client, auth, run_jobs, feed):
+def test_generate_from_whole_archive_uses_the_archive_notebook(client, auth, run_jobs, feed):  # noqa: F811
     connect(client, auth, run_jobs)
     art = client.post("/api/artifacts/generate", json={"type": "summary", "archive": True}, headers=auth).json()
     archive = client.post("/api/notebooks/archive", headers=auth).json()
     assert art["notebook_id"] == archive["id"]
 
 
-def test_sync_queues_resurfacing_and_writing_voice_once(client, auth, feed, db_session, session_factory,
+def test_sync_queues_resurfacing_and_writing_voice_once(client, auth, feed, db_session, session_factory,  # noqa: F811
                                                        monkeypatch):
     from app.services.jobs import claim_next
     from app.worker import run_job

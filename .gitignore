@@ -20,3 +20,6 @@ renderer/build/
 
 # Local object storage (used when no R2 is configured)
 .storage/
+
+# Local-only notes, not for the repo
+docs-local/

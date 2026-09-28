@@ -94,7 +94,7 @@ export default function PricingTiers() {
   useEffect(() => {
     api<{ billing_enabled: boolean; plans: Plan[] }>("/api/billing/plans")
       .then((r) => {
-        setPlans(r.plans);
+        if (Array.isArray(r.plans) && r.plans.length > 0) setPlans(r.plans);
         setBillingEnabled(r.billing_enabled);
       })
       .catch(() => {
