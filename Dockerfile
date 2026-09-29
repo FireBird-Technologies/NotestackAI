@@ -1,6 +1,6 @@
-# Hugging Face Spaces image, built from the repo root (the Space holds the whole repo).
-# Upload this file to the Space root as `Dockerfile`. One container, non-root uid 1000, port 7860;
-# the worker runs inside the API process.
+# Hugging Face Spaces image (the Space builds this root Dockerfile from the whole repo).
+# One container, non-root uid 1000, port 7860; the worker runs inside the API process.
+# Local docker-compose builds backend/Dockerfile instead.
 FROM python:3.12-slim
 
 RUN useradd -m -u 1000 user
