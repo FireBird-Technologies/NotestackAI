@@ -18,6 +18,10 @@ import Resurface from "./pages/Resurface";
 import Settings from "./pages/Settings";
 import Sources from "./pages/Sources";
 import Studio from "./pages/Studio";
+import VideoCreate from "./pages/VideoCreate";
+import VideoEditor from "./pages/VideoEditor";
+import VideoVoices from "./pages/VideoVoices";
+import Videos from "./pages/Videos";
 import TopicMap from "./pages/TopicMap";
 import { ToolPage, ToolsHub } from "./pages/Tools";
 import VoiceProfile from "./pages/VoiceProfile";
@@ -55,6 +59,10 @@ export default function App() {
         <Route index element={<MissionControl />} />
         <Route path="notebooks" element={<Notebooks />} />
         <Route path="notebooks/:id" element={<NotebookView />} />
+        <Route path="videos" element={<Videos />} />
+        <Route path="videos/new" element={<VideoCreate />} />
+        <Route path="videos/voices" element={<VideoVoices />} />
+        <Route path="videos/:id" element={<VideoEditor />} />
         <Route path="sources" element={<Sources />} />
         <Route path="map" element={<TopicMap />} />
         <Route path="voice" element={<VoiceProfile />} />

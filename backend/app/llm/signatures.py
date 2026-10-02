@@ -47,14 +47,6 @@ class ScriptLine(BaseModel):
     sources: list[SourceRef] = Field(default_factory=list)
 
 
-class Scene(BaseModel):
-    type: Literal["title", "section", "pull_quote", "number", "outro"]
-    on_screen_text: str
-    narration: str
-    duration_hint_s: float
-    visual: str = ""
-
-
 class Hook(BaseModel):
     text: str
     strength: float = Field(ge=0, le=1)
@@ -163,14 +155,6 @@ class PodcastScript(dspy.Signature):
     format: Literal["deep_dive", "brief", "debate"] = dspy.InputField()
     target_minutes: int = dspy.InputField()
     lines: list[ScriptLine] = dspy.OutputField()
-
-
-class VideoStoryboard(dspy.Signature):
-    """Turn the post into a scene list for a Remotion composition."""
-
-    passages: list[str] = dspy.InputField()
-    aspect: Literal["16:9", "9:16", "1:1"] = dspy.InputField()
-    scenes: list[Scene] = dspy.OutputField()
 
 
 class HookGenerator(dspy.Signature):

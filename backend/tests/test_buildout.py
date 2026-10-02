@@ -404,26 +404,32 @@ def test_audio_overview_and_limits(client, auth, run_jobs, feed, llm, monkeypatc
     assert r.status_code == 402 and r.json()["detail"]["code"] == "plan_limit"
 
 
-def test_video_hands_off_and_renderer_callback(client, auth, run_jobs, feed, llm, monkeypatch):
-    from app.pipeline import media
-
+def test_native_video_moved_to_blog2video(client, auth, run_jobs, feed):
     connect(client, auth, run_jobs)
     doc = docs(client, auth)[0]
+    r = client.post("/api/artifacts/generate", json={"type": "video", "document_id": doc["id"], "style": "short"},
+                    headers=auth)
+    assert r.status_code == 410
+
+
+def test_audiogram_hands_off_and_renderer_callback(client, auth, monkeypatch, db_session, run_jobs):
+    from app.config import settings
+    from app.models import Artifact, Workspace
+    from app.pipeline import media
+
+    ws = db_session.query(Workspace).one()
+    audio = Artifact(workspace_id=ws.id, type="audio_overview", status="ready", storage_key="ws/x/audio.mp3",
+                     content_json={"title": "Pricing", "duration_s": 42, "segments": []})
+    db_session.add(audio)
+    db_session.commit()
     sent = {}
     monkeypatch.setattr(media, "request_render", lambda job, artifact, comp, props=None, stills=None:
                         sent.update(comp=comp, props=props, job=str(job.id)))
-    llm["VideoStoryboard"] = {"scenes": [
-        {"type": "title", "on_screen_text": "Charge more", "narration": "", "duration_hint_s": 2.5, "visual": ""},
-        {"type": "section", "on_screen_text": "Readers valued it", "narration": "", "duration_hint_s": 3,
-         "visual": ""},
-    ]}
-    art = client.post("/api/artifacts/generate", json={"type": "video", "document_id": doc["id"], "style": "short"},
-                      headers=auth).json()
+    art = client.post("/api/artifacts/generate", json={"type": "video", "style": "audiogram",
+                                                       "audio_artifact_id": str(audio.id)}, headers=auth).json()
     job = run_jobs()[0]
     assert job.status == "running"  # handed off to the renderer
-    assert sent["comp"] == "ShortVertical" and sent["props"]["hook"] == "Charge more"
-    from app.config import settings
-
+    assert sent["comp"] == "AudiogramSquare"
     r = client.post(f"/api/internal/jobs/{sent['job']}/progress", headers={"x-internal-token": settings.internal_token},
                     json={"status": "done", "progress": 1, "storage_key": "ws/x/video.mp4", "render_seconds": 12})
     assert r.status_code == 200

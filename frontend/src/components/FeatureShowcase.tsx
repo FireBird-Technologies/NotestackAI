@@ -200,9 +200,9 @@ const FEATURES: Feature[] = [
   {
     id: "video",
     eyebrow: "Video studio",
-    title: "Shorts, explainers and audiograms, from one post.",
-    body: "Notestack storyboards the post, narrates it and renders it with word by word captions and your brand colors. Vertical for Reels and TikTok, wide for YouTube, square for feeds.",
-    points: ["9:16 shorts with a hook in two seconds", "16:9 explainers and 1:1 audiograms", "Your logo and accent color on every frame"],
+    title: "Narrated videos from one post, edited scene by scene.",
+    body: "Pick a post or paste a link, choose a template, style and voice, and Notestack writes the script, narrates it and builds the scenes. Edit any scene and watch the live preview update, then render an MP4.",
+    points: ["Landscape for YouTube, vertical for Reels and TikTok", "Templates, stock footage, captions and 16 languages", "Square audiograms from any audio overview"],
     visual: <VideoVisual />,
   },
   {

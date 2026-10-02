@@ -21,7 +21,7 @@ ArtifactType = Literal["summary", "audio_overview", "video", "quote_card", "caro
 
 
 class RenderIn(BaseModel):
-    composition: Literal["ShortVertical", "ExplainerLong", "AudiogramSquare", "QuoteCard", "CarouselSlide"]
+    composition: Literal["AudiogramSquare", "QuoteCard", "CarouselSlide"]
     props: dict
 
 
@@ -33,8 +33,8 @@ class GenerateIn(BaseModel):
     # audio_overview
     format: Literal["deep_dive", "brief", "debate"] = "deep_dive"
     minutes: int = Field(6, ge=1, le=30)
-    # video
-    style: Literal["short", "explainer", "audiogram"] = "short"
+    # video: only audiograms here; other videos are made by blog2video (/api/videos)
+    style: str = "audiogram"
     audio_artifact_id: uuid.UUID | None = None
     # carousel
     slides: list[dict] | None = None
@@ -81,12 +81,12 @@ def generate(body: GenerateIn, ctx: Ctx = Depends(get_ctx)):
         body.notebook_id = ensure_archive_notebook(ctx).id
     params: dict = {}
     content: dict = {}
-    if body.type == "video" and body.style == "audiogram":
+    if body.type == "video" and body.style != "audiogram":
+        raise HTTPException(410, "Videos moved to /app/videos")
+    if body.type == "video":
         if not body.audio_artifact_id:
             raise HTTPException(400, "Pick an audio overview for the audiogram")
         source = get_artifact_or_404(ctx, body.audio_artifact_id)
-        seconds = float((source.content_json or {}).get("duration_s", 60))
-        check_limit(ctx.db, ctx.workspace, "video_minutes", seconds / 60)
         title = f"Audiogram: {(source.content_json or {}).get('title', 'Audio overview')}"
         params = {"style": "audiogram", "audio_artifact_id": str(source.id)}
         artifact, job = start_artifact(ctx.db, ctx.workspace.id, "video", title=title, notebook_id=source.notebook_id,
@@ -101,10 +101,6 @@ def generate(body: GenerateIn, ctx: Ctx = Depends(get_ctx)):
         check_limit(ctx.db, ctx.workspace, "audio_minutes", body.minutes)
         params = {"format": body.format, "minutes": body.minutes}
         title = f"Audio overview: {target}"
-    elif body.type == "video":
-        check_limit(ctx.db, ctx.workspace, "video_minutes", 1 if body.style == "short" else 3)
-        params = {"style": body.style}
-        title = f"{'Short' if body.style == 'short' else 'Explainer'} video: {target}"
     elif body.type == "launch_kit":
         if not body.document_id:
             raise HTTPException(400, "A Launch Kit is made from one post")
@@ -174,6 +170,11 @@ def patch_artifact(artifact_id: uuid.UUID, body: PatchIn, ctx: Ctx = Depends(get
 @router.delete("/{artifact_id}")
 def delete_artifact(artifact_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
     a = get_artifact_or_404(ctx, artifact_id)
+    if a.type == "video" and (a.content_json or {}).get("provider") == "blog2video":
+        from app.routers.videos import remove_video  # also removes it from blog2video
+
+        remove_video(ctx, a)
+        return {"ok": True}
     storage.delete_prefix(f"ws/{ctx.workspace.id}/artifacts/{a.id}/")
     ctx.db.query(CalendarItem).filter(CalendarItem.artifact_id == a.id, CalendarItem.status == "scheduled").delete()
     ctx.db.delete(a)

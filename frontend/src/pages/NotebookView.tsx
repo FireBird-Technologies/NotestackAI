@@ -55,12 +55,9 @@ function StudioPanel({ notebookId, disabled }: { notebookId: string; disabled: b
             {format === "deep_dive" ? "Deep dive" : format === "brief" ? "Brief" : "Debate"} · {minutes} min
           </span>
         </button>
-        <button disabled={off} onClick={() => make({ type: "video", style: "short" })}>
-          Short video
-        </button>
-        <button disabled={off} onClick={() => make({ type: "video", style: "explainer" })}>
-          Explainer
-        </button>
+        <Link className={off ? "disabled" : ""} to={`/app/videos/new?notebook_id=${notebookId}`} aria-disabled={off}>
+          Video
+        </Link>
         <button disabled={off} onClick={() => make({ type: "summary" })}>
           Summary
         </button>

@@ -62,8 +62,11 @@ def serialize_artifact(a: Artifact, job: Job | None = None) -> dict:
         "document_id": str(a.document_id) if a.document_id else None,
         "content": content,
         "storage_key": a.storage_key,
-        "url": storage.presign_get(a.storage_key) if a.storage_key else None,
-        "download_url": storage.presign_get(a.storage_key, download_name=_download_name(a)) if a.storage_key else None,
+        # blog2video videos live on blog2video's storage (video_url once rendered)
+        "url": storage.presign_get(a.storage_key) if a.storage_key else content.get("video_url"),
+        "download_url": (storage.presign_get(a.storage_key, download_name=_download_name(a)) if a.storage_key
+                         else content.get("video_url")),
+        "provider": content.get("provider"),
         "slide_urls": [storage.presign_get(k) for k in slides],
         "created_at": a.created_at.isoformat() if a.created_at else None,
         "job": serialize_job(job) if job else None,

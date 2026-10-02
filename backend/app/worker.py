@@ -44,7 +44,7 @@ from app.models import (
 from app.pipeline import generate, launchkit, media
 from app.pipeline.generate import NothingToDo
 from app.pipeline.ingest import FeedNotFound, entry_from_upload, extract_article, ingest_source, store_entries
-from app.services import launchpad, tts
+from app.services import launchpad, tts, video_quota
 from app.services.email import email_service
 from app.services.email_verification import purge_old_codes
 from app.services.jobs import claim_next, create_job, record_usage, retry_or_fail, stale_jobs, update_job
@@ -226,7 +226,7 @@ HANDLERS: dict[str, Callable[[Session, Job], object]] = {
     "resurface_scan": handle_resurface,
     "summary": _artifact_handler(generate.summarize_notebook, "Summary ready"),
     "audio_overview": _artifact_handler(media.audio_overview, "Audio overview ready"),
-    "video": _artifact_handler(media.make_video, "Video ready"),
+    "video": _artifact_handler(media.make_video, "Audiogram ready"),  # audiograms; videos come from blog2video
     "quote_card": _artifact_handler(media.make_quote_card, "Quote card ready"),
     "carousel": _artifact_handler(media.render_carousel, "Carousel ready"),
     "launch_kit": _artifact_handler(launchkit.build_launch_kit, "Launch Kit ready"),
@@ -364,6 +364,9 @@ PERIODIC = [
     Periodic("sync_engagement", 3600, launchpad.sync_engagement),
     Periodic("update_email_batch", 300, update_email_batch),
     Periodic("daily_cleanup", 24 * 3600, daily_cleanup),
+    Periodic("video_period_reset", 3600, video_quota.reset_due_video_periods),
+    Periodic("video_refund_sweep", 600, video_quota.sweep_failed_videos),
+    Periodic("video_capacity_check", 3600, video_quota.check_capacity),
 ]
 
 

@@ -13,13 +13,14 @@ from app.config import settings
 from app.models import Artifact, CalendarItem, Notebook, Source, Subscription, User, VoiceProfile, Workspace
 from app.services.plans import PLANS, Plan, effective_plan, next_plan, plan_dict
 from app.services.usage import month_usage
+from app.services.video_quota import sync_video_quota, video_usage
 
 CYCLES = {"monthly", "annual"}
 LOW_FUEL = 0.8  # meters at or above this share of the allowance start nudging
 
 METERS = {
     "audio_minutes": ("Audio overviews", "min"),
-    "video_minutes": ("Video renders", "min"),
+    "videos": ("Videos", ""),
     "launch_kits": ("Launch Kits", ""),
 }
 
@@ -90,7 +91,7 @@ def build_nudges(db: Session, workspace: Workspace, plan: Plan, meters: list[dic
         left = "Unlimited" if kits["limit"] < 0 else f"{kits['limit']}"
         out.append(_nudge(f"act-kit-{month}", "action", "Launch your latest post",
                           f"{left} Launch Kits this month, none used yet. One click turns a post into threads, "
-                          "LinkedIn posts, quote cards and a short video.", "Build a Launch Kit",
+                          "LinkedIn posts and quote cards.", "Build a Launch Kit",
                           "/app/launch-kit", priority=70))
     elif kits["limit"] > 0 and kits["used"] < kits["limit"]:
         left = kits["limit"] - kits["used"]
@@ -119,6 +120,8 @@ def build_nudges(db: Session, workspace: Workspace, plan: Plan, meters: list[dic
 def billing_status(db: Session, workspace: Workspace) -> dict:
     plan = effective_plan(db, workspace)
     used = month_usage(db, workspace.id)
+    videos = video_usage(db, workspace)
+    used["videos"] = videos["used"]
     sources = _count(db, Source, workspace.id)
     meters = _meters(plan, used, sources)
     upgrade = next_plan(plan)
@@ -134,6 +137,7 @@ def billing_status(db: Session, workspace: Workspace) -> dict:
         "period_end": sub.current_period_end.isoformat() if sub and sub.current_period_end else None,
         "meters": meters,
         "since": used["since"],
+        "videos_resets_at": videos["resets_at"],
         "nudges": build_nudges(db, workspace, plan, meters, can_upgrade),
     }
 
@@ -156,6 +160,8 @@ def apply_subscription(db: Session, workspace_id, *, plan: str, status: str, pro
     sub.provider_subscription_id = subscription_id or sub.provider_subscription_id
     sub.current_period_end = current_period_end
     db.commit()
+    if workspace:
+        sync_video_quota(db, workspace)
     if workspace and effective_plan(db, workspace).indexed_posts != before:
         resync_sources(db, workspace_id)
     return sub

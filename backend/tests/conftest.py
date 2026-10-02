@@ -11,6 +11,8 @@ os.environ["ELEVENLABS_API_KEY"] = ""
 os.environ["FIRECRAWL_API_KEY"] = ""
 os.environ["R2_PREFIX"] = ""
 os.environ["TYPESAFE_API_KEY"] = ""
+os.environ["B2V_API_BASE_URL"] = ""
+os.environ["B2V_API_KEY"] = ""
 os.environ.setdefault("EMAIL_PROVIDER", "console")
 os.environ.setdefault("JWT_SECRET", "test-secret-that-is-at-least-32-bytes-long")
 os.environ.setdefault("BILLING_ENABLED", "false")

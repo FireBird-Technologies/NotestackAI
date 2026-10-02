@@ -8,6 +8,7 @@ import SkyCanvas from "./SkyCanvas";
 import UpgradeModal from "./UpgradeModal";
 import {
   AsteroidIcon,
+  CometIcon,
   HelmetIcon,
   LaunchpadIcon,
   LaunchWindowIcon,
@@ -18,12 +19,13 @@ import {
 } from "./icons/Icons";
 
 // Theme in the icon, clarity in the label: the plain label always shows.
-// Seven stops: related pages share one entry (`also` keeps it lit on them).
+// Eight stops: related pages share one entry (`also` keeps it lit on them).
 const NAV: { to: string; label: string; icon: typeof RadarIcon; end?: boolean; also?: string[] }[] = [
   { to: "/app", label: "Home", icon: RadarIcon, end: true },
   { to: "/app/sources", label: "Sources", icon: SatelliteDishIcon, also: ["/app/map"] },
   { to: "/app/notebooks", label: "Notebooks", icon: PlanetIcon },
   { to: "/app/studio", label: "Create", icon: LaunchWindowIcon, also: ["/app/launch-kit"] },
+  { to: "/app/videos", label: "Videos", icon: CometIcon },
   { to: "/app/launchpad", label: "Launchpad", icon: LaunchpadIcon, also: ["/app/resurface"] },
   { to: "/app/archive", label: "Library", icon: AsteroidIcon },
   { to: "/app/voice", label: "Voice", icon: HelmetIcon },

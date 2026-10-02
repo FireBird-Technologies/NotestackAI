@@ -240,6 +240,16 @@ function head(r: Rendered, origin: string) {
   return tags.join("\n    ");
 }
 
+/**
+ * The static copy is for crawlers and screen readers, not for people: until the app's JS and CSS load it would flash
+ * as an unstyled page of links. Keep it in the document but visually hidden (not display:none, which some crawlers
+ * skip), and paint the app's black background from the first frame. React's createRoot replaces it on load.
+ */
+const STATIC_STYLE =
+  "<style>html,body{background:#000;color:#fff;margin:0}" +
+  ".seo-static{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;" +
+  "clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}</style>";
+
 export function prerenderPlugin(siteUrl: string): Plugin {
   const origin = siteUrl.replace(/\/+$/, "");
   let config: ResolvedConfig;
@@ -255,14 +265,14 @@ export function prerenderPlugin(siteUrl: string): Plugin {
       const all = routes();
       for (const r of all) {
         const html = template
-          .replace("</head>", `    ${head(r, origin)}\n  </head>`)
-          .replace('<div id="root"></div>', `<div id="root">${r.body}</div>`);
+          .replace("</head>", `    ${head(r, origin)}\n    ${STATIC_STYLE}\n  </head>`)
+          .replace('<div id="root"></div>', `<div id="root"><div class="seo-static">${r.body}</div></div>`);
         const file = r.path === "/" ? path.join(outDir, "index.html") : path.join(outDir, `${r.path.slice(1)}.html`);
         await mkdir(path.dirname(file), { recursive: true });
         await writeFile(file, html, "utf8");
       }
       // Signed in and unknown routes fall back to an app shell with no page content (see public/_redirects).
-      await writeFile(path.join(outDir, "app.html"), template.replace("</head>", `    <meta name="robots" content="noindex" />\n    <title>Notestack</title>\n  </head>`), "utf8");
+      await writeFile(path.join(outDir, "app.html"), template.replace("</head>", `    <meta name="robots" content="noindex" />\n    <title>Notestack</title>\n    ${STATIC_STYLE}\n  </head>`), "utf8");
       config.logger.info(`prerendered ${all.length} public routes`);
     },
   };

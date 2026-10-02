@@ -1,4 +1,4 @@
-"""Audio overviews (two hosts, ElevenLabs), videos and stills (Remotion renderer)."""
+"""Audio overviews (two hosts, ElevenLabs), audiograms and stills (Remotion renderer)."""
 
 import uuid
 
@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.corpus import Corpus
 from app.llm import run
-from app.llm.signatures import PickQuotes, PodcastScript, VideoStoryboard
+from app.llm.signatures import PickQuotes, PodcastScript
 from app.models import Artifact, Document, Job, Source, User, VoiceProfile, Workspace
 from app.pipeline.generate import NothingToDo
 from app.pipeline.passages import notebook_docs, passages_for, tools_for, verify_refs
@@ -16,12 +16,6 @@ from app.services import tts
 from app.services.jobs import record_usage, update_job
 from app.services.renderer import PermanentJobError, brand_props, request_render
 from app.services.storage import keys, storage
-
-SCENE_TYPES = {"title", "section", "pull_quote", "number", "outro"}
-VIDEO_STYLES = {
-    "short": ("ShortVertical", "9:16"),
-    "explainer": ("ExplainerLong", "16:9"),
-}
 
 
 def artifact_docs(db: Session, artifact: Artifact) -> list[Document]:
@@ -112,91 +106,13 @@ def audio_overview(db: Session, job: Job, artifact: Artifact) -> dict:
     return {"artifact_id": str(artifact.id), "duration_s": round(t, 1)}
 
 
-# Video
-
-
-def _clamp(value, lo: float, hi: float) -> float:
-    try:
-        return max(lo, min(hi, float(value)))
-    except (TypeError, ValueError):
-        return lo
+# Video: blog2video makes videos now (app/routers/videos.py). The renderer still makes audiograms.
 
 
 def make_video(db: Session, job: Job, artifact: Artifact) -> None:
-    style = job.params.get("style", "short")
-    if style == "audiogram":
+    if job.params.get("style") == "audiogram":
         return make_audiogram(db, job, artifact)
-    composition, aspect = VIDEO_STYLES[style]
-    docs = artifact_docs(db, artifact)
-    if not docs:
-        raise NothingToDo("Add posts before making a video.")
-    corpus = Corpus(artifact.workspace_id)
-    workspace = db.get(Workspace, artifact.workspace_id)
-    update_job(db, job, progress=0.05, message="Storyboarding")
-    passages = passages_for(corpus, docs, budget_chars=60_000)
-    out = run.predict(VideoStoryboard, db=db, workspace_id=artifact.workspace_id, job=job,
-                      passages=passages, aspect=aspect)
-    scenes = [s for s in (out.get("scenes") or []) if (s.get("on_screen_text") or "").strip()]
-    if not scenes:
-        raise RuntimeError("The storyboard came back empty")
-    max_scenes = 8 if style == "short" else 14
-    scenes = scenes[:max_scenes]
-
-    captions: list[dict] = []
-    audio = bytearray()
-    cursor = 0.0
-    voice_a, _ = host_voices(db, artifact.workspace_id)
-    narrator = host_settings(db, artifact.workspace_id)["host_a"]
-    out_scenes = []
-    for i, s in enumerate(scenes):
-        narration = (s.get("narration") or "").strip()
-        duration = _clamp(s.get("duration_hint_s"), 2.0, 20.0)
-        if narration and settings.elevenlabs_api_key:
-            update_job(db, job, progress=0.15 + 0.5 * i / len(scenes), message=f"Narrating scene {i + 1}")
-            clip, words = tts.synthesize_with_timestamps(artifact.workspace_id, narration, voice_a, narrator)
-            seconds = tts.mp3_seconds(clip)
-            # Pad with silence so each clip starts exactly when its scene does.
-            audio += _silence(cursor - tts.mp3_seconds(bytes(audio)))
-            offset = int(cursor * 1000)
-            captions += [{**w, "startMs": w["startMs"] + offset, "endMs": w["endMs"] + offset} for w in words]
-            audio += clip
-            duration = max(duration, seconds + 0.3)
-        cursor += duration
-        scene_type = s.get("type") if s.get("type") in SCENE_TYPES else "section"
-        out_scenes.append({"type": scene_type, "onScreenText": s["on_screen_text"][:300],
-                           "narration": narration, "durationS": round(_clamp(duration, 0.5, 60), 2)})
-
-    props: dict = {"scenes": out_scenes, "captions": captions, "brand": brand_props(workspace)}
-    title = docs[0].title if len(docs) == 1 else (artifact.content_json or {}).get("title", "Notestack")
-    if composition == "ShortVertical":
-        hook = next((sc["onScreenText"] for sc in out_scenes if sc["type"] == "title"), title)
-        props["hook"] = hook[:120]
-    else:
-        props["title"] = title[:140]
-    if audio:
-        key = keys.artifact(artifact.workspace_id, artifact.id, "narration", "mp3")
-        storage.put_bytes(key, bytes(audio), "audio/mpeg")
-        props["audioUrl"] = storage.presign_get(key, ttl=6 * 3600)
-    artifact.content_json = {**(artifact.content_json or {}), "style": style, "composition": composition,
-                             "scenes": out_scenes, "duration_s": round(cursor, 1)}
-    artifact.status = "rendering"
-    db.commit()
-    update_job(db, job, progress=0.7, message="Handing off to the renderer")
-    request_render(job, artifact, composition, props)
-    record_usage(db, workspace_id=artifact.workspace_id, kind="video", provider="remotion",
-                 quantity=round(cursor, 1), unit="seconds", job=job)
-
-
-_SILENT_FRAME = None
-
-
-def _silence(seconds: float) -> bytes:
-    """MPEG1 Layer III 128 kbps 44.1 kHz silent frames (417 bytes, ~26 ms each)."""
-    global _SILENT_FRAME
-    if _SILENT_FRAME is None:
-        _SILENT_FRAME = bytes([0xFF, 0xFB, 0x90, 0x64]) + bytes(413)
-    frames = int(seconds / 0.026122)
-    return _SILENT_FRAME * max(frames, 0)
+    raise PermanentJobError("Videos are now made in the Videos editor.")
 
 
 def make_audiogram(db: Session, job: Job, artifact: Artifact) -> None:
@@ -217,7 +133,7 @@ def make_audiogram(db: Session, job: Job, artifact: Artifact) -> None:
     db.commit()
     update_job(db, job, progress=0.1, message="Handing off to the renderer")
     request_render(job, artifact, "AudiogramSquare", props)
-    record_usage(db, workspace_id=artifact.workspace_id, kind="video", provider="remotion",
+    record_usage(db, workspace_id=artifact.workspace_id, kind="render", provider="remotion",
                  quantity=props["durationS"], unit="seconds", job=job)
 
 

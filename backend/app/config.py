@@ -101,6 +101,15 @@ class Settings(BaseSettings):
     linkedin_client_id: str = ""
     linkedin_client_secret: str = ""
 
+    # blog2video: makes the videos. We call its public API with our own account's key (b2v_live_...), so every
+    # video is charged to that account. Backend only: the key must never reach the browser or the logs.
+    b2v_api_base_url: str = Field("", validation_alias=AliasChoices("B2V_API_BASE_URL", "B2V_API_URL"))
+    b2v_api_key: str = ""
+    # blog2video's web app: serves the template poster images (<app>/template-posters/<id>.webp).
+    b2v_app_url: str = "https://blog2video.app"
+    b2v_timeout_seconds: float = 30  # creates, uploads and full-project reads; other calls also wait 30s (STATUS_TIMEOUT)
+    b2v_capacity_alert_below: int = 20  # log an error when our blog2video account has fewer videos left
+
     # Renderer
     renderer_url: str = "http://localhost:3100"
     internal_token: str = "internal-change-me"

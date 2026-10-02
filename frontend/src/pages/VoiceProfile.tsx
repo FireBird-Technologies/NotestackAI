@@ -377,7 +377,7 @@ function GenerateVoiceModal({
         {mode === "clone" &&
           (state.clone.allowed ? (
             <>
-              <p className="muted">Read a passage from your own writing for one to three minutes. Your voice becomes Host A, so every overview and video sounds like you.</p>
+              <p className="muted">Read a passage from your own writing for one to three minutes. Your voice becomes Host A, so every audio overview sounds like you.</p>
               <div className="row">
                 <button
                   className="btn btn-primary"
@@ -395,7 +395,7 @@ function GenerateVoiceModal({
             <div className="vp-upgrade">
               <div>
                 <strong>Voice cloning is on the Writer and Studio plans</strong>
-                <p className="muted small">Record a couple of minutes and every audio overview and video is narrated by you.</p>
+                <p className="muted small">Record a couple of minutes and every audio overview is narrated by you.</p>
               </div>
               <button className="btn btn-primary" onClick={() => openUpgrade("writer")}>
                 Upgrade to clone my voice
@@ -901,7 +901,7 @@ export default function VoiceProfile() {
       {step === "hosts" && (
         <section className="card stack vp-card">
           <h2>Who reads your work aloud</h2>
-          <p className="muted">Audio overviews are a conversation between two hosts, and videos are narrated by Host A. Tap a voice to use it, or add your own.</p>
+          <p className="muted">Audio overviews are a conversation between two hosts. Tap a voice to use it, or add your own.</p>
           {!state.tts_configured && <p className="muted">Voice previews are unavailable right now.</p>}
           <VoicePicker state={state} voices={voices} onSaved={setState} onBrowse={setBrowsing} onGenerate={setGenerating} />
 

@@ -10,7 +10,7 @@ const ORDER = ["free", "writer", "studio"];
 
 const LIMIT_TITLES: Record<string, string> = {
   audio_minutes: "Out of audio fuel",
-  video_minutes: "Out of render fuel",
+  videos: "Out of videos",
   launch_kits: "Launch Kits used up",
   sources: "Your station is full",
   voice_cloning: "Voice cloning is locked",
@@ -25,14 +25,15 @@ function boosts(plan: PlanInfo, current: PlanInfo): string[] {
   };
   if (plan.sources > current.sources) out.push(`${plan.sources} sources`);
   times(plan.audio_minutes, current.audio_minutes, "audio minutes");
-  times(plan.video_minutes, current.video_minutes, "video minutes");
+  times(plan.videos, current.videos, "videos");
   times(plan.launch_kits, current.launch_kits, "Launch Kits");
   if (plan.voice_cloning && !current.voice_cloning) out.push("Voice cloning");
   if (plan.brand_kit && !current.brand_kit) out.push("Brand kit");
   return out;
 }
 
-function resetDate(since: string | undefined): string {
+function resetDate(since: string | undefined, videosResetAt?: string | null): string {
+  if (videosResetAt) return new Date(videosResetAt).toLocaleDateString(undefined, { month: "long", day: "numeric" });
   const d = since ? new Date(since) : new Date();
   const next = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1));
   return next.toLocaleDateString(undefined, { month: "long", day: "numeric" });
@@ -139,7 +140,7 @@ export default function UpgradeModal() {
             {modal.mode === "welcome"
               ? "Your new limits are live. Every source, minute and Launch Kit below is ready to use."
               : limit
-                ? `${limit.message} ${canBuy ? "Upgrade and keep flying, or wait" : "Your allowance refills"} on ${resetDate(status?.since)}.`
+                ? `${limit.message} ${canBuy ? "Upgrade and keep flying, or wait" : "Your allowance refills"} on ${resetDate(status?.since, limit?.kind === "videos" ? status?.videos_resets_at : null)}.`
                 : "Your archive has more orbits in it. More sources, more minutes and more Launch Kits, so every post gets a second life."}
           </p>
           {meter && <FuelMeter meter={meter} />}

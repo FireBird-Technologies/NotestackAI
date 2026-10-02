@@ -7,8 +7,6 @@ from app.models import Artifact, Job
 from app.services.storage import keys, storage
 
 COMPOSITIONS = {
-    "ShortVertical": "mp4",
-    "ExplainerLong": "mp4",
     "AudiogramSquare": "mp4",
     "QuoteCard": "png",
     "CarouselSlide": "png",

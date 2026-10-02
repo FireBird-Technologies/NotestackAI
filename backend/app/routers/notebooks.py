@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, select
+from sqlalchemy.exc import IntegrityError
 
 from app.auth import Ctx, get_ctx
 from app.config import settings
@@ -77,12 +78,20 @@ ARCHIVE_TITLE = "All posts"
 
 def ensure_archive_notebook(ctx: Ctx) -> Notebook:
     """The workspace's "All posts" notebook, topped up with every indexed post (locked posts are skipped)."""
-    nb = ctx.db.scalar(select(Notebook).where(Notebook.workspace_id == ctx.workspace.id, Notebook.is_archive.is_(True)))
+    def find() -> Notebook | None:
+        return ctx.db.scalar(select(Notebook).where(Notebook.workspace_id == ctx.workspace.id,
+                                                    Notebook.is_archive.is_(True)))
+
+    nb = find()
     if not nb:
-        nb = Notebook(workspace_id=ctx.workspace.id, title=ARCHIVE_TITLE, is_archive=True,
-                      description="Every indexed post in your archive, kept up to date.")
-        ctx.db.add(nb)
-        ctx.db.flush()
+        try:
+            nb = Notebook(workspace_id=ctx.workspace.id, title=ARCHIVE_TITLE, is_archive=True,
+                          description="Every indexed post in your archive, kept up to date.")
+            ctx.db.add(nb)
+            ctx.db.flush()
+        except IntegrityError:  # a concurrent request made it first (uq_notebooks_one_archive)
+            ctx.db.rollback()
+            nb = find()
     ids = list(ctx.db.scalars(select(Document.id).where(Document.workspace_id == ctx.workspace.id)))
     _add_docs(ctx, nb, ids)
     ctx.db.commit()

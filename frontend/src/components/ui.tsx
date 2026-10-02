@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { ApiError } from "../api/client";
 import type { Job } from "../api/types";
 
@@ -39,11 +40,14 @@ export function Modal({
   onClose,
   children,
   wide = false,
+  actions,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
   wide?: boolean;
+  /** Buttons for the header's right side, in place of the close button. */
+  actions?: ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -52,20 +56,25 @@ export function Modal({
     ref.current?.focus();
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
-  return (
+  // Rendered into <body>: a parent with backdrop-filter or transform (cards have one) would otherwise become the
+  // containing block of this fixed backdrop and trap the modal inside that card.
+  return createPortal(
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className={`modal card${wide ? " modal-wide" : ""}`} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} ref={ref}>
         <div className="modal-head">
           <h2>{title}</h2>
-          <button className="icon-btn" onClick={onClose} aria-label="Close">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
-              <path d="M6 6l12 12M18 6L6 18" />
-            </svg>
-          </button>
+          {actions ?? (
+            <button className="icon-btn" onClick={onClose} aria-label="Close">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+          )}
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -143,11 +152,14 @@ export function ConfirmButton({
   children,
   confirmLabel = "Click again to confirm",
   className = "btn btn-small btn-danger",
+  label,
 }: {
-  onConfirm: () => void | Promise<void>;
+  onConfirm: () => unknown; // the result (e.g. act's success flag) is awaited, not used
   children: ReactNode;
   confirmLabel?: string;
   className?: string;
+  /** Accessible name and tooltip, for an icon-only button. */
+  label?: string;
 }) {
   const [armed, setArmed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -161,6 +173,8 @@ export function ConfirmButton({
       type="button"
       className={`${className}${armed ? " armed" : ""}`}
       disabled={busy}
+      aria-label={label ? (armed ? confirmLabel : label) : undefined}
+      title={label ? (armed ? confirmLabel : label) : undefined}
       onClick={async () => {
         if (!armed) return setArmed(true);
         setBusy(true);

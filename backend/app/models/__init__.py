@@ -1,5 +1,9 @@
 from app.models.content import (
     Artifact,
+    B2VCustomVoice,
+    B2VStyle,
+    B2VTemplate,
+    B2VVideo,
     CalendarItem,
     Chat,
     Citation,
@@ -16,16 +20,22 @@ from app.models.content import (
     Topic,
     TrackedLink,
     Upload,
+    UsageCounter,
     UsageEvent,
+    UserSavedVoice,
     VoiceConsent,
     VoiceProfile,
 )
 from app.models.email import EmailVerificationCode, UpdateEmail, UpdateEmailSend, VerificationPurpose
-from app.models.user import AuthProvider, BillingEvent, Subscription, User, Workspace, WorkspaceMember
+from app.models.user import AuthProvider, BillingEvent, PlanRecord, Subscription, User, Workspace, WorkspaceMember
 
 __all__ = [
     "Artifact",
     "AuthProvider",
+    "B2VCustomVoice",
+    "B2VStyle",
+    "B2VTemplate",
+    "B2VVideo",
     "BillingEvent",
     "CalendarItem",
     "Chat",
@@ -38,6 +48,7 @@ __all__ = [
     "Job",
     "Message",
     "Notebook",
+    "PlanRecord",
     "NotebookDocument",
     "SocialAccount",
     "Source",
@@ -47,7 +58,9 @@ __all__ = [
     "UpdateEmail",
     "UpdateEmailSend",
     "Upload",
+    "UsageCounter",
     "UsageEvent",
+    "UserSavedVoice",
     "User",
     "VerificationPurpose",
     "VoiceConsent",

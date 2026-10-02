@@ -37,8 +37,8 @@ const FEATURES = [
   {
     icon: LaunchWindowIcon,
     label: "Video",
-    title: "Shorts, explainers, audiograms",
-    body: "Storyboards generated from your post, rendered with accurate captions in 9:16, 16:9 or 1:1.",
+    title: "Narrated videos you can edit",
+    body: "Pick a post and a template, then edit every scene with a live preview. Landscape for YouTube, vertical for Reels.",
   },
   {
     icon: RocketIcon,

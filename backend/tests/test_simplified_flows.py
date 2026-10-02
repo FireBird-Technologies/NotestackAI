@@ -1,9 +1,11 @@
 """One-click flows: the "All posts" notebook, whole-archive generation, and jobs that run after a sync."""
 
+import pytest
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from app.config import settings
-from app.models import Job
+from app.models import Job, Notebook, Workspace
 from tests.test_buildout import auth, connect, docs, feed, llm  # noqa: F401  (fixtures)
 
 
@@ -21,6 +23,17 @@ def test_archive_notebook_is_created_once_and_listed_first(client, auth, run_job
 
     nb = client.get(f"/api/notebooks/{first['id']}", headers=auth).json()
     assert nb["is_archive"] and len(nb["documents"]) == len(indexed)
+
+
+def test_a_workspace_cannot_have_two_archive_notebooks(client, auth, db_session):  # noqa: F811
+    client.post("/api/notebooks/archive", headers=auth)
+    ws = db_session.scalar(select(Workspace))
+    db_session.add(Notebook(workspace_id=ws.id, title="All posts", is_archive=True))
+    with pytest.raises(IntegrityError):
+        db_session.commit()
+    db_session.rollback()
+    db_session.add(Notebook(workspace_id=ws.id, title="Mine"))  # ordinary notebooks are not limited
+    db_session.commit()
 
 
 def test_generate_from_whole_archive_uses_the_archive_notebook(client, auth, run_jobs, feed):  # noqa: F811

@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { artifactsApi } from "../api/endpoints";
+import { artifactsApi, videosApi } from "../api/endpoints";
 import type { Artifact, Citation, Segment } from "../api/types";
 import { useJob } from "../hooks/useJob";
 import { Markdown } from "./Markdown";
@@ -43,7 +43,8 @@ function Transcript({ segments, onSeek }: { segments: Segment[]; onSeek: (t: num
   );
 }
 
-function Body({ artifact, onCite }: { artifact: Artifact; onCite?: (c: Citation) => void }) {
+/** The player, image or text of a finished artifact (nothing while it is still being made). */
+export function Body({ artifact, onCite }: { artifact: Artifact; onCite?: (c: Citation) => void }) {
   const [showTranscript, setShowTranscript] = useState(false);
   const [audioEl, setAudioEl] = useState<HTMLAudioElement | null>(null);
   const c = artifact.content;
@@ -90,6 +91,16 @@ function Body({ artifact, onCite }: { artifact: Artifact; onCite?: (c: Citation)
         </div>
       );
     case "video":
+      if (artifact.provider === "blog2video") {
+        return (
+          <div className="artifact-body">
+            {artifact.url && <video controls preload="metadata" src={artifact.url} className={`player video-${c.aspect_ratio === "portrait" ? "short" : "explainer"}`} />}
+            <Link className="btn btn-small" to={`/app/videos/${artifact.id}`}>
+              Open editor
+            </Link>
+          </div>
+        );
+      }
       return artifact.url ? (
         <div className="artifact-body">
           <video controls preload="metadata" src={artifact.url} className={`player video-${c.style ?? "short"}`} />
@@ -195,7 +206,8 @@ export function ArtifactCard({
         {onRemoved && (
           <ConfirmButton
             onConfirm={async () => {
-              await artifactsApi.remove(artifact.id);
+              // A blog2video video is also removed from blog2video.
+              await (artifact.provider === "blog2video" ? videosApi.remove(artifact.id) : artifactsApi.remove(artifact.id));
               onRemoved(artifact.id);
             }}
           >
