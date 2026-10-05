@@ -1,10 +1,11 @@
 import { notebooksApi } from "../../api/endpoints";
-import type { Doc, NotebookSummary } from "../../api/types";
+import type { Doc, NotebookSummary, WorkspaceChat } from "../../api/types";
 
 /** The video wizard's step 1 lists, kept for the browser session (until a full reload) so re-opening the wizard
  * shows them at once. Readers show what is cached, then refresh in the background through the loaders below. */
 export const sourceCache = {
   notebooks: null as NotebookSummary[] | null,
+  chats: null as WorkspaceChat[] | null,
   archiveId: null as string | null,
   docs: new Map<string, Doc[]>(),
 };
@@ -12,8 +13,10 @@ export const sourceCache = {
 /** Forget everything, so one account never sees another's posts (called on log in and log out). */
 export function clearSourceCache(): void {
   sourceCache.notebooks = null;
+  sourceCache.chats = null;
   sourceCache.archiveId = null;
   sourceCache.docs.clear();
+  seededAt.clear();
 }
 
 export async function loadNotebooks(): Promise<NotebookSummary[]> {
@@ -22,10 +25,31 @@ export async function loadNotebooks(): Promise<NotebookSummary[]> {
   return n;
 }
 
+export async function loadChats(): Promise<WorkspaceChat[]> {
+  const c = await notebooksApi.allChats();
+  sourceCache.chats = c;
+  return c;
+}
+
 export async function loadArchiveId(): Promise<string> {
   const nb = await notebooksApi.archive();
   sourceCache.archiveId = nb.id;
   return nb.id;
+}
+
+/** A page that already holds a notebook's current posts (the notebook page) hands them over, so the video wizard
+ * shows them without loading them again. For a minute SourcePicker trusts them and skips its own refresh. */
+const seededAt = new Map<string, number>();
+const SEED_TRUST_MS = 60_000;
+
+export function seedDocs(notebookId: string, docs: Doc[]): void {
+  sourceCache.docs.set(notebookId, docs);
+  seededAt.set(notebookId, Date.now());
+}
+
+export function freshlySeeded(notebookId: string): boolean {
+  const at = seededAt.get(notebookId);
+  return at !== undefined && Date.now() - at < SEED_TRUST_MS;
 }
 
 export async function loadDocs(notebookId: string): Promise<Doc[]> {

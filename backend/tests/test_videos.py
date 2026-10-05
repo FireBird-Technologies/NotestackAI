@@ -19,7 +19,9 @@ from app.models import (
     B2VStyle,
     B2VTemplate,
     B2VVideo,
+    Chat,
     Document,
+    Message,
     Notebook,
     Subscription,
     UsageCounter,
@@ -296,6 +298,78 @@ def test_locked_posts_are_refused_before_charging(client, b2v, owner, db_session
     assert not creates(b2v) and used(db_session, ws) == 0
 
 
+def add_chat(db, ws, turns: list[tuple[str, str]], title: str | None = "Pricing chat") -> Chat:
+    nb = Notebook(workspace_id=ws.id, title="Pricing series")
+    db.add(nb)
+    db.flush()
+    chat = Chat(workspace_id=ws.id, notebook_id=nb.id, title=title)
+    db.add(chat)
+    db.flush()
+    for i, (role, text) in enumerate(turns):
+        db.add(Message(chat_id=chat.id, role=role, content=text,
+                       created_at=datetime(2026, 1, 1, tzinfo=UTC) + timedelta(minutes=i)))
+    db.commit()
+    return chat
+
+
+def test_chat_is_sent_as_its_transcript_after_the_context_prompt(client, b2v, owner, db_session):
+    from app.routers.videos import CHAT_CONTEXT
+    headers, ws = owner
+    chat = add_chat(db_session, ws, [("user", "How often should I raise prices?"),
+                                     ("assistant", "Once a year, and tell readers why [1]. Grandfather the early ones [2].")])
+    r = client.post("/api/videos", json={"chat_ids": [str(chat.id)]}, headers=headers)
+    assert r.status_code == 201 and r.json()["content"]["title"] == "Pricing chat"
+    sent = creates(b2v)[-1]["json"]
+    assert sent["title"] == "Pricing chat" and "chat_ids" not in sent and "url" not in sent
+    assert sent["content"].startswith(CHAT_CONTEXT)
+    assert "User: How often should I raise prices?" in sent["content"]
+    assert "Assistant: Once a year, and tell readers why. Grandfather the early ones." in sent["content"]
+    assert used(db_session, ws) == 1
+
+
+def test_several_chats_make_one_video(client, b2v, owner, other, db_session):
+    from app.routers.videos import CHAT_CONTEXT
+    headers, ws = owner
+    a = add_chat(db_session, ws, [("user", "How often should I raise prices?"),
+                                  ("assistant", "Once a year, and tell readers why it is happening.")])
+    b = add_chat(db_session, ws, [("user", "Should early readers keep their price?"),
+                                  ("assistant", "Yes, grandfather them: they took the risk first.")], title="Early readers")
+    r = client.post("/api/videos", json={"chat_ids": [str(a.id), str(b.id)]}, headers=headers)
+    assert r.status_code == 201 and r.json()["content"]["title"] == "Pricing chat + 1 more"
+    content = creates(b2v)[-1]["json"]["content"]
+    assert content.startswith(CHAT_CONTEXT)
+    assert content.index("# Pricing chat") < content.index("User: How often") < content.index("# Early readers")
+    assert "Assistant: Yes, grandfather them" in content
+    # Six is over the cap; one chat that is not ours makes it 404.
+    six = [str(add_chat(db_session, ws, [("user", "Q?"), ("assistant", "A long enough answer.")]).id) for _ in range(6)]
+    assert client.post("/api/videos", json={"chat_ids": six}, headers=headers).status_code == 422
+    theirs = add_chat(db_session, other[1], [("user", "Q?"), ("assistant", "A.")])
+    r = client.post("/api/videos", json={"chat_ids": [str(a.id), str(theirs.id)]}, headers=headers)
+    assert r.status_code == 404 and len(creates(b2v)) == 1
+
+
+def test_chats_list_across_notebooks_only_answered_ones(client, owner, other, db_session):
+    headers, ws = owner
+    answered = add_chat(db_session, ws, [("user", "Q?"), ("assistant", "A.")])
+    add_chat(db_session, ws, [("user", "Unanswered?")])
+    add_chat(db_session, other[1], [("user", "Q?"), ("assistant", "A.")])
+    r = client.get("/api/notebooks/chats", headers=headers)
+    assert r.status_code == 200
+    assert [(c["id"], c["notebook_title"]) for c in r.json()] == [(str(answered.id), "Pricing series")]
+
+
+def test_chat_source_is_checked(client, b2v, owner, other, db_session):
+    headers, ws = owner
+    theirs = add_chat(db_session, other[1], [("user", "Q?"), ("assistant", "A long enough answer, really.")])
+    assert client.post("/api/videos", json={"chat_ids": [str(theirs.id)]}, headers=headers).status_code == 404
+    empty = add_chat(db_session, ws, [("user", "Anyone there?")])
+    assert client.post("/api/videos", json={"chat_ids": [str(empty.id)]}, headers=headers).status_code == 400
+    doc = add_doc(db_session, ws, "https://ada.example.com/p/a")
+    r = client.post("/api/videos", json={"chat_ids": [str(empty.id)], "document_id": str(doc.id)}, headers=headers)
+    assert r.status_code == 422
+    assert not creates(b2v) and used(db_session, ws) == 0
+
+
 def test_another_workspaces_post_is_404(client, b2v, owner, other, db_session):
     headers, ws = owner
     mine = add_doc(db_session, ws, "https://ada.example.com/p/a", "Enough text to make a video from, really. " * 3)
@@ -462,6 +536,158 @@ def test_catalog_shows_only_this_workspace(client, b2v, owner, theirs, db_sessio
     cat = client.get("/api/videos/catalog", headers=headers).json()
     assert [s["id"] for s in cat["video_styles"]] == ["explainer", "custom:7"]
     assert [t["id"] for t in cat["my_templates"]] == ["custom_58"]
+
+
+@pytest.fixture()
+def house(monkeypatch):
+    """Our account has the two house styles (made on blog2video itself, not by any workspace)."""
+    styles = DEFAULTS["GET /api/video-styles"]["styles"] + [
+        {"id": "custom:21", "custom_id": 21, "name": "Deep dive", "kind": "custom", "guidance": "Context first."},
+        {"id": "custom:20", "custom_id": 20, "name": "Overview", "kind": "custom", "guidance": "Neutral."}]
+    monkeypatch.setitem(DEFAULTS, "GET /api/video-styles", {"styles": styles})
+
+
+def test_catalog_offers_only_the_house_styles(client, b2v, owner, house, db_session):
+    headers, ws = owner
+    db_session.add(B2VStyle(b2v_style_id=7, workspace_id=ws.id, name="Mine"))
+    db_session.commit()
+    styles = client.get("/api/videos/catalog", headers=headers).json()["video_styles"]
+    assert [(s["id"], s["name"], s["kind"]) for s in styles] == [("custom:20", "Overview", "house"),
+                                                                 ("custom:21", "Deep dive", "house")]
+    assert all(s["description"] and "length" not in s for s in styles)
+
+
+@pytest.mark.parametrize("style,length", [("custom:20", "short"), ("custom:21", "medium")])
+def test_house_style_sets_the_length(client, b2v, owner, house, free_plan, style, length):
+    make_video(client, owner[0], video_style=style, video_length="detailed")
+    sent = creates(b2v)[-1]["json"]
+    assert sent["video_style"] == style and sent["video_length"] == length
+
+
+def test_other_account_styles_stay_refused(client, b2v, owner, house):
+    r = client.post("/api/videos", json={"url": "https://a.test/x", "video_style": "custom:9"}, headers=owner[0])
+    assert r.status_code == 404 and not creates(b2v)
+
+
+@pytest.fixture()
+def suggest(monkeypatch):
+    """The AI's focus suggestions, canned: records what it was given."""
+    from app.llm import run
+    seen: list[dict] = []
+
+    def predict(signature, *, db, workspace_id, job=None, lm=None, **inputs):
+        seen.append({"signature": signature.__name__, **inputs})
+        topic = lambda title, desc="": {"title": title, "description": desc}  # noqa: E731
+        return {"topics": [topic("Why prices go up.", "Why raises happen.  Once a year,\n with notice."),
+                           topic("why prices go up"), topic("Grandfathering early readers", "Keep early prices."),
+                           topic("Annual raises", "One raise a year."), topic("A fourth one")]}
+
+    monkeypatch.setattr(run, "predict", predict)
+    return seen
+
+
+def test_focus_topics_for_posts_a_chat_and_one_post(client, owner, db_session, suggest):
+    headers, ws = owner
+    a = add_doc(db_session, ws, "https://ada.example.com/p/a", "Raise prices once a year, and say why. " * 3)
+    b = add_doc(db_session, ws, "https://ada.example.com/p/b", "Start cheaper than you think you should. " * 3)
+    chat = add_chat(db_session, ws, [("user", "How often should I raise prices?"),
+                                     ("assistant", "Once a year, and tell readers why it is happening [1].")])
+    for body in ({"document_ids": [str(a.id), str(b.id)]}, {"chat_ids": [str(chat.id)]}, {"document_id": str(a.id)}):
+        r = client.post("/api/videos/focus-topics", json=body, headers=headers)
+        assert r.status_code == 200, r.text
+        assert r.json()["topics"] == [
+            {"title": "Why prices go up", "description": "Why raises happen. Once a year, with notice."},
+            {"title": "Grandfathering early readers", "description": "Keep early prices."},
+            {"title": "Annual raises", "description": "One raise a year."}]
+    assert [s["signature"] for s in suggest] == ["VideoFocusTopics"] * 3
+    # Each item is a title and the start of its text: a little, never the whole post or transcript.
+    posts, chat_item, one = (s["items"] for s in suggest)
+    assert len(posts) == 2 and all(p.startswith("On Pricing\n") for p in posts)
+    assert any("Raise prices once a year" in p for p in posts) and any("Start cheaper" in p for p in posts)
+    assert chat_item == ["Pricing chat\nHow often should I raise prices?\nOnce a year, and tell readers why it is "
+                         "happening."]
+    assert one[0].startswith("On Pricing\nRaise prices")
+
+
+def test_focus_material_is_short_and_untitled_chats_still_get_topics(client, owner, db_session, suggest):
+    headers, ws = owner
+    long = add_doc(db_session, ws, "https://ada.example.com/p/a", "Pricing is a promise to your readers. " * 200)
+    other = add_doc(db_session, ws, "https://ada.example.com/p/b", "Grandfather the people who came early. " * 200)
+    untitled = add_chat(db_session, ws, [("user", "Should I raise prices?"), ("assistant", "Yes, once a year [1].")],
+                        title=None)
+    r = client.post("/api/videos/focus-topics", json={"document_ids": [str(long.id), str(other.id)]}, headers=headers)
+    assert len(r.json()["topics"]) == 3
+    assert all(len(i) < 450 and i.endswith("...") for i in suggest[-1]["items"])  # 400 characters of text per post
+    titled = add_chat(db_session, ws, [("user", "What about early readers?"), ("assistant", "Keep their price.")])
+    r = client.post("/api/videos/focus-topics", json={"chat_ids": [str(untitled.id), str(titled.id)]}, headers=headers)
+    assert len(r.json()["topics"]) == 3 and len(suggest[-1]["items"]) == 2
+    r = client.post("/api/videos/focus-topics", json={"chat_ids": [str(untitled.id)]}, headers=headers)
+    assert len(r.json()["topics"]) == 3
+    assert suggest[-1]["items"] == ["Should I raise prices?\nYes, once a year."]
+
+
+def test_unusable_topics_get_one_fresh_retry(client, owner, db_session, monkeypatch):
+    from app.llm import run
+    headers, ws = owner
+    doc = add_doc(db_session, ws, "https://ada.example.com/p/a", "Raise prices once a year, and say why. " * 3)
+    lms = []
+    answers = [  # what GLM did: the word "Description" as every title, then a proper answer
+        {"topics": [{"topic": "Description", "summary": f"Angle {i}."} for i in range(3)]},
+        {"topics": [{"topic": "Annual raises", "summary": "One raise a year."},
+                    {"topic": "Grandfathering early readers", "summary": "Keep early prices."},
+                    {"topic": "Saying why prices go up", "summary": "Explain the raise."}]},
+    ]
+
+    def predict(signature, *, db, workspace_id, job=None, lm=None, **inputs):
+        lms.append(lm)
+        return answers[len(lms) - 1]
+
+    monkeypatch.setattr(run, "predict", predict)
+    r = client.post("/api/videos/focus-topics", json={"document_id": str(doc.id)}, headers=headers)
+    assert [t["title"] for t in r.json()["topics"]] == ["Annual raises", "Grandfathering early readers",
+                                                        "Saying why prices go up"]
+    assert len(lms) == 2 and lms[0] is not lms[1]  # the retry is a fresh call, not the cached bad answer
+
+
+def test_focus_topics_check_the_source(client, owner, other, db_session, suggest):
+    headers, ws = owner
+    theirs = add_chat(db_session, other[1], [("user", "Q?"), ("assistant", "A long enough answer, really.")])
+    assert client.post("/api/videos/focus-topics", json={"chat_ids": [str(theirs.id)]}, headers=headers).status_code == 404
+    locked = add_doc(db_session, ws, "https://ada.example.com/p/b")
+    locked.path, locked.metadata_json = None, {"locked": True}
+    db_session.commit()
+    r = client.post("/api/videos/focus-topics", json={"document_id": str(locked.id)}, headers=headers)
+    assert r.status_code == 400 and not suggest
+
+
+@pytest.mark.parametrize("style,length,words", [("custom:20", "short", "overview of that topic"),
+                                                ("custom:21", "medium", "deep dive into that topic")])
+def test_focus_goes_ahead_of_the_material_worded_for_the_style(client, b2v, owner, house, db_session,
+                                                               style, length, words):
+    headers, ws = owner
+    doc = add_doc(db_session, ws, "https://ada.example.com/p/a", "Raise prices once a year, and say why. " * 3)
+    make_video(client, headers, url=None, document_id=str(doc.id), video_style=style, focus="Annual raises",
+               focus_detail="One raise a year, announced early.  Why readers accept it.")
+    sent = creates(b2v)[-1]["json"]
+    assert "url" not in sent and sent["video_length"] == length  # a focus needs the text, not the link
+    head, material = sent["content"].split("\n\n---\n\n", 1)
+    assert head.index('"Annual raises"') < head.index("What to cover: One raise a year, announced early. Why "
+                                                      "readers accept it.") < head.index(words)
+    assert material.startswith("Raise prices")
+    # The topic alone (no description) still works, without the "What to cover" part.
+    make_video(client, headers, url=None, document_id=str(doc.id), video_style=style, focus="Annual raises")
+    head = creates(b2v)[-1]["json"]["content"].split("\n\n---\n\n", 1)[0]
+    assert '"Annual raises"' in head and "What to cover" not in head
+
+
+def test_chat_with_a_focus_keeps_the_chat_context_first(client, b2v, owner, house, db_session):
+    from app.routers.videos import CHAT_CONTEXT
+    headers, ws = owner
+    chat = add_chat(db_session, ws, [("user", "How often should I raise prices?"),
+                                     ("assistant", "Once a year, and tell readers why it is happening.")])
+    make_video(client, headers, url=None, chat_ids=[str(chat.id)], video_style="custom:20", focus="Annual raises")
+    content = creates(b2v)[-1]["json"]["content"]
+    assert content.startswith(CHAT_CONTEXT) and content.index('"Annual raises"') < content.index("User:")
 
 
 # Premium (★) and per-workspace counters

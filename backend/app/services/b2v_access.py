@@ -18,6 +18,16 @@ from app.services.plans import Plan, effective_plan
 from app.services.video_limits import require_premium
 
 BUILTIN_STYLES = {"auto", "explainer", "storytelling", "promotional"}
+# Custom styles made on our blog2video account itself, offered to every workspace in place of the others when they
+# exist (matched by name, the first is the default). Each sets the video length; the wizard has no length picker and
+# only says roughly how long the video comes out.
+HOUSE_STYLES = [  # (name on blog2video, video length, what the wizard says it is: about three lines)
+    ("Overview", "short", "A clear, neutral rundown of the key points. It gets straight to the main idea, one point per "
+                          "scene in plain words. Best for quick social posts and teasers. Usually under a minute long."),
+    ("Deep dive", "medium", "Sets up the context first, then works through the reasoning, examples and trade-offs, each "
+                            "scene building on the last. Best for YouTube, tutorials and full explainers. Usually 1 to "
+                            "2 minutes long."),
+]
 PREMIUM_LENGTHS = {"detailed", "more_detailed", "mdetailed"}
 
 
@@ -116,10 +126,31 @@ def check_template(ctx: Ctx, template: str, plan: Plan) -> None:
         raise not_found("Template not found")
 
 
+def house_styles() -> list[dict]:
+    """HOUSE_STYLES found among the account's custom styles, in HOUSE_STYLES order, with the length each sets."""
+    by_name = {str(s.get("name") or "").strip().lower(): s for s in (b2v.video_styles() or {}).get("styles") or []
+               if s.get("kind") == "custom" and s.get("custom_id") is not None}
+    out = []
+    for name, length, blurb in HOUSE_STYLES:
+        if s := by_name.get(name.lower()):
+            out.append({"id": f"custom:{s['custom_id']}", "custom_id": s["custom_id"], "name": s.get("name"),
+                        "description": blurb, "kind": "house", "length": length})
+    return out
+
+
+def house_length(style: str | None) -> str | None:
+    """The video length a house style sets; None for any other style."""
+    if not style or not style.startswith("custom:"):
+        return None
+    return next((s["length"] for s in house_styles() if s["id"] == style), None)
+
+
 def check_style(ctx: Ctx, style: str) -> None:
     if style in BUILTIN_STYLES:
         return
     if (sid := _custom_id(style, "custom:")) is not None:
+        if any(s["custom_id"] == sid for s in house_styles()):
+            return
         owned_style(ctx, sid)
         return
     raise not_found("Video style not found")  # includes your_style, which learns from every workspace's edits
@@ -159,7 +190,10 @@ def check_refs(ctx: Ctx, body: dict, plan: Plan | None = None) -> Plan:
 
 
 def visible_styles(ctx: Ctx) -> list[dict]:
-    """Built-in styles (read-only) and this workspace's custom styles. Never "Your Style", never others'."""
+    """The house styles when the account has them; otherwise built-in styles (read-only) and this workspace's custom
+    styles. Never "Your Style", never others'."""
+    if house := house_styles():
+        return [{k: v for k, v in s.items() if k != "length"} for s in house]
     mine = set(ctx.db.scalars(select(B2VStyle.b2v_style_id).where(B2VStyle.workspace_id == ctx.workspace.id)))
     out = []
     for s in (b2v.video_styles() or {}).get("styles") or []:

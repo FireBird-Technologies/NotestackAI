@@ -26,7 +26,10 @@ from sqlalchemy import select
 
 from app.auth import Ctx, get_ctx
 from app.config import settings
-from app.models import Artifact, B2VVideo, Document, Notebook, Upload
+from app.llm import run
+from app.llm.provider import focus_lm
+from app.llm.signatures import VideoFocusTopics
+from app.models import Artifact, B2VVideo, Chat, Document, Message, Notebook, Upload
 from app.routers.sources import is_locked
 from app.services import b2v_access, video_limits, video_quota
 from app.services import blog2video as b2v
@@ -43,7 +46,14 @@ MIN_CONTENT = 50
 MAX_CONTENT = 100_000
 MAX_LINKS = 10
 MAX_POSTS = 200  # a notebook's posts, combined into one video (the ingest SCAN_CAP)
+MAX_CHATS = 5  # notebook chats, combined into one video (the wizard's cap, as for posts)
 MAX_FILES = 5
+# Sent ahead of chat transcripts: blog2video only takes content, so this tells its script writer what it is reading.
+CHAT_CONTEXT = ("The text below is one or more conversations between a user and an AI assistant. Make the video about "
+                "the subject of these conversations: the questions the user asked and the answers and conclusions "
+                "reached. Present it "
+                "as a clear explainer for a general audience, in your own narration. Do not read it out as a dialogue, "
+                "and do not mention the chat, the user or the AI assistant.")
 FILE_MAX_BYTES = 5 * 1024 * 1024
 FILE_TYPES = {".pdf", ".docx", ".pptx", ".md", ".txt", ".vtt"}
 LOGO_MAX_BYTES = 2 * 1024 * 1024
@@ -163,19 +173,38 @@ class VideoOptions(BaseModel):
         return data
 
 
-class VideoCreateIn(VideoOptions):
-    # Source: exactly one of these. document_ids are a notebook's ticked posts, combined into one video.
+class FocusIn(BaseModel):
+    # A source from the workspace: exactly one of these. document_ids are a notebook's ticked posts, combined into one
+    # video; chat_ids are notebook chats, sent as their transcripts (combined too).
     document_id: uuid.UUID | None = None
     document_ids: list[uuid.UUID] | None = Field(None, min_length=1, max_length=MAX_POSTS)
-    url: str | None = Field(None, max_length=2000)
-    content: str | None = Field(None, max_length=MAX_CONTENT)
-    title: str | None = Field(None, max_length=300)
+    chat_ids: list[uuid.UUID] | None = Field(None, min_length=1, max_length=MAX_CHATS)
     notebook_id: uuid.UUID | None = None  # names a combined video after its notebook
 
     @model_validator(mode="after")
     def one_source(self):
-        if sum(x is not None for x in (self.document_id, self.document_ids, self.url, self.content)) != 1:
-            raise ValueError("Pick one source: a notebook, a post, a link or pasted text")
+        if sum(x is not None for x in (self.document_id, self.document_ids, self.chat_ids)) != 1:
+            raise ValueError("Pick one source: a notebook, a post or chats")
+        return self
+
+
+class VideoCreateIn(VideoOptions):
+    # Source: exactly one of these (the first three as in FocusIn).
+    document_id: uuid.UUID | None = None
+    document_ids: list[uuid.UUID] | None = Field(None, min_length=1, max_length=MAX_POSTS)
+    chat_ids: list[uuid.UUID] | None = Field(None, min_length=1, max_length=MAX_CHATS)
+    url: str | None = Field(None, max_length=2000)
+    content: str | None = Field(None, max_length=MAX_CONTENT)
+    title: str | None = Field(None, max_length=300)
+    notebook_id: uuid.UUID | None = None  # names a combined video after its notebook
+    # One of the suggested focus topics (/focus-topics): the video is mainly about it. None = the material as a whole.
+    focus: str | None = Field(None, max_length=200)
+    focus_detail: str | None = Field(None, max_length=400)  # the topic's description: what the video should cover
+
+    @model_validator(mode="after")
+    def one_source(self):
+        if sum(x is not None for x in (self.document_id, self.document_ids, self.url, self.content, self.chat_ids)) != 1:
+            raise ValueError("Pick one source: a notebook, a post, chats, a link or pasted text")
         if self.document_ids and len(self.document_ids) == 1:
             self.document_id, self.document_ids = self.document_ids[0], None
         return self
@@ -190,7 +219,7 @@ def _not_indexed(count: int) -> HTTPException:
                               "Untick them or upgrade to index your whole archive.")
 
 
-def _combined(ctx: Ctx, body: VideoCreateIn) -> tuple[str, str]:
+def _combined(ctx: Ctx, body: FocusIn | VideoCreateIn, limit: int) -> tuple[str, str]:
     """Several posts as one text, oldest first, each given an equal share so none is cut off entirely."""
     ids = set(body.document_ids or [])
     docs = list(ctx.db.scalars(select(Document).where(Document.id.in_(ids),
@@ -201,40 +230,116 @@ def _combined(ctx: Ctx, body: VideoCreateIn) -> tuple[str, str]:
     if locked:
         raise _not_indexed(locked)
     docs.sort(key=lambda d: (d.published_at is None, d.published_at.timestamp() if d.published_at else 0))
-    share = MAX_CONTENT // len(docs)
+    share = limit // len(docs)
     text = "\n\n".join(f"# {d.title}\n\n{(d.clean_text or '').strip()}"[:share] for d in docs)
     nb = ctx.db.scalar(select(Notebook).where(Notebook.id == body.notebook_id,
                                               Notebook.workspace_id == ctx.workspace.id)) if body.notebook_id else None
     return (nb.title if nb else f"{docs[0].title} + {len(docs) - 1} more"), text
 
 
+def _cite_free(text: str) -> str:
+    """Citation markers ([1], [2]) point at the notebook's posts, which blog2video never sees."""
+    return re.sub(r"\s*\[\d+\]", "", text).strip()
+
+
+def _load_chats(ctx: Ctx, ids: list[uuid.UUID]) -> list[tuple[Chat, list[Message]]]:
+    """This workspace's chats, oldest first, each with its messages in order. 404 if any is not ours."""
+    chats = list(ctx.db.scalars(select(Chat).where(Chat.id.in_(set(ids)), Chat.workspace_id == ctx.workspace.id)
+                                .order_by(Chat.created_at)))
+    if len(chats) != len(set(ids)):
+        raise HTTPException(404, "Chat not found")
+    msgs = ctx.db.scalars(select(Message).where(Message.chat_id.in_([c.id for c in chats]))
+                          .order_by(Message.created_at)).all()
+    return [(c, [m for m in msgs if m.chat_id == c.id]) for c in chats]
+
+
+def _chat_title(chat: Chat, msgs: list[Message]) -> str:
+    return chat.title or next((m.content for m in msgs if m.role == "user"), "")[:80] or "Chat"
+
+
+def _chats(ctx: Ctx, ids: list[uuid.UUID], limit: int) -> tuple[str, str]:
+    """Chats' turns as one text, each chat given an equal share. Over its share, a chat's oldest turns go so its
+    conclusion stays. Several chats are headed by their titles."""
+    loaded = _load_chats(ctx, ids)
+    share = limit // len(loaded)
+    parts = []
+    for chat, msgs in loaded:
+        if not any(m.role == "assistant" for m in msgs):
+            raise HTTPException(400, f'"{_chat_title(chat, msgs)}" has no answers yet')
+        turns = [f"{'User' if m.role == 'user' else 'Assistant'}: {t}" for m in msgs if (t := _cite_free(m.content))]
+        head = f"# {_chat_title(chat, msgs)}\n\n" if len(loaded) > 1 else ""
+        size = len(head) + sum(len(t) + 2 for t in turns)
+        while len(turns) > 1 and size > share:
+            size -= len(turns.pop(0)) + 2
+        parts.append(head + "\n\n".join(turns))
+    first = _chat_title(*loaded[0])
+    return (first if len(loaded) == 1 else f"{first} + {len(loaded) - 1} more"), "\n\n".join(parts)
+
+
+def _doc(ctx: Ctx, document_id: uuid.UUID) -> Document:
+    doc = ctx.db.scalar(select(Document).where(Document.id == document_id, Document.workspace_id == ctx.workspace.id))
+    if not doc:
+        raise HTTPException(404, "Post not found")
+    if is_locked(doc):
+        raise _not_indexed(1)
+    return doc
+
+
+def _source_text(ctx: Ctx, body: FocusIn | VideoCreateIn, limit: int = MAX_CONTENT) -> tuple[str, str]:
+    """A workspace source (posts, a chat, one post) or pasted text as a title and one text."""
+    if body.document_ids:
+        return _combined(ctx, body, limit)
+    if body.chat_ids:
+        return _chats(ctx, body.chat_ids, limit)
+    if body.document_id:
+        doc = _doc(ctx, body.document_id)
+        return doc.title, (doc.clean_text or "")[:limit]
+    return getattr(body, "title", None) or "", getattr(body, "content", None) or ""
+
+
+def _instructions(body: VideoCreateIn) -> str:
+    """What blog2video's script writer is told ahead of the material: what a chat is, and the focus picked (worded
+    for the house style's depth). Empty when neither applies."""
+    parts = [CHAT_CONTEXT] if body.chat_ids else []
+    if focus := (body.focus or "").strip():
+        detail = re.sub(r"\s+", " ", body.focus_detail or "").strip().rstrip(".")
+        cover = f" What to cover: {detail}." if detail else ""
+        length = b2v_access.house_length(body.video_style)
+        if length == "short":
+            parts.append(f'The main focus of this video is one topic only: "{focus}".{cover} Make it an overview of '
+                         "that topic: cover just the parts of the material about it, briefly, and leave the rest out.")
+        elif length == "medium":
+            parts.append(f'The main focus of this video is one topic only: "{focus}".{cover} Make it a deep dive into '
+                         "that topic: explore it in depth using the parts of the material about it, and leave the rest "
+                         "out.")
+        else:
+            parts.append(f'The main focus of this video is: "{focus}".{cover} Leave out parts of the material not '
+                         "about it.")
+    return " ".join(parts)
+
+
 def _source(ctx: Ctx, body: VideoCreateIn) -> tuple[dict, str]:
     """The blog2video source fields and a title for our artifact."""
-    if body.document_ids:
-        title, text = _combined(ctx, body)
-    elif body.document_id:
-        doc = ctx.db.scalar(select(Document).where(Document.id == body.document_id,
-                                                   Document.workspace_id == ctx.workspace.id))
-        if not doc:
-            raise HTTPException(404, "Post not found")
-        if is_locked(doc):
-            raise _not_indexed(1)
-        if re.match(r"https?://", doc.url or ""):
-            return {"url": doc.url, "title": doc.title[:255]}, doc.title
-        # Uploaded files have no public link (upload://name): send their text instead.
-        title, text = doc.title, doc.clean_text or ""
-    elif body.url:
+    if body.url:
         if not re.match(r"https?://", body.url):
             raise HTTPException(400, "Enter a link that starts with http:// or https://")
         return {"url": body.url}, body.title or body.url
-    else:
-        title, text = body.title or "", body.content or ""
-        if not title.strip():
-            raise HTTPException(400, "Give the pasted text a title")
+    if body.document_id and not body.focus:
+        doc = _doc(ctx, body.document_id)
+        if re.match(r"https?://", doc.url or ""):
+            return {"url": doc.url, "title": doc.title[:255]}, doc.title
+        # Uploaded files have no public link (upload://name): their text is sent instead (below). So is any post
+        # given a focus, which goes in front of the text.
+    with upstream():  # the focus wording needs the house styles
+        head = _instructions(body)
+    title, text = _source_text(ctx, body, MAX_CONTENT - len(head) - 10)
+    if body.content is not None and not title.strip():
+        raise HTTPException(400, "Give the pasted text a title")
     text = text.strip()
     if len(text) < MIN_CONTENT:
         raise HTTPException(400, f"Add at least {MIN_CONTENT} characters of text")
-    return {"content": text[:MAX_CONTENT], "title": title[:255]}, title
+    content = f"{head}\n\n---\n\n{text}" if head else text
+    return {"content": content[:MAX_CONTENT], "title": title[:255]}, title
 
 
 def _metadata(ctx: Ctx, row: B2VVideo, **extra) -> dict:
@@ -245,6 +350,9 @@ def _metadata(ctx: Ctx, row: B2VVideo, **extra) -> dict:
 def _check(ctx: Ctx, options: VideoOptions) -> tuple[dict, Plan]:
     payload = options.payload()
     with upstream():  # checking a template or voice may need blog2video's catalog
+        # A house style decides the length, whatever the client sent (before the checks, which gate some lengths).
+        if length := b2v_access.house_length(payload.get("video_style")):
+            payload["video_length"] = length
         plan = b2v_access.check_refs(ctx, payload)
     accent = (ctx.workspace.brand_json or {}).get("accent")
     if plan.brand_kit and accent and "accent_color" not in payload:
@@ -323,13 +431,82 @@ def create_video(body: VideoCreateIn, ctx: Ctx = Depends(get_ctx), _: None = Dep
                                                           document_id=str(body.document_id) if body.document_id
                                                           else None,
                                                           document_ids=[str(d) for d in body.document_ids or []]
-                                                          or None)},
+                                                          or None,
+                                                          chat_ids=[str(c) for c in body.chat_ids or []] or None)},
                                    row.idempotency_key)
         return int(created["video_id"])
 
     a = _start(ctx, plan, title, body.aspect_ratio, body.template, "v1", call, logo, body.document_id,
                source_url=source.get("url"))
     return serialize_artifact(a)
+
+
+def _excerpt(text: str | None, limit: int) -> str:
+    """The start of a text, cut on a word boundary."""
+    text = re.sub(r"\s+", " ", text or "").strip()
+    if len(text) <= limit:
+        return text
+    return text[:limit].rsplit(" ", 1)[0] + "..."
+
+
+def _focus_material(ctx: Ctx, body: FocusIn) -> list[str]:
+    """What the focus suggestions read: each post's title and the start of its text, or a chat's title and first
+    exchange (per chat). A little text, so a vague title or an untitled chat still says what it is about. Checked like a create
+    (another workspace's source 404s, locked posts 400)."""
+    if body.chat_ids:
+        loaded = _load_chats(ctx, body.chat_ids)
+        answer_len = 600 if len(loaded) == 1 else 300
+        items = []
+        for chat, msgs in loaded:
+            question = next((m.content for m in msgs if m.role == "user"), "")
+            answer = next((m.content for m in msgs if m.role == "assistant"), "")
+            parts = [chat.title or "", _excerpt(question, 300), _excerpt(_cite_free(answer), answer_len)]
+            if item := "\n".join(p for p in parts if p):
+                items.append(item)
+        return items
+    ids = set(body.document_ids or [body.document_id])
+    docs = list(ctx.db.scalars(select(Document).where(Document.id.in_(ids),
+                                                      Document.workspace_id == ctx.workspace.id)))
+    if len(docs) != len(ids):
+        raise HTTPException(404, "Post not found")
+    if locked := sum(is_locked(d) for d in docs):
+        raise _not_indexed(locked)
+    each = 800 if len(docs) == 1 else 400
+    items = ["\n".join(p for p in (d.title or "", _excerpt(d.clean_text, each)) if p) for d in docs[:5]]
+    return [i for i in items if i]
+
+
+@router.post("/focus-topics")
+def focus_topics(body: FocusIn, ctx: Ctx = Depends(get_ctx)):
+    """Three topics a video from this source could focus on, suggested by the AI from each item's title and the start
+    of its text. Asked for while the wizard is still on step 1, shown on step 2."""
+    items = _focus_material(ctx, body)
+    if not items:
+        return {"topics": []}
+    topics: list[dict] = []
+    # One retry when the answer has fewer than 3 usable topics (a placeholder for every title, repeats).
+    for retry in (False, True):
+        out = run.predict(VideoFocusTopics, db=ctx.db, workspace_id=ctx.workspace.id, lm=focus_lm(retry), items=items)
+        _add_topics(topics, out.get("topics"))
+        if len(topics) >= 3:
+            break
+    return {"topics": topics[:3]}
+
+
+FOCUS_PLACEHOLDERS = {"title", "topic", "description", "summary", "name", "angle", "focus"}
+
+
+def _add_topics(topics: list[dict], raw) -> None:
+    """Add the model's usable topics to `topics` (as {title, description}): a real title, not seen before."""
+    for t in raw or []:
+        if not isinstance(t, dict):
+            continue
+        title = str(t.get("topic") or t.get("title") or "").strip().strip(".").strip()[:120]
+        description = re.sub(r"\s+", " ", str(t.get("summary") or t.get("description") or "")).strip()[:300]
+        if not title or title.lower() in FOCUS_PLACEHOLDERS:
+            continue
+        if title.lower() not in {x["title"].lower() for x in topics}:
+            topics.append({"title": title, "description": description})
 
 
 @router.post("/batch", status_code=201)

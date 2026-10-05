@@ -265,3 +265,20 @@ class TriageMessage(dspy.Signature):
     standalone_question: str = dspy.OutputField(desc="For archive: the question with follow ups resolved")
     depth: Literal["quick", "deep"] = dspy.OutputField()
     reply: str = dspy.OutputField(desc="For non archive kinds: the reply to show. Empty for archive")
+
+
+class FocusTopic(BaseModel):
+    # Not "title"/"description": with those names GLM sometimes wrote the word "Description" as every title.
+    topic: str = Field(description="The angle itself in 3 to 7 words, e.g. \"Why tokens break software margins\". "
+                                   "Never a label such as Title, Topic or Description. No trailing period")
+    summary: str = Field(description="Two short sentences (at most 40 words): what the video would cover and the "
+                                     "angle it takes, using only this material")
+
+
+class VideoFocusTopics(dspy.Signature):
+    """Suggest three distinct angles a short explainer video could focus on, drawn only from this material. Each has a
+    short, specific topic (different for each of the three) and a two sentence summary of what the video covers about
+    that angle. Never use em dashes."""
+
+    items: list[str] = dspy.InputField(desc="Each item: a title (when there is one), then the start of its text")
+    topics: list[FocusTopic] = dspy.OutputField(desc="Exactly 3 focus topics")

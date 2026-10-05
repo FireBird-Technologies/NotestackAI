@@ -298,8 +298,16 @@ export default function VideoEditor() {
 
   const title = project?.artifact.title ?? "Video";
   const failed = !!status && (!!status.error || status.status === "failed");
+  // Until the first /status answer, our stored status decides (as for edit jobs), so reopening a video that is still
+  // being made goes straight to its progress screen instead of showing the editor first.
+  const stored = !status && genKey === 0 ? project?.artifact.status : null;
   // First generation only: an edit job on a finished video has its own progress screen.
-  const generating = !!status && !status.ready && !failed && !REVIEW.has(status.status) && !(status.status in JOBS);
+  const generating = status
+    ? !status.ready && !failed && !REVIEW.has(status.status) && !(status.status in JOBS)
+    : stored === "generating" || stored === "pending";
+  // Stored as waiting on a review or failed: /status says which screen, so the editor stays hidden until it answers.
+  const awaiting = stored === "review" || stored === "failed";
+  const step: number = status?.step ?? (typeof project?.artifact.content?.step === "number" ? project.artifact.content.step : 1);
   // The live preview only while blog2video says the video is ready (generated / done, or rendering its MP4). The preview link is minted once
   // and kept, so it is there in every state; mid-job it would show a half-changed video. Until /status answers, our
   // stored status decides.
@@ -374,10 +382,9 @@ export default function VideoEditor() {
       {generating && (
         <section className="card stack vw-making">
           <h2>Making your video</h2>
-          <ol className="vw-progress" aria-label={`Step ${status?.step ?? 1} of ${STEPS.length}`}>
+          <ol className="vw-progress" aria-label={`Step ${step} of ${STEPS.length}`}>
             {STEPS.map((s, i) => {
               const n = i + 1;
-              const step = status?.step ?? 1;
               const done = n < step;
               return (
                 <li key={s} className={done ? "done" : n === step ? "on" : ""} aria-current={n === step ? "step" : undefined}>
@@ -432,7 +439,9 @@ export default function VideoEditor() {
       {/* A background job (not a render, which shows its own progress) takes the editor's place until it ends */}
       {fullScreenJob && running && <JobProgress label={running.label} name={title} state={job.data ?? null} />}
 
-      {project && panelProps && !generating && !REVIEW.has(status?.status ?? "") && !fullScreenJob && (
+      {awaiting && <div className="loading-center"><Loading label="Loading video" /></div>}
+
+      {project && panelProps && !generating && !awaiting && !REVIEW.has(status?.status ?? "") && !fullScreenJob && (
         <div className="stack vw-editor-v2">
           <section className="card vw-preview-card wide">
             {project.preview_url && previewReady ? (

@@ -4,6 +4,8 @@ import { videosApi, videoVoicesApi } from "../api/endpoints";
 import type {
   VideoCatalog,
   VideoConfig,
+  VideoFocusSource,
+  VideoFocusTopic,
   VideoOptions,
   VideoQuota,
   VideoSavedVoice,
@@ -12,7 +14,7 @@ import type {
   VideoVoicesResponse,
 } from "../api/types";
 import { Dropdown } from "../components/Dropdown";
-import { CheckIcon } from "../components/icons/Icons";
+import { CheckIcon, SparkleIcon } from "../components/icons/Icons";
 import { errorMessage, Loading, PageHeader } from "../components/ui";
 import { SourcePicker, type VideoSource } from "../components/video/SourcePicker";
 import { loadArchiveId, sourceCache } from "../components/video/sourceCache";
@@ -52,12 +54,19 @@ function Steps({ step }: { step: number }) {
   );
 }
 
+/** The New video page (/app/videos/new?notebook_id=… | document_id=…). */
 export default function VideoCreate() {
-  const navigate = useNavigate();
   const [params] = useSearchParams();
+  return <VideoCreateForm startNotebook={params.get("notebook_id")} startDoc={params.get("document_id")} />;
+}
+
+/** The three-step video wizard: as a page, or inside a modal (inModal: no page header, no step-1 Back, no outer card;
+ * the modal's own close button leaves it). */
+export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal = false }: {
+  startNotebook?: string | null; startDoc?: string | null; inModal?: boolean;
+}) {
+  const navigate = useNavigate();
   const { openUpgrade } = useUpgrade();
-  const startNotebook = params.get("notebook_id");
-  const startDoc = params.get("document_id");
 
   const [config, setConfig] = useState<VideoConfig | null>(null);
   const [catalog, setCatalog] = useState<VideoCatalog | null>(null);
@@ -71,6 +80,12 @@ export default function VideoCreate() {
       : sourceCache.archiveId ? { kind: "notebook", id: sourceCache.archiveId } : null,
   );
   const [postIds, setPostIds] = useState<string[]>([]);
+  const [chatIds, setChatIds] = useState<string[]>([]);
+  // Step 2's "focus on": the AI's three suggestions for the step 1 choice (sourceKey), and the one picked (none =
+  // the whole material).
+  const [topics, setTopics] = useState<VideoFocusTopic[] | null>(null);
+  const topicsFor = useRef(""); // the sourceKey of the suggestions shown or on their way
+  const [focus, setFocus] = useState<VideoFocusTopic | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { playing, play } = useAudio();
@@ -78,7 +93,7 @@ export default function VideoCreate() {
   const [form, setForm] = useState<VideoOptions>({
     stock_footage_enabled: true,
     aspect_ratio: "landscape",
-    video_length: "medium", // every video is medium (1 to 2 min); there is no length picker
+    video_length: "medium", // no length picker: the server sets it from a house style
     logo_position: "bottom_right",
     logo_opacity: 0.9,
     template: "default",
@@ -120,6 +135,9 @@ export default function VideoCreate() {
       const first = pool[Math.floor(Math.random() * pool.length)];
       const known = new Set([...c.my_templates, ...c.crafted_templates, ...c.templates].map((t) => t.id));
       if (first) setForm((f) => (known.has(f.template) ? f : { ...f, ...templateFields(first) }));
+      // Start on the first house style (Overview) unless the form already names one on offer.
+      const house = c.video_styles.filter((s) => s.kind === "house");
+      if (house.length) setForm((f) => (house.some((s) => s.id === f.video_style) ? f : { ...f, video_style: house[0].id }));
     }).catch((e) => setLoadError(errorMessage(e)));
     loadVoices()
       .then((v) => v.saved[0] && pickVoice(v.saved[0]))
@@ -140,7 +158,11 @@ export default function VideoCreate() {
 
   const templates = catalog?.templates ?? [];
   const shown: VideoTemplate[] = templates;
-  const styles: VideoStyleItem[] = [{ id: "auto", name: "Auto", kind: "builtin" }, ...(catalog?.video_styles ?? [])];
+  // The house styles alone when the account has them; otherwise "Auto" and the rest, as before.
+  const listed = catalog?.video_styles ?? [];
+  const houseStyles = listed.some((s) => s.kind === "house");
+  const styles: VideoStyleItem[] = houseStyles ? listed : [{ id: "auto", name: "Auto", kind: "builtin" }, ...listed];
+  const picked = styles.find((s) => s.id === form.video_style);
   const saved = voices?.saved ?? [];
   const left = quota ? Math.max(quota.limit - quota.used, 0) : null;
 
@@ -159,7 +181,41 @@ export default function VideoCreate() {
     }));
   }
 
-  const sourceReady = source?.kind === "post" || (source?.kind === "notebook" && postIds.length > 0);
+  const sourceReady = source?.kind === "post" || (source?.kind === "chats" && chatIds.length > 0)
+    || (source?.kind === "notebook" && postIds.length > 0);
+
+  /** Step 1's choice as API fields: the same for the focus suggestions and the create. */
+  const sourceFields = (): VideoFocusSource | null => !source ? null
+    : source.kind === "post" ? { document_id: source.id }
+    : source.kind === "chats" ? { chat_ids: chatIds }
+    : { document_ids: postIds, notebook_id: source.id };
+  // The focus suggestions belong to one step 1 choice. They are asked for while still on step 1, as soon as the choice
+  // is complete, so they are usually there by step 2; a new source or other ticks asks again. The short wait lets a
+  // run of ticks settle into one request.
+  const sourceKey = !source ? ""
+    : source.kind === "chats" ? `chats:${[...chatIds].sort().join(",")}`
+    : `${source.kind}:${source.id}:${source.kind === "notebook" ? [...postIds].sort().join(",") : ""}`;
+
+  useEffect(() => {
+    if (!sourceReady || sourceKey === topicsFor.current) return;
+    const fields = sourceFields();
+    if (!fields) return;
+    const timer = setTimeout(() => {
+      topicsFor.current = sourceKey;
+      setTopics(null);
+      setFocus(null);
+      // An answer for a choice that has since changed is dropped (topicsFor moved on). A failure counts as no
+      // topics: the block hides, and this choice is not asked again.
+      videosApi.focusTopics(fields)
+        .then((r) => topicsFor.current === sourceKey && setTopics(r.topics))
+        .catch(() => topicsFor.current === sourceKey && setTopics([]));
+    }, 600);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceKey, sourceReady]);
+  // Suggestions made for an earlier choice are never shown for this one: the cards wait for the new ones (and so
+  // does Go to step 2). null = still loading; [] = none to show.
+  const shownTopics = topicsFor.current === sourceKey ? topics : null;
 
   function options(): VideoOptions {
     const o: VideoOptions = { ...form };
@@ -171,9 +227,9 @@ export default function VideoCreate() {
     setError(null);
     setBusy(true);
     try {
-      if (!source) return;
-      const from = source.kind === "post" ? { document_id: source.id } : { document_ids: postIds, notebook_id: source.id };
-      const a = await videosApi.create({ ...options(), ...from });
+      const from = sourceFields();
+      if (!from) return;
+      const a = await videosApi.create({ ...options(), ...from, ...(focus ? { focus: focus.title, focus_detail: focus.description } : {}) });
       navigate(`/app/videos/${a.id}`);
     } catch (e) {
       setError(errorMessage(e)); // 402 also opens the upgrade popup (api/client.ts)
@@ -183,8 +239,8 @@ export default function VideoCreate() {
 
   if (loadError) {
     return (
-      <div className="page-wrap">
-        <PageHeader eyebrow="Videos" title="New video" />
+      <div className={inModal ? "vw-in-modal" : "page-wrap"}>
+        {!inModal && <PageHeader eyebrow="Videos" title="New video" />}
         <p className="error-text">{loadError}</p>
       </div>
     );
@@ -192,8 +248,8 @@ export default function VideoCreate() {
   if (!config) return <Loading label="Loading" />;
   if (!config.configured) {
     return (
-      <div className="page-wrap">
-        <PageHeader eyebrow="Videos" title="New video" />
+      <div className={inModal ? "vw-in-modal" : "page-wrap"}>
+        {!inModal && <PageHeader eyebrow="Videos" title="New video" />}
         <p className="notice">Video is not set up on this server yet.</p>
       </div>
     );
@@ -202,14 +258,18 @@ export default function VideoCreate() {
   const currentVoice = saved.find((v) => v.voice_id === form.custom_voice_id);
 
   return (
-    <div className="page-wrap">
-      <PageHeader eyebrow="Videos" title="New video">
-        {left !== null && (
-          <span className="mono muted">{left} of {quota!.limit} video{quota!.limit === 1 ? "" : "s"} left</span>
-        )}
-      </PageHeader>
+    <div className={inModal ? "stack vw-in-modal" : "page-wrap"}>
+      {inModal ? (
+        left !== null && <span className="mono muted small vw-modal-quota">{left} of {quota!.limit} video{quota!.limit === 1 ? "" : "s"} left</span>
+      ) : (
+        <PageHeader eyebrow="Videos" title="New video">
+          {left !== null && (
+            <span className="mono muted">{left} of {quota!.limit} video{quota!.limit === 1 ? "" : "s"} left</span>
+          )}
+        </PageHeader>
+      )}
 
-      {step === 1 && (
+      {step === 1 && !inModal && (
         // Leaves the wizard for wherever it was opened from. Steps 2 and 3 have their own Back at the bottom.
         <button type="button" className="vw-back"
                 onClick={() => (window.history.length > 1 ? navigate(-1) : navigate("/app/videos"))}>
@@ -217,11 +277,12 @@ export default function VideoCreate() {
         </button>
       )}
       <Steps step={step} />
-      <section className="card stack vw">
+      <section className={inModal ? "stack vw" : "card stack vw"}>
 
         {/* Stays mounted on steps 2 and 3, so going Back keeps the loaded posts and the ticks */}
         <div style={{ display: step === 1 ? "contents" : "none" }}>
-          <SourcePicker source={source} onSource={setSource} postIds={postIds} onPostIds={setPostIds} />
+          <SourcePicker source={source} onSource={setSource} postIds={postIds} onPostIds={setPostIds}
+                        chatIds={chatIds} onChatIds={setChatIds} />
         </div>
 
         {step === 1 && (
@@ -240,13 +301,15 @@ export default function VideoCreate() {
                   ))}
                 </div>
               </div>
-              <label className="vw-option">
-                <input type="checkbox" checked={form.stock_footage_enabled}
-                       onChange={(e) => set({ stock_footage_enabled: e.target.checked })} />
-                Insert stock footage automatically
-              </label>
+              <div className="field">
+                <span className="vw-label">Stock footage</span>
+                <label className="vw-option">
+                  <input type="checkbox" checked={form.stock_footage_enabled}
+                         onChange={(e) => set({ stock_footage_enabled: e.target.checked })} />
+                  Insert stock footage automatically
+                </label>
+              </div>
             </div>
-            <small className="muted vw-note">Your video will be about 1 to 2 minutes long.</small>
 
             {error && <p className="error-text">{error}</p>}
             <div className="vw-nav">
@@ -286,15 +349,20 @@ export default function VideoCreate() {
             <div className="vw-style-row">
               <div className="field">
                 <span className="vw-label">Video style</span>
-                <div className="vw-chips">
-                  {styles.map((s) => (
-                    <button key={s.id} type="button" className={`vw-chip${form.video_style === s.id ? " on" : ""}`}
-                            aria-pressed={form.video_style === s.id} title={s.description ?? undefined}
-                            onClick={() => set({ video_style: s.id })}>
-                      {s.name}{s.kind === "custom" ? " (yours)" : ""}
-                    </button>
-                  ))}
-                </div>
+                {catalog === null ? <Loading label="Loading styles" /> : (
+                  <div className="vw-chips vw-style-chips">
+                    {styles.map((s) => (
+                      <button key={s.id} type="button" className={`vw-chip${form.video_style === s.id ? " on" : ""}`}
+                              aria-pressed={form.video_style === s.id} title={s.description ?? undefined}
+                              onClick={() => set({ video_style: s.id })}>
+                        {s.name}{s.kind === "custom" ? " (yours)" : ""}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {houseStyles && picked?.description && (
+                  <small className="muted vw-style-note">{picked.description}</small>
+                )}
               </div>
 
               <div className="field">
@@ -310,9 +378,50 @@ export default function VideoCreate() {
               </div>
             </div>
 
+            {/* Asked for on step 1, so usually here already. Hidden only when the request failed */}
+            {sourceReady && shownTopics?.length !== 0 && (
+              <div className="field vw-focus">
+                <span className="vw-label">What should the video focus on?</span>
+                <div className="vw-focus-grid" aria-busy={shownTopics === null}>
+                  {shownTopics === null
+                    ? [0, 1, 2].map((i) => (
+                      <div key={i} className="vw-focus-card wait" aria-hidden="true">
+                        <SparkleIcon size={18} />
+                        <span className="vw-focus-text">
+                          <span className="vw-focus-bar" />
+                          <span className="vw-focus-bar short" />
+                        </span>
+                      </div>
+                    ))
+                    : shownTopics.map((t) => {
+                      const on = focus?.title === t.title;
+                      return (
+                        <button key={t.title} type="button" className={`vw-focus-card${on ? " on" : ""}`}
+                                aria-pressed={on} onClick={() => setFocus(on ? null : t)}>
+                          <SparkleIcon size={18} />
+                          <span className="vw-focus-text">
+                            <strong>{t.title}</strong>
+                            {t.description && <small className="vw-focus-desc">{t.description}</small>}
+                          </span>
+                          {on && <CheckIcon size={18} />}
+                        </button>
+                      );
+                    })}
+                </div>
+                {shownTopics && (
+                  <small className="muted vw-hint">
+                    {focus ? "The video is mainly about this topic." : "None picked: the video covers the material as a whole."}
+                  </small>
+                )}
+              </div>
+            )}
+
             <div className="vw-nav">
               <button className="btn" onClick={() => setStep(1)}>Back</button>
-              <button className="btn btn-primary vw-next" onClick={() => setStep(3)}>Go to step 3</button>
+              {/* Waits for the focus suggestions (shown, or none to show), so they are never skipped past */}
+              <button className="btn btn-primary vw-next" disabled={shownTopics === null} onClick={() => setStep(3)}>
+                Go to step 3
+              </button>
             </div>
           </>
         )}

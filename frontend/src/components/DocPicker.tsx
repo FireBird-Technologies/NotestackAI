@@ -39,17 +39,21 @@ export function DocPicker({
     );
   }, [docs, q, exclude]);
 
-  // The tick-all box: ticked only while every pickable post in view is ticked. Ticking it picks them all,
-  // unticking it clears them.
+  // The tick-all box: ticked only while every pickable post in view is ticked, or with a `max`, exactly the first `max`
+  // of them. Ticking it picks those, unticking it clears them.
   const pickable = visible.filter((d) => !d.locked);
-  const allOn = pickable.length > 0 && pickable.every((d) => selected.includes(d.id));
+  const full = !!max && selected.length >= max;
+  const firstFew = max ? pickable.slice(0, max).map((d) => d.id) : null;
+  const allOn = pickable.length > 0 && (firstFew
+    ? selected.length === firstFew.length && firstFew.every((id) => selected.includes(id))
+    : pickable.every((d) => selected.includes(d.id)));
 
   if (!docs) return <Loading label="Loading posts" />;
   if (docs.length === 0) return <p className="muted">No posts yet. Connect a source first.</p>;
 
   const selectAll = () => {
-    const ids = Array.from(new Set([...selected, ...visible.filter((d) => !d.locked).map((d) => d.id)]));
-    onChange(max ? ids.slice(0, max) : ids);
+    if (firstFew) return onChange(firstFew);
+    onChange(Array.from(new Set([...selected, ...pickable.map((d) => d.id)])));
   };
 
   const toggle = (id: string) => {
@@ -68,7 +72,7 @@ export function DocPicker({
             <label className="picker-all">
               <input type="checkbox" checked={allOn} disabled={pickable.length === 0}
                      onChange={() => (allOn ? onChange(selected.filter((id) => !pickable.some((d) => d.id === id))) : selectAll())} />
-              Select All
+              {max && pickable.length > max ? `Select first ${max}` : "Select All"}
             </label>
             {count && <span>{selected.length} selected{max ? ` of ${max}` : ""}</span>}
           </div>
@@ -78,7 +82,7 @@ export function DocPicker({
         {visible.map((d) => (
           <li key={d.id}>
             <label className={`picker-row${selected.includes(d.id) ? " on" : ""}${d.locked ? " locked" : ""}`}>
-              <input type={single ? "radio" : "checkbox"} name="doc-picker" checked={selected.includes(d.id)} disabled={d.locked}
+              <input type={single ? "radio" : "checkbox"} name="doc-picker" checked={selected.includes(d.id)} disabled={d.locked || (!single && full && !selected.includes(d.id))}
                      onChange={() => toggle(d.id)} />
               <span className="picker-title">{d.title}</span>
               <span className="mono muted picker-meta">

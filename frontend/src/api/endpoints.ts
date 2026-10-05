@@ -12,6 +12,7 @@ import type {
   LibraryVoice,
   Notebook,
   NotebookSummary,
+  WorkspaceChat,
   Page,
   Platform,
   Quota,
@@ -38,6 +39,8 @@ import type {
   VideoCatalog,
   VideoConfig,
   VideoCreateBody,
+  VideoFocusSource,
+  VideoFocusTopic,
   VideoCustomVoice,
   VideoDesignedVoice,
   VideoJobState,
@@ -89,6 +92,8 @@ export const notebooksApi = {
   removeDoc: (id: string, docId: string) => del(`/api/notebooks/${id}/documents/${docId}`),
   artifacts: (id: string) => api<Artifact[]>(`/api/notebooks/${id}/artifacts`),
   chats: (id: string) => api<ChatSummary[]>(`/api/notebooks/${id}/chats`),
+  /** Every answered chat in the workspace, newest first. */
+  allChats: () => api<WorkspaceChat[]>("/api/notebooks/chats"),
   messages: (chatId: string) => api<ChatMessage[]>(`/api/notebooks/chats/${chatId}/messages`),
   removeChat: (chatId: string) => del(`/api/notebooks/chats/${chatId}`),
 };
@@ -241,6 +246,8 @@ export const videosApi = {
   catalog: () => api<VideoCatalog>("/api/videos/catalog"),
   list: () => api<VideoListItem[]>("/api/videos"),
   create: (body: VideoCreateBody) => post<Artifact>("/api/videos", body),
+  /** Three topics the AI suggests a video from this source could focus on. */
+  focusTopics: (body: VideoFocusSource) => post<{ topics: VideoFocusTopic[] }>("/api/videos/focus-topics", body),
   /** Multi-link: one video per link. Items with `error` say where it stopped (usually the allowance ran out). */
   createBatch: (urls: string[], options: VideoOptions) =>
     post<(Artifact | { error: string; url: string })[]>("/api/videos/batch", { ...options, urls }),

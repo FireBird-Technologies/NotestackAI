@@ -871,6 +871,126 @@ a.mc-action {
   color: var(--white);
 }
 
+.vw-focus {
+  margin-bottom: 12px;
+}
+
+.vw-focus-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.vw-focus-card {
+  display: flex;
+  align-items: flex-start; /* title and description read from the top */
+  gap: 12px;
+  min-height: 72px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.vw-focus-card > .icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.vw-focus-text {
+  display: grid;
+  flex: 1;
+  gap: 6px;
+  min-width: 0;
+}
+
+.vw-focus-text strong {
+  font-weight: 500;
+}
+
+/* The topic's description: two lines at most */
+.vw-focus-desc {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 0.82rem;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.vw-focus-card.on {
+  border-color: var(--blue);
+}
+
+.vw-focus-card.wait {
+  cursor: default;
+  color: var(--text-2);
+}
+
+/* The loading line in place of a topic: a light-to-dark bar with a sweep across it */
+.vw-focus-bar {
+  display: block;
+  height: 14px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #b8bcc6, #3d4658, #b8bcc6);
+  background-size: 200% 100%;
+  opacity: 0.85;
+  animation: vw-focus-sweep 1.6s linear infinite;
+}
+
+.vw-focus-bar.short {
+  width: 60%;
+  height: 10px;
+}
+
+@keyframes vw-focus-sweep {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vw-focus-bar {
+    animation: none;
+    background: linear-gradient(90deg, #b8bcc6, #3d4658);
+  }
+}
+
+@media (max-width: 720px) {
+  .vw-focus-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Video style pills: a little wider than the generic chips */
+.vw-style-chips .vw-chip {
+  min-width: 132px;
+  justify-content: center;
+  padding-inline: 24px;
+}
+
+.vw-style-chips .vw-chip.on,
+.vw-style-chips .vw-chip[aria-pressed="true"] {
+  border-color: var(--blue);
+  background: var(--blue);
+  color: var(--white);
+  box-shadow: var(--glow-sm);
+}
+
+.vw-style-note {
+  display: -webkit-box;
+  margin-top: 10px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3; /* the description is written to fit three lines */
+  line-clamp: 3;
+}
+
 .vw-premium-badge.small {
   padding: 1px 8px;
   font-size: 0.68rem;
@@ -3063,4 +3183,40 @@ a.mc-action {
 .vw-field-add {
   justify-self: start;
   font-size: 0.875rem;
+}
+
+/* Modals that scroll (e.g. Edit Scene): a very thin, quiet scrollbar */
+.modal {
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: var(--line-strong, rgba(255, 255, 255, 0.2)) transparent;
+}
+
+.modal::-webkit-scrollbar {
+  width: 4px;
+}
+
+.modal::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modal::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--line-strong, rgba(255, 255, 255, 0.2));
+}
+
+.modal::-webkit-scrollbar-thumb:hover {
+  background: var(--text-3, rgba(255, 255, 255, 0.4));
+}
+
+/* The video wizard inside a modal (from a notebook): a wider modal, no page-level width or outer card */
+.modal-wide:has(.vw-in-modal) {
+  width: min(700px, 100%);
+}
+
+.vw-in-modal .vw {
+  max-width: none;
+}
+
+.vw-modal-quota {
+  justify-self: end;
 }

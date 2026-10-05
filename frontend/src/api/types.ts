@@ -82,6 +82,8 @@ export type Citation = {
 };
 
 export type ChatSummary = { id: string; title: string | null; updated_at: string | null };
+/** A chat listed across the whole workspace, with the notebook it belongs to. */
+export type WorkspaceChat = ChatSummary & { notebook_id: string; notebook_title: string };
 export type ChatMessage = { id: string; role: "user" | "assistant"; text: string; citations: Citation[] };
 
 export type ArtifactType = "summary" | "audio_overview" | "video" | "quote_card" | "carousel" | "launch_kit";
@@ -407,7 +409,8 @@ export type VideoStyleItem = {
   id: string;
   name: string;
   description?: string | null;
-  kind: "builtin" | "custom";
+  /** house: made on our blog2video account and offered to everyone; the server sets the video length from it. */
+  kind: "builtin" | "custom" | "house";
   custom_id?: number;
   guidance?: string | null;
   version?: number;
@@ -493,12 +496,24 @@ export type VideoOptions = {
   bgm_volume: number;
 };
 
+/** A workspace source the AI can suggest focus topics for. */
+/** A focus topic the AI suggests: a short title, and two sentences on what the video would cover. */
+export type VideoFocusTopic = { title: string; description: string };
+
+export type VideoFocusSource = { document_id?: string; document_ids?: string[]; chat_ids?: string[]; notebook_id?: string };
+
 export type VideoCreateBody = VideoOptions & {
+  /** One of the suggested focus topics: the video is mainly about it. */
+  focus?: string;
+  /** The picked topic's description, sent so blog2video knows what to cover. */
+  focus_detail?: string;
   document_id?: string;
   /** A notebook's ticked posts, combined into one video. */
   document_ids?: string[];
   /** Names a combined video after its notebook. */
   notebook_id?: string;
+  /** Notebook chats: their transcripts, after a prompt saying what they are (combined into one video). */
+  chat_ids?: string[];
   url?: string;
   content?: string;
   title?: string;

@@ -60,6 +60,18 @@ def triage_lm() -> dspy.LM:
     return _build(settings.llm_triage_model, effort="low", temperature=0.2, max_tokens=2000)
 
 
+FOCUS_MAX_TOKENS = 2000  # three titles and two-line descriptions plus GLM's low-effort reasoning
+
+
+@lru_cache
+def focus_lm(retry: bool = False) -> dspy.LM:
+    """The video wizard's focus suggestions: a little material in, three short topics out, so a small cap keeps it
+    quick. retry=True is the second try after an unusable answer: a different temperature, so it is a fresh call and
+    not that answer again from the cache."""
+    return _build(settings.llm_fast_model, effort="low", temperature=0.8 if retry else 0.4,
+                  max_tokens=FOCUS_MAX_TOKENS)
+
+
 def configure_default() -> None:
     dspy.configure(lm=main_lm(), adapter=dspy.JSONAdapter())
 

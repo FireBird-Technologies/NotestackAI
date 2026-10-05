@@ -6,24 +6,27 @@ import type { Artifact, ChatSummary, Citation, Notebook } from "../api/types";
 import { ArtifactCard, CitationList } from "../components/ArtifactCard";
 import { Markdown } from "../components/Markdown";
 import { DocPicker } from "../components/DocPicker";
-import { TelescopeIcon } from "../components/icons/Icons";
+import { Dropdown } from "../components/Dropdown";
+import { ChevronIcon, TelescopeIcon } from "../components/icons/Icons";
 import { Reader } from "../components/Reader";
-import { ConfirmButton, errorMessage, formatDate, Loading, Modal, Tabs } from "../components/ui";
+import { seedDocs } from "../components/video/sourceCache";
+import { ConfirmButton, errorMessage, formatDate, Loading, Modal } from "../components/ui";
+import { VideoCreateForm } from "./VideoCreate";
 
 type Turn = { role: "user" | "assistant"; text: string; citations?: Citation[]; status?: string; steps?: string[] };
 
-type Pane = "create" | "posts";
 
 const STARTERS = ["What are the strongest ideas across these posts?", "Where do I contradict myself?", "Which post is most worth updating, and why?"];
 
-/** The Create tab: one click per format with sensible defaults, options folded away. */
-function StudioPanel({ notebookId, disabled }: { notebookId: string; disabled: boolean }) {
+/** Create: one click per format with sensible defaults, options folded away; then what was made from this notebook. */
+function StudioPanel({ notebookId, disabled, onCreateVideo }: { notebookId: string; disabled: boolean; onCreateVideo: () => void }) {
   const [artifacts, setArtifacts] = useState<Artifact[] | null>(null);
   const [format, setFormat] = useState<"deep_dive" | "brief" | "debate">("deep_dive");
   const [minutes, setMinutes] = useState(6);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [reading, setReading] = useState<{ id: string; start: number; end: number } | null>(null);
+  const [audioOpen, setAudioOpen] = useState(false); // the Audio overview tile is opened to its options
 
   const load = useCallback(() => notebooksApi.artifacts(notebookId).then(setArtifacts), [notebookId]);
   useEffect(() => {
@@ -48,43 +51,57 @@ function StudioPanel({ notebookId, disabled }: { notebookId: string; disabled: b
 
   return (
     <div className="stack">
+      <span className="vw-label">Create</span>
       <div className="nbv-make">
-        <button className="nbv-make-main" disabled={off} onClick={() => make({ type: "audio_overview", format, minutes })}>
-          <strong>Audio overview</strong>
-          <span className="muted small">
-            {format === "deep_dive" ? "Deep dive" : format === "brief" ? "Brief" : "Debate"} · {minutes} min
+        {/* Opens its options (format, length) right under it; the audio is made from there */}
+        <button className={`nbv-make-main${audioOpen ? " open" : ""}`} disabled={off} aria-expanded={audioOpen}
+                onClick={() => setAudioOpen(!audioOpen)}>
+          <span>Audio overview</span>
+          <span className="nbv-make-meta">
+            <span className="muted small">
+              {format === "deep_dive" ? "Deep dive" : format === "brief" ? "Brief" : "Debate"} · {minutes} min
+            </span>
+            <ChevronIcon size={16} className={`chevron${audioOpen ? " open" : ""}`} />
           </span>
         </button>
-        <Link className={off ? "disabled" : ""} to={`/app/videos/new?notebook_id=${notebookId}`} aria-disabled={off}>
-          Video
-        </Link>
+        {audioOpen && (
+          <div className="nbv-audio-opts">
+            <div className="nbv-audio-row">
+              <div className="field">
+                <span className="small muted">Format</span>
+                <Dropdown<typeof format> label="Audio format" value={format} onChange={setFormat}
+                  options={[
+                    { value: "deep_dive", label: "Deep dive" },
+                    { value: "brief", label: "Brief" },
+                    { value: "debate", label: "Debate" },
+                  ]} />
+              </div>
+              <div className="field">
+                <span className="small muted">Length</span>
+                <Dropdown<string> label="Length" value={String(minutes)} onChange={(v) => setMinutes(Number(v))}
+                  options={[3, 6, 10, 15].map((m) => ({ value: String(m), label: `${m} min` }))} />
+              </div>
+            </div>
+            <button className="btn btn-primary btn-small" disabled={off}
+                    onClick={() => make({ type: "audio_overview", format, minutes }).then(() => setAudioOpen(false))}>
+              {busy ? "Starting..." : "Create audio overview"}
+            </button>
+          </div>
+        )}
+        <button disabled={off} onClick={onCreateVideo}>
+          Create Video
+        </button>
         <button disabled={off} onClick={() => make({ type: "summary" })}>
-          Summary
+          Generate Summary
         </button>
         <button disabled={off} onClick={() => make({ type: "quote_card" })}>
-          Quote card
+          Make Quote Card
         </button>
       </div>
-      <details className="delivery">
-        <summary className="mono muted small">Audio options</summary>
-        <div className="row">
-          <select className="input input-sm" value={format} onChange={(e) => setFormat(e.target.value as typeof format)} aria-label="Audio format">
-            <option value="deep_dive">Deep dive</option>
-            <option value="brief">Brief</option>
-            <option value="debate">Debate</option>
-          </select>
-          <select className="input input-sm" value={minutes} onChange={(e) => setMinutes(Number(e.target.value))} aria-label="Length">
-            {[3, 6, 10, 15].map((m) => (
-              <option key={m} value={m}>
-                {m} min
-              </option>
-            ))}
-          </select>
-        </div>
-      </details>
       {disabled && <p className="muted small">Add posts to this notebook to start creating.</p>}
       {error && <p className="error-text">{error}</p>}
-      <div className="studio-list">
+      {(!artifacts || artifacts.length > 0) && <span className="vw-label nbv-made-label">Made from this notebook</span>}
+      {(!artifacts || artifacts.length > 0) && <div className="studio-list nbv-made">
         {!artifacts && <Loading />}
         {artifacts?.map((a) => (
           <ArtifactCard
@@ -101,7 +118,7 @@ function StudioPanel({ notebookId, disabled }: { notebookId: string; disabled: b
             }
           />
         ))}
-      </div>
+      </div>}
       {reading && <Reader documentId={reading.id} highlight={{ start: reading.start, end: reading.end }} onClose={() => setReading(null)} />}
     </div>
   );
@@ -117,12 +134,12 @@ export default function NotebookView() {
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [makingVideo, setMakingVideo] = useState(false); // the video wizard is open in a modal
   const [toAdd, setToAdd] = useState<string[]>([]);
   const [addError, setAddError] = useState<string | null>(null);
   const [reading, setReading] = useState<{ id: string; start?: number; end?: number } | null>(null);
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState("");
-  const [pane, setPane] = useState<Pane>("create");
   const [params, setParams] = useSearchParams();
   const asked = useRef(false);
   const bottom = useRef<HTMLDivElement>(null);
@@ -326,53 +343,55 @@ export default function NotebookView() {
       </section>
 
       <aside className="card nbv-pane nbv-side">
-        <Tabs<Pane>
-          tabs={[
-            { id: "create", label: "Create" },
-            { id: "posts", label: "Posts", count: nb.documents.length },
-          ]}
-          value={pane}
-          onChange={setPane}
-        />
-        {pane === "create" && <StudioPanel notebookId={nb.id} disabled={nb.documents.length === 0} />}
-        {pane === "posts" && (
-          <>
-            {nb.is_archive ? (
-              <p className="muted small">Every indexed post. New posts join automatically.</p>
-            ) : (
-              <button className="btn btn-small" onClick={() => setAdding(true)}>
-                Add posts
-              </button>
+        <StudioPanel notebookId={nb.id} disabled={nb.documents.length === 0}
+                     onCreateVideo={() => {
+                       seedDocs(nb.id, nb.documents); // the posts this page already has: the wizard shows them at once
+                       setMakingVideo(true);
+                     }} />
+
+        {/* Posts: below the create buttons and what was made */}
+        <section className="nbv-section">
+          <div className="nbv-section-head">
+            <span className="vw-label">Posts <span className="mono muted">{nb.documents.length}</span></span>
+            {!nb.is_archive && (
+              <button className="btn btn-small" onClick={() => setAdding(true)}>+ Add posts</button>
             )}
-            <ul className="nbv-docs">
-              {nb.documents.map((d) => (
-                <li key={d.id} className="nbv-doc">
-                  <button className="link-btn" onClick={() => setReading({ id: d.id })}>
-                    {d.title}
+          </div>
+          {nb.is_archive && <p className="muted small">Every indexed post. New posts join automatically.</p>}
+          {!nb.is_archive && nb.documents.length === 0 && <p className="muted small">No posts yet. Add some to start asking and creating.</p>}
+          <ul className="nbv-docs">
+            {nb.documents.map((d) => (
+              <li key={d.id} className="nbv-doc">
+                <button className="link-btn" onClick={() => setReading({ id: d.id })}>
+                  {d.title}
+                </button>
+                <span className="mono muted">{formatDate(d.published_at)}</span>
+                {!nb.is_archive && (
+                  <button
+                    className="icon-btn nbv-remove"
+                    aria-label={`Remove ${d.title} from this notebook`}
+                    title="Remove from this notebook (the post itself is kept)"
+                    onClick={async () => {
+                      await notebooksApi.removeDoc(nb.id, d.id);
+                      load();
+                    }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+                      <path d="M6 6l12 12M18 6L6 18" />
+                    </svg>
                   </button>
-                  <span className="mono muted">{formatDate(d.published_at)}</span>
-                  {!nb.is_archive && (
-                    <button
-                      className="icon-btn nbv-remove"
-                      aria-label={`Remove ${d.title}`}
-                      title="Remove from notebook"
-                      onClick={async () => {
-                        await notebooksApi.removeDoc(nb.id, d.id);
-                        load();
-                      }}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
-                        <path d="M6 6l12 12M18 6L6 18" />
-                      </svg>
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
       </aside>
 
+      {makingVideo && (
+        <Modal title="New video" onClose={() => setMakingVideo(false)} wide>
+          <VideoCreateForm startNotebook={nb.id} inModal />
+        </Modal>
+      )}
       {adding && (
         <Modal title="Add posts" onClose={() => setAdding(false)} wide>
           <DocPicker selected={toAdd} onChange={setToAdd} exclude={nb.documents.map((d) => d.id)} />

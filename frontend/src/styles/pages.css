@@ -937,7 +937,7 @@ select.input option {
   grid-column: 2;
   width: 26px;
   height: 26px;
-  opacity: 0;
+  opacity: 0.55; /* always visible, so removing a post is easy to find */
 }
 
 .nbv-doc:hover .nbv-remove,
@@ -3017,10 +3017,10 @@ select.input,
   font: 600 1.6rem var(--font-display, inherit);
 }
 
-/* Notebook view: chat takes the room, one side panel with Create / Posts tabs */
+/* Notebook view: chat takes the room, one narrower side panel (Create, what was made, Posts) */
 @media (min-width: 1100px) {
   .nbv {
-    grid-template-columns: minmax(0, 1fr) minmax(340px, 420px);
+    grid-template-columns: minmax(0, 1fr) minmax(290px, 340px);
   }
 }
 
@@ -3484,4 +3484,120 @@ details.map-legend[open] summary {
 
 .tabs a.tab {
   text-decoration: none;
+}
+
+/* Notebook side panel: Create, what was made, then Posts, in one scrolling column */
+.nbv-section {
+  display: grid;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.nbv-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.nbv-section-head .mono {
+  margin-left: 4px;
+  letter-spacing: 0;
+}
+
+.nbv-made-label {
+  padding-top: 6px;
+}
+
+/* What was made keeps its own scroll so a long list cannot push the posts far down */
+.nbv-made {
+  max-height: 40vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.nbv-side {
+  scrollbar-width: thin;
+}
+
+/* Create buttons: one per row, compact (Audio overview opens its options right under it) */
+.nbv-make {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.nbv-make > button,
+.nbv-make > a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 46px;
+  padding: 0 14px;
+}
+
+/* Audio overview looks like the others (no highlight); its current format / length and chevron on the right */
+.nbv-make .nbv-make-main {
+  grid-column: auto;
+  display: flex; /* label left, format / length + chevron right (the older rule made it a stacked grid) */
+  padding: 0 14px;
+  border-color: var(--line);
+  background: transparent;
+}
+
+.nbv-make-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Audio overview opened: a blue edge, its options panel just below */
+.nbv-make .nbv-make-main.open {
+  border-color: var(--blue);
+}
+
+.nbv-audio-opts {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--blue-35);
+  border-radius: var(--radius-sm);
+  background: var(--blue-05);
+}
+
+.nbv-audio-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); /* Format needs a little more room than Length */
+  gap: 10px;
+}
+
+/* Each dropdown fills its column and can shrink, instead of spilling into its neighbour */
+.nbv-audio-row > .field {
+  min-width: 0;
+}
+
+.nbv-audio-row > .field > * {
+  width: 100%;
+  min-width: 0;
+}
+
+.nbv-audio-opts .dropdown-btn {
+  padding: 0 12px;
+  font-size: 0.9rem;
+}
+
+.nbv-audio-opts .dropdown-btn {
+  height: 40px;
+  border-radius: 12px;
+}
+
+.nbv-audio-opts > .btn {
+  justify-self: end;
+}
+
+.nbv-audio-opts .dropdown-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

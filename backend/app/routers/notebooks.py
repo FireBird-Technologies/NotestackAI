@@ -144,6 +144,21 @@ def list_notebooks(ctx: Ctx = Depends(get_ctx)):
     ]
 
 
+# Above /{notebook_id}, so "chats" is not read as a notebook id.
+@router.get("/chats")
+def list_all_chats(ctx: Ctx = Depends(get_ctx)):
+    """Every chat in the workspace that has an answer, newest first (the video wizard's "Made from" menu)."""
+    answered = select(Message.chat_id).where(Message.role == "assistant")
+    rows = ctx.db.execute(
+        select(Chat, Notebook.title).join(Notebook, Notebook.id == Chat.notebook_id)
+        .where(Chat.workspace_id == ctx.workspace.id, Chat.id.in_(answered))
+        .order_by(Chat.updated_at.desc())
+    ).all()
+    return [{"id": str(c.id), "title": c.title, "notebook_id": str(c.notebook_id), "notebook_title": nb_title,
+             "updated_at": c.updated_at.isoformat() if c.updated_at else None}
+            for c, nb_title in rows]
+
+
 @router.get("/{notebook_id}")
 def get_notebook(notebook_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
     nb = _get(ctx, notebook_id)
