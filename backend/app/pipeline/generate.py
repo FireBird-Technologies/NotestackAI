@@ -10,9 +10,17 @@ from sqlalchemy.orm import Session
 from app.corpus import Corpus, slugify
 from app.llm import run
 from app.llm.provider import fast_lm
-from app.llm.signatures import BuildVoiceProfile, ConsolidateTopics, EvergreenScore, ExtractTopics, SummarizeNotebook
+from app.llm.signatures import (
+    ArrangeMindMap,
+    BuildVoiceProfile,
+    ConsolidateTopics,
+    EvergreenScore,
+    ExtractIdeas,
+    ExtractTopics,
+    SummarizeNotebook,
+)
 from app.models import Artifact, DocumentTopic, Job, Notebook, Topic, VoiceProfile
-from app.pipeline.passages import as_citations, notebook_docs, passages_for, tools_for, workspace_docs
+from app.pipeline.passages import as_citations, notebook_docs, passages_for, tools_for, verify_refs, workspace_docs
 from app.pipeline.research import verify_citations
 from app.services.jobs import update_job
 
@@ -52,6 +60,183 @@ def summarize_notebook(db: Session, job: Job, artifact: Artifact) -> dict:
     artifact.content_json = content
     artifact.status = "ready"
     nb.summary = text
+    db.commit()
+    return {"artifact_id": str(artifact.id)}
+
+
+# Mind map
+
+MAX_BRANCHES, MAX_DETAILS = 10, 4
+IDEAS_BUDGET = 30_000  # characters of one post read for its ideas
+BRIEF_ABOVE = 600  # ideas listed to the model by label only beyond this many
+CATCH_ALL = "More from your posts"
+
+
+def _node(item: dict, children: list[dict], refs) -> dict:
+    return {"label": (item.get("label") or "").strip()[:80], "note": (item.get("note") or "").strip()[:400],
+            "sources": refs(item.get("sources")), "children": children}
+
+
+def _topic(t: dict, refs) -> dict:
+    details = [_node(d, [], refs) for d in [d for d in t.get("details") or [] if (d.get("label") or "").strip()]
+               [:MAX_DETAILS]]
+    return _node(t, details, refs)
+
+
+def _cited(branches: list[dict]) -> set[str]:
+    found: set[str] = set()
+
+    def walk(n: dict) -> None:
+        found.update(s["document_id"] for s in n["sources"])
+        for c in n["children"]:
+            walk(c)
+
+    for b in branches:
+        walk(b)
+    return found
+
+
+def _number(node: dict, nid: str) -> None:
+    node["id"] = nid
+    for i, c in enumerate(node["children"]):
+        _number(c, f"{nid}.{i}")
+
+
+def ideas_fresh(d) -> bool:
+    """True when the post's stored ideas were extracted from its current text."""
+    md = d.metadata_json or {}
+    return bool(md.get("ideas")) and md.get("ideas_hash") == (d.content_hash or "")
+
+
+def extract_ideas(db: Session, job: Job | None, workspace_id: uuid.UUID, doc_ids: list[str] | None = None) -> dict:
+    """Read each post that has no current ideas once and keep what it says on the post (label, note, points and
+    the lines they came from). Maps are arranged from these, so they never re-read the posts."""
+    docs = workspace_docs(db, workspace_id, [uuid.UUID(str(i)) for i in doc_ids] if doc_ids is not None else None)
+    todo = [d for d in docs if not ideas_fresh(d)]
+    corpus = Corpus(workspace_id)
+    lm = fast_lm()
+    done = 0
+    for i, d in enumerate(todo):
+        if job:
+            update_job(db, job, progress=0.05 + 0.85 * i / max(len(todo), 1), message=f"Reading {d.title[:70]}")
+        try:
+            out = run.predict(ExtractIdeas, db=db, workspace_id=workspace_id, job=job, lm=lm, title=d.title,
+                              passage="\n\n".join(passages_for(corpus, [d], budget_chars=IDEAS_BUDGET)))
+        except Exception:
+            continue
+        tools = tools_for(corpus, [d])
+
+        def keep(items, tools=tools, d=d) -> list[dict]:
+            return [{"path": r["path"], "line_start": r["line_start"], "line_end": r["line_end"]}
+                    for r in verify_refs(tools, items or []) if r["path"] == d.path]
+
+        ideas = []
+        for t in out.get("ideas") or []:
+            if not (t.get("label") or "").strip():
+                continue
+            details = [{"label": x["label"].strip()[:80], "note": (x.get("note") or "").strip()[:400],
+                        "sources": keep(x.get("sources"))}
+                       for x in t.get("details") or [] if (x.get("label") or "").strip()]
+            ideas.append({"label": t["label"].strip()[:80], "note": (t.get("note") or "").strip()[:400],
+                          "sources": keep(t.get("sources")), "details": details[:MAX_DETAILS]})
+        if not ideas:
+            continue
+        d.metadata_json = {**(d.metadata_json or {}), "ideas": ideas[:8], "ideas_hash": d.content_hash or ""}
+        db.commit()
+        done += 1
+    return {"extracted": done, "skipped": len(todo) - done}
+
+
+def build_mind_map(db: Session, job: Job, artifact: Artifact) -> dict:
+    """A tree (centre, branches, sub-themes, points) over the picked posts, arranged from the ideas already stored
+    on each post. A focus decides how they are grouped and weighted, never which posts are on the map: every idea
+    the model leaves out is filed next to a sibling from the same post, or under a catch-all branch."""
+    nb = db.get(Notebook, artifact.notebook_id)
+    docs = notebook_docs(db, nb.id)
+    picked = {str(i) for i in job.params.get("document_ids") or []}
+    if picked:
+        docs = [d for d in docs if str(d.id) in picked]
+    if not docs:
+        raise NothingToDo("Pick at least one post for the Mind Constellation.")
+    focus = (job.params.get("focus") or "").strip()
+    corpus = Corpus(nb.workspace_id)
+    stale = [d for d in docs if not ideas_fresh(d)]
+    if stale:  # background extraction has not reached these yet, so do it now
+        update_job(db, job, progress=0.1, message=f"Reading {len(stale)} posts")
+        extract_ideas(db, None, nb.workspace_id, [str(d.id) for d in stale])
+    tools = tools_for(corpus, docs)
+
+    def refs(items) -> list[dict]:
+        by_path = {d.path: d for d in docs}
+        return [{"document_id": str(by_path[r["path"]].id), "path": r["path"], "title": r["title"],
+                 "line_start": r["line_start"], "line_end": r["line_end"], "quote": r["quote"]}
+                for r in verify_refs(tools, items or []) if r["path"] in by_path]
+
+    corpus.sync()
+    pool: dict[str, dict] = {}  # idea id -> node
+    owner: dict[str, str] = {}  # idea id -> document id
+    for di, d in enumerate(docs):
+        ideas = list((d.metadata_json or {}).get("ideas") or []) if ideas_fresh(d) else []
+        if not ideas:  # extraction failed for this post: a sub-theme from its own opening lines
+            try:
+                lines = corpus.read_lines(d.path)
+            except Exception:
+                lines = []
+            first = next((n for n, line in enumerate(lines, start=1) if line.strip()), 1)
+            ideas = [{"label": d.title[:60], "note": "A post in this map. Open its source to read it.",
+                      "sources": [{"path": d.path, "line_start": first, "line_end": first + 5}], "details": []}]
+        for ii, idea in enumerate(ideas):
+            pool[f"{di}.{ii}"] = _topic(idea, refs)
+            owner[f"{di}.{ii}"] = str(d.id)
+
+    # A very large notebook lists labels only, and the leftover rule below files whatever is not listed.
+    brief = len(pool) > BRIEF_ABOVE
+    listing = [f"{i} | {n['label']}" if brief else f"{i} | {n['label']}: {n['note'][:140]}" for i, n in pool.items()]
+    update_job(db, job, progress=0.4, message="Charting the constellation")
+    out = run.predict(ArrangeMindMap, db=db, workspace_id=nb.workspace_id, job=job,
+                      title=nb.title, focus=focus or "(none)", ideas=listing)
+
+    placed: set[str] = set()
+    branches: list[dict] = []
+    members: list[list[str]] = []
+    for b in [b for b in out.get("branches") or [] if (b.get("label") or "").strip()][:MAX_BRANCHES]:
+        ids = [i for i in dict.fromkeys(b.get("ideas") or []) if i in pool and i not in placed]
+        if not ids:
+            continue
+        placed.update(ids)
+        branches.append(_node(b, [pool[i] for i in ids], refs))
+        members.append(ids)
+
+    def catch_all() -> dict:
+        for b in branches:
+            if b["label"] == CATCH_ALL:
+                return b
+        b = {"label": CATCH_ALL, "note": "Posts whose ideas did not fit a theme above.", "sources": [], "children": []}
+        branches.append(b)
+        members.append([])
+        return b
+
+    for i in [i for i in pool if i not in placed]:
+        home = next((k for k, ids in enumerate(members) if any(owner[x] == owner[i] for x in ids)), None)
+        (branches[home] if home is not None else catch_all())["children"].append(pool[i])
+        if home is not None:
+            members[home].append(i)
+
+    for i, b in enumerate(branches):
+        _number(b, str(i))
+    centre = (out.get("centre") or focus or nb.title).strip()[:80]
+    root = {"id": "root", "label": centre, "note": (out.get("overview") or "").strip()[:500], "sources": [],
+            "children": branches}
+
+    def count(n: dict) -> int:
+        return 1 + sum(count(c) for c in n["children"])
+
+    artifact.content_json = {
+        "title": f"Mind Constellation: {focus[:60] or nb.title}", "focus": focus, "root": root,
+        "node_count": count(root), "document_ids": [str(d.id) for d in docs], "post_count": len(docs),
+        "covered_count": len(_cited(branches) & {str(d.id) for d in docs}),
+    }
+    artifact.status = "ready"
     db.commit()
     return {"artifact_id": str(artifact.id)}
 

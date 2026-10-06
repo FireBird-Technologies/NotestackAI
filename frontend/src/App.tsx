@@ -22,6 +22,7 @@ import TopicMap from "./pages/TopicMap";
 import { ToolPage, ToolsHub } from "./pages/Tools";
 import VoiceProfile from "./pages/VoiceProfile";
 import Welcome from "./pages/Welcome";
+import { SupportWidget } from "./components/support/SupportWidget";
 
 function PricingPage() {
   return (
@@ -40,6 +41,7 @@ function PricingPage() {
 
 export default function App() {
   return (
+    <>
     <Routes>
       <Route path="/" element={<Landing />} />
       <Route path="/pricing" element={<PricingPage />} />
@@ -68,5 +70,7 @@ export default function App() {
       </Route>
       <Route path="*" element={<Landing />} />
     </Routes>
+    <SupportWidget />
+    </>
   );
 }

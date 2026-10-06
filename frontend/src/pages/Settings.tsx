@@ -4,6 +4,7 @@ import { authApi } from "../api/auth";
 import { tokens, uploadFile } from "../api/client";
 import { settingsApi, type SettingsPatch } from "../api/endpoints";
 import type { Settings as SettingsData } from "../api/types";
+import { MemoryNotes } from "../components/MemoryNotes";
 import { ConfirmButton, errorMessage, Loading, PageHeader } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import { useUpgrade } from "../hooks/useUpgrade";
@@ -146,6 +147,10 @@ export default function Settings() {
                 )}
               </div>
             </div>
+          </Section>
+
+          <Section title="What the assistant should know">
+            <MemoryNotes />
           </Section>
 
           <Section title="Privacy and email">

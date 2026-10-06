@@ -54,8 +54,9 @@ def create_job(
     *,
     artifact_id: uuid.UUID | None = None,
     max_attempts: int = 3,
+    run_after: datetime | None = None,
 ) -> Job:
-    """Enqueue. The worker picks it up within WORKER_POLL_SECONDS."""
+    """Enqueue. The worker picks it up within WORKER_POLL_SECONDS, or after `run_after` when that is set."""
     job = Job(
         workspace_id=workspace_id,
         kind=kind,
@@ -63,6 +64,7 @@ def create_job(
         artifact_id=artifact_id,
         status="queued",
         max_attempts=max_attempts,
+        run_after=run_after,
     )
     db.add(job)
     db.commit()

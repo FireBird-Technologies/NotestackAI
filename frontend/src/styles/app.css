@@ -772,6 +772,15 @@
   grid-template-columns: 1fr;
 }
 
+/* A notebook is already a complete three-pane workspace; avoid stacking a second app sidebar beside its chat rail. */
+.shell.notebook-focus {
+  grid-template-columns: 1fr;
+}
+
+.shell.notebook-focus > .sidebar {
+  display: none;
+}
+
 .sidebar {
   display: flex;
   flex-direction: column;
@@ -972,7 +981,7 @@
 
 @media (min-width: 1100px) {
   .nbv {
-    grid-template-columns: 260px 1fr 280px;
+    grid-template-columns: 280px 1fr 240px;
     height: calc(100vh - 96px);
   }
 }
@@ -1039,6 +1048,13 @@
 
 .cite-span {
   font-size: 0.8125rem;
+}
+.chat-quote {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border-left: 3px solid var(--accent, currentColor);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 /* Empty states */
@@ -1264,3 +1280,4 @@
     filter: none;
   }
 }
+

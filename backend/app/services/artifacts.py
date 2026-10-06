@@ -17,6 +17,7 @@ TYPE_LABELS = {
     "quote_card": "Quote card",
     "carousel": "Carousel",
     "launch_kit": "Launch Kit",
+    "mind_map": "Mind Constellation",
 }
 
 

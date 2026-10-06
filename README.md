@@ -52,7 +52,7 @@ archive, stays in sync with it, cites the exact lines behind every answer, and t
 | Video | 9:16 shorts, 16:9 explainers, 1:1 audiograms, quote cards, in your brand | Video overviews |
 | Publishing | Launch Kits (threads, LinkedIn, Notes, Bluesky, SEO, carousels) and auto posting | Not a publishing tool |
 | Your voice | Voice profile learned from your posts, used in every draft | General purpose writing |
-| Seeing your archive | Topic constellation with rising and dormant topics, evergreen resurfacing | Mind maps per notebook |
+| Seeing your archive | Topic constellation with rising and dormant topics, evergreen resurfacing | Idea Constellations per notebook |
 
 The full comparison lives at [notestack.ai/notebooklm-alternative](https://notestack.ai/notebooklm-alternative).
 

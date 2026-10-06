@@ -1,11 +1,13 @@
 import { api, del, patch, post, put, qs, uploadFile } from "./client";
 import type {
+  AnswerFeedback,
   Artifact,
   ArtifactType,
   BillingStatus,
   CalendarItem,
   ChatMessage,
   ChatSummary,
+  MemoryNote,
   Doc,
   DocDetail,
   Job,
@@ -68,6 +70,9 @@ export const notebooksApi = {
   chats: (id: string) => api<ChatSummary[]>(`/api/notebooks/${id}/chats`),
   messages: (chatId: string) => api<ChatMessage[]>(`/api/notebooks/chats/${chatId}/messages`),
   removeChat: (chatId: string) => del(`/api/notebooks/chats/${chatId}`),
+  /** Thumbs up or down on an answer. rating null takes it back. */
+  rate: (messageId: string, body: { rating: "up" | "down" | null; reasons?: string[]; comment?: string }) =>
+    put<{ feedback: AnswerFeedback | null }>(`/api/notebooks/messages/${messageId}/feedback`, body),
 };
 
 export type GenerateBody = {
@@ -82,6 +87,9 @@ export type GenerateBody = {
   audio_artifact_id?: string;
   slides?: { heading: string; body: string }[];
   parent_id?: string;
+  /** mind_map: the posts to chart (none: all in the notebook) and what to centre on. */
+  document_ids?: string[];
+  focus?: string;
 };
 
 export const artifactsApi = {
@@ -188,6 +196,12 @@ export const settingsApi = {
   get: () => api<Settings>("/api/settings"),
   update: (body: SettingsPatch) => patch<Settings>("/api/settings", body),
   usage: () => api<Usage>("/api/settings/usage"),
+};
+
+export const memoryApi = {
+  list: () => api<{ items: MemoryNote[]; limit: number }>("/api/memory"),
+  put: (key: string, value: string) => put<MemoryNote>(`/api/memory/${encodeURIComponent(key)}`, { value }),
+  remove: (key: string) => del(`/api/memory/${encodeURIComponent(key)}`),
 };
 
 export type BillingCycle = "monthly" | "annual";
