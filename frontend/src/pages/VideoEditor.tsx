@@ -282,14 +282,14 @@ export default function VideoEditor() {
 
   const remove = async () => {
     await videosApi.remove(id);
-    navigate("/app/videos");
+    navigate("/app/archive?tab=videos");
   };
 
   if (notFound) {
     return (
       <div className="page-wrap">
         <PageHeader eyebrow="Videos" title="Video not found" />
-        <Link to="/app/videos" className="btn">Back to videos</Link>
+        <Link to="/app/archive?tab=videos" className="btn">Back to videos</Link>
       </div>
     );
   }

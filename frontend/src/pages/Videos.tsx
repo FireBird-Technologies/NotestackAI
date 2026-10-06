@@ -3,7 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { videosApi } from "../api/endpoints";
 import type { VideoListItem, VideoQuota } from "../api/types";
 import { TrashIcon } from "../components/icons/Icons";
-import { EmptyState, errorMessage, formatDate, Loading, Modal, PageHeader } from "../components/ui";
+import { EmptyState, errorMessage, formatDate, Loading, Modal } from "../components/ui";
 import { useUpgrade } from "../hooks/useUpgrade";
 
 const JOB_LABELS: Record<string, string> = {
@@ -76,21 +76,21 @@ export default function Videos() {
   const out = !!quota && quota.used >= quota.limit;
 
   return (
-    <div className="page-wrap">
-      <PageHeader eyebrow="Videos" title="Your videos">
+    // The Library's Videos tab: the allowance on the left, New video on the right, then the list.
+    <div className="stack">
+      <div className="row between wrap lib-tab-head">
+        <p className="mono muted">
+          {quota && <>
+            {quota.used} of {quota.limit} video{quota.limit === 1 ? "" : "s"} used
+            {quota.resets_at ? ` this period, refills ${formatDate(quota.resets_at)}` : " on your plan"}
+          </>}
+        </p>
         {out && status?.can_upgrade ? (
           <button className="btn btn-primary" onClick={() => openUpgrade()}>Get more videos</button>
         ) : (
           <Link to="/app/videos/new" className="btn btn-primary">New video</Link>
         )}
-      </PageHeader>
-
-      {quota && (
-        <p className="mono muted">
-          {quota.used} of {quota.limit} video{quota.limit === 1 ? "" : "s"} used
-          {quota.resets_at ? ` this period, refills ${formatDate(quota.resets_at)}` : " on your plan"}
-        </p>
-      )}
+      </div>
       {notice && <p className="notice">{notice}</p>}
       {error && <p className="error-text">{error}</p>}
       {!videos && !error && <div className="loading-center"><Loading label="Loading videos" /></div>}

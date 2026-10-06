@@ -485,8 +485,6 @@ export type VideoVoicesResponse = {
   library: VideoLibraryVoice[];
   custom: VideoCustomVoice[];
   notestack: VideoNotestackVoice[];
-  /** How many voices "My voices" can hold. */
-  max_saved: number;
 };
 
 export type VideoDesignedVoice = {

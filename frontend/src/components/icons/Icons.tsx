@@ -161,6 +161,32 @@ export const DownloadIcon = (p: P) => (
   </Icon>
 );
 
+/** A stack of media with a play mark on the front: the Library (what you made, your videos and your voices). */
+export const LibraryIcon = (p: P) => (
+  <Icon {...p}>
+    <rect x="3" y="8" width="18" height="12.5" rx="2.5" />
+    <path d="M5.5 5h13M8 2.5h8" />
+    <path d="M10.25 11.6v5.3l4.4-2.65z" />
+  </Icon>
+);
+
+/** A video camera: the Videos section. */
+export const VideoIcon = (p: P) => (
+  <Icon {...p}>
+    <rect x="3" y="6.5" width="12.5" height="11" rx="2.5" />
+    <path d="M15.5 10.5l4.6-2.7a.6.6 0 0 1 .9.5v7.4a.6.6 0 0 1-.9.5l-4.6-2.7" />
+  </Icon>
+);
+
+/** A microphone with sound waves: the Voices section. */
+export const MicIcon = (p: P) => (
+  <Icon {...p}>
+    <rect x="9" y="3" width="6" height="11" rx="3" />
+    <path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M9 21h6" />
+    <path d="M2.5 9v3M21.5 9v3" />
+  </Icon>
+);
+
 export const FilmIcon = (p: P) => (
   <Icon {...p}>
     <rect x="3" y="5" width="18" height="14" rx="2" />

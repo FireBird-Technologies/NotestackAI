@@ -16,7 +16,7 @@ export default function VideoTemplates() {
   return (
     <div className="page-wrap">
       <PageHeader eyebrow="Videos" title="Templates">
-        <Link to="/app/videos" className="btn">Back to videos</Link>
+        <Link to="/app/archive?tab=videos" className="btn">Back to videos</Link>
         <Link to="/app/videos/templates/new" className="btn btn-primary">Create a template</Link>
       </PageHeader>
       {slots && (

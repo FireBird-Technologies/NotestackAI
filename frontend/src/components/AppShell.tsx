@@ -7,9 +7,8 @@ import { FuelGauge, NudgeDock } from "./Nudges";
 import SkyCanvas from "./SkyCanvas";
 import UpgradeModal from "./UpgradeModal";
 import {
-  CometIcon,
-  HelmetIcon,
   LaunchpadIcon,
+  LibraryIcon,
   OrbitIcon,
   PlanetIcon,
   SatelliteDishIcon,
@@ -19,8 +18,7 @@ import {
 const NAV: { to: string; label: string; icon: typeof PlanetIcon; end?: boolean; also?: string[] }[] = [
   { to: "/app/notebooks", label: "Notebooks", icon: PlanetIcon },
   { to: "/app/sources", label: "Sources", icon: SatelliteDishIcon, also: ["/app/map"] },
-  { to: "/app/videos", label: "Videos", icon: CometIcon },
-  { to: "/app/voice", label: "Voices", icon: HelmetIcon },
+  { to: "/app/archive", label: "Library", icon: LibraryIcon, also: ["/app/videos"] },
   { to: "/app/launchpad", label: "Launchpad", icon: LaunchpadIcon, also: ["/app/resurface"] },
 ];
 

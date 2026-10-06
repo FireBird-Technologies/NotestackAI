@@ -61,6 +61,7 @@ from app.services.jobs import (
     stale_jobs,
     update_job,
 )
+from app.services.notestack_voices import save_notestack_voice
 from app.services.plans import effective_plan
 from app.services.renderer import PermanentJobError, request_render
 from app.services.storage import keys, storage
@@ -212,13 +213,15 @@ def handle_voice_clone(db: Session, job: Job):
     consent.elevenlabs_voice_id = voice_id
     db.commit()
 
-    # Make the new voice host A and record a short preview so the writer can judge it straight away.
+    # Save the new voice to the workspace's voices (and keep it as the default host A), then record a short preview
+    # so the writer can judge it straight away.
     update_job(db, job, progress=0.7, message="Recording a preview in your voice")
     vp = db.scalar(select(VoiceProfile).where(VoiceProfile.workspace_id == consent.workspace_id))
     if not vp:
         vp = VoiceProfile(workspace_id=consent.workspace_id)
         db.add(vp)
     vp.host_voices = {**(vp.host_voices or {}), "host_a": voice_id}
+    save_notestack_voice(db, consent.workspace_id, voice_id, "My voice")
     db.commit()
     preview_text = job.params.get("preview_text") or (
         "Hi, this is my Notestack voice. From now on, my audio overviews and videos can sound like me.")

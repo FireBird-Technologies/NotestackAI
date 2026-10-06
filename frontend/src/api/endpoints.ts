@@ -113,6 +113,9 @@ export type GenerateBody = {
   minutes?: number;
   style?: "audiogram";
   audio_artifact_id?: string;
+  /** audio_overview: the two hosts' voices, from the workspace's voices (none: the defaults). */
+  host_a?: string;
+  host_b?: string;
   slides?: { heading: string; body: string }[];
   parent_id?: string;
   /** mind_map: the posts to chart (none: all in the notebook) and what to centre on. */

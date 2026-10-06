@@ -18,6 +18,7 @@ from app.models import (
     Source,
     TrackedLink,
     UsageEvent,
+    UserSavedVoice,
     Workspace,
 )
 from app.services.email import ConsoleEmailProvider
@@ -766,7 +767,13 @@ def test_artifact_ownership(client, auth, db_session):
 # Voice pipeline (ElevenLabs stubbed)
 
 
-def test_voice_library_preview_and_script(client, auth, monkeypatch, feed, run_jobs):
+def saved_voices(db_session) -> dict[str, str]:
+    """The workspace's voices (the one list for audio and video): voice id -> name."""
+    db_session.expire_all()
+    return {v.voice_id: v.name for v in db_session.query(UserSavedVoice)}
+
+
+def test_voice_library_preview_and_script(client, auth, monkeypatch, feed, run_jobs, db_session):
     from app.config import settings
     from app.services import tts
 
@@ -783,6 +790,7 @@ def test_voice_library_preview_and_script(client, auth, monkeypatch, feed, run_j
         "public_owner_id": "owner-1", "voice_id": "lib-voice-1", "name": "Narrator",
                                                     "use_as": "host_b"}, headers=auth).json()
     assert r["voice_id"] == "added-lib-voice-1" and r["host_voices"]["host_b"] == "added-lib-voice-1"
+    assert saved_voices(db_session) == {"added-lib-voice-1": "Narrator"}  # added, so saved
 
     prev = client.post("/api/voice/preview", json={"voice_id": "added-lib-voice-1", "text": "Hello there",
                                                    "delivery": {"stability": 0.3, "similarity_boost": 0.8,
@@ -794,7 +802,7 @@ def test_voice_library_preview_and_script(client, auth, monkeypatch, feed, run_j
     assert script["words"] > 5 and script["title"]
 
 
-def test_voice_clone_multi_sample_sets_host_and_preview(client, auth, monkeypatch, run_jobs):
+def test_voice_clone_multi_sample_sets_host_and_preview(client, auth, monkeypatch, run_jobs, db_session):
     from app.config import settings
     from app.services import tts
 
@@ -823,6 +831,54 @@ def test_voice_clone_multi_sample_sets_host_and_preview(client, auth, monkeypatc
     voice = client.get("/api/voice", headers=auth).json()
     assert voice["clone"]["status"] == "ready" and voice["host_voices"]["host_a"] == "clone-1"
     assert voice["clone"]["preview_url"]
+    assert saved_voices(db_session) == {"clone-1": "My voice"}
+
+
+def test_a_designed_voice_is_saved_to_the_voices(client, auth, monkeypatch, db_session):
+    from app.config import settings
+    from app.services import tts
+
+    monkeypatch.setattr(settings, "elevenlabs_api_key", "test")
+    monkeypatch.setattr(tts, "create_designed_voice", lambda name, description, generated: "designed-1")
+    r = client.post("/api/voice/design/save", json={"generated_voice_id": "gen-12345", "name": "Narrator",
+                                                    "description": "A calm narrator"}, headers=auth)
+    assert r.status_code == 200 and r.json()["voice_id"] == "designed-1"
+    assert saved_voices(db_session) == {"designed-1": "Narrator"}
+    client.post("/api/voice/design/save", json={"generated_voice_id": "gen-12345", "name": "Narrator"}, headers=auth)
+    assert len(saved_voices(db_session)) == 1  # saved once
+
+
+def test_audio_overview_hosts_are_picked_from_the_voices(client, auth, run_jobs, feed, llm, monkeypatch,
+                                                         db_session):
+    from app.config import settings
+    from app.services import tts
+
+    connect(client, auth, run_jobs)
+    doc = docs(client, auth)[0]
+    monkeypatch.setattr(settings, "elevenlabs_api_key", "test")
+    used = []
+    monkeypatch.setattr(tts, "synthesize", lambda ws, text, voice, vs=None, *a: used.append((text, voice)) or
+                        b"\x00" * 16000)
+    llm["PodcastScript"] = {"lines": [{"speaker": "host_a", "text": "Welcome in.", "sources": []},
+                                      {"speaker": "host_b", "text": "Thanks.", "sources": []}]}
+    ws_id = db_session.get(Document, uuid.UUID(doc["id"])).workspace_id
+    db_session.add_all([UserSavedVoice(workspace_id=ws_id, voice_id=v, name=v) for v in ("mine-1", "mine-2")])
+    db_session.commit()
+    body = {"type": "audio_overview", "document_id": doc["id"], "minutes": 3}
+    art = client.post("/api/artifacts/generate", json={**body, "host_a": "mine-2", "host_b": "mine-1"},
+                      headers=auth).json()
+    run_jobs()
+    done = client.get(f"/api/artifacts/{art['id']}", headers=auth).json()
+    assert done["content"]["voices"] == {"host_a": "mine-2", "host_b": "mine-1"}
+    assert dict(used) == {"Welcome in.": "mine-2", "Thanks.": "mine-1"}
+    # Only the workspace's own voices (or the defaults).
+    r = client.post("/api/artifacts/generate", json={**body, "host_a": "someone-elses"}, headers=auth)
+    assert r.status_code == 400
+    # None picked: the defaults, as before.
+    art = client.post("/api/artifacts/generate", json=body, headers=auth).json()
+    run_jobs()
+    voices = client.get(f"/api/artifacts/{art['id']}", headers=auth).json()["content"]["voices"]
+    assert voices == {"host_a": settings.elevenlabs_voice_a, "host_b": settings.elevenlabs_voice_b}
 
 
 def test_tts_retries_rate_limits(monkeypatch):

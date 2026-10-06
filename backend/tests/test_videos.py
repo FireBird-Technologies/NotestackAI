@@ -1157,15 +1157,15 @@ def notestack_voice(db, ws, voice_id="nv_narrator", name="Narrator") -> None:
     db.commit()
 
 
-def test_my_voices_are_capped_at_five(client, b2v, owner, db_session):
+def test_any_number_of_voices_can_be_saved(client, b2v, owner, db_session):
     headers, ws = owner
     client.get("/api/video-voices", headers=headers)  # the starter voice
-    for i in range(4):
+    for i in range(7):
         db_session.add(UserSavedVoice(workspace_id=ws.id, voice_id=f"v{i}", name=f"V{i}"))
     db_session.commit()
-    r = client.post("/api/video-voices/saved", json={"voice_id": BELLA}, headers=headers)
-    assert r.status_code == 409 and "5 voices" in r.json()["detail"]
-    assert client.get("/api/video-voices", headers=headers).json()["max_saved"] == 5
+    assert client.post("/api/video-voices/saved", json={"voice_id": BELLA}, headers=headers).status_code == 201
+    got = client.get("/api/video-voices", headers=headers).json()
+    assert len(got["saved"]) == 9 and "max_saved" not in got
 
 
 def test_notestack_voices_can_be_saved_and_used_in_a_video(client, b2v, owner, other, db_session):
@@ -1185,11 +1185,14 @@ def test_notestack_voices_can_be_saved_and_used_in_a_video(client, b2v, owner, o
     assert r.status_code == 404
 
 
-def test_notestack_voices_need_premium_in_videos(client, b2v, owner, db_session, free_plan):
+def test_notestack_voices_are_saved_on_any_plan_but_need_premium_in_videos(client, b2v, owner, db_session,
+                                                                          free_plan):
     headers, ws = owner
     notestack_voice(db_session, ws)
     assert client.post("/api/video-voices/saved", json={"voice_id": "nv_narrator"},
-                       headers=headers).status_code == 402
+                       headers=headers).status_code == 201  # in the list, for audio overviews
+    r = client.post("/api/videos", json={"url": "https://a.test/x", "custom_voice_id": "nv_narrator"}, headers=headers)
+    assert r.status_code == 402 and not creates(b2v)
 
 
 def test_revoking_the_clone_drops_it_from_video_voices(client, b2v, owner, db_session, monkeypatch):
