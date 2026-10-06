@@ -87,15 +87,30 @@ async function tryRefresh(): Promise<boolean> {
   return true;
 }
 
-export async function api<T>(path: string, init: RequestInit = {}, retry = true): Promise<T> {
+async function request(path: string, init: RequestInit, retry: boolean): Promise<Response> {
   const headers = new Headers(init.headers);
-  if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+  // FormData sets its own multipart Content-Type (with the boundary); everything else is JSON.
+  if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
   if (tokens.access) headers.set("Authorization", `Bearer ${tokens.access}`);
   const res = await fetch(`${BASE}${path}`, { ...init, headers });
-  if (res.status === 401 && retry && (await tryRefresh())) return api<T>(path, init, false);
+  if (res.status === 401 && retry && (await tryRefresh())) return request(path, init, false);
   if (!res.ok) throw await parseError(res);
-  return (await res.json()) as T;
+  return res;
 }
+
+export async function api<T>(path: string, init: RequestInit = {}, retry = true): Promise<T> {
+  return (await (await request(path, init, retry)).json()) as T;
+}
+
+/** A binary answer (audio, a download) as a Blob. */
+export async function apiBlob(path: string, init: RequestInit = {}): Promise<Blob> {
+  return (await request(path, init, true)).blob();
+}
+
+/** Multipart upload to our API (files plus form fields). */
+export const postForm = <T>(path: string, form: FormData) => api<T>(path, { method: "POST", body: form });
 
 export const post = <T>(path: string, body?: unknown) =>
   api<T>(path, { method: "POST", body: body === undefined ? undefined : JSON.stringify(body) });

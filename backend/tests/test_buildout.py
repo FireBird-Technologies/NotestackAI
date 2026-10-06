@@ -329,6 +329,75 @@ def test_topic_map_and_notebook_from_topic(client, auth, run_jobs, feed, llm):
     assert nb["added"] == 1
 
 
+def topic_metas(session_factory) -> dict[str, dict]:
+    with session_factory() as db:
+        return {d.title: d.metadata_json or {} for d in db.query(Document).filter(Document.path.is_not(None))}
+
+
+def test_a_post_the_model_fails_on_is_tried_again(client, auth, run_jobs, feed, llm, monkeypatch, session_factory):
+    from app.pipeline import generate
+    monkeypatch.setattr(generate, "TAG_BACKOFF", (0.0, 0.0))
+    connect(client, auth, run_jobs)
+    tries: dict[str, int] = {}
+
+    def extract(title, **_):
+        tries[title] = tries.get(title, 0) + 1
+        if tries[title] == 1:
+            raise TimeoutError("the model timed out")  # once per post: the second try works
+        if tries[title] == 2 and "Pricing" in title:
+            return {"topics": []}  # an empty answer is not a result: tried a third time
+        return {"topics": [{"name": "Writing", "weight": 0.8}]}
+
+    llm["ExtractTopics"] = extract
+    llm["ConsolidateTopics"] = {"groups": []}
+    client.post("/api/topics/rebuild", headers=auth)
+    job = run_jobs()[0]
+    metas = topic_metas(session_factory)
+    assert job.status == "done" and job.result["tagged"] == len(metas) and job.result["failed"] == 0
+    assert all(m["topics"] == [{"name": "Writing", "weight": 0.8}] for m in metas.values())
+    assert max(tries.values()) == 3
+
+
+def test_every_post_gets_topics_through_the_sweep(client, auth, run_jobs, feed, llm, monkeypatch, session_factory):
+    from app import worker
+    from app.config import settings
+    from app.pipeline import generate
+    monkeypatch.setattr(generate, "TAG_BACKOFF", (0.0, 0.0))
+    monkeypatch.setattr(settings, "llm_api_key", "test-key")
+    llm["ConsolidateTopics"] = {"groups": []}
+    llm["ExtractTopics"] = lambda **_: (_ for _ in ()).throw(TimeoutError("the model is down"))
+    connect(client, auth, run_jobs)  # the import's topics job runs too, and tags nothing
+    metas = topic_metas(session_factory)
+    assert metas and all("topics" not in m and m["topics_failures"] == 1 for m in metas.values())
+
+    worker.topics_backfill(session_factory)
+    worker.topics_backfill(session_factory)  # one job per workspace, not one per sweep
+    llm["ExtractTopics"] = {"topics": [{"name": "Pricing", "weight": 0.9}]}  # the model is back
+    jobs = run_jobs()
+    assert len(jobs) == 1 and jobs[0].result["tagged"] == len(metas)
+    assert all(m["topics"] and "topics_failures" not in m for m in topic_metas(session_factory).values())
+    worker.topics_backfill(session_factory)
+    assert not run_jobs()  # all tagged: nothing to do
+
+
+def test_the_sweep_gives_up_on_a_post_that_keeps_failing(client, auth, run_jobs, feed, llm, monkeypatch,
+                                                         session_factory):
+    from app import worker
+    from app.config import settings
+    from app.pipeline import generate
+    monkeypatch.setattr(generate, "TAG_BACKOFF", (0.0, 0.0))
+    monkeypatch.setattr(settings, "llm_api_key", "test-key")
+    llm["ConsolidateTopics"] = {"groups": []}
+    llm["ExtractTopics"] = lambda **_: (_ for _ in ()).throw(TimeoutError("always"))
+    connect(client, auth, run_jobs)
+    for _ in range(generate.MAX_TAG_FAILURES):
+        worker.topics_backfill(session_factory)
+        run_jobs()
+    assert all(m["topics_failures"] == generate.MAX_TAG_FAILURES for m in topic_metas(session_factory).values())
+    worker.topics_backfill(session_factory)
+    assert not run_jobs()
+
+
 def test_voice_profile_build_and_edit(client, auth, run_jobs, feed, llm):
     connect(client, auth, run_jobs)
     profile = {"tone": ["warm"], "sentence_length": "short", "vocabulary": ["readers"], "structure_habits": [],
@@ -404,26 +473,32 @@ def test_audio_overview_and_limits(client, auth, run_jobs, feed, llm, monkeypatc
     assert r.status_code == 402 and r.json()["detail"]["code"] == "plan_limit"
 
 
-def test_video_hands_off_and_renderer_callback(client, auth, run_jobs, feed, llm, monkeypatch):
-    from app.pipeline import media
-
+def test_native_video_moved_to_blog2video(client, auth, run_jobs, feed):
     connect(client, auth, run_jobs)
     doc = docs(client, auth)[0]
+    r = client.post("/api/artifacts/generate", json={"type": "video", "document_id": doc["id"], "style": "short"},
+                    headers=auth)
+    assert r.status_code == 410
+
+
+def test_audiogram_hands_off_and_renderer_callback(client, auth, monkeypatch, db_session, run_jobs):
+    from app.config import settings
+    from app.models import Artifact, Workspace
+    from app.pipeline import media
+
+    ws = db_session.query(Workspace).one()
+    audio = Artifact(workspace_id=ws.id, type="audio_overview", status="ready", storage_key="ws/x/audio.mp3",
+                     content_json={"title": "Pricing", "duration_s": 42, "segments": []})
+    db_session.add(audio)
+    db_session.commit()
     sent = {}
     monkeypatch.setattr(media, "request_render", lambda job, artifact, comp, props=None, stills=None:
                         sent.update(comp=comp, props=props, job=str(job.id)))
-    llm["VideoStoryboard"] = {"scenes": [
-        {"type": "title", "on_screen_text": "Charge more", "narration": "", "duration_hint_s": 2.5, "visual": ""},
-        {"type": "section", "on_screen_text": "Readers valued it", "narration": "", "duration_hint_s": 3,
-         "visual": ""},
-    ]}
-    art = client.post("/api/artifacts/generate", json={"type": "video", "document_id": doc["id"], "style": "short"},
-                      headers=auth).json()
+    art = client.post("/api/artifacts/generate", json={"type": "video", "style": "audiogram",
+                                                       "audio_artifact_id": str(audio.id)}, headers=auth).json()
     job = run_jobs()[0]
     assert job.status == "running"  # handed off to the renderer
-    assert sent["comp"] == "ShortVertical" and sent["props"]["hook"] == "Charge more"
-    from app.config import settings
-
+    assert sent["comp"] == "AudiogramSquare"
     r = client.post(f"/api/internal/jobs/{sent['job']}/progress", headers={"x-internal-token": settings.internal_token},
                     json={"status": "done", "progress": 1, "storage_key": "ws/x/video.mp4", "render_seconds": 12})
     assert r.status_code == 200

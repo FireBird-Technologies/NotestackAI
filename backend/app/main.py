@@ -23,6 +23,10 @@ from app.routers import (
     support,
     topics,
     unsubscribe,
+    video_edit,
+    video_styles,
+    video_voices,
+    videos,
     voice,
 )
 from app.routers import settings as settings_router
@@ -88,8 +92,9 @@ def health():
     return {"ok": True, "llm": settings.llm_model, "billing_enabled": settings.billing_enabled}
 
 
+# video_templates (custom templates) is switched off: users pick only from the built-in templates.
 for r in (auth, billing, storage, sources, notebooks, artifacts, jobs, unsubscribe, topics, voice, resurface,
-          launchpad, settings_router, memory, support):
+          launchpad, videos, video_edit, video_voices, video_styles, settings_router, memory, support):
     app.include_router(r.router)
 app.include_router(sources.documents_router)
 app.include_router(launchpad.links_router)

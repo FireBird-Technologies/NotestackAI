@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, select
+from sqlalchemy.exc import IntegrityError
 
 from app.auth import Ctx, get_ctx
 from app.chat_memory.context import load_chat_memory
@@ -103,12 +104,20 @@ ARCHIVE_TITLE = "All posts"
 
 def ensure_archive_notebook(ctx: Ctx) -> Notebook:
     """The workspace's "All posts" notebook, topped up with every indexed post (locked posts are skipped)."""
-    nb = ctx.db.scalar(select(Notebook).where(Notebook.workspace_id == ctx.workspace.id, Notebook.is_archive.is_(True)))
+    def find() -> Notebook | None:
+        return ctx.db.scalar(select(Notebook).where(Notebook.workspace_id == ctx.workspace.id,
+                                                    Notebook.is_archive.is_(True)))
+
+    nb = find()
     if not nb:
-        nb = Notebook(workspace_id=ctx.workspace.id, title=ARCHIVE_TITLE, is_archive=True,
-                      description="Every indexed post in your archive, kept up to date.")
-        ctx.db.add(nb)
-        ctx.db.flush()
+        try:
+            nb = Notebook(workspace_id=ctx.workspace.id, title=ARCHIVE_TITLE, is_archive=True,
+                          description="Every indexed post in your archive, kept up to date.")
+            ctx.db.add(nb)
+            ctx.db.flush()
+        except IntegrityError:  # a concurrent request made it first (uq_notebooks_one_archive)
+            ctx.db.rollback()
+            nb = find()
     ids = list(ctx.db.scalars(select(Document.id).where(Document.workspace_id == ctx.workspace.id)))
     _add_docs(ctx, nb, ids)
     ctx.db.commit()
@@ -159,6 +168,21 @@ def list_notebooks(ctx: Ctx = Depends(get_ctx)):
          "updated_at": n.updated_at.isoformat() if n.updated_at else None}
         for n in rows
     ]
+
+
+# Above /{notebook_id}, so "chats" is not read as a notebook id.
+@router.get("/chats")
+def list_all_chats(ctx: Ctx = Depends(get_ctx)):
+    """Every chat in the workspace that has an answer, newest first (the video wizard's "Made from" menu)."""
+    answered = select(Message.chat_id).where(Message.role == "assistant")
+    rows = ctx.db.execute(
+        select(Chat, Notebook.title).join(Notebook, Notebook.id == Chat.notebook_id)
+        .where(Chat.workspace_id == ctx.workspace.id, Chat.id.in_(answered))
+        .order_by(Chat.updated_at.desc())
+    ).all()
+    return [{"id": str(c.id), "title": c.title, "notebook_id": str(c.notebook_id), "notebook_title": nb_title,
+             "updated_at": c.updated_at.isoformat() if c.updated_at else None}
+            for c, nb_title in rows]
 
 
 @router.get("/{notebook_id}")

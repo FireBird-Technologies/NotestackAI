@@ -5,7 +5,7 @@ import { tokens, uploadFile } from "../api/client";
 import { settingsApi, type SettingsPatch } from "../api/endpoints";
 import type { Settings as SettingsData } from "../api/types";
 import { MemoryNotes } from "../components/MemoryNotes";
-import { ConfirmButton, errorMessage, Loading, PageHeader } from "../components/ui";
+import { ConfirmButton, errorMessage, formatDate, Loading, PageHeader } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import { useUpgrade } from "../hooks/useUpgrade";
 import { setSoundsEnabled, soundsEnabled } from "../lib/sound";
@@ -182,10 +182,11 @@ export default function Settings() {
               <strong>{s.plan.name}</strong> plan
             </p>
             <Meter label="Audio overviews" used={u.used.audio_minutes} limit={u.limits.audio_minutes} unit="min" />
-            <Meter label="Video renders" used={u.used.video_minutes} limit={u.limits.video_minutes} unit="min" />
+            <Meter label="Videos" used={u.used.videos} limit={u.limits.videos} unit="" />
             <Meter label="Launch Kits" used={u.used.launch_kits} limit={u.limits.launch_kits} unit="" />
             <p className="mono muted small">
               Refills on the 1st of every month.
+              {u.videos_resets_at && ` Videos refill on ${formatDate(u.videos_resets_at)}.`}
             </p>
             {s.billing_enabled && (
               <div className="row">

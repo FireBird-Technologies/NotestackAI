@@ -206,11 +206,11 @@ export default function MissionControl() {
                 <strong>{busy === "audio" ? "Starting..." : "Audio overview"}</strong>
                 <span className="muted small">Two hosts, 6 minutes, your whole archive</span>
               </button>
-              <button className="mc-action" disabled={busy !== null || !hasPosts} onClick={() => create("video", { type: "video", style: "short", archive: true })}>
+              <Link className="mc-action" to="/app/videos/new">
                 <LaunchWindowIcon size={28} />
-                <strong>{busy === "video" ? "Starting..." : "Short video"}</strong>
-                <span className="muted small">Vertical 9:16 with captions</span>
-              </button>
+                <strong>Video</strong>
+                <span className="muted small">Turn a post or link into a narrated video</span>
+              </Link>
               <button className="mc-action" disabled={busy !== null || !newest} onClick={() => newest && launch(newest)}>
                 <RocketIcon size={28} />
                 <strong>{newest && busy === `kit-${newest.id}` ? "Launching..." : "Launch newest post"}</strong>

@@ -149,6 +149,132 @@ select.input {
   padding-right: 30px;
 }
 
+/* Dropdown: the themed select (components/Dropdown.tsx) */
+.dropdown {
+  position: relative;
+}
+
+.dropdown-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  height: 48px;
+  padding: 0 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.6);
+  color: var(--text);
+  font: 400 1rem var(--font-body);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.dropdown-btn:hover,
+.dropdown.open .dropdown-btn,
+.dropdown-btn:focus-visible {
+  border-color: var(--blue);
+  box-shadow: var(--glow-sm);
+  outline: none;
+}
+
+.dropdown-value {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dropdown-value strong {
+  font-weight: 500;
+}
+
+.dropdown-value .muted {
+  font-size: 0.875rem;
+}
+
+.dropdown-chevron {
+  flex: none;
+  color: var(--text-2);
+  transition: transform 0.15s;
+}
+
+.dropdown.open .dropdown-chevron {
+  transform: rotate(180deg);
+}
+
+.dropdown-list {
+  position: fixed; /* portalled to <body>, placed by Dropdown.tsx */
+  z-index: 1000;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--black);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6), var(--glow-sm);
+  max-height: 288px; /* about six options, then it scrolls */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.dropdown-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.dropdown-group {
+  padding: 8px 12px 4px;
+  color: var(--text-3);
+  font: 500 0.68rem var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: default;
+}
+
+.dropdown-group.divider,
+.dropdown-option.divider {
+  position: relative;
+  margin-top: 9px;
+}
+
+.dropdown-group.divider::before,
+.dropdown-option.divider::before {
+  content: "";
+  position: absolute;
+  top: -5px;
+  left: 8px;
+  right: 8px;
+  height: 1px;
+  background: var(--line);
+}
+
+.dropdown-option .dropdown-value {
+  flex: 1;
+}
+
+.dropdown-option.active {
+  background: var(--blue-10);
+}
+
+.dropdown-option.on strong {
+  color: var(--blue);
+}
+
+.dropdown-check {
+  flex: none;
+  color: var(--blue);
+}
+
 select.input option {
   background: var(--black);
 }
@@ -318,6 +444,29 @@ select.input option {
   align-items: center;
   gap: 12px;
   padding: 24px 0;
+}
+
+/* A page's first load: the loader in the middle of the space under the header */
+.loading-center {
+  display: grid;
+  place-items: center;
+  min-height: 60vh;
+}
+
+/* No header above it (the whole page is loading): centre in nearly the full window height */
+.loading-center.full {
+  min-height: 80vh;
+}
+
+/* Inside a card (a tab still loading): centred, without claiming most of the window */
+.loading-center.inline {
+  min-height: 200px;
+}
+
+/* The label sits under the spinner, both centred */
+.loading-center .loading {
+  flex-direction: column;
+  gap: 16px;
 }
 
 .empty-state h3 {
@@ -495,9 +644,24 @@ select.input option {
 
 .picker-actions {
   display: flex;
+  align-items: center;
   gap: 12px;
   font-size: 0.75rem;
 }
+
+/* Tick-all box: lines up with the row checkboxes below it */
+.picker-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 13px;
+  cursor: pointer;
+}
+
+.picker-all input {
+  accent-color: var(--blue);
+}
+
 
 .picker-list {
   list-style: none;
@@ -518,9 +682,18 @@ select.input option {
   cursor: pointer;
 }
 
-.picker-row:hover,
-.picker-row.on {
+/* Hover only: a picked post shows by its tick, not a highlight */
+.picker-row:hover {
   background: var(--blue-10);
+}
+
+.picker-row.locked {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.picker-row.locked:hover {
+  background: none;
 }
 
 .picker-row input {
@@ -821,7 +994,7 @@ select.input option {
   grid-column: 2;
   width: 26px;
   height: 26px;
-  opacity: 0;
+  opacity: 0.55; /* always visible, so removing a post is easy to find */
 }
 
 .nbv-doc:hover .nbv-remove,
@@ -2059,7 +2232,8 @@ select.input option {
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  /* The voices and the Add a voice tile share one row, wrapping only when they no longer fit */
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 12px;
 }
 
@@ -3389,23 +3563,6 @@ select.input,
   background: var(--blue-05);
 }
 
-.nb-new {
-  display: grid;
-  justify-items: start;
-  align-content: center;
-  gap: 4px;
-  border-style: dashed;
-  border-color: var(--line-strong);
-  color: var(--white);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.nb-new:hover {
-  border-color: var(--blue-60);
-}
-
 .card-menu {
   position: absolute;
   top: 10px;
@@ -3449,7 +3606,7 @@ select.input,
 /* Create (Studio): format tiles and one row of choices */
 .format-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -3745,6 +3902,122 @@ details.map-legend[open] summary {
   text-decoration: none;
 }
 
+/* Notebook side panel: Create, what was made, then Posts, in one scrolling column */
+.nbv-section {
+  display: grid;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.nbv-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.nbv-section-head .mono {
+  margin-left: 4px;
+  letter-spacing: 0;
+}
+
+.nbv-made-label {
+  padding-top: 6px;
+}
+
+/* What was made keeps its own scroll so a long list cannot push the posts far down */
+.nbv-made {
+  max-height: 40vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.nbv-side {
+  scrollbar-width: thin;
+}
+
+/* Create buttons: one per row, compact (Audio overview opens its options right under it) */
+.nbv-make {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.nbv-make > button,
+.nbv-make > a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 46px;
+  padding: 0 14px;
+}
+
+/* Audio overview looks like the others (no highlight); its current format / length and chevron on the right */
+.nbv-make .nbv-make-main {
+  grid-column: auto;
+  display: flex; /* label left, format / length + chevron right (the older rule made it a stacked grid) */
+  padding: 0 14px;
+  border-color: var(--line);
+  background: transparent;
+}
+
+.nbv-make-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Audio overview opened: a blue edge, its options panel just below */
+.nbv-make .nbv-make-main.open {
+  border-color: var(--blue);
+}
+
+.nbv-audio-opts {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--blue-35);
+  border-radius: var(--radius-sm);
+  background: var(--blue-05);
+}
+
+.nbv-audio-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); /* Format needs a little more room than Length */
+  gap: 10px;
+}
+
+/* Each dropdown fills its column and can shrink, instead of spilling into its neighbour */
+.nbv-audio-row > .field {
+  min-width: 0;
+}
+
+.nbv-audio-row > .field > * {
+  width: 100%;
+  min-width: 0;
+}
+
+.nbv-audio-opts .dropdown-btn {
+  padding: 0 12px;
+  font-size: 0.9rem;
+}
+
+.nbv-audio-opts .dropdown-btn {
+  height: 40px;
+  border-radius: 12px;
+}
+
+.nbv-audio-opts > .btn {
+  justify-self: end;
+}
+
+.nbv-audio-opts .dropdown-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ---------- Mind map: the right-rail tile and list, the dialog, and the galaxy explorer ---------- */
 .nbv-make .nbv-make-map {
   grid-column: 1 / -1;
@@ -3807,6 +4080,157 @@ details.map-legend[open] summary {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+
+.voice-new .voice-pick:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* The host a voice row belongs to (Audio hosts list) */
+.voice-badge-inline {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--blue);
+  color: var(--white);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+}
+
+.voice-badge-inline.dim {
+  background: var(--surface-2, rgba(255, 255, 255, 0.08));
+  color: var(--text-2);
+}
+
+/* Audio hosts / Video voiceovers: the explainer takes the room, the Manage button sits at the right end */
+.manage-top > p {
+  flex: 1;
+  min-width: 240px;
+  margin: 0;
+}
+
+.manage-top > .btn {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* A quiet way back: an arrow and text, no button outline */
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.back-link:hover {
+  color: var(--text);
+}
+
+.back-link:hover svg {
+  transform: translateX(-2px);
+}
+
+.back-link svg {
+  transition: transform 0.15s;
+}
+
+/* Delivery settings for a host: a text link with a chevron that opens a two-column grid of sliders */
+.delivery-card summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-2);
+  font-size: 0.9rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.delivery-card summary::-webkit-details-marker {
+  display: none;
+}
+
+.delivery-card summary:hover {
+  color: var(--text);
+}
+
+.delivery-chevron {
+  flex-shrink: 0;
+  transition: transform 0.2s;
+}
+
+.delivery-card[open] .delivery-chevron {
+  transform: rotate(180deg);
+}
+
+.delivery-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px 32px;
+  padding-top: 18px;
+}
+
+.delivery-slider {
+  display: grid;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
+.delivery-value {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(33, 124, 255, 0.14);
+  color: var(--blue);
+  font-size: 0.78rem;
+}
+
+/* A slim track, filled up to the thumb (--pct) */
+.delivery-slider input[type="range"] {
+  width: 100%;
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--blue) var(--pct, 50%), var(--line-strong) var(--pct, 50%));
+  appearance: none;
+  outline: none;
+  cursor: pointer;
+}
+
+.delivery-slider input[type="range"]::-webkit-slider-thumb {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--white);
+  border-radius: 50%;
+  background: var(--blue);
+  box-shadow: 0 0 0 4px rgba(33, 124, 255, 0.2);
+  appearance: none;
+}
+
+.delivery-slider input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--white);
+  border-radius: 50%;
+  background: var(--blue);
+}
+
+.delivery-slider input[type="range"]:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 6px rgba(33, 124, 255, 0.35);
+}
+
+.delivery-actions {
+  padding-top: 14px;
+}
+
+@media (max-width: 640px) {
+  .delivery-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .mm-row-progress {

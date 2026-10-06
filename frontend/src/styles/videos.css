@@ -1,0 +1,3216 @@
+/* Videos (blog2video): the three step create wizard and the editor. */
+
+.vw {
+  width: 100%; /* auto margins would otherwise shrink the card to its content while posts load */
+  max-width: 960px;
+  margin-inline: auto;
+  gap: 20px;
+}
+
+/* A little more breathing room than a plain card; phones keep the global card padding */
+@media (min-width: 641px) {
+  .card.vw {
+    padding: 32px;
+  }
+}
+
+/* Post list in step 1: compact one-line rows, three visible at a time (3 x 48px rows + the list's border) */
+.vw .picker-list {
+  max-height: 146px;
+}
+
+.vw .vw-posts-wait {
+  display: grid;
+  place-items: center;
+  height: 146px;
+  overflow: hidden;
+}
+
+.vw .picker-row {
+  height: 48px;
+  padding: 6px 12px;
+  align-content: center;
+  gap: 0 10px;
+}
+
+.vw .picker-row input {
+  margin-top: 2px;
+}
+
+.vw .picker-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.3;
+}
+
+.vw .picker-meta {
+  line-height: 1.3;
+}
+
+/* The post picker uses the form's body font, not the shared picker's mono */
+.vw .picker-actions,
+.vw .picker-meta,
+.vw .vw-source-post .mono {
+  font-family: var(--font-body);
+  letter-spacing: normal;
+}
+
+.vw-label {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+/* Stepper */
+
+/* Under the page title, step 1 only: plain text */
+.vw-back {
+  justify-self: start;
+  margin-top: -12px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-2);
+  font: 500 0.9rem var(--font-body);
+  cursor: pointer;
+}
+
+.vw-back:hover {
+  color: var(--white);
+}
+
+/* Above the wizard card, centred over it */
+.vw-steps {
+  display: grid;
+  justify-items: center;
+}
+
+.vw-steps ol {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vw-steps li {
+  display: flex;
+  align-items: center;
+}
+
+.vw-steps li + li::before {
+  content: "";
+  width: 56px;
+  height: 1px;
+  margin-inline: 10px;
+  background: var(--line-strong);
+}
+
+.vw-steps li span {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  color: var(--text-2);
+  font: 600 0.875rem var(--font-body);
+}
+
+.vw-steps li.done span {
+  border-color: var(--blue-35);
+  background: var(--blue-10);
+  color: var(--blue);
+}
+
+.vw-steps li.on span {
+  border-color: var(--blue);
+  background: var(--blue);
+  color: var(--white);
+  box-shadow: var(--glow-sm);
+}
+
+/* Option rows and "Coming soon" */
+
+.vw-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.vw-option input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--blue);
+}
+
+.vw-soon {
+  position: relative;
+}
+
+.vw-soon-body {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  opacity: 0.45;
+}
+
+.vw-soon-tag {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--black);
+  color: var(--text-2);
+  font-size: 0.7rem;
+}
+
+.vw-premium {
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--blue);
+  color: var(--white);
+  font-size: 0.65rem;
+}
+
+.vw-dim {
+  opacity: 0.5;
+}
+
+.vw-hint {
+  font-size: 0.78rem;
+}
+
+.vw-note {
+  margin-top: -8px;
+  font-size: 0.75rem;
+}
+
+/* Templates */
+
+.vw-hero-check {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--blue);
+  color: var(--white);
+}
+
+/* Template grid: small cards, scrolling inside its own box */
+.vw-templates-scroll {
+  position: relative;
+  max-height: 410px; /* 2.5 rows: padding + 2 x (110px thumb + ~43px name) + 2 gaps + half a row, so the third row peeks in and hints that the grid scrolls */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.vw-templates-scroll .vw-templates {
+  margin-top: 0;
+  gap: 10px;
+}
+
+.vw-templates-scroll .vw-template img,
+.vw-templates-scroll .vw-template .vw-thumb-fallback {
+  height: 110px;
+  aspect-ratio: auto;
+}
+
+.vw-templates-scroll .vw-template .vw-thumb-fallback {
+  padding: 10px;
+}
+
+.vw-templates-scroll .vw-template .vw-thumb-fallback strong {
+  padding: 0;
+  font-size: 0.8rem;
+}
+
+.vw-templates-scroll .vw-template > strong {
+  padding: 10px 12px;
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vw-templates-scroll .vw-badge {
+  top: 6px;
+  left: 6px;
+  padding: 1px 6px;
+  font-size: 0.58rem;
+}
+
+.vw-templates {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+}
+
+@media (max-width: 640px) {
+  .vw-templates {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.vw-template {
+  position: relative;
+  display: grid;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--white);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.vw-template img,
+.vw-template-blank {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  background: var(--surface-2);
+}
+
+.vw-template strong {
+  padding: 10px 12px;
+  font-size: 0.9rem;
+}
+
+.vw-template.on {
+  border-color: var(--blue);
+  outline: 2px solid var(--blue); /* a thicker ring that stays inside the grid's padding */
+  outline-offset: 0;
+  box-shadow: var(--glow-md);
+}
+
+.vw-template.on > strong {
+  padding-right: 40px; /* room for the check */
+  background: var(--blue-20);
+}
+
+/* Tick in the name bar of the chosen template */
+.vw-template-check {
+  position: absolute;
+  right: 10px;
+  bottom: 9px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--blue);
+  color: var(--white);
+}
+
+.vw-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--blue);
+  color: var(--white);
+  font-size: 0.65rem;
+  text-transform: uppercase;
+}
+
+/* Colors */
+
+.vw-colors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.vw-color {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+.vw-color input {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+}
+
+.vw-color input::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.vw-color input::-webkit-color-swatch {
+  border: none;
+  border-radius: 50%;
+}
+
+/* The style chips (step 1) and the colors (step 2), each in a row of their own, with smaller swatches */
+.vw-style-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start; /* both labels on one line; the swatch row matches the chip height below */
+  gap: 16px 40px;
+  margin-block: 12px; /* extra room from the template grid above and the buttons below */
+}
+
+/* As tall as a style chip, so swatches and chips sit on the same centre line */
+.vw-style-row .vw-colors {
+  min-height: 38px;
+  align-items: center;
+  gap: 16px;
+}
+
+.vw-style-row .vw-color {
+  gap: 8px;
+}
+
+.vw-style-row .vw-color input {
+  width: 32px;
+  height: 32px;
+}
+
+/* Voices */
+
+.vw-voices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .vw-voices {
+    grid-template-columns: 1fr;
+  }
+}
+
+.vw-voice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 4px 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.vw-voice.on {
+  border-color: var(--blue);
+  background: var(--blue-05);
+}
+
+.vw-voice-pick {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  background: none;
+  color: var(--white);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* Voice list (play, name, "Female \2022 American - description", Premium, check) */
+
+.vw-voice-list {
+  display: grid;
+  gap: 10px;
+  max-height: 420px;
+  overflow-y: auto;
+  padding: 2px;
+}
+
+.vw-vrow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px 12px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+/* Step 3's voice picker: shorter rows than the Voices page */
+/* 4.5 rows visible, so the half row hints that the list scrolls: 2px padding + 4 x (64px row + 8px gap) + half a row */
+.vw-voice-list-compact {
+  gap: 8px;
+  max-height: 322px;
+}
+
+/* One fixed height for every row (name only, or name and "Female • American"), so exactly four fit */
+.vw-voice-list-compact .vw-vrow {
+  height: 64px;
+  padding: 0 14px 0 10px;
+}
+
+.vw-voice-list-compact .vw-vplay {
+  width: 40px;
+  height: 40px;
+}
+
+.vw-voice-list-compact .vw-vpick {
+  gap: 2px;
+}
+
+.vw-vrow:hover {
+  border-color: var(--line-strong);
+}
+
+.vw-vrow.on {
+  border-color: var(--blue);
+  background: var(--blue-05);
+  box-shadow: var(--glow-sm);
+}
+
+.vw-vplay {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border: none;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--white);
+  cursor: pointer;
+}
+
+.vw-vplay:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.vw-tri {
+  width: 0;
+  height: 0;
+  margin-left: 3px;
+  border-block: 7px solid transparent;
+  border-left: 11px solid currentColor;
+}
+
+.vw-stop {
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+  background: currentColor;
+}
+
+.vw-vpick {
+  display: grid;
+  flex: 1;
+  gap: 4px;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--white);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.vw-vpick strong {
+  font-size: 1.05rem;
+}
+
+.vw-vpick span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 0.9rem;
+}
+
+.vw-premium-badge {
+  flex: none;
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: var(--blue);
+  color: var(--white);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+/* Wizard footer */
+
+.vw-nav {
+  display: flex;
+  gap: 12px;
+}
+
+.vw-next {
+  flex: 1;
+  padding-block: 14px;
+}
+
+/* Editor */
+
+/* While a video is being made: one card in the middle of the page */
+.vw-making {
+  width: 100%;
+  max-width: 880px;
+  margin: 10vh auto 0;
+  padding: 64px 40px;
+  gap: 48px; /* heading, steps and note well apart */
+  justify-items: center;
+  text-align: center;
+}
+
+.vw-making .vw-progress {
+  margin-top: 0;
+}
+
+.vw-making > .pill {
+  margin-top: -32px; /* sits just under the note, not a full section away */
+}
+
+.vw-making .vw-progress li {
+  gap: 18px; /* circle to label */
+}
+
+/* Generation progress: the steps as circles wired together in one row, each label under its circle */
+.vw-progress {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  width: 100%;
+  max-width: 760px; /* closer together, centred in the card */
+  margin: 8px auto 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text-3);
+}
+
+.vw-progress li {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  text-align: center;
+}
+
+/* The wire from the previous circle to this one */
+.vw-progress li + li::before {
+  content: "";
+  position: absolute;
+  top: 18px;
+  left: calc(-50% + 26px);
+  right: calc(50% + 26px);
+  height: 2px;
+  border-radius: 1px;
+  background: var(--line-strong);
+}
+
+.vw-progress li.done + li::before {
+  background: var(--blue);
+}
+
+.vw-progress-dot {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  font: 600 0.875rem var(--font-body);
+  color: var(--text-2);
+}
+
+.vw-progress-label {
+  font-size: 0.875rem;
+}
+
+.vw-progress li.done .vw-progress-dot {
+  border-color: var(--blue);
+  background: var(--blue-10);
+  color: var(--blue);
+}
+
+.vw-progress li.done .vw-progress-label {
+  color: var(--text-2);
+}
+
+.vw-progress li.on .vw-progress-dot {
+  border-color: var(--blue);
+  background: var(--blue);
+  color: var(--white);
+  animation: vw-pulse 1.6s ease-in-out infinite;
+}
+
+.vw-progress li.on .vw-progress-label {
+  color: var(--white);
+}
+
+@media (max-width: 520px) {
+  .vw-progress-label {
+    font-size: 0.75rem;
+  }
+}
+
+@keyframes vw-pulse {
+  50% {
+    box-shadow: var(--glow-md);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vw-progress li.on .vw-progress-dot {
+    animation: none;
+  }
+}
+
+.vw-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 1000px) {
+  .vw-editor {
+    grid-template-columns: 1fr;
+  }
+}
+
+.vw-preview-card {
+  position: sticky;
+  top: 16px;
+}
+
+.vw-preview {
+  position: relative;
+  width: 100%;
+  padding-top: 56.25%;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.vw-preview.portrait {
+  max-width: 400px;
+  margin-inline: auto;
+  padding-top: min(177.78%, 711px);
+}
+
+.vw-preview iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.vw-rendered {
+  width: 100%;
+  border-radius: var(--radius-sm);
+}
+
+.vw-scene {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  gap: 10px;
+}
+
+.vw-audio {
+  width: 100%;
+  height: 36px;
+}
+
+.vw-assets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 8px;
+}
+
+.vw-assets img,
+.vw-assets video {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+}
+
+/* Links styled like the buttons they sit next to */
+
+a.mc-action {
+  color: inherit;
+  text-decoration: none;
+}
+
+.nbv-make a {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--white);
+  font: 500 0.875rem var(--font-body);
+  text-decoration: none;
+}
+
+.nbv-make a:hover {
+  border-color: var(--blue-60);
+}
+
+.nbv-make a.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* Wizard, voices, templates and editor additions */
+
+.vw-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.vw-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.vw-chip.on {
+  border-color: var(--blue);
+  background: var(--blue);
+  color: var(--white);
+}
+
+.vw-focus {
+  margin-bottom: 12px;
+}
+
+.vw-focus-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.vw-focus-card {
+  display: flex;
+  align-items: flex-start; /* title and description read from the top */
+  gap: 10px;
+  min-height: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.vw-focus-card > .icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.vw-focus-text {
+  display: grid;
+  flex: 1;
+  gap: 3px;
+  min-width: 0;
+}
+
+.vw-focus-text strong {
+  font-size: 0.9rem;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+/* The topic's description: two lines at most */
+.vw-focus-desc {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.vw-focus-card.on {
+  border-color: var(--blue);
+}
+
+/* The user's own topic, under the suggestions: same frame as a card, the box full width */
+.vw-focus-custom {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.vw-focus-custom.on {
+  border-color: var(--blue);
+}
+
+.vw-focus-custom-head {
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+/* A multi-line box, not the site's pill-shaped one-line .input */
+.vw-focus-custom textarea {
+  width: 100%;
+  min-height: 72px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.45);
+  color: var(--text);
+  font: 400 0.88rem/1.45 var(--font-body);
+  resize: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.vw-focus-custom textarea::placeholder {
+  color: var(--text-3);
+}
+
+.vw-focus-custom textarea:focus {
+  outline: none;
+  border-color: var(--blue);
+  box-shadow: var(--glow-sm);
+}
+
+/* The guide on the left, the character count on the right */
+.vw-focus-custom-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.vw-focus-custom-foot small {
+  font-size: 0.74rem;
+}
+
+.vw-focus-card.wait {
+  cursor: default;
+  color: var(--text-2);
+}
+
+/* The loading line in place of a topic: a light-to-dark bar with a sweep across it */
+.vw-focus-bar {
+  display: block;
+  height: 14px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #b8bcc6, #3d4658, #b8bcc6);
+  background-size: 200% 100%;
+  opacity: 0.85;
+  animation: vw-focus-sweep 1.6s linear infinite;
+}
+
+.vw-focus-bar.short {
+  width: 60%;
+  height: 10px;
+}
+
+@keyframes vw-focus-sweep {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vw-focus-bar {
+    animation: none;
+    background: linear-gradient(90deg, #b8bcc6, #3d4658);
+  }
+}
+
+@media (max-width: 720px) {
+  .vw-focus-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Video style pills: a little wider than the generic chips */
+.vw-style-chips .vw-chip {
+  min-width: 132px;
+  justify-content: center;
+  padding-inline: 24px;
+}
+
+.vw-style-chips .vw-chip.on,
+.vw-style-chips .vw-chip[aria-pressed="true"] {
+  border-color: var(--blue);
+  background: var(--blue);
+  color: var(--white);
+  box-shadow: var(--glow-sm);
+}
+
+.vw-style-note {
+  display: -webkit-box;
+  margin-top: 10px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3; /* the description is written to fit three lines */
+  line-clamp: 3;
+}
+
+.vw-premium-badge.small {
+  padding: 1px 8px;
+  font-size: 0.68rem;
+}
+
+.vw-grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.vw-span2 {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 640px) {
+  .vw-grid2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.vw-slider input[type="range"] {
+  width: 100%;
+  accent-color: var(--blue);
+}
+
+/* A thin slider: 4px track, blue up to the handle (set --fill to the value as a percentage), small round handle */
+.vw-slider input.range-thin {
+  height: 16px;
+  margin: 4px 0;
+  background: none;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.range-thin::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--blue) var(--fill, 0%), var(--line-strong, rgba(255, 255, 255, 0.15)) var(--fill, 0%));
+}
+
+.range-thin::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--line-strong, rgba(255, 255, 255, 0.15));
+}
+
+.range-thin::-moz-range-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--blue);
+}
+
+.range-thin::-webkit-slider-thumb {
+  width: 14px;
+  height: 14px;
+  margin-top: -5px; /* centres the handle on the 4px track */
+  border: 2px solid var(--white);
+  border-radius: 50%;
+  background: var(--blue);
+  box-shadow: var(--glow-sm);
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.range-thin::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--white);
+  border-radius: 50%;
+  background: var(--blue);
+  box-shadow: var(--glow-sm);
+}
+
+.range-thin:focus-visible {
+  outline: none;
+}
+
+.range-thin:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px var(--blue-35, var(--blue-20));
+}
+
+.vw-fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.vw-fieldset:disabled {
+  opacity: 0.5;
+}
+
+.vw-files {
+  display: grid;
+  gap: 6px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vw-vpick.static {
+  cursor: default;
+}
+
+.vw-vplay-space {
+  flex: none;
+  width: 36px;
+}
+
+.vw-subpanel {
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.vw-num {
+  width: 84px;
+}
+
+.vw-asset-pick {
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: none;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.vw-asset-pick img,
+.vw-clip video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
+.vw-clip {
+  display: grid;
+  gap: 6px;
+}
+
+.vw-pre {
+  max-height: 260px;
+  overflow: auto;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+}
+
+.vw-chat {
+  display: grid;
+  gap: 8px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.vw-chat-line {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.vw-chat-line.user {
+  justify-self: end;
+  background: var(--blue);
+  color: var(--white);
+}
+
+.vw-still {
+  max-width: 100%;
+  border-radius: var(--radius-sm);
+}
+
+.vw-swatch {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+/* Template posters (blog2video's baked previews), or the template's colors when there is none */
+
+.vw-template img.vw-thumb.portrait {
+  object-fit: contain;
+  background: #000;
+}
+
+.vw-thumb-fallback {
+  display: grid;
+  align-content: end;
+  gap: 8px;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  padding: 14px;
+  border-bottom: 3px solid;
+  box-sizing: border-box;
+}
+
+.vw-thumb-fallback.large {
+  max-height: 420px;
+}
+
+.vw-thumb-fallback strong {
+  padding: 0;
+  font-size: 1.1rem;
+}
+
+.vw-thumb-bar {
+  width: 40%;
+  height: 6px;
+  border-radius: 3px;
+}
+
+/* Videos page: one row per video */
+
+.vw-list {
+  display: grid;
+  gap: 12px;
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vw-list-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.vw-list-row:hover {
+  border-color: var(--blue);
+}
+
+.vw-list-main {
+  display: grid;
+  flex: 1;
+  gap: 6px;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.vw-list-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.vw-list-title strong {
+  overflow: hidden;
+  font-size: 1.05rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vw-list-row:hover .vw-list-title strong {
+  color: var(--blue);
+}
+
+.vw-list-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  font-size: 0.9rem;
+}
+
+.vw-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted, #888);
+}
+
+.vw-dot.done { background: var(--blue); }
+.vw-dot.ready { background: var(--blue); }
+.vw-dot.busy { background: var(--blue); }
+.vw-dot.review { background: var(--blue); }
+.vw-dot.failed { background: #ef4444; }
+
+/* Create page "Latest": the same rows, for any artifact, with its type in front */
+.artifact-row {
+  display: grid;
+  gap: 12px;
+}
+
+.artifact-row-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.artifact-row-toggle {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.artifact-row-body {
+  display: grid;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.artifact-row-body .player,
+.artifact-row-body .still {
+  max-width: 520px;
+}
+
+.type-chip {
+  flex: none;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--blue-35);
+  background: var(--blue-10);
+  color: var(--blue);
+  font: 500 0.68rem var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.type-chip.audio_overview {
+  border-color: rgba(168, 85, 247, 0.4);
+  background: rgba(168, 85, 247, 0.12);
+  color: #c084fc;
+}
+
+.type-chip.quote_card {
+  border-color: rgba(245, 158, 11, 0.4);
+  background: rgba(245, 158, 11, 0.12);
+  color: #fbbf24;
+}
+
+.vw-list-delete {
+  flex: none;
+  opacity: 0.6;
+}
+
+/* Confirm button in every delete / remove / stop warning: a solid red pill, darker red on hover. While it works
+   (disabled, "Deleting..."), it stays red and dimmed instead of picking up the shared .btn-danger hover. */
+.btn.vw-delete-confirm {
+  border-color: #ef4444;
+  background: #ef4444;
+  color: var(--white);
+  box-shadow: none;
+}
+
+.btn.vw-delete-confirm:hover:not(:disabled) {
+  border-color: #b91c1c;
+  background: #b91c1c;
+  color: var(--white);
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.35);
+}
+
+.btn.vw-delete-confirm:disabled,
+.btn.vw-delete-confirm:disabled:hover {
+  border-color: #ef4444;
+  background: #ef4444;
+  color: var(--white);
+  box-shadow: none;
+}
+
+.vw-list-delete:hover {
+  opacity: 1;
+  color: #ef4444;
+}
+
+/* Editor, blog2video-style: preview on top, tab bar, scenes as expandable rows */
+
+.vw-editor-v2 {
+  gap: 20px;
+  min-width: 0; /* wide tab content (Settings' two columns) shrinks to the page instead of overflowing it */
+}
+
+.vw-preview-card.wide {
+  /* Full width above the tabs: scrolls with the page (the sticky rule is for the old side-by-side layout). */
+  position: static;
+  display: grid;
+  gap: 12px;
+}
+
+/* Exactly 16:9 (aspect-ratio, not padding: padding % follows the card's width, not the box's, and left black
+   bands above and below the video), at most 65% of the window tall, centred. */
+.vw-preview-card.wide .vw-preview {
+  width: min(100%, calc(65vh * 16 / 9));
+  margin-inline: auto;
+  padding-top: 0;
+  aspect-ratio: 16 / 9;
+}
+
+.vw-preview-card.wide .vw-rendered {
+  max-height: 65vh;
+  object-fit: contain;
+  background: #000;
+}
+
+.vw-preview-card.wide .vw-preview.portrait {
+  width: min(100%, calc(62vh * 9 / 16)); /* portrait: up to 62% of the window tall */
+  max-width: none;
+  padding-top: 0;
+  aspect-ratio: 9 / 16;
+}
+
+.vw-preview-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.vw-tabbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* The editor's tabs: more room between them than the default tab pill */
+.vw-tabbar .tabs {
+  gap: 12px;
+}
+
+.vw-scenes-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 18px;
+}
+
+.vw-scenes-head h2 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.vw-accent {
+  color: var(--blue);
+}
+
+.vw-group {
+  display: grid;
+  gap: 10px;
+}
+
+.vw-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--blue);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  font-size: 1.05rem;
+  cursor: pointer;
+}
+
+.vw-scene-row {
+  display: flex;
+  margin-left: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.vw-scene-row.open,
+.vw-scene-row:hover {
+  border-color: var(--line-strong, var(--line));
+}
+
+.vw-scene-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.vw-scene-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+}
+
+.vw-num-badge {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(124, 58, 237, 0.14);
+  color: var(--blue);
+  font-weight: 600;
+}
+
+.vw-scene-title {
+  flex: 1;
+  min-width: 180px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 1.05rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.vw-scene-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.vw-soft {
+  border-color: rgba(124, 58, 237, 0.35);
+  color: var(--blue);
+}
+
+.vw-pill {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 0.8rem;
+  opacity: 0.55;
+}
+
+.vw-pill.ok {
+  background: rgba(34, 197, 94, 0.14);
+  color: #22c55e;
+  opacity: 1;
+}
+
+/* Scene delete: a red dustbin; the first click arms it ("Delete?"), the second deletes */
+.vw-trash-btn {
+  display: inline-grid;
+  place-items: center;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: #ef4444;
+  font: 500 0.8rem var(--font-body);
+  cursor: pointer;
+}
+
+.vw-trash-btn:hover {
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.vw-trash-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.vw-scene-detail {
+  display: grid;
+  gap: 20px;
+  padding: 6px 18px 22px 62px;
+  border-top: 1px solid var(--line);
+}
+
+.vw-detail-block {
+  display: grid;
+  gap: 8px;
+}
+
+.vw-detail-block p {
+  margin: 0;
+}
+
+.vw-narrow {
+  max-width: 560px;
+}
+
+.vw-layout-pill {
+  justify-self: start;
+  padding: 6px 14px;
+  border-radius: 8px;
+  background: rgba(124, 58, 237, 0.14);
+  color: var(--blue);
+}
+
+.vw-detail-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 24px;
+}
+
+@media (max-width: 760px) {
+  .vw-detail-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .vw-scene-detail {
+    padding-left: 18px;
+  }
+
+  .vw-scene-row {
+    margin-left: 0;
+  }
+}
+
+.vw-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.vw-tile {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 104px;
+  height: 104px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.vw-tile img,
+.vw-tile video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Add tiles (AI image, upload, stock footage): same size as the media tiles, icon over a short label */
+.vw-tile.add {
+  align-content: center;
+  gap: 10px;
+  padding: 10px;
+  border-style: dashed;
+  border-color: var(--line-strong, var(--line));
+  background: var(--surface);
+  color: var(--text-2);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.vw-tile-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin-inline: auto;
+  border-radius: 50%;
+  background: var(--blue-10);
+  color: var(--blue);
+  transition: background 0.15s;
+}
+
+.vw-tile.add small {
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.vw-tile.add:hover:not(:disabled),
+.vw-tile.add.on {
+  border-style: solid;
+  border-color: var(--blue);
+  background: var(--blue-10);
+  color: var(--white);
+}
+
+.vw-tile.add:hover:not(:disabled) .vw-tile-icon,
+.vw-tile.add.on .vw-tile-icon {
+  background: var(--blue-20);
+}
+
+.vw-tile.add.on {
+  box-shadow: var(--glow-sm);
+}
+
+.vw-tile.add:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* The AI tile is set apart by a filled spark */
+.vw-tile.ai .vw-tile-icon svg {
+  fill: currentColor;
+}
+
+.vw-tile-x {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  cursor: pointer;
+}
+
+.vw-avatar {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border: 1px dashed var(--line);
+  border-radius: 50%;
+  color: #22c55e;
+}
+
+.vw-avatar.on {
+  border-style: solid;
+  border-color: #22c55e;
+}
+
+/* Images/footage tab: scenes and their media on the left, what no scene uses on the right */
+.vw-media-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .vw-media-cols {
+    grid-template-columns: 1fr;
+  }
+}
+
+.vw-media-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.vw-media-head h3 {
+  margin: 0;
+}
+
+.vw-media-scene {
+  display: grid;
+  gap: 10px;
+  margin: 10px 0 0 18px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.vw-media-scene-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.vw-media-scene-title strong {
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vw-media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.vw-media-tile {
+  position: relative;
+  overflow: visible;
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
+  background: #000;
+}
+
+.vw-media-tile > img,
+.vw-media-tile > video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 10px;
+}
+
+.vw-media-badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.7);
+  color: var(--white);
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.vw-media-name {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  overflow: hidden;
+  padding: 14px 8px 6px;
+  border-radius: 0 0 10px 10px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
+  color: var(--white);
+  font-size: 0.65rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.vw-media-x {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.7);
+  color: #ef4444;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.vw-media-x:hover {
+  background: rgba(239, 68, 68, 0.9);
+  color: var(--white);
+}
+
+/* Unassigned: delete the asset for good (opens a warning) */
+.vw-media-del {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.7);
+  color: #ef4444;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.vw-media-del:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.9);
+  color: var(--white);
+}
+
+/* Scene edit dialog */
+
+.vw-edit {
+  gap: 18px;
+}
+
+.vw-seg {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.vw-seg-btn {
+  padding: 12px;
+  border: 0;
+  border-radius: calc(var(--radius-sm) - 2px);
+  background: none;
+  color: var(--text-2);
+  font: inherit;
+  cursor: pointer;
+}
+
+.vw-seg-btn.on {
+  background: var(--surface);
+  color: var(--blue);
+  box-shadow: var(--glow-sm);
+}
+
+.vw-ai-btn {
+  padding: 16px;
+  border: 1px solid rgba(124, 58, 237, 0.4);
+  border-radius: var(--radius-sm);
+  background: rgba(124, 58, 237, 0.08);
+  color: var(--blue);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.vw-switch {
+  position: relative;
+  flex: none;
+  width: 52px;
+  height: 30px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface-2);
+  cursor: pointer;
+}
+
+.vw-switch span {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #fff;
+  transition: left 0.15s;
+}
+
+.vw-switch.on {
+  background: var(--blue);
+}
+
+.vw-switch.on span {
+  left: 25px;
+}
+
+.vw-radio {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  cursor: pointer;
+}
+
+.vw-radio span {
+  display: grid;
+  gap: 2px;
+}
+
+.vw-collapse {
+  display: flex;
+  justify-content: space-between;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 1.05rem;
+  cursor: pointer;
+}
+
+/* Format switch under the preview: portrait (phone) / landscape (screen) */
+
+.vw-format-toggle {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.vw-format-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 32px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+.vw-format-icon.on {
+  background: var(--blue);
+  color: var(--white);
+}
+
+.vw-format-icon:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+/* Step 1: the single post a video is made from */
+.vw-source-post {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.vw-source-post > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* Audio tab: each scene's voiceover, play with progress or record a new take */
+.vw-vo-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.vw-vo-head h3 {
+  margin: 0;
+}
+
+.vw-vo-legend {
+  display: inline-flex;
+  gap: 14px;
+  margin-left: auto;
+}
+
+.vw-vo-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.vw-vo-dot {
+  display: inline-block;
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--line-strong);
+}
+
+.vw-vo-dot.ok {
+  background: #22c55e;
+}
+
+.vw-vo-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 10px 0 0 18px;
+  padding: 14px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.vw-vo-play {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--white);
+  color: #000;
+  cursor: pointer;
+}
+
+.vw-vo-play:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.vw-vo-tri {
+  width: 0;
+  height: 0;
+  margin-left: 3px;
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+  border-left: 11px solid currentColor;
+}
+
+.vw-vo-pause {
+  width: 11px;
+  height: 13px;
+  border-right: 4px solid currentColor;
+  border-left: 4px solid currentColor;
+}
+
+.vw-vo-main {
+  display: grid;
+  flex: 1;
+  gap: 8px;
+  min-width: 0;
+}
+
+.vw-vo-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.vw-vo-line strong {
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vw-vo-line .mono {
+  flex: none;
+}
+
+.vw-vo-bar {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--line);
+}
+
+.vw-vo-bar span {
+  display: block;
+  height: 100%;
+  background: var(--blue);
+  transition: width 0.2s linear;
+}
+
+@media (max-width: 640px) {
+  .vw-vo-row {
+    flex-wrap: wrap;
+    margin-left: 0;
+  }
+}
+
+/* Settings tab: titled cards in two columns, each saving on its own */
+.vw-settings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 28px 24px;
+  align-items: stretch; /* the two cards in a row end at the same line */
+  width: 100%;
+  min-width: 0;
+}
+
+/* Let every card and its contents shrink to the column instead of pushing past the page edge */
+.vw-set-card,
+.vw-set-card > .card,
+.vw-set-row > *,
+.vw-voice-lang > *,
+.vw-lang-pair > * {
+  min-width: 0;
+}
+
+@media (max-width: 1000px) {
+  .vw-settings {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* The heading and note on top, the card filling the rest of the row's height */
+.vw-set-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.vw-set-card > .card {
+  display: flex; /* flex, not the stack's grid, so margin-top: auto below can push the last row down */
+  flex: 1;
+  flex-direction: column;
+}
+
+/* Project Template: the Change button sits at the bottom of the taller card */
+.vw-set-card > .card > .vw-set-end:last-child {
+  margin-top: auto;
+}
+
+.vw-set-card > h3 {
+  margin: 0;
+}
+
+.vw-set-card > p {
+  margin: 4px 0 12px;
+}
+
+.vw-set-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.vw-set-grow {
+  flex: 1 1 220px;
+}
+
+/* A dropdown and its button (Save font, Change template) as two compact pills of the same 40px height */
+.vw-set-row .dropdown-btn {
+  height: 40px;
+  font-size: 0.9rem;
+}
+
+.vw-set-row:not(.vw-colors-row) > .btn {
+  height: 40px;
+}
+
+.vw-set-end {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.vw-set-rule {
+  width: 100%;
+  margin: 4px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+.vw-colorpicks {
+  display: flex;
+  flex: 1 1 0;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+}
+
+/* Colors stay on the left, Save colors on the right of them */
+.vw-colors-row {
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+.vw-colors-row > .btn {
+  flex: none;
+}
+
+.vw-colorpick {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.vw-colorpick input {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: none;
+  cursor: pointer;
+}
+
+.vw-colorpick input::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.vw-colorpick input::-webkit-color-swatch {
+  border: 0;
+  border-radius: 7px;
+}
+
+.vw-colorpick span {
+  display: grid;
+  gap: 2px;
+  white-space: nowrap;
+}
+
+.vw-colorpick strong {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.vw-colorpick small {
+  font-size: 0.7rem;
+}
+
+/* Current template: a large thumbnail, the name and description beside it, wrapping under it when the card is too
+   narrow for both */
+.vw-template-current {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px;
+}
+
+.vw-template-thumb {
+  position: relative;
+  flex: none;
+  width: 260px;
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--blue);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--glow-sm);
+}
+
+.vw-template-thumb > img,
+.vw-template-thumb > .vw-thumb-fallback {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
+.vw-template-thumb .vw-hero-check {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 24px;
+  height: 24px;
+}
+
+.vw-template-meta {
+  display: grid;
+  flex: 1 1 220px; /* below 220px of room beside the thumbnail, it drops under it */
+  gap: 4px;
+  min-width: 0;
+}
+
+.vw-template-meta strong {
+  font-size: 1.1rem;
+}
+
+.vw-voice-lang,
+.vw-split {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.vw-voice-lang > .stack + .stack,
+.vw-split > .stack + .stack {
+  padding-left: 24px;
+  border-left: 1px solid var(--line);
+}
+
+@media (max-width: 640px) {
+  .vw-voice-lang,
+  .vw-split {
+    grid-template-columns: 1fr;
+  }
+
+  .vw-voice-lang > .stack + .stack,
+  .vw-split > .stack + .stack {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .vw-template-current {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+.vw-voice-lang p,
+.vw-split p {
+  margin: 2px 0 0;
+}
+
+.vw-split > * {
+  min-width: 0;
+}
+
+/* Inside the half-width captions column the two sliders stack, compact */
+.vw-split .vw-caption-opts {
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.vw-split .vw-option {
+  padding: 8px 12px;
+  font-size: 0.9rem;
+}
+
+.vw-split .vw-option input {
+  width: 16px;
+  height: 16px;
+}
+
+.vw-split .vw-slider {
+  gap: 2px;
+}
+
+.vw-split .vw-slider .vw-label,
+.vw-split .vw-slider .mono {
+  font-size: 0.68rem;
+}
+
+.vw-split .vw-slider .small {
+  font-size: 0.7rem;
+}
+
+.vw-split .vw-slider input[type="range"] {
+  height: 14px;
+  margin: 2px 0;
+}
+
+.vw-split .vw-caption-font .field {
+  gap: 4px;
+}
+
+.vw-split .vw-caption-font .vw-label {
+  font-size: 0.68rem;
+}
+
+.vw-voice-current {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--blue);
+  border-radius: var(--radius-sm);
+  background: var(--blue-05, var(--surface));
+}
+
+.vw-voice-current span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.vw-lang-pair {
+  display: grid;
+  gap: 10px;
+}
+
+.vw-lang-current {
+  display: flex;
+  align-items: center;
+  height: 48px;
+  padding: 0 16px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text-2);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.vw-danger-soft {
+  border-color: rgba(239, 68, 68, 0.45);
+  color: #ef4444;
+}
+
+.vw-danger-soft:hover,
+.vw-danger-soft.armed {
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.vw-caption-opts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 20px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.vw-caption-font {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* Scene list expand/collapse arrows: one sharp chevron that flips when open */
+.chevron {
+  flex: none;
+  color: var(--text-2);
+  transition: transform 0.2s ease, color 0.15s;
+}
+
+.chevron.open {
+  transform: rotate(180deg);
+  color: var(--white);
+}
+
+.vw-group-head:hover .chevron,
+.icon-btn:hover > .chevron {
+  color: var(--white);
+}
+
+/* Scene media modals (SceneMedia.tsx), like blog2video's: two-way choice, existing-media picker, stock search,
+   AI image review; plus the loading tile while an image is generated or uploaded */
+
+.vw-choice {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.vw-choice button {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  min-height: 130px;
+  padding: 18px;
+  border: 1px solid var(--line-strong, var(--line));
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.95rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+.vw-choice button svg {
+  color: var(--blue);
+}
+
+.vw-choice button:hover,
+.vw-choice button:focus-visible {
+  border-color: var(--blue);
+  background: var(--blue-10);
+  box-shadow: var(--glow-sm);
+  outline: none;
+}
+
+.vw-asset-grid,
+.vw-clip-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 12px;
+  max-height: min(56vh, 520px);
+  overflow-y: auto;
+  padding: 2px;
+}
+
+.vw-asset,
+.vw-clip-card {
+  position: relative;
+  display: grid;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.vw-asset img,
+.vw-asset video,
+.vw-clip-thumb video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  background: #000;
+}
+
+.vw-asset:hover:not(:disabled),
+.vw-clip-card:hover:not(:disabled) {
+  border-color: var(--blue-60, var(--blue));
+}
+
+.vw-asset.on,
+.vw-clip-card.on {
+  border-color: var(--blue);
+  outline: 2px solid var(--blue);
+  box-shadow: var(--glow-sm);
+}
+
+.vw-asset-tag {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.7);
+  color: var(--white);
+  font-size: 0.62rem;
+  font-weight: 500;
+}
+
+.vw-asset-time {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.7);
+  color: var(--white);
+  font-size: 0.7rem;
+}
+
+.vw-asset-check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--blue);
+  color: var(--white);
+}
+
+.vw-asset-empty {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 28px 12px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-sm);
+  text-align: center;
+}
+
+.vw-clip-thumb {
+  position: relative;
+  display: block;
+}
+
+.vw-clip-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  font-size: 0.8rem;
+}
+
+.vw-clip-author {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vw-clip-provider {
+  flex: none;
+  color: var(--text-3);
+  font-size: 0.65rem;
+  text-transform: uppercase;
+}
+
+/* Footer with a note on the left and the buttons on the right */
+.vw-nav-end {
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.vw-nav-end > .muted {
+  margin-right: auto;
+}
+
+/* The AI image prompt: a roomy multi-line box */
+.vw-ai-prompt {
+  min-height: 200px;
+  font-size: 1rem;
+}
+
+/* AI image review: keep (tick) and discard (cross) in the modal header */
+.vw-review-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.vw-round-btn {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--line-strong, var(--line));
+  border-radius: 50%;
+  background: none;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.vw-round-btn:hover:not(:disabled) {
+  border-color: var(--blue);
+  color: var(--white);
+  box-shadow: var(--glow-sm);
+}
+
+.vw-round-btn.keep {
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+.vw-round-btn.keep:hover:not(:disabled) {
+  background: var(--blue);
+  color: var(--white);
+}
+
+.vw-round-btn:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.vw-ai-preview {
+  display: block;
+  width: 100%;
+  max-height: 60vh;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+  background: #000;
+}
+
+/* A media tile still on its way (AI image generating, upload in progress) */
+.vw-tile.loading {
+  border: 1px solid var(--blue-60, var(--blue));
+  background: var(--blue-10);
+}
+
+.vw-spin {
+  display: inline-block;
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--blue-20);
+  border-top-color: var(--blue);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+.vw-spin.small {
+  width: 14px;
+  height: 14px;
+  vertical-align: -2px;
+}
+
+.vw-media-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--blue);
+  font-size: 0.85rem;
+}
+
+@media (max-width: 600px) {
+  .vw-choice {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Inside a modal, button rows sit at the right end, every button the same width (that of the widest, at least
+   140px) instead of the primary one stretching across. Page footers (the wizard) keep their full-width layout. */
+.modal .vw-nav {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  justify-content: end;
+  width: max-content;
+  max-width: 100%;
+  margin-left: auto;
+}
+
+.modal .vw-nav > .btn {
+  min-width: 110px;
+  height: 38px;
+  padding: 0 18px;
+  font-size: 0.875rem;
+}
+
+/* With a note on the left (e.g. "Uses 1 AI edit"): the note takes the free space, buttons stay equal */
+.modal .vw-nav-end {
+  display: flex;
+  width: auto;
+  margin-left: 0;
+}
+
+.modal .vw-nav-end > .btn {
+  flex: 0 0 140px;
+}
+
+@media (max-width: 600px) {
+  .modal .vw-nav {
+    width: 100%;
+  }
+}
+
+/* Search field with its button beside it on the right, on one line */
+.vw-search {
+  display: flex;
+  gap: 10px;
+}
+
+.vw-search .input {
+  flex: 1;
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+
+.vw-search > .btn {
+  flex: none;
+  min-width: 110px;
+}
+
+/* Font size value, with its saving spinner in front */
+.vw-font-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Settings save buttons: spinner + "Saving..." while a save runs */
+.vw-save-btn {
+  gap: 8px;
+}
+
+.vw-save-btn .vw-spin {
+  border-color: rgba(255, 255, 255, 0.35);
+  border-top-color: var(--white);
+}
+
+/* Template picker modal: the wizard's grid, taller; the current template is shown but not pickable */
+.vw-template-pick {
+  max-height: min(60vh, 560px);
+}
+
+.vw-template.current {
+  cursor: default;
+  opacity: 0.6;
+}
+
+/* Background job progress (template switch, voice, translation, add scene), like blog2video's */
+.vw-job {
+  display: grid;
+  justify-items: center;
+  align-content: center; /* centred in the space under the title */
+  gap: 30px;
+  width: 100%;
+  max-width: 640px;
+  min-height: 70vh;
+  margin: 0 auto;
+  padding: 0 16px;
+  text-align: center;
+}
+
+.vw-job-icon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  background: var(--blue-20);
+  color: var(--blue);
+  box-shadow: var(--glow-sm);
+}
+
+.vw-job-head h2 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.vw-job-head p {
+  margin: 10px 0 0;
+}
+
+.vw-job-bar {
+  position: relative;
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.vw-job-bar > span {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: var(--blue);
+  box-shadow: var(--glow-sm);
+  transition: width 0.6s ease;
+}
+
+/* No number to show: a segment slides along the track */
+.vw-job-bar.indeterminate > span {
+  position: absolute;
+  width: 30%;
+  animation: vw-job-slide 1.4s ease-in-out infinite;
+}
+
+@keyframes vw-job-slide {
+  from {
+    left: -30%;
+  }
+  to {
+    left: 100%;
+  }
+}
+
+.vw-job-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+}
+
+/* What the job is on now ("Scene 3 of 14", "Recording voiceovers · scene 2 of 7"), under the % line */
+.vw-job-detail {
+  margin: -18px 0 0;
+}
+
+.vw-job-tip {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  padding-top: 28px;
+  border-top: 1px solid var(--line);
+}
+
+.vw-job-tip p {
+  margin: 0;
+  color: var(--text-2);
+}
+
+/* Current template's description: at most four lines, the rest cut with an ellipsis (full text on hover) */
+.vw-template-desc {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+}
+
+/* The preview box while the video is not ready (an edit job, or before its status is known): same size, no player */
+.vw-preview-wait {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  text-align: center;
+}
+
+/* Stacked radio cards in a modal (e.g. Download: the rendered MP4 now, or render again first) */
+.vw-choice-list {
+  display: grid;
+  gap: 10px;
+}
+
+.vw-choice-list > button {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--line-strong, var(--line));
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+.vw-choice-list > button > span:last-child {
+  display: grid;
+  gap: 4px;
+}
+
+.vw-choice-list > button:hover:not(:disabled) {
+  border-color: var(--blue-60, var(--blue));
+}
+
+.vw-choice-list > button.on {
+  border-color: var(--blue);
+  background: var(--blue-10);
+  box-shadow: var(--glow-sm);
+}
+
+/* The radio circle, filled when chosen */
+.vw-choice-dot {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  border: 2px solid var(--line-strong, var(--line));
+  border-radius: 50%;
+}
+
+.vw-choice-list > button.on .vw-choice-dot {
+  border-color: var(--blue);
+  background: radial-gradient(circle, var(--blue) 0 4px, transparent 5px);
+}
+
+/* Render in progress, under the preview: "Rendering MP4  42%" over a progress bar (no pill) */
+.vw-render-status {
+  display: grid;
+  gap: 8px;
+  width: min(280px, 100%);
+}
+
+.vw-render-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--white);
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.vw-render-pct {
+  margin-left: auto;
+  color: var(--blue);
+}
+
+.vw-render-bar {
+  display: block;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.vw-render-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--blue);
+  box-shadow: var(--glow-sm);
+  transition: width 0.6s ease;
+}
+
+/* Rendering status and its Cancel: the status fills the row, Cancel at the right end */
+.vw-render-row {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  min-width: min(420px, 100%);
+}
+
+/* Cancel keeps its size (it was squeezed into "Can / cel"); the status takes the rest, up to 280px */
+.vw-render-row > .btn {
+  flex: none;
+  white-space: nowrap;
+}
+
+.vw-render-row > .vw-render-status {
+  flex: 0 1 280px;
+  min-width: 160px;
+}
+
+/* Edit Scene, AI-Assisted tab */
+.vw-narration {
+  min-height: 130px;
+  font-size: 1rem;
+}
+
+/* "You changed the narration, so the voiceover will be re-recorded on save." */
+.vw-edit-note {
+  color: #f59e0b;
+  font-size: 0.8rem;
+}
+
+/* One card, sections divided by a rule: re-record, scene style, scene layout */
+.vw-ai-options {
+  display: grid;
+  padding: 0;
+}
+
+.vw-ai-block {
+  display: grid;
+  gap: 12px;
+  padding: 18px 20px;
+}
+
+.vw-ai-block + .vw-ai-block {
+  border-top: 1px solid var(--line);
+}
+
+.vw-ai-block p {
+  margin: 4px 0 0;
+}
+
+.vw-style-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.vw-style-chips > button {
+  height: 36px;
+  padding: 0 16px;
+  border: 1px solid var(--line-strong, var(--line));
+  border-radius: 999px;
+  background: none;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.vw-style-chips > button:hover {
+  border-color: var(--blue-60, var(--blue));
+  color: var(--white);
+}
+
+.vw-style-chips > button.on {
+  border-color: var(--blue);
+  background: var(--blue-10);
+  color: var(--white);
+}
+
+/* Scene layout: the label on the left, the picker on the right (stacked on narrow screens) */
+.vw-layout-row {
+  grid-template-columns: minmax(0, 1fr) minmax(200px, 280px);
+  align-items: center;
+}
+
+@media (max-width: 640px) {
+  .vw-layout-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Edit Scene, Manual tab: layout content lists (string lists, object rows like Byline Rows) */
+.vw-field-list {
+  display: grid;
+  gap: 10px;
+}
+
+.vw-field-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vw-field-row > .input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* One object row: its number, the sub-field inputs, a remove button */
+.vw-field-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  padding: 14px 14px 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.vw-field-num {
+  padding-top: 26px;
+  color: var(--text-3);
+}
+
+.vw-field-x {
+  flex: none;
+  color: var(--text-3);
+}
+
+.vw-field-x:hover {
+  color: #ef4444;
+}
+
+.vw-field-add {
+  justify-self: start;
+  font-size: 0.875rem;
+}
+
+/* Modals that scroll (e.g. Edit Scene): a very thin, quiet scrollbar */
+.modal {
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: var(--line-strong, rgba(255, 255, 255, 0.2)) transparent;
+}
+
+.modal::-webkit-scrollbar {
+  width: 4px;
+}
+
+.modal::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modal::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--line-strong, rgba(255, 255, 255, 0.2));
+}
+
+.modal::-webkit-scrollbar-thumb:hover {
+  background: var(--text-3, rgba(255, 255, 255, 0.4));
+}
+
+/* The video wizard inside a modal (from a notebook): a wider modal, no page-level width or outer card */
+.modal-wide:has(.vw-in-modal) {
+  width: min(700px, 100%);
+}
+
+.vw-in-modal .vw {
+  max-width: none;
+}
+
+.vw-modal-quota {
+  justify-self: end;
+}

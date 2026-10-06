@@ -14,6 +14,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -60,6 +61,9 @@ class Document(IdMixin, TimestampMixin, Base):
 
 class Notebook(IdMixin, TimestampMixin, Base):
     __tablename__ = "notebooks"
+    # One "All posts" notebook per workspace: two requests opening it at once cannot both create one.
+    __table_args__ = (Index("uq_notebooks_one_archive", "workspace_id", unique=True,
+                            postgresql_where=text("is_archive"), sqlite_where=text("is_archive")),)
 
     workspace_id: Mapped[uuid.UUID] = _ws_fk()
     title: Mapped[str] = mapped_column(String(300))
@@ -184,9 +188,104 @@ class Artifact(IdMixin, TimestampMixin, Base):
     document_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("documents.id", ondelete="SET NULL"))
     # summary | audio_overview | video | thread | linkedin | notes | quote_card | carousel | seo
     type: Mapped[str] = mapped_column(String(30))
-    status: Mapped[str] = mapped_column(String(20), default="pending")
+    # pending | generating | ready | failed | rendering | review; a video also takes blog2video's job statuses as they
+    # are: regenerating (template switch) | voice_regenerating | language_regenerating | script_regenerating
+    status: Mapped[str] = mapped_column(String(40), default="pending")
     content_json: Mapped[dict] = mapped_column(JSON, default=dict)
     storage_key: Mapped[str | None] = mapped_column(String(500))
+
+
+class B2VVideo(IdMixin, TimestampMixin, Base):
+    """One blog2video video we asked for: the only place its blog2video id lives. Every read, edit and delete on
+    blog2video goes through this row (b2v_video_id, and created_via for the right endpoints). Also records who made it
+    and whether the workspace's video allowance is still charged for it.
+
+    Our API key reaches every video it created, for every workspace, so this table (with the artifact) is what
+    ties a blog2video id to one workspace. quota_state moves charged -> refunded (or -> kept once generated), with a
+    conditional UPDATE (see video_quota.refund), so the status poller and the sweep can not refund twice."""
+
+    __tablename__ = "b2v_videos"
+    __table_args__ = (Index("ix_b2v_videos_ws_created", "workspace_id", "created_at"),)
+
+    workspace_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("workspaces.id", ondelete="CASCADE"))
+    user_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("users.id", ondelete="SET NULL"),
+                                                      index=True)  # who made it
+    artifact_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("artifacts.id", ondelete="SET NULL"),
+                                                          index=True)
+    # blog2video's video id, which is also its project id. Null until blog2video accepts the create.
+    b2v_video_id: Mapped[int | None] = mapped_column(Integer, unique=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(100), unique=True)  # "<workspace_id>:<uuid>"; v1 only
+    created_via: Mapped[str] = mapped_column(String(10), default="v1", server_default="v1")  # v1 | upload
+    template_ref: Mapped[str | None] = mapped_column(String(100))  # e.g. custom_58: blocks deleting that template
+    title: Mapped[str | None] = mapped_column(String(300))
+    source_url: Mapped[str | None] = mapped_column(String(2000))  # the link it was made from (null for files, text)
+    aspect_ratio: Mapped[str | None] = mapped_column(String(20))
+    preview_url: Mapped[str | None] = mapped_column(String(1000))  # public live preview (embed token)
+    video_url: Mapped[str | None] = mapped_column(String(1000))  # the rendered MP4
+    quota_state: Mapped[str] = mapped_column(String(20), default="charged")  # charged | refunded | kept
+    status: Mapped[str] = mapped_column(String(40), default="queued")  # last known blog2video status
+
+
+class B2VTemplate(TimestampMixin, Base):
+    """A custom template this workspace made. Used on videos as custom_<b2v_template_id>; only when ready."""
+
+    __tablename__ = "b2v_templates"
+
+    b2v_template_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    workspace_id: Mapped[uuid.UUID] = _ws_fk()
+    name: Mapped[str] = mapped_column(String(255))
+    ready: Mapped[bool] = mapped_column(Boolean, default=False)  # code generation finished ('complete')
+
+
+class B2VCustomVoice(TimestampMixin, Base):
+    """A designed or cloned voice this workspace made. Videos reference it by voice_id (custom_voice_id)."""
+
+    __tablename__ = "b2v_custom_voices"
+
+    b2v_custom_voice_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)  # preview/delete
+    workspace_id: Mapped[uuid.UUID] = _ws_fk()
+    voice_id: Mapped[str] = mapped_column(String(100), unique=True)  # the ElevenLabs id sent as custom_voice_id
+    name: Mapped[str] = mapped_column(String(255))
+    source: Mapped[str] = mapped_column(String(20))  # prompt | preset | clone
+    preview_url: Mapped[str | None] = mapped_column(String(1000))
+
+
+class UserSavedVoice(TimestampMixin, Base):
+    """The workspace's "My voices" list. Kept only here: blog2video's saved-voice list is shared by everyone."""
+
+    __tablename__ = "user_saved_voices"
+
+    workspace_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("workspaces.id", ondelete="CASCADE"),
+                                                    primary_key=True)
+    voice_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    name: Mapped[str] = mapped_column(String(255))
+    preview_url: Mapped[str | None] = mapped_column(String(1000))
+    gender: Mapped[str | None] = mapped_column(String(20))
+    accent: Mapped[str | None] = mapped_column(String(50))
+    premium: Mapped[bool] = mapped_column(Boolean, default=False)  # a paid built-in voice, or any custom voice
+    is_custom: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class B2VStyle(TimestampMixin, Base):
+    """A custom video style this workspace made. Used on videos as custom:<b2v_style_id>."""
+
+    __tablename__ = "b2v_styles"
+
+    b2v_style_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    workspace_id: Mapped[uuid.UUID] = _ws_fk()
+    name: Mapped[str] = mapped_column(String(80))
+
+
+class UsageCounter(Base):
+    """Per-workspace counters for the video features blog2video only limits account-wide (video_limits.py)."""
+
+    __tablename__ = "usage_counters"
+
+    workspace_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("workspaces.id", ondelete="CASCADE"),
+                                                    primary_key=True)
+    period: Mapped[str] = mapped_column(String(10), primary_key=True)  # 2026-10 | 2026-10-02 | all
+    metric: Mapped[str] = mapped_column(String(30), primary_key=True)
+    used: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class Job(IdMixin, TimestampMixin, Base):

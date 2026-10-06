@@ -23,7 +23,7 @@ def billing_on(monkeypatch):
 def test_status_without_billing_has_no_upgrade_nudges(client, auth):
     body = client.get("/api/billing/status", headers=auth).json()
     assert body["plan"]["id"] == "studio" and body["can_upgrade"] is False
-    assert {m["key"] for m in body["meters"]} == {"audio_minutes", "video_minutes", "launch_kits", "sources"}
+    assert {m["key"] for m in body["meters"]} == {"audio_minutes", "videos", "launch_kits", "sources"}
     assert all(n["tone"] == "action" for n in body["nudges"])
     assert body["nudges"][0]["id"] == "act-source"
 
@@ -76,3 +76,69 @@ def test_plan_limit_error_names_the_upgrade():
     assert upgrade_for(PLANS["studio"], "audio_minutes") is None
     detail = plan_limit_error(PLANS["free"], "audio_minutes", "x").detail
     assert detail["code"] == "plan_limit" and detail["upgrade_to"] == "writer" and detail["kind"] == "audio_minutes"
+
+
+@pytest.fixture()
+def plans_table(monkeypatch):
+    """Point the plan catalog at its own database, seeded like migration 0006. (Not the client's: that one
+    shares a single connection, and the catalog's own session would roll back the request's work.)"""
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+
+    import app.db
+    from app.db import Base
+    from app.models import PlanRecord
+    from app.services.plans import DEFAULT_PLANS, PLANS
+
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+    monkeypatch.setattr(app.db, "SessionLocal", session_factory)
+    with session_factory() as db:
+        for i, p in enumerate(DEFAULT_PLANS.values()):
+            db.add(PlanRecord(id=p.id, sort_order=i, name=p.name, tagline=p.tagline,
+                              price_monthly_usd=p.price_monthly_usd, sources=p.sources, indexed_posts=p.indexed_posts,
+                              audio_minutes=p.audio_minutes, videos=p.videos, launch_kits=p.launch_kits,
+                              voice_cloning=p.voice_cloning, brand_kit=p.brand_kit, features=list(p.features)))
+        db.commit()
+    PLANS.reload()
+    yield session_factory
+    PLANS.reload()
+
+
+def test_plans_come_from_the_table(plans_table):
+    from app.models import PlanRecord
+    from app.services.plans import PLANS, next_plan
+
+    with plans_table() as db:
+        db.get(PlanRecord, "studio").videos = 50
+        db.get(PlanRecord, "writer").features = ["Edited copy"]
+        db.commit()
+    PLANS.reload()
+    assert PLANS["studio"].videos == 50 and PLANS["writer"].features == ("Edited copy",)
+    assert list(PLANS) == ["free", "writer", "studio"] and next_plan(PLANS["free"]).id == "writer"
+
+
+def test_edited_limit_reaches_video_quota(plans_table, client, auth, db_session):
+    from app.models import PlanRecord, Workspace
+    from app.services.plans import PLANS
+    from app.services.video_quota import sync_video_quota
+
+    with plans_table() as db:
+        db.get(PlanRecord, "studio").videos = 42  # billing disabled: everyone is on Studio
+        db.commit()
+    PLANS.reload()
+    ws = db_session.query(Workspace).one()
+    assert sync_video_quota(db_session, ws).video_limit == 42
+
+
+def test_empty_or_broken_table_falls_back_to_defaults(plans_table):
+    from app.models import PlanRecord
+    from app.services.plans import DEFAULT_PLANS, PLANS
+
+    with plans_table() as db:
+        db.query(PlanRecord).filter(PlanRecord.id == "free").delete()  # no free plan: unusable
+        db.commit()
+    PLANS.reload()
+    assert PLANS["free"] == DEFAULT_PLANS["free"] and PLANS["studio"].videos == DEFAULT_PLANS["studio"].videos

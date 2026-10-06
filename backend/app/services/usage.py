@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Artifact, UsageEvent, Workspace
 from app.services.plans import Plan, effective_plan, plan_limit_error
+from app.services.video_quota import video_usage
 
 
 def month_start(now: datetime | None = None) -> datetime:
@@ -32,7 +33,6 @@ def month_usage(db: Session, workspace_id) -> dict:
     ) or 0
     return {
         "audio_minutes": round(total("tts", "seconds") / 60, 1),
-        "video_minutes": round(total("video", "seconds") / 60, 1),
         "launch_kits": kits,
         "llm_tokens": int(total("llm", "tokens")),
         "since": since.isoformat(),
@@ -42,10 +42,13 @@ def month_usage(db: Session, workspace_id) -> dict:
 def usage_report(db: Session, workspace: Workspace) -> dict:
     plan = effective_plan(db, workspace)
     used = month_usage(db, workspace.id)
+    videos = video_usage(db, workspace)
+    used["videos"] = videos["used"]
     return {
         "plan": plan.id,
         "used": used,
-        "limits": {"audio_minutes": plan.audio_minutes, "video_minutes": plan.video_minutes,
+        "videos_resets_at": videos["resets_at"],
+        "limits": {"audio_minutes": plan.audio_minutes, "videos": videos["limit"],
                    "launch_kits": plan.launch_kits, "sources": plan.sources, "indexed_posts": plan.indexed_posts},
     }
 
@@ -54,8 +57,7 @@ def check_limit(db: Session, workspace: Workspace, kind: str, amount: float = 1)
     """Raise 402 plan_limit when this request would go over the monthly allowance."""
     plan = effective_plan(db, workspace)
     used = month_usage(db, workspace.id)
-    limit = {"audio_minutes": plan.audio_minutes, "video_minutes": plan.video_minutes,
-             "launch_kits": plan.launch_kits}[kind]
+    limit = {"audio_minutes": plan.audio_minutes, "launch_kits": plan.launch_kits}[kind]
     if limit >= 0 and used[kind] + amount > limit:
         label = kind.replace("_", " ")
         raise plan_limit_error(plan, kind, f"This would go over your {limit} {label} this month.")

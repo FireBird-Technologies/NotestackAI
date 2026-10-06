@@ -17,6 +17,8 @@ os.environ["STRIPE_PRICE_WRITER_MONTHLY"] = ""
 os.environ["STRIPE_PRICE_WRITER_ANNUAL"] = ""
 os.environ["STRIPE_PRICE_STUDIO_MONTHLY"] = ""
 os.environ["STRIPE_PRICE_STUDIO_ANNUAL"] = ""
+os.environ["B2V_API_BASE_URL"] = ""
+os.environ["B2V_API_KEY"] = ""
 os.environ.setdefault("EMAIL_PROVIDER", "console")
 os.environ.setdefault("JWT_SECRET", "test-secret-that-is-at-least-32-bytes-long")
 os.environ.setdefault("BILLING_ENABLED", "false")

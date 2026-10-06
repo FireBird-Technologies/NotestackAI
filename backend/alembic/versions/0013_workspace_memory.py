@@ -1,14 +1,14 @@
 """workspace_memory: one row of standing notes per workspace, stored as JSON
 
-Revision ID: 0005_workspace_memory
-Revises: 0004_archive_notebook
+Revision ID: 0013_workspace_memory
+Revises: 0012_artifact_status_len
 Create Date: 2026-09-30
 """
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0005_workspace_memory"
-down_revision = "0004_archive_notebook"
+revision = "0013_workspace_memory"
+down_revision = "0012_artifact_status_len"
 branch_labels = None
 depends_on = None
 

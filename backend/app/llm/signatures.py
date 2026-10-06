@@ -47,14 +47,6 @@ class ScriptLine(BaseModel):
     sources: list[SourceRef] = Field(default_factory=list)
 
 
-class Scene(BaseModel):
-    type: Literal["title", "section", "pull_quote", "number", "outro"]
-    on_screen_text: str
-    narration: str
-    duration_hint_s: float
-    visual: str = ""
-
-
 class Hook(BaseModel):
     text: str
     strength: float = Field(ge=0, le=1)
@@ -278,14 +270,6 @@ class PodcastScript(dspy.Signature):
     lines: list[ScriptLine] = dspy.OutputField()
 
 
-class VideoStoryboard(dspy.Signature):
-    """Turn the post into a scene list for a Remotion composition."""
-
-    passages: list[str] = dspy.InputField()
-    aspect: Literal["16:9", "9:16", "1:1"] = dspy.InputField()
-    scenes: list[Scene] = dspy.OutputField()
-
-
 class HookGenerator(dspy.Signature):
     """Write scroll stopping hooks for the post in the writer's voice. No em dashes."""
 
@@ -458,3 +442,30 @@ class TriageWithMemory(TriageMessage):
                                        "`slug | label | last active | gist`")
     topic: str = dspy.OutputField(desc="The slug of the topic the message belongs to, or none")
     memory: Literal["none", "lookup", "replay", "compose"] = dspy.OutputField()
+
+
+class FocusTopic(BaseModel):
+    # Not "title"/"description": with those names GLM sometimes wrote the word "Description" as every title.
+    topic: str = Field(description="The angle itself in 3 to 7 words, e.g. \"Why tokens break software margins\". "
+                                   "Never a label such as Title, Topic or Description. No trailing period")
+    summary: str = Field(description="Two short sentences (at most 40 words): what the video would cover and the "
+                                     "angle it takes, using only this material")
+
+
+class FocusAngle(FocusTopic):
+    tag: str = Field(description="The candidate tag this angle is built on, copied exactly (its name only), or an "
+                                 "empty string when it comes from the material alone")
+
+
+class VideoFocusAngles(dspy.Signature):
+    """Suggest three distinct angles a short explainer video could focus on, drawn only from this material. Build
+    each angle on a different candidate tag when tags are given (a tag shared by several items makes a good angle that
+    connects them). Each has a short, specific topic (different for each of the three) and a two sentence summary of
+    what the video covers about that angle. Never reuse or closely reword an avoided title: find a new angle instead.
+    Never use em dashes."""
+
+    items: list[str] = dspy.InputField(desc="Each item: a title (when there is one), then the start of its text")
+    candidate_tags: list[str] = dspy.InputField(
+        desc="Topics this material is about: 'Name (in how many items): what it covers'. May be empty")
+    avoid_titles: list[str] = dspy.InputField(desc="Titles already suggested. Do not repeat or reword them")
+    topics: list[FocusAngle] = dspy.OutputField(desc="Exactly 3 focus topics")

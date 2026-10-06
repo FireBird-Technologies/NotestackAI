@@ -1,5 +1,7 @@
 """Text generation jobs over the corpus: notebook summaries, topic map, voice profile, evergreen scores."""
 
+import logging
+import time
 import uuid
 from collections import Counter, defaultdict
 from datetime import UTC, datetime
@@ -19,10 +21,12 @@ from app.llm.signatures import (
     ExtractTopics,
     SummarizeNotebook,
 )
-from app.models import Artifact, DocumentTopic, Job, Notebook, Topic, VoiceProfile
+from app.models import Artifact, Document, DocumentTopic, Job, Notebook, Topic, VoiceProfile
 from app.pipeline.passages import as_citations, notebook_docs, passages_for, tools_for, verify_refs, workspace_docs
 from app.pipeline.research import verify_citations
 from app.services.jobs import update_job
+
+log = logging.getLogger(__name__)
 
 
 class NothingToDo(ValueError):
@@ -244,26 +248,65 @@ def build_mind_map(db: Session, job: Job, artifact: Artifact) -> dict:
 # Topic map
 
 
+TAG_TRIES = 3  # per post per job: the model times out or rate limits now and then
+TAG_BACKOFF = (2.0, 6.0)  # seconds before the second and third try
+MAX_TAG_FAILURES = 5  # jobs in a row that could not tag a post: the sweep stops asking for it (and logs it)
+
+
+def needs_topics(meta: dict | None) -> bool:
+    """A post without topics yet that is still worth another try (see worker.topics_backfill)."""
+    meta = meta or {}
+    return not meta.get("topics") and int(meta.get("topics_failures") or 0) < MAX_TAG_FAILURES
+
+
+def save_topic_tags(doc: Document, out: dict) -> list[dict]:
+    """ExtractTopics' answer for a post (at most 8 named topics), kept in metadata_json["topics"]. An answer with no
+    topics is not kept, so the post still counts as untagged. Also used by the video wizard, which tags a post on
+    demand when it has none yet."""
+    tags = [t for t in (out.get("topics") or []) if t.get("name")][:8]
+    if tags:
+        meta = {k: v for k, v in (doc.metadata_json or {}).items() if k != "topics_failures"}
+        doc.metadata_json = {**meta, "topics": tags}
+    return tags
+
+
+def tag_post(db: Session, job: Job | None, workspace_id: uuid.UUID, doc: Document, known: list[str]) -> list[dict]:
+    """One post's topics, tried a few times. Out of tries, the post is counted as failed once more (the sweep asks
+    again later) and [] returned."""
+    error: object = None
+    for attempt in range(TAG_TRIES):
+        if attempt:
+            time.sleep(TAG_BACKOFF[attempt - 1])
+        try:
+            out = run.predict(ExtractTopics, db=db, workspace_id=workspace_id, job=job, lm=fast_lm(),
+                              title=doc.title, text=(doc.clean_text or "")[:12000], known_topics=known)
+        except Exception as exc:
+            error = exc
+            continue
+        if tags := save_topic_tags(doc, out):
+            return tags
+        error = "no topics in the answer"
+    meta = doc.metadata_json or {}
+    doc.metadata_json = {**meta, "topics_failures": int(meta.get("topics_failures") or 0) + 1}
+    log.warning("could not tag post %s (%s): %s", doc.id, doc.title[:60], error)
+    return []
+
+
 def extract_topics(db: Session, job: Job, workspace_id: uuid.UUID, doc_ids: list[str] | None = None) -> dict:
     """Tag posts that have no topics yet (or the given ones), then rebuild the workspace topic table."""
     docs = workspace_docs(db, workspace_id, [uuid.UUID(i) for i in doc_ids] if doc_ids else None)
-    todo = [d for d in docs if doc_ids or "topics" not in (d.metadata_json or {})]
+    todo = [d for d in docs if doc_ids or needs_topics(d.metadata_json)]
     known = sorted({t["name"] for d in docs for t in (d.metadata_json or {}).get("topics", [])})[:200]
-    lm = fast_lm()
+    tagged = 0
     for i, d in enumerate(todo):
         update_job(db, job, progress=0.05 + 0.75 * i / max(len(todo), 1), message=f"Mapping {d.title[:70]}")
-        try:
-            out = run.predict(ExtractTopics, db=db, workspace_id=workspace_id, job=job, lm=lm,
-                              title=d.title, text=(d.clean_text or "")[:12000], known_topics=known)
-        except Exception:
-            continue
-        tags = [t for t in (out.get("topics") or []) if t.get("name")][:8]
-        d.metadata_json = {**(d.metadata_json or {}), "topics": tags}
-        known = sorted(set(known) | {t["name"] for t in tags})[:200]
+        if tags := tag_post(db, job, workspace_id, d, known):
+            tagged += 1
+            known = sorted(set(known) | {t["name"] for t in tags})[:200]
         db.commit()
     update_job(db, job, progress=0.85, message="Drawing constellations")
     count = rebuild_topics(db, job, workspace_id)
-    return {"tagged": len(todo), "topics": count}
+    return {"tagged": tagged, "failed": len(todo) - tagged, "topics": count}
 
 
 def rebuild_topics(db: Session, job: Job | None, workspace_id: uuid.UUID) -> int:

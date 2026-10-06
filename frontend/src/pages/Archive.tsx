@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { artifactsApi } from "../api/endpoints";
 import type { Artifact } from "../api/types";
-import { ArtifactCard } from "../components/ArtifactCard";
+import { ArtifactRow } from "../components/ArtifactRow";
 import { Reader } from "../components/Reader";
 import { EmptyState, Loading, PageHeader, Tabs } from "../components/ui";
 
@@ -58,9 +58,9 @@ export default function Archive() {
             </Link>
           }
         />}
-      <div className="gallery">
+      <ul className="vw-list">
         {items?.map((a) => (
-          <ArtifactCard
+          <ArtifactRow
             key={a.id}
             artifact={a}
             onCite={(c) => c.document_id && setReading({ id: c.document_id, start: c.line_start, end: c.line_end })}
@@ -70,7 +70,7 @@ export default function Archive() {
             }}
           />
         ))}
-      </div>
+      </ul>
       {items && items.length < total && (
         <button className="btn" onClick={() => load(items.length)}>
           Load more

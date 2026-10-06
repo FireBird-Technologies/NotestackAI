@@ -1,14 +1,14 @@
 """message_feedback: thumbs up/down on chat answers, plus messages.recall_json (how the answer was produced)
 
-Revision ID: 0007_message_feedback
-Revises: 0006_chat_citations
+Revision ID: 0015_message_feedback
+Revises: 0014_chat_citations
 Create Date: 2026-10-02
 """
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0007_message_feedback"
-down_revision = "0006_chat_citations"
+revision = "0015_message_feedback"
+down_revision = "0014_chat_citations"
 branch_labels = None
 depends_on = None
 

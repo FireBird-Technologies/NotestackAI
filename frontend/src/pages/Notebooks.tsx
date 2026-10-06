@@ -179,13 +179,6 @@ export default function Notebooks() {
             )}
           </article>
         ))}
-        <button type="button" className="card nb-card nb-new" onClick={() => setCreating(true)}>
-          <span className="mc-more" aria-hidden="true">
-            +
-          </span>
-          <strong>New notebook</strong>
-          <span className="muted small">Group posts by theme, series or year</span>
-        </button>
       </section>
       {creating && <NewNotebookModal onClose={() => setCreating(false)} />}
     </div>

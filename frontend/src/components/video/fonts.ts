@@ -1,0 +1,23 @@
+/** blog2video's font ids and names (its frontend fonts/registry.ts), for the video and caption font pickers. */
+export const FONTS: { id: string; name: string }[] = [
+  { id: "inter", name: "Inter" },
+  { id: "roboto_slab", name: "Roboto Slab" },
+  { id: "patrick_hand", name: "Patrick Hand" },
+  { id: "arimo", name: "Arimo" },
+  { id: "archivo_black", name: "Archivo Black" },
+  { id: "poppins", name: "Poppins" },
+  { id: "montserrat", name: "Montserrat" },
+  { id: "merriweather", name: "Merriweather" },
+  { id: "playfair_display", name: "Playfair Display" },
+  { id: "oswald", name: "Oswald" },
+  { id: "lora", name: "Lora" },
+  { id: "fira_code", name: "Fira Code" },
+  { id: "righteous", name: "Righteous" },
+  { id: "im_fell_english", name: "IM Fell English" },
+  { id: "pirata_one", name: "Pirata One" },
+  { id: "cinzel_decorative", name: "Cinzel Decorative" },
+  { id: "dm_sans", name: "DM Sans" },
+  { id: "source_sans_3", name: "Source Sans 3" },
+  { id: "source_serif_4", name: "Source Serif 4" },
+  { id: "shippori_mincho", name: "Shippori Mincho" },
+];

@@ -1,14 +1,14 @@
 """citations.kind: a citation can point at an earlier chat (no document) as well as a post
 
-Revision ID: 0006_chat_citations
-Revises: 0005_workspace_memory
+Revision ID: 0014_chat_citations
+Revises: 0013_workspace_memory
 Create Date: 2026-10-01
 """
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0006_chat_citations"
-down_revision = "0005_workspace_memory"
+revision = "0014_chat_citations"
+down_revision = "0013_workspace_memory"
 branch_labels = None
 depends_on = None
 

@@ -29,7 +29,7 @@ const FALLBACK: Plan[] = [
       "1 source, your latest 5 posts indexed",
       "Grounded research chat with citations",
       "3 min of audio overviews a month",
-      "1 min of video a month",
+      "1 video to try it",
       "2 Launch Kits a month",
     ],
   },
@@ -41,7 +41,7 @@ const FALLBACK: Plan[] = [
     features: [
       "3 sources, 500 indexed posts",
       "60 min of audio overviews a month",
-      "30 min of video renders a month",
+      "10 videos a month",
       "50 Launch Kits a month",
       "Voice cloning with consent",
       "Your brand colors and logo",
@@ -55,7 +55,7 @@ const FALLBACK: Plan[] = [
     features: [
       "10 sources, 5,000 indexed posts",
       "240 min of audio overviews a month",
-      "120 min of video renders a month",
+      "20 videos a month",
       "Unlimited Launch Kits",
       "Launchpad calendar and resurfacing",
       "Priority rendering",

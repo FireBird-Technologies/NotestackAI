@@ -1,14 +1,14 @@
 """support_chat: conversations and messages for the in app help bot
 
-Revision ID: 0008_support_chat
-Revises: 0007_message_feedback
+Revision ID: 0016_support_chat
+Revises: 0015_message_feedback
 Create Date: 2026-10-06
 """
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0008_support_chat"
-down_revision = "0007_message_feedback"
+revision = "0016_support_chat"
+down_revision = "0015_message_feedback"
 branch_labels = None
 depends_on = None
 

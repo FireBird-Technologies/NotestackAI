@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { authApi, type LoginResult, type User } from "../api/auth";
 import { tokens } from "../api/client";
+import { clearSourceCache } from "../components/video/sourceCache";
 
 type AuthState = {
   user: User | null;
@@ -26,6 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const complete = useCallback((result: LoginResult) => {
     tokens.set(result.access_token, result.refresh_token);
+    clearSourceCache();
     setUser(result.user);
   }, []);
 
@@ -34,6 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await authApi.logout();
     } finally {
       tokens.clear();
+      clearSourceCache();
       setUser(null);
     }
   }, []);

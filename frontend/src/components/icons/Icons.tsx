@@ -148,3 +148,35 @@ export const SparkleIcon = (p: P) => (
     <path d="M12 3l1.8 7.2L21 12l-7.2 1.8L12 21l-1.8-7.2L3 12l7.2-1.8z" />
   </Icon>
 );
+
+export const UploadIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M12 15V4M7.5 8.5L12 4l4.5 4.5M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4" />
+  </Icon>
+);
+
+export const DownloadIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4" />
+  </Icon>
+);
+
+export const FilmIcon = (p: P) => (
+  <Icon {...p}>
+    <rect x="3" y="5" width="18" height="14" rx="2" />
+    <path d="M7 5v14M17 5v14M3 9.5h4M3 14.5h4M17 9.5h4M17 14.5h4" />
+  </Icon>
+);
+
+/** Points down; rotate it (e.g. .chevron.open) to point up. Mitred, not rounded, for a sharp tip. */
+export const ChevronIcon = (p: P) => (
+  <Icon strokeWidth={2} strokeLinecap="square" strokeLinejoin="miter" {...p}>
+    <path d="M6 9l6 6 6-6" />
+  </Icon>
+);
+
+export const TrashIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6" />
+  </Icon>
+);

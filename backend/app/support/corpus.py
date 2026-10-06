@@ -61,10 +61,13 @@ def _parse(path: Path) -> Doc:
 
 def _plans_doc() -> Doc:
     """Built from services/plans.py so prices and limits can never drift from what the app enforces."""
-    from app.services.plans import PLAN_ORDER, PLANS, annual_prices
+    from app.services.plans import PLANS, annual_prices, plan_order
 
-    lines = ["# Plans", "Notestack has three plans: Free, Writer and Studio. Prices are in US dollars."]
-    for pid in PLAN_ORDER:
+    order = plan_order()  # the plans table's (editable without a deploy), so the names and count come from it too
+    names = [PLANS[pid].name for pid in order]
+    listed = ", ".join(names[:-1]) + f" and {names[-1]}" if len(names) > 1 else "".join(names)
+    lines = ["# Plans", f"Notestack has {len(names)} plans: {listed}. Prices are in US dollars."]
+    for pid in order:
         p = PLANS[pid]
         price = "free" if not p.price_monthly_usd else f"${p.price_monthly_usd:g} a month"
         if p.price_monthly_usd:
@@ -76,7 +79,7 @@ def _plans_doc() -> Doc:
             f"{p.tagline}. Price: {price}.",
             f"Limits: {p.sources} sources, {p.indexed_posts} indexed posts, "
             f"{p.audio_minutes} minutes of audio a month, "
-            f"{p.video_minutes} minutes of video a month, {kits} Launch Kits a month. "
+            f"{p.videos} videos {'a month' if p.videos_monthly else 'in total'}, {kits} Launch Kits a month. "
             f"Voice cloning: {'yes' if p.voice_cloning else 'no'}. Brand kit: {'yes' if p.brand_kit else 'no'}.",
             "Includes: " + "; ".join(p.features) + ".",
         ]
