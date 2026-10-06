@@ -98,7 +98,7 @@ export function withoutMedia(scene: VideoScene, template: string, filename: stri
   return withProps(scene, template, patch);
 }
 
-/** The template's own name for a layout (blog2video's layout_names, e.g. "News Headline — Broadsheet" for
+/** The template's own name for a layout (blog2video's layout_names, e.g. "News Headline: Broadsheet" for
  *  news_headline__v2), else the id title-cased: "cinematic_title" -> "Cinematic Title". */
 export function layoutName(id: string | null | undefined, names?: Record<string, string> | null): string {
   if (id && names?.[id]) return names[id];

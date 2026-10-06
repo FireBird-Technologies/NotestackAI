@@ -58,7 +58,7 @@ export function SceneList(p: PanelProps & { aiEditsLeft: number | null }) {
       <div className="vw-scenes-head">
         <h2>{p.project.name}</h2>
         <span className="muted">
-          {summary?.scenes ?? scenes.length} scenes{summary ? ` — ${summary.images} images, ${summary.clips ?? 0} stock clips` : ""}. Click <strong className="vw-accent">Edit</strong> on
+          {summary?.scenes ?? scenes.length} scenes{summary ? `: ${summary.images} images, ${summary.clips ?? 0} stock clips` : ""}. Click <strong className="vw-accent">Edit</strong> on
           any scene to change it.
         </span>
       </div>
