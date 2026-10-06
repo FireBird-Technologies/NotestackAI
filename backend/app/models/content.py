@@ -119,15 +119,56 @@ class Message(IdMixin, TimestampMixin, Base):
     chat_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("chats.id", ondelete="CASCADE"), index=True)
     role: Mapped[str] = mapped_column(String(20))  # user | assistant
     content: Mapped[str] = mapped_column(Text)
+    # How an assistant answer was produced (triage route, which chat memory was loaded, the steps taken), so a
+    # thumbs down can be traced back to what recall did. Null for user messages and older rows.
+    recall_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     citations: Mapped[list["Citation"]] = relationship(cascade="all, delete-orphan")
+
+
+class MessageFeedback(IdMixin, TimestampMixin, Base):
+    """A thumbs up or down on one assistant answer, with a snapshot of the question, answer and recall trace taken
+    when it was rated. It keeps its own copy so the rating stays useful for improving recall even after the chat is
+    deleted (the links then become null). One row per message: rating again replaces it."""
+
+    __tablename__ = "message_feedback"
+
+    workspace_id: Mapped[uuid.UUID] = _ws_fk()
+    notebook_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("notebooks.id", ondelete="SET NULL"))
+    chat_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("chats.id", ondelete="SET NULL"))
+    message_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("messages.id", ondelete="SET NULL"), unique=True, index=True
+    )
+    rating: Mapped[int] = mapped_column(Integer)  # 1 up, -1 down
+    reasons: Mapped[list] = mapped_column(JSON, default=list)  # tags such as forgot_chat, wrong, bad_sources
+    comment: Mapped[str | None] = mapped_column(Text)
+    question: Mapped[str] = mapped_column(Text, default="")  # what the writer asked (the message before the answer)
+    answer: Mapped[str] = mapped_column(Text, default="")
+    sources: Mapped[list] = mapped_column(JSON, default=list)  # [{kind, path, line_start, line_end}] it cited
+    recall: Mapped[dict] = mapped_column(JSON, default=dict)  # copy of Message.recall_json
+
+
+class WorkspaceMemory(IdMixin, TimestampMixin, Base):
+    """The writer's standing notes, one row per workspace, shared by every notebook and chat.
+
+    facts maps a short key to {"value", "source" (user | auto), "updated_at"}, e.g.
+    {"audience": {"value": "indie founders", "source": "auto", "updated_at": "2026-09-30T10:00:00+00:00"}}."""
+
+    __tablename__ = "workspace_memory"
+
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("workspaces.id", ondelete="CASCADE"), unique=True, index=True
+    )
+    facts: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
 class Citation(IdMixin, Base):
     __tablename__ = "citations"
 
     message_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("messages.id", ondelete="CASCADE"))
-    document_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("documents.id", ondelete="CASCADE"))
+    # post: a line range of a document. chat: a line range of an earlier chat's topic file, with no document.
+    kind: Mapped[str] = mapped_column(String(10), default="post", server_default="post")
+    document_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("documents.id", ondelete="CASCADE"))
     marker: Mapped[int] = mapped_column(Integer)  # [1], [2] in the answer text
     path: Mapped[str] = mapped_column(String(500))
     line_start: Mapped[int] = mapped_column(Integer)

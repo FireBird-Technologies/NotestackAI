@@ -17,7 +17,7 @@ from app.services.usage import check_limit
 
 router = APIRouter(prefix="/api/artifacts", tags=["artifacts"])
 
-ArtifactType = Literal["summary", "audio_overview", "video", "quote_card", "carousel", "launch_kit"]
+ArtifactType = Literal["summary", "audio_overview", "video", "quote_card", "carousel", "launch_kit", "mind_map"]
 
 
 class RenderIn(BaseModel):
@@ -26,7 +26,7 @@ class RenderIn(BaseModel):
 
 
 class GenerateIn(BaseModel):
-    type: Literal["summary", "audio_overview", "video", "quote_card", "carousel", "launch_kit"]
+    type: Literal["summary", "audio_overview", "video", "quote_card", "carousel", "launch_kit", "mind_map"]
     notebook_id: uuid.UUID | None = None
     document_id: uuid.UUID | None = None
     archive: bool = False  # no notebook or post picked: use the "All posts" notebook
@@ -39,6 +39,9 @@ class GenerateIn(BaseModel):
     # carousel
     slides: list[dict] | None = None
     parent_id: uuid.UUID | None = None
+    # mind_map: the posts to chart (none picked means every post in the notebook) and what to centre on
+    document_ids: list[uuid.UUID] | None = None
+    focus: str | None = Field(None, max_length=500)
 
 
 class PatchIn(BaseModel):
@@ -105,6 +108,11 @@ def generate(body: GenerateIn, ctx: Ctx = Depends(get_ctx)):
         check_limit(ctx.db, ctx.workspace, "video_minutes", 1 if body.style == "short" else 3)
         params = {"style": body.style}
         title = f"{'Short' if body.style == 'short' else 'Explainer'} video: {target}"
+    elif body.type == "mind_map":
+        if not body.notebook_id:
+            raise HTTPException(400, "A Mind Constellation is made from a notebook")
+        params = {"document_ids": [str(i) for i in body.document_ids or []], "focus": (body.focus or "").strip()}
+        title = f"Mind Constellation: {params['focus'][:60] or target}"
     elif body.type == "launch_kit":
         if not body.document_id:
             raise HTTPException(400, "A Launch Kit is made from one post")

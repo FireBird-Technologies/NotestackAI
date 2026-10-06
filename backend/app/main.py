@@ -15,10 +15,12 @@ from app.routers import (
     billing,
     jobs,
     launchpad,
+    memory,
     notebooks,
     resurface,
     sources,
     storage,
+    support,
     topics,
     unsubscribe,
     voice,
@@ -87,7 +89,7 @@ def health():
 
 
 for r in (auth, billing, storage, sources, notebooks, artifacts, jobs, unsubscribe, topics, voice, resurface,
-          launchpad, settings_router):
+          launchpad, settings_router, memory, support):
     app.include_router(r.router)
 app.include_router(sources.documents_router)
 app.include_router(launchpad.links_router)

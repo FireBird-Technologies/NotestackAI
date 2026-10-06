@@ -72,7 +72,9 @@ export type Notebook = {
 
 export type Citation = {
   marker: number;
-  document_id?: string;
+  /** "post" (a line range of one of the writer's posts) or "chat" (what was said earlier in the notebook's chats). */
+  kind?: "post" | "chat";
+  document_id?: string | null;
   title: string;
   url: string;
   path: string;
@@ -82,9 +84,10 @@ export type Citation = {
 };
 
 export type ChatSummary = { id: string; title: string | null; updated_at: string | null };
-export type ChatMessage = { id: string; role: "user" | "assistant"; text: string; citations: Citation[] };
+export type AnswerFeedback = { rating: "up" | "down"; reasons: string[]; comment: string | null };
+export type ChatMessage = { id: string; role: "user" | "assistant"; text: string; citations: Citation[]; feedback?: AnswerFeedback | null };
 
-export type ArtifactType = "summary" | "audio_overview" | "video" | "quote_card" | "carousel" | "launch_kit";
+export type ArtifactType = "summary" | "audio_overview" | "video" | "quote_card" | "carousel" | "launch_kit" | "mind_map";
 
 export type SourceRef = { path: string; line_start: number; line_end: number; title?: string | null; quote?: string };
 
@@ -323,6 +326,11 @@ export type Settings = {
   integrations: { llm: boolean; elevenlabs: boolean; x: boolean; linkedin: boolean; storage: string; renderer: string };
 };
 
+export type MemoryNote = { key: string; value: string; source: "user" | "auto"; updated_at: string | null };
+
+/** What the memory job changed after a chat message, shown under the answer. */
+export type MemoryChange = { op: "add" | "update" | "delete"; key: string; value?: string };
+
 export type PlanInfo = Plan & {
   tagline: string;
   price_monthly_usd: number;
@@ -356,4 +364,12 @@ export type BillingStatus = {
   meters: Meter[];
   since: string;
   nudges: Nudge[];
+};
+
+export type MindNode = {
+  id: string;
+  label: string;
+  note: string;
+  sources: { document_id: string; path: string; title: string; line_start: number; line_end: number; quote: string }[];
+  children: MindNode[];
 };
