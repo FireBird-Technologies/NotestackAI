@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useSearchParams } from "react-router-dom";
 import AppShell from "./components/AppShell";
 import { PublicFooter, PublicNav } from "./components/PublicChrome";
 import PricingTiers from "./components/PricingTiers";
@@ -20,10 +20,8 @@ import Sources from "./pages/Sources";
 import Studio from "./pages/Studio";
 import VideoCreate from "./pages/VideoCreate";
 import VideoEditor from "./pages/VideoEditor";
-import Videos from "./pages/Videos";
 import TopicMap from "./pages/TopicMap";
 import { ToolPage, ToolsHub } from "./pages/Tools";
-import VoiceProfile from "./pages/VoiceProfile";
 import Welcome from "./pages/Welcome";
 import { SupportWidget } from "./components/support/SupportWidget";
 
@@ -60,13 +58,13 @@ export default function App() {
         <Route index element={<MissionControl />} />
         <Route path="notebooks" element={<Notebooks />} />
         <Route path="notebooks/:id" element={<NotebookView />} />
-        <Route path="videos" element={<Videos />} />
+        <Route path="videos" element={<Navigate to="/app/archive?tab=videos" replace />} />
         <Route path="videos/new" element={<VideoCreate />} />
-        <Route path="videos/voices" element={<Navigate to="/app/voice?step=hosts#video-voices" replace />} />
+        <Route path="videos/voices" element={<Navigate to="/app/archive?tab=voices" replace />} />
         <Route path="videos/:id" element={<VideoEditor />} />
         <Route path="sources" element={<Sources />} />
         <Route path="map" element={<TopicMap />} />
-        <Route path="voice" element={<VoiceProfile />} />
+        <Route path="voice" element={<VoiceRedirect />} />
         <Route path="studio" element={<Studio />} />
         <Route path="launch-kit" element={<LaunchKit />} />
         <Route path="launchpad" element={<Launchpad />} />
@@ -80,4 +78,11 @@ export default function App() {
     <SupportWidget />
     </>
   );
+}
+
+/** The old Voice page (/app/voice, ?step=writing for the writing voice) is the Library's Voices tab now. */
+function VoiceRedirect() {
+  const [params] = useSearchParams();
+  const writing = params.get("step") === "writing";
+  return <Navigate to={`/app/archive?tab=voices${writing ? "&step=writing" : ""}`} replace />;
 }

@@ -6,7 +6,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
 
 from app.auth import Ctx, get_ctx
-from app.models import Artifact, CalendarItem, Document, Job, Notebook
+from app.config import settings
+from app.models import Artifact, CalendarItem, Document, Job, Notebook, UserSavedVoice
 from app.routers.notebooks import ensure_archive_notebook
 from app.services.artifacts import latest_jobs, serialize_artifact, start_artifact
 from app.services.jobs import create_job, serialize_job
@@ -33,6 +34,9 @@ class GenerateIn(BaseModel):
     # audio_overview
     format: Literal["deep_dive", "brief", "debate"] = "deep_dive"
     minutes: int = Field(6, ge=1, le=30)
+    # the two hosts' voices, from the workspace's voices (none: the defaults)
+    host_a: str | None = Field(None, max_length=100)
+    host_b: str | None = Field(None, max_length=100)
     # video: only audiograms here; other videos are made by blog2video (/api/videos)
     style: str = "audiogram"
     audio_artifact_id: uuid.UUID | None = None
@@ -42,6 +46,18 @@ class GenerateIn(BaseModel):
     # mind_map: the posts to chart (none picked means every post in the notebook) and what to centre on
     document_ids: list[uuid.UUID] | None = None
     focus: str | None = Field(None, max_length=500)
+
+
+def _hosts(ctx: Ctx, body: GenerateIn) -> dict:
+    """The voices picked for an audio overview's two hosts: each one from the workspace's voices (or a default)."""
+    picked = {k: v for k, v in (("host_a", body.host_a), ("host_b", body.host_b)) if v}
+    if picked:
+        ok = set(ctx.db.scalars(select(UserSavedVoice.voice_id).where(UserSavedVoice.workspace_id == ctx.workspace.id,
+                                                                     UserSavedVoice.voice_id.in_(picked.values()))))
+        ok |= {settings.elevenlabs_voice_a, settings.elevenlabs_voice_b}
+        if any(v not in ok for v in picked.values()):
+            raise HTTPException(400, "Pick the hosts' voices from your voices")
+    return picked
 
 
 class PatchIn(BaseModel):
@@ -102,7 +118,7 @@ def generate(body: GenerateIn, ctx: Ctx = Depends(get_ctx)):
     target = _target_title(ctx, body.notebook_id, body.document_id)
     if body.type == "audio_overview":
         check_limit(ctx.db, ctx.workspace, "audio_minutes", body.minutes)
-        params = {"format": body.format, "minutes": body.minutes}
+        params = {"format": body.format, "minutes": body.minutes, **_hosts(ctx, body)}
         title = f"Audio overview: {target}"
     elif body.type == "mind_map":
         if not body.notebook_id:

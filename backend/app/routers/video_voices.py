@@ -1,8 +1,8 @@
 """Voices for videos: the workspace's saved voices, the built-in library, custom voices (design, clone), and its
 Notestack voices (made on the Voice page; blog2video speaks with the same ElevenLabs account).
 
-"My voices" (user_saved_voices, at most MAX_SAVED_VOICES) lives only here: blog2video's saved-voice list is one list
-for the whole account.
+"Your voices" (user_saved_voices, as many as wanted) is the one list for audio overviews and videos, and lives only
+here: blog2video's saved-voice list is one list for the whole account.
 Custom voices are made on our blog2video account, so b2v_custom_voices records which workspace made each one;
 only that workspace can use, play or delete it. Designing, keeping, cloning and samples are premium (★) and come out
 of the workspace's own daily and total counters (video_limits).
@@ -20,7 +20,7 @@ from app.models import B2VCustomVoice, UserSavedVoice
 from app.routers.videos import b2v_ready, upstream
 from app.services import b2v_access, video_limits
 from app.services import blog2video as b2v
-from app.services.notestack_voices import notestack_voices
+from app.services.notestack_voices import notestack_voices, save_notestack_voice
 
 log = logging.getLogger(__name__)
 
@@ -28,7 +28,6 @@ router = APIRouter(prefix="/api/video-voices", tags=["videos"])
 
 CLONE_MAX_BYTES = 50 * 1024 * 1024
 STARTER_VOICES = 4  # a new workspace starts with this many free built-in voices saved
-MAX_SAVED_VOICES = 5  # "My voices": what step 3 of a new video offers
 
 
 def _labels(v: dict) -> dict:
@@ -39,14 +38,6 @@ def _voice_out(v: UserSavedVoice, ours: set[str] = frozenset()) -> dict:
     return {"voice_id": v.voice_id, "name": v.name, "preview_url": v.preview_url, "gender": v.gender,
             "accent": v.accent, "premium": v.premium, "is_custom": v.is_custom,
             "source": "notestack" if v.voice_id in ours else "blog2video"}
-
-
-def _room(ctx: Ctx) -> bool:
-    return len(_saved(ctx)) < MAX_SAVED_VOICES
-
-
-def _full() -> HTTPException:
-    return HTTPException(409, f"You can keep {MAX_SAVED_VOICES} voices. Remove one first.")
 
 
 def _library_out(v: dict, saved: set[str]) -> dict:
@@ -74,7 +65,7 @@ def _saved(ctx: Ctx) -> list[UserSavedVoice]:
 
 @router.get("")
 def voices(ctx: Ctx = Depends(get_ctx), _: None = Depends(b2v_ready)):
-    """My voices (for the wizard), the built-in library (to save from) and my custom voices."""
+    """Your voices (audio overviews and videos), the built-in library (to save from) and my custom voices."""
     with upstream():
         library = b2v.prebuilt_voices()
     saved = _saved(ctx)
@@ -88,7 +79,7 @@ def voices(ctx: Ctx = Depends(get_ctx), _: None = Depends(b2v_ready)):
                             .order_by(B2VCustomVoice.created_at.desc()))
     mine = notestack_voices(ctx.db, ctx.workspace.id)
     ours = {v["voice_id"] for v in mine}
-    return {"saved": [_voice_out(v, ours) for v in saved], "max_saved": MAX_SAVED_VOICES,
+    return {"saved": [_voice_out(v, ours) for v in saved],
             "notestack": [{**v, "saved": v["voice_id"] in ids} for v in mine],
             "library": [_library_out(v, ids) for v in library if v.get("voice_id")],
             "custom": [{"id": c.b2v_custom_voice_id, "voice_id": c.voice_id, "name": c.name, "source": c.source,
@@ -103,16 +94,12 @@ class SaveIn(BaseModel):
 def save_voice(body: SaveIn, ctx: Ctx = Depends(get_ctx), _: None = Depends(b2v_ready)):
     if ctx.db.get(UserSavedVoice, {"workspace_id": ctx.workspace.id, "voice_id": body.voice_id}):
         return _voice_out(ctx.db.get(UserSavedVoice, {"workspace_id": ctx.workspace.id, "voice_id": body.voice_id}))
-    if not _room(ctx):
-        raise _full()
     custom = ctx.db.scalar(select(B2VCustomVoice).where(B2VCustomVoice.voice_id == body.voice_id,
                                                         B2VCustomVoice.workspace_id == ctx.workspace.id))
     mine = next((v for v in notestack_voices(ctx.db, ctx.workspace.id) if v["voice_id"] == body.voice_id), None)
     if mine:
-        # A Notestack voice: premium, like a custom voice. No preview link (the Voice page plays it).
-        video_limits.require_premium(ctx.db, ctx.workspace, "Custom voices")
-        row = ctx.db.merge(UserSavedVoice(workspace_id=ctx.workspace.id, voice_id=mine["voice_id"],
-                                          name=mine["name"][:255], premium=True, is_custom=True))
+        # A Notestack voice: saved on any plan, premium to use in a video. No preview link (the Voice page plays it).
+        row = save_notestack_voice(ctx.db, ctx.workspace.id, mine["voice_id"], mine["name"])
         ctx.db.commit()
         return _voice_out(row, {row.voice_id})
     if custom:
@@ -191,13 +178,11 @@ def _record_custom(ctx: Ctx, made: dict, source: str) -> dict:
                          voice_id=made["voice_id"], name=(made.get("name") or "My voice")[:255], source=source,
                          preview_url=made.get("preview_url"))
     ctx.db.add(row)
-    saved = _room(ctx)  # kept in My voices only while there is room; otherwise added from the list later
-    if saved:
-        ctx.db.merge(UserSavedVoice(workspace_id=ctx.workspace.id, voice_id=row.voice_id, name=row.name,
-                                    preview_url=row.preview_url, premium=True, is_custom=True))
+    ctx.db.merge(UserSavedVoice(workspace_id=ctx.workspace.id, voice_id=row.voice_id, name=row.name,
+                                preview_url=row.preview_url, premium=True, is_custom=True))  # a new voice is saved
     ctx.db.commit()
     return {"id": row.b2v_custom_voice_id, "voice_id": row.voice_id, "name": row.name, "source": source,
-            "preview_url": row.preview_url, "saved": saved}
+            "preview_url": row.preview_url, "saved": True}
 
 
 def _make_custom(ctx: Ctx, source: str, send) -> dict:

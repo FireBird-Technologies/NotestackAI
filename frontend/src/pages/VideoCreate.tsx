@@ -145,7 +145,7 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
     }).catch((e) => setLoadError(errorMessage(e)));
     loadVoices()
       .then((v) => v.saved[0] && pickVoice(v.saved[0]))
-      .catch(() => setVoices({ saved: [], library: [], custom: [], notestack: [], max_saved: 5 }));
+      .catch(() => setVoices({ saved: [], library: [], custom: [], notestack: [] }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config?.configured]);
 
@@ -279,7 +279,7 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
       {step === 1 && !inModal && (
         // Leaves the wizard for wherever it was opened from. Steps 2 and 3 have their own Back at the bottom.
         <button type="button" className="vw-back"
-                onClick={() => (window.history.length > 1 ? navigate(-1) : navigate("/app/videos"))}>
+                onClick={() => (window.history.length > 1 ? navigate(-1) : navigate("/app/archive?tab=videos"))}>
           Back
         </button>
       )}
@@ -367,13 +367,7 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
                     <small className="muted mono">{custom.length}/500</small>
                   </span>
                 </label>
-                {shownTopics && (
-                  <small className="muted vw-hint">
-                    {focus ? "The video is mainly about this topic."
-                      : custom.trim() ? "The video follows your topic, as far as the posts cover it."
-                      : "None picked: the video covers the material as a whole."}
-                  </small>
-                )}
+                
               </div>
             )}
 
@@ -471,7 +465,7 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
               {voices === null ? (
                 <Loading label="Loading voices" />
               ) : saved.length === 0 ? (
-                <p className="muted">No voices saved yet. Add some on the <Link to="/app/voice?step=hosts#video-voices">Voice</Link> page.</p>
+                <p className="muted">No voices yet. Add some on the <Link to="/app/archive?tab=voices">Voices</Link> tab of your Library.</p>
               ) : (
                 <div className="vw-voice-list vw-voice-list-compact" role="radiogroup" aria-label="Narration voice">
                   {saved.map((v) => {

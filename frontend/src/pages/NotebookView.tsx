@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { artifactsApi, notebooksApi, type GenerateBody } from "../api/endpoints";
+import { artifactsApi, notebooksApi, videoVoicesApi, type GenerateBody } from "../api/endpoints";
 import { streamSSE } from "../api/stream";
-import type { AnswerFeedback as Feedback, Artifact, ChatSummary, Citation, MemoryChange, Notebook } from "../api/types";
+import type { AnswerFeedback as Feedback, Artifact, ChatSummary, Citation, MemoryChange, Notebook, VideoSavedVoice } from "../api/types";
 import { AnswerFeedback } from "../components/AnswerFeedback";
 import { ArtifactCard, CitationList } from "../components/ArtifactCard";
 import { Markdown } from "../components/Markdown";
@@ -52,6 +52,9 @@ function StudioPanel({ notebookId, docs, disabled, onCreateVideo }: {
   const [busy, setBusy] = useState(false);
   const [reading, setReading] = useState<{ id: string; start: number; end: number } | null>(null);
   const [audioOpen, setAudioOpen] = useState(false); // the Audio overview tile is opened to its options
+  // The two hosts' voices, picked from the workspace's voices (loaded when the options first open).
+  const [hostVoices, setHostVoices] = useState<VideoSavedVoice[] | null>(null);
+  const [hosts, setHosts] = useState<[string, string]>(["", ""]);
   const [mapDialog, setMapDialog] = useState(false);
   const [mapBusy, setMapBusy] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
@@ -59,6 +62,25 @@ function StudioPanel({ notebookId, docs, disabled, onCreateVideo }: {
   const [exploring, setExploring] = useState<Artifact | null>(null);
 
   const load = useCallback(() => notebooksApi.artifacts(notebookId).then(setArtifacts), [notebookId]);
+
+  useEffect(() => {
+    if (!audioOpen || hostVoices) return;
+    videoVoicesApi.list().then((r) => {
+      setHostVoices(r.saved);
+      // The first two voices by default; with just one, it reads both parts.
+      setHosts([r.saved[0]?.voice_id ?? "", (r.saved[1] ?? r.saved[0])?.voice_id ?? ""]);
+    }).catch(() => setHostVoices([])); // none to pick: the server's default voices
+  }, [audioOpen, hostVoices]);
+
+  /** Pick a host's voice; the other host moves off it, so the two never share one (when there are two to pick). */
+  const pickHost = (i: 0 | 1, voiceId: string) =>
+    setHosts((cur) => {
+      const next: [string, string] = [...cur];
+      next[i] = voiceId;
+      const other = i === 0 ? 1 : 0;
+      if (next[other] === voiceId) next[other] = hostVoices?.find((v) => v.voice_id !== voiceId)?.voice_id ?? voiceId;
+      return next;
+    });
   useEffect(() => {
     load();
   }, [load]);
@@ -134,9 +156,18 @@ function StudioPanel({ notebookId, docs, disabled, onCreateVideo }: {
                 <Dropdown<string> label="Length" value={String(minutes)} onChange={(v) => setMinutes(Number(v))}
                   options={[3, 6, 10, 15].map((m) => ({ value: String(m), label: `${m} min` }))} />
               </div>
+              {hostVoices && hostVoices.length > 0 && ([0, 1] as const).map((i) => (
+                <div key={i} className="field">
+                  <span className="small muted">Host {i + 1}</span>
+                  <Dropdown<string> label={`Host ${i + 1} voice`} value={hosts[i]} onChange={(v) => pickHost(i, v)}
+                    options={hostVoices.map((v) => ({ value: v.voice_id, label: v.name }))} />
+                </div>
+              ))}
             </div>
-            <button className="btn btn-primary btn-small" disabled={off}
-                    onClick={() => make({ type: "audio_overview", format, minutes }).then(() => setAudioOpen(false))}>
+            <button className="btn btn-primary btn-small" disabled={off || (audioOpen && hostVoices === null)}
+                    onClick={() => make({ type: "audio_overview", format, minutes,
+                                          ...(hosts[0] ? { host_a: hosts[0], host_b: hosts[1] || hosts[0] } : {}) })
+                      .then(() => setAudioOpen(false))}>
               {busy ? "Starting..." : "Create audio overview"}
             </button>
           </div>

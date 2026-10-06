@@ -662,7 +662,6 @@ select.input option {
   accent-color: var(--blue);
 }
 
-
 .picker-list {
   list-style: none;
   margin: 0;
@@ -2180,51 +2179,52 @@ select.input option {
   animation: welcome-in 0.35s ease both;
 }
 
-.vp-steps {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
-  font-size: 0.75rem;
+/* The link between the two views (Speaking voices / Writing voice): underlined text and an arrow */
+.vp-switch-row {
+  display: flex;
+  justify-content: flex-end; /* at the right end */
+  margin: -6px 0 4px;
 }
 
-.vp-steps button {
-  display: grid;
+.vp-switch {
+  display: inline-flex;
+  align-items: center;
   gap: 8px;
-  width: 100%;
-  padding: 0;
+  padding: 4px 0;
   border: 0;
   background: none;
-  color: var(--text-3);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.vp-steps li.done button {
   color: var(--text-2);
+  font: inherit;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: color 0.15s;
 }
 
-.vp-steps li.current button {
-  color: var(--white);
+.vp-switch-text {
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 4px;
+  transition: text-decoration-color 0.15s;
 }
 
-.vp-dot {
-  height: 3px;
-  border-radius: 999px;
-  background: var(--line-strong);
-  transition: background 0.3s, box-shadow 0.3s;
+.vp-switch:hover {
+  color: var(--text);
 }
 
-.vp-steps li.done .vp-dot {
-  background: var(--blue-60);
+.vp-switch:hover .vp-switch-text {
+  text-decoration-color: var(--blue);
 }
 
-.vp-steps li.current .vp-dot {
-  background: var(--blue);
-  box-shadow: var(--glow-sm);
+.vp-switch > span[aria-hidden] {
+  transition: transform 0.15s;
+}
+
+.vp-switch:hover > span[aria-hidden] {
+  transform: translateX(3px);
+}
+
+.vp-switch.back:hover > span[aria-hidden] {
+  transform: translateX(-3px);
 }
 
 .voice-grid {
@@ -2352,14 +2352,69 @@ select.input option {
   border-color: var(--blue);
 }
 
+/* Build from options: one grey card, a label column on the left and its choices on the right, a line between rows */
 .gen-options {
   display: grid;
-  gap: 12px;
+  padding: 6px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .gen-row {
   display: grid;
-  gap: 6px;
+  grid-template-columns: 110px minmax(0, 1fr);
+  align-items: start; /* the label lines up with the first line of chips, also when they wrap */
+  gap: 8px 16px;
+  padding: 18px 0;
+}
+
+.gen-row + .gen-row {
+  border-top: 1px solid var(--line);
+}
+
+.gen-label {
+  color: var(--text-2);
+  font-size: 0.85rem;
+  font-weight: 500;
+  line-height: 32px; /* a chip's height */
+}
+
+.gen-options .gen-chips {
+  gap: 8px;
+}
+
+/* Its chips: smaller than the app's default chip (the later .chip rule), only in this card */
+/* Soft pills: a faint fill and border; the picked one is tinted blue rather than solid */
+.gen-options .gen-chips .chip {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-2);
+  font-size: 0.85rem;
+  font-weight: 400;
+  line-height: 30px;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.gen-options .gen-chips .chip:hover {
+  border-color: var(--line-strong);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+
+.gen-options .gen-chips .chip.on {
+  border-color: rgba(33, 124, 255, 0.55);
+  background: rgba(33, 124, 255, 0.2);
+  color: var(--white);
+}
+
+@media (max-width: 560px) {
+  .gen-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .gen-chips {
@@ -2476,30 +2531,6 @@ select.input option {
 
 .library-filters .input:first-child {
   grid-column: 1 / -1;
-}
-
-.library-grid {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  max-height: 52vh;
-  overflow: auto;
-}
-
-.library-voice {
-  display: grid;
-  gap: 6px;
-  align-content: start;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-}
-
-.library-voice:hover {
-  border-color: var(--blue-35);
 }
 
 .clone-tips {
@@ -2777,7 +2808,6 @@ select.input option {
 .artifact-head > div,
 .source-title,
 .nb-card,
-.library-voice,
 .host-card,
 .post-edit,
 .slide-edit,
@@ -4082,25 +4112,9 @@ details.map-legend[open] summary {
   white-space: nowrap;
 }
 
-
 .voice-new .voice-pick:disabled {
   cursor: not-allowed;
   opacity: 0.6;
-}
-
-/* The host a voice row belongs to (Audio hosts list) */
-.voice-badge-inline {
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: var(--blue);
-  color: var(--white);
-  font-size: 0.72rem;
-  letter-spacing: 0.06em;
-}
-
-.voice-badge-inline.dim {
-  background: var(--surface-2, rgba(255, 255, 255, 0.08));
-  color: var(--text-2);
 }
 
 /* Audio hosts / Video voiceovers: the explainer takes the room, the Manage button sits at the right end */
@@ -4139,98 +4153,6 @@ details.map-legend[open] summary {
 
 .back-link svg {
   transition: transform 0.15s;
-}
-
-/* Delivery settings for a host: a text link with a chevron that opens a two-column grid of sliders */
-.delivery-card summary {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--text-2);
-  font-size: 0.9rem;
-  cursor: pointer;
-  list-style: none;
-}
-
-.delivery-card summary::-webkit-details-marker {
-  display: none;
-}
-
-.delivery-card summary:hover {
-  color: var(--text);
-}
-
-.delivery-chevron {
-  flex-shrink: 0;
-  transition: transform 0.2s;
-}
-
-.delivery-card[open] .delivery-chevron {
-  transform: rotate(180deg);
-}
-
-.delivery-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 22px 32px;
-  padding-top: 18px;
-}
-
-.delivery-slider {
-  display: grid;
-  gap: 8px;
-  font-size: 0.9rem;
-}
-
-.delivery-value {
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: rgba(33, 124, 255, 0.14);
-  color: var(--blue);
-  font-size: 0.78rem;
-}
-
-/* A slim track, filled up to the thumb (--pct) */
-.delivery-slider input[type="range"] {
-  width: 100%;
-  height: 4px;
-  border-radius: 999px;
-  background: linear-gradient(to right, var(--blue) var(--pct, 50%), var(--line-strong) var(--pct, 50%));
-  appearance: none;
-  outline: none;
-  cursor: pointer;
-}
-
-.delivery-slider input[type="range"]::-webkit-slider-thumb {
-  width: 16px;
-  height: 16px;
-  border: 2px solid var(--white);
-  border-radius: 50%;
-  background: var(--blue);
-  box-shadow: 0 0 0 4px rgba(33, 124, 255, 0.2);
-  appearance: none;
-}
-
-.delivery-slider input[type="range"]::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
-  border: 2px solid var(--white);
-  border-radius: 50%;
-  background: var(--blue);
-}
-
-.delivery-slider input[type="range"]:focus-visible::-webkit-slider-thumb {
-  box-shadow: 0 0 0 6px rgba(33, 124, 255, 0.35);
-}
-
-.delivery-actions {
-  padding-top: 14px;
-}
-
-@media (max-width: 640px) {
-  .delivery-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 .mm-row-progress {

@@ -64,7 +64,8 @@ def audio_overview(db: Session, job: Job, artifact: Artifact) -> dict:
     if not lines:
         raise RuntimeError("The script came back empty")
     tools = tools_for(corpus, docs)
-    voice_a, voice_b = host_voices(db, artifact.workspace_id)
+    default_a, default_b = host_voices(db, artifact.workspace_id)
+    voice_a, voice_b = params.get("host_a") or default_a, params.get("host_b") or default_b  # picked when made
     delivery = host_settings(db, artifact.workspace_id)
     script = [
         tts.Line(text=ln["text"], voice_id=voice_b if ln.get("speaker") == "host_b" else voice_a,

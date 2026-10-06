@@ -31,6 +31,18 @@ def is_notestack_voice(db: Session, workspace_id: uuid.UUID, voice_id: str) -> b
     return any(v["voice_id"] == voice_id for v in notestack_voices(db, workspace_id))
 
 
+def save_notestack_voice(db: Session, workspace_id: uuid.UUID, voice_id: str, name: str) -> UserSavedVoice:
+    """Put a Notestack voice in the workspace's voices (the one list for audio and video), once. Saving needs no plan:
+    using it in a video is premium (b2v_access.check_voice). No preview link: it is played through /api/voice/preview.
+    The caller commits."""
+    row = db.get(UserSavedVoice, {"workspace_id": workspace_id, "voice_id": voice_id})
+    if row is None:
+        row = UserSavedVoice(workspace_id=workspace_id, voice_id=voice_id, name=(name or "Voice")[:255], premium=True,
+                             is_custom=True)
+        db.add(row)
+    return row
+
+
 def forget_video_voice(db: Session, workspace_id: uuid.UUID, voice_id: str) -> None:
     """A Notestack voice that is gone (clone revoked) leaves the workspace's saved video voices too."""
     db.execute(delete(UserSavedVoice).where(UserSavedVoice.workspace_id == workspace_id,

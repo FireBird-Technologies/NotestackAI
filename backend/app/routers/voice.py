@@ -12,7 +12,7 @@ from app.config import settings
 from app.models import Document, Job, Upload, VoiceConsent, VoiceProfile
 from app.services import tts
 from app.services.jobs import create_job, record_usage, serialize_job
-from app.services.notestack_voices import forget_video_voice
+from app.services.notestack_voices import forget_video_voice, save_notestack_voice
 from app.services.plans import effective_plan, plan_limit_error
 from app.services.storage import storage
 
@@ -215,6 +215,7 @@ async def add_from_library(body: LibraryAddIn, ctx: Ctx = Depends(get_ctx)):
     if body.use_as in ("host_a", "host_b"):
         voices[body.use_as] = voice_id
     vp.host_voices = voices
+    save_notestack_voice(ctx.db, ctx.workspace.id, voice_id, body.name)  # a voice added is a voice saved
     ctx.db.commit()
     return {"voice_id": voice_id, **_serialize(ctx)}
 
@@ -293,6 +294,7 @@ async def save_design(body: DesignSaveIn, ctx: Ctx = Depends(get_ctx)):
     if body.use_as in ("host_a", "host_b"):
         voices[body.use_as] = voice_id
     vp.host_voices = voices
+    save_notestack_voice(ctx.db, ctx.workspace.id, voice_id, body.name)  # a voice made is a voice saved
     ctx.db.commit()
     return {"voice_id": voice_id, **_serialize(ctx)}
 

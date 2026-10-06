@@ -477,6 +477,74 @@
   gap: 2px;
 }
 
+/* The Voice page's two lists (Your voices, Voice library): each in its own grey panel so they read as separate */
+.yv-panel {
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.yv-panel + .yv-panel {
+  margin-top: 8px;
+}
+
+/* Section headings: a step up from the rows, with the count in a small pill */
+.yv-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.yv-count {
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+/* Their rows: darker than the panel, four and a half in view, the rest scrolls inside */
+.vw-voice-list-tight {
+  gap: 6px;
+  max-height: calc(4.5 * 60px + 4 * 6px);
+}
+
+.vw-voice-list-tight .vw-vrow {
+  gap: 12px;
+  height: 60px;
+  padding: 0 12px 0 10px;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+/* Your voices: four rows in view and a sliver of the fifth (so it reads as scrollable), plus the list's 2px padding */
+.vw-voice-list-tight.vw-voice-list-four {
+  max-height: calc(4.3 * 60px + 4 * 6px + 2px);
+}
+
+.vw-voice-list-tight .vw-vplay {
+  width: 38px;
+  height: 38px;
+}
+
+.vw-voice-list-tight .vw-vpick {
+  gap: 1px;
+}
+
+.vw-voice-list-tight .vw-vpick strong {
+  font-size: 0.95rem;
+}
+
+.vw-voice-list-tight .vw-vpick span {
+  font-size: 0.8rem;
+}
+
 .vw-vrow:hover {
   border-color: var(--line-strong);
 }
