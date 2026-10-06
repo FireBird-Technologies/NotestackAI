@@ -436,6 +436,8 @@ export type VideoSavedVoice = {
   accent: string | null;
   premium: boolean;
   is_custom: boolean;
+  /** notestack: made or added on the Voice page (played through the Voice page's preview, not a link). */
+  source?: "notestack" | "blog2video";
 };
 
 export type VideoLibraryVoice = {
@@ -459,7 +461,17 @@ export type VideoCustomVoice = {
   saved: boolean;
 };
 
-export type VideoVoicesResponse = { saved: VideoSavedVoice[]; library: VideoLibraryVoice[]; custom: VideoCustomVoice[] };
+/** A voice the workspace made or added on the Voice page (its clone, a designed voice, a library voice). */
+export type VideoNotestackVoice = { voice_id: string; name: string; kind: "clone" | "designed" | "library"; saved: boolean };
+
+export type VideoVoicesResponse = {
+  saved: VideoSavedVoice[];
+  library: VideoLibraryVoice[];
+  custom: VideoCustomVoice[];
+  notestack: VideoNotestackVoice[];
+  /** How many voices "My voices" can hold. */
+  max_saved: number;
+};
 
 export type VideoDesignedVoice = {
   generated_voice_id: string;
@@ -507,6 +519,8 @@ export type VideoCreateBody = VideoOptions & {
   focus?: string;
   /** The picked topic's description, sent so blog2video knows what to cover. */
   focus_detail?: string;
+  /** Or the user's own focus topic, followed as far as the posts cover it (never with `focus`). */
+  focus_prompt?: string;
   document_id?: string;
   /** A notebook's ticked posts, combined into one video. */
   document_ids?: string[];

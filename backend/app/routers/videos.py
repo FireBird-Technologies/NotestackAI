@@ -28,10 +28,10 @@ from app.auth import Ctx, get_ctx
 from app.config import settings
 from app.llm import run
 from app.llm.provider import focus_lm
-from app.llm.signatures import VideoFocusTopics
+from app.llm.signatures import VideoFocusAngles
 from app.models import Artifact, B2VVideo, Chat, Document, Message, Notebook, Upload
 from app.routers.sources import is_locked
-from app.services import b2v_access, video_limits, video_quota
+from app.services import b2v_access, video_focus, video_limits, video_quota
 from app.services import blog2video as b2v
 from app.services.artifacts import serialize_artifact
 from app.services.plans import Plan, plan_limit_error
@@ -200,6 +200,8 @@ class VideoCreateIn(VideoOptions):
     # One of the suggested focus topics (/focus-topics): the video is mainly about it. None = the material as a whole.
     focus: str | None = Field(None, max_length=200)
     focus_detail: str | None = Field(None, max_length=400)  # the topic's description: what the video should cover
+    # Or the user's own topic, in their words: followed as far as the material supports it (instead of `focus`).
+    focus_prompt: str | None = Field(None, max_length=500)
 
     @model_validator(mode="after")
     def one_source(self):
@@ -207,6 +209,13 @@ class VideoCreateIn(VideoOptions):
             raise ValueError("Pick one source: a notebook, a post, chats, a link or pasted text")
         if self.document_ids and len(self.document_ids) == 1:
             self.document_id, self.document_ids = self.document_ids[0], None
+        return self
+
+    @model_validator(mode="after")
+    def one_focus(self):
+        self.focus_prompt = re.sub(r"\s+", " ", self.focus_prompt or "").strip() or None
+        if self.focus_prompt and (self.focus or "").strip():
+            raise ValueError("Pick a suggested topic or write your own, not both")
         return self
 
 
@@ -298,10 +307,16 @@ def _source_text(ctx: Ctx, body: FocusIn | VideoCreateIn, limit: int = MAX_CONTE
 
 
 def _instructions(body: VideoCreateIn) -> str:
-    """What blog2video's script writer is told ahead of the material: what a chat is, and the focus picked (worded
-    for the house style's depth). Empty when neither applies."""
+    """What blog2video's script writer is told ahead of the material: what a chat is, and the focus picked or written
+    by the user (worded for the house style's depth). Empty when neither applies."""
     parts = [CHAT_CONTEXT] if body.chat_ids else []
-    if focus := (body.focus or "").strip():
+    if prompt := (body.focus_prompt or "").replace('"', "'"):
+        depth = {"short": " Make it a brief overview.", "medium": " Make it a deep dive."}
+        parts.append(f'The user wants this video to focus on: "{prompt}". Follow it only as far as the material below '
+                     "supports it: use what the material says about it and leave the rest out. If the material does "
+                     "not cover it, ignore this request and make a general video about the material."
+                     + depth.get(b2v_access.house_length(body.video_style), ""))
+    elif focus := (body.focus or "").strip():
         detail = re.sub(r"\s+", " ", body.focus_detail or "").strip().rstrip(".")
         cover = f" What to cover: {detail}." if detail else ""
         length = b2v_access.house_length(body.video_style)
@@ -324,7 +339,7 @@ def _source(ctx: Ctx, body: VideoCreateIn) -> tuple[dict, str]:
         if not re.match(r"https?://", body.url):
             raise HTTPException(400, "Enter a link that starts with http:// or https://")
         return {"url": body.url}, body.title or body.url
-    if body.document_id and not body.focus:
+    if body.document_id and not (body.focus or body.focus_prompt):
         doc = _doc(ctx, body.document_id)
         if re.match(r"https?://", doc.url or ""):
             return {"url": doc.url, "title": doc.title[:255]}, doc.title
@@ -449,21 +464,22 @@ def _excerpt(text: str | None, limit: int) -> str:
     return text[:limit].rsplit(" ", 1)[0] + "..."
 
 
-def _focus_material(ctx: Ctx, body: FocusIn) -> list[str]:
-    """What the focus suggestions read: each post's title and the start of its text, or a chat's title and first
-    exchange (per chat). A little text, so a vague title or an untitled chat still says what it is about. Checked like a create
-    (another workspace's source 404s, locked posts 400)."""
+def _focus_material(ctx: Ctx, body: FocusIn) -> tuple[dict[str, str], list[Document]]:
+    """What the focus suggestions read, per post or chat (by id): each post's title and the start of its text, or a
+    chat's title and first exchange. A little text, so a vague title or an untitled chat still says what it is about.
+    Also the posts themselves (none for chats). Checked like a create (another workspace's source 404s, locked posts
+    400)."""
     if body.chat_ids:
         loaded = _load_chats(ctx, body.chat_ids)
         answer_len = 600 if len(loaded) == 1 else 300
-        items = []
+        material = {}
         for chat, msgs in loaded:
             question = next((m.content for m in msgs if m.role == "user"), "")
             answer = next((m.content for m in msgs if m.role == "assistant"), "")
             parts = [chat.title or "", _excerpt(question, 300), _excerpt(_cite_free(answer), answer_len)]
             if item := "\n".join(p for p in parts if p):
-                items.append(item)
-        return items
+                material[str(chat.id)] = item
+        return material, []
     ids = set(body.document_ids or [body.document_id])
     docs = list(ctx.db.scalars(select(Document).where(Document.id.in_(ids),
                                                       Document.workspace_id == ctx.workspace.id)))
@@ -471,28 +487,42 @@ def _focus_material(ctx: Ctx, body: FocusIn) -> list[str]:
         raise HTTPException(404, "Post not found")
     if locked := sum(is_locked(d) for d in docs):
         raise _not_indexed(locked)
+    docs.sort(key=lambda d: d.published_at or d.created_at, reverse=True)
     each = 800 if len(docs) == 1 else 400
-    items = ["\n".join(p for p in (d.title or "", _excerpt(d.clean_text, each)) if p) for d in docs[:5]]
-    return [i for i in items if i]
+    items = {str(d.id): "\n".join(p for p in (d.title or "", _excerpt(d.clean_text, each)) if p) for d in docs}
+    return {k: v for k, v in items.items() if v}, docs
 
 
 @router.post("/focus-topics")
 def focus_topics(body: FocusIn, ctx: Ctx = Depends(get_ctx)):
-    """Three topics a video from this source could focus on, suggested by the AI from each item's title and the start
-    of its text. Asked for while the wizard is still on step 1, shown on step 2."""
-    items = _focus_material(ctx, body)
-    if not items:
+    """Up to three topics a video from this source could focus on: the topics the workspace already has for it,
+    shown as they are (untagged posts are tagged on demand; a chat's are the cited posts' topics). The AI writes them
+    only when there are none. Asked for and shown on the wizard's step 1, once the source is chosen."""
+    material, docs = _focus_material(ctx, body)
+    if not material:
         return {"topics": []}
+    ws = ctx.workspace.id
+    if body.chat_ids:
+        cited, docs = video_focus.chat_citations(ctx.db, ws, body.chat_ids)
+        sources = {chat: cited.get(chat, {}) for chat in material}
+    else:
+        sources = {str(d.id): {d.id: 1.0} for d in docs}
+    video_focus.ensure_tags(ctx.db, ws, docs)
+    if cards := video_focus.pick_cards(video_focus.build_pool(ctx.db, ws, sources, docs)):
+        return {"topics": [{"title": c.name, "description": c.summary} for c in cards]}
+    items = list(material.values())[:FOCUS_ITEMS]
     topics: list[dict] = []
     # One retry when the answer has fewer than 3 usable topics (a placeholder for every title, repeats).
     for retry in (False, True):
-        out = run.predict(VideoFocusTopics, db=ctx.db, workspace_id=ctx.workspace.id, lm=focus_lm(retry), items=items)
+        out = run.predict(VideoFocusAngles, db=ctx.db, workspace_id=ws, lm=focus_lm(retry), items=items,
+                          candidate_tags=[], avoid_titles=[])
         _add_topics(topics, out.get("topics"))
         if len(topics) >= 3:
             break
     return {"topics": topics[:3]}
 
 
+FOCUS_ITEMS = 5  # posts or chats the AI reads when there are no topics to show
 FOCUS_PLACEHOLDERS = {"title", "topic", "description", "summary", "name", "angle", "focus"}
 
 

@@ -189,35 +189,6 @@
   opacity: 0.5;
 }
 
-/* Format */
-
-/* Format and stock footage side by side, bottoms aligned; stacked on phones */
-.vw-row2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  align-items: end;
-}
-
-.vw-row2 .vw-formats {
-  display: flex;
-}
-
-.vw-row2 .vw-formats button {
-  flex: 1;
-  justify-content: center;
-}
-
-.vw-row2 .vw-option {
-  height: 48px;
-}
-
-@media (max-width: 600px) {
-  .vw-row2 {
-    grid-template-columns: 1fr;
-  }
-}
-
 .vw-hint {
   font-size: 0.78rem;
 }
@@ -225,41 +196,6 @@
 .vw-note {
   margin-top: -8px;
   font-size: 0.75rem;
-}
-
-.vw-formats {
-  display: inline-flex;
-  gap: 4px;
-  height: 48px;
-  padding: 4px;
-  border: 1px solid var(--line-strong);
-  border-radius: 12px;
-  background: rgba(0, 0, 0, 0.6);
-}
-
-.vw-formats button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 16px;
-  border: 0;
-  border-radius: 8px;
-  background: none;
-  color: var(--text-2);
-  font: 500 0.9rem var(--font-body);
-  white-space: nowrap;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
-
-.vw-formats button:hover {
-  color: var(--text);
-}
-
-.vw-formats button.on {
-  background: var(--blue);
-  color: var(--white);
-  box-shadow: var(--glow-sm);
 }
 
 /* Templates */
@@ -434,7 +370,7 @@
   border-radius: 50%;
 }
 
-/* Step 2: video style and colors share one row (wrapping when the chips run long), with smaller swatches */
+/* The style chips (step 1) and the colors (step 2), each in a row of their own, with smaller swatches */
 .vw-style-row {
   display: flex;
   flex-wrap: wrap;
@@ -878,17 +814,17 @@ a.mc-action {
 .vw-focus-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 
 .vw-focus-card {
   display: flex;
   align-items: flex-start; /* title and description read from the top */
-  gap: 12px;
-  min-height: 72px;
-  padding: 14px 16px;
+  gap: 10px;
+  min-height: 0;
+  padding: 10px 12px;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: 12px;
   background: var(--surface);
   color: var(--text);
   font: inherit;
@@ -904,12 +840,14 @@ a.mc-action {
 .vw-focus-text {
   display: grid;
   flex: 1;
-  gap: 6px;
+  gap: 3px;
   min-width: 0;
 }
 
 .vw-focus-text strong {
+  font-size: 0.9rem;
   font-weight: 500;
+  line-height: 1.35;
 }
 
 /* The topic's description: two lines at most */
@@ -917,8 +855,8 @@ a.mc-action {
   display: -webkit-box;
   overflow: hidden;
   color: var(--text-2);
-  font-size: 0.82rem;
-  line-height: 1.4;
+  font-size: 0.78rem;
+  line-height: 1.35;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   line-clamp: 2;
@@ -926,6 +864,62 @@ a.mc-action {
 
 .vw-focus-card.on {
   border-color: var(--blue);
+}
+
+/* The user's own topic, under the suggestions: same frame as a card, the box full width */
+.vw-focus-custom {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.vw-focus-custom.on {
+  border-color: var(--blue);
+}
+
+.vw-focus-custom-head {
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+/* A multi-line box, not the site's pill-shaped one-line .input */
+.vw-focus-custom textarea {
+  width: 100%;
+  min-height: 72px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.45);
+  color: var(--text);
+  font: 400 0.88rem/1.45 var(--font-body);
+  resize: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.vw-focus-custom textarea::placeholder {
+  color: var(--text-3);
+}
+
+.vw-focus-custom textarea:focus {
+  outline: none;
+  border-color: var(--blue);
+  box-shadow: var(--glow-sm);
+}
+
+/* The guide on the left, the character count on the right */
+.vw-focus-custom-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.vw-focus-custom-foot small {
+  font-size: 0.74rem;
 }
 
 .vw-focus-card.wait {

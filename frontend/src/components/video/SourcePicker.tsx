@@ -1,17 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import type { Doc, NotebookSummary, WorkspaceChat } from "../../api/types";
+import type { Doc, NotebookSummary } from "../../api/types";
 import { DocPicker } from "../DocPicker";
 import { Dropdown } from "../Dropdown";
-import { formatDate, Loading } from "../ui";
-import { freshlySeeded, loadChats, loadDocs, loadNotebooks, sourceCache } from "./sourceCache";
+import { Loading } from "../ui";
+import { freshlySeeded, loadDocs, loadNotebooks, sourceCache } from "./sourceCache";
 
-/** What a video is made from: a notebook's ticked posts (combined into one video), one post, or ticked notebook chats
- * (combined too; the ticks are held next to the source, like a notebook's posts). */
-export type VideoSource = { kind: "notebook"; id: string } | { kind: "post"; id: string } | { kind: "chats" };
+/** What a video is made from: a notebook's (or the whole archive's) ticked posts, combined into one video, or one
+ * post. */
+export type VideoSource = { kind: "notebook"; id: string } | { kind: "post"; id: string };
 
 const ONE_POST = "__post";
-const CHATS = "__chats";
 /** Most posts one video can combine. */
 export const MAX_VIDEO_POSTS = 5;
 
@@ -21,18 +20,13 @@ export function SourcePicker({
   onSource,
   postIds,
   onPostIds,
-  chatIds,
-  onChatIds,
 }: {
   source: VideoSource | null;
   onSource: (s: VideoSource | null) => void;
   postIds: string[];
   onPostIds: (ids: string[]) => void;
-  chatIds: string[];
-  onChatIds: (ids: string[]) => void;
 }) {
   const [notebooks, setNotebooks] = useState<NotebookSummary[] | null>(sourceCache.notebooks);
-  const [chats, setChats] = useState<WorkspaceChat[] | null>(sourceCache.chats);
   const [docs, setDocs] = useState<Doc[] | null>(null);
   const ticks = useRef(postIds);
   ticks.current = postIds;
@@ -42,12 +36,10 @@ export function SourcePicker({
 
   useEffect(() => {
     loadNotebooks().then(setNotebooks).catch(() => setNotebooks((n) => n ?? []));
-    loadChats().then(setChats).catch(() => setChats((c) => c ?? []));
   }, []);
 
   const notebookId = source?.kind === "notebook" ? source.id : null;
   const postId = source?.kind === "post" ? source.id : null;
-  const onChats = source?.kind === "chats";
 
   useEffect(() => {
     if (!notebookId) return;
@@ -84,15 +76,11 @@ export function SourcePicker({
         <span className="vw-label">Made from</span>
         <Dropdown
           label="Made from"
-          value={choosing || postId ? ONE_POST : onChats ? CHATS : notebookId ?? ONE_POST}
+          value={choosing || postId ? ONE_POST : notebookId ?? ONE_POST}
           onChange={(v) => {
             if (v === ONE_POST) {
               setChoosing(true);
               onSource(null);
-            } else if (v === CHATS) {
-              setChoosing(false);
-              onChatIds([]); // none ticked to start with
-              onSource({ kind: "chats" });
             } else {
               setChoosing(false);
               onSource({ kind: "notebook", id: v });
@@ -102,31 +90,11 @@ export function SourcePicker({
             // The API lists the "All posts" notebook first, so the sections come out in order.
             ...(notebooks ?? []).map((n) => ({ value: n.id, label: n.is_archive ? "My whole archive" : n.title,
                                                hint: `${n.document_count} posts`, group: n.is_archive ? "Archive" : "Notebooks" })),
-            ...(chats?.length ? [{ value: CHATS, label: "Chats", hint: `${chats.length} chat${chats.length === 1 ? "" : "s"}`,
-                                   group: "Chats" }] : []),
             { value: ONE_POST, label: "Create a video on a single post", group: "Single post" },
           ]}
         />
-        <small className="muted vw-hint">
-          {onChats
-            ? "The video explains what the ticked chats are about."
-            : "Choose a notebook, individual posts, a chat or your whole archive."}
-        </small>
+        <small className="muted vw-hint">Choose a notebook, your whole archive or a single post.</small>
       </div>
-
-      {onChats && (
-        <div className="field">
-          <span className="vw-label">Chats</span>
-          <ChatPicker chats={chats} selected={chatIds} onChange={onChatIds} />
-          {chats && chats.length > 0 && (
-            <small className="muted vw-hint">
-              {chatIds.length === 0
-                ? "Tick at least one chat."
-                : `You can select up to ${Math.min(MAX_VIDEO_POSTS, chats.length)} (${chatIds.length} selected). They are combined into one video.`}
-            </small>
-          )}
-        </div>
-      )}
 
       {(choosing || postId) && (
         <DocPicker selected={postId ? [postId] : []} onChange={(ids) => onSource({ kind: "post", id: ids[0] })} single />
@@ -163,64 +131,5 @@ export function SourcePicker({
         )
       )}
     </>
-  );
-}
-
-/** Searchable checklist of the workspace's chats (title, notebook, date), up to MAX_VIDEO_POSTS ticked. The posts
- * list's look (DocPicker), so both sources read the same. */
-function ChatPicker({ chats, selected, onChange }: {
-  chats: WorkspaceChat[] | null;
-  selected: string[];
-  onChange: (ids: string[]) => void;
-}) {
-  const [q, setQ] = useState("");
-  const visible = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    return (chats ?? []).filter((c) => !needle || (c.title ?? "").toLowerCase().includes(needle)
-      || c.notebook_title.toLowerCase().includes(needle));
-  }, [chats, q]);
-
-  if (!chats) {
-    return (
-      <div className="picker">
-        <div className="picker-bar">
-          <input className="input input-sm" placeholder="Search chats" disabled aria-label="Search chats" />
-        </div>
-        <div className="picker-list vw-posts-wait"><Loading label="Loading chats" /></div>
-      </div>
-    );
-  }
-  if (chats.length === 0) return <p className="muted">No chats yet. Ask something in a notebook first.</p>;
-
-  const full = selected.length >= MAX_VIDEO_POSTS;
-  const toggle = (id: string) => {
-    if (selected.includes(id)) return onChange(selected.filter((x) => x !== id));
-    if (!full) onChange([...selected, id]);
-  };
-
-  return (
-    <div className="picker">
-      <div className="picker-bar">
-        <input className="input input-sm" placeholder="Search chats" value={q} onChange={(e) => setQ(e.target.value)}
-               aria-label="Search chats" />
-      </div>
-      <ul className="picker-list">
-        {visible.map((c) => {
-          const on = selected.includes(c.id);
-          return (
-            <li key={c.id}>
-              <label className={`picker-row${on ? " on" : ""}`}>
-                <input type="checkbox" checked={on} disabled={!on && full} onChange={() => toggle(c.id)} />
-                <span className="picker-title">{c.title || "Untitled chat"}</span>
-                <span className="mono muted picker-meta">
-                  {c.notebook_title}{c.updated_at ? ` · ${formatDate(c.updated_at)}` : ""}
-                </span>
-              </label>
-            </li>
-          );
-        })}
-        {visible.length === 0 && <li className="muted">No chats match.</li>}
-      </ul>
-    </div>
   );
 }

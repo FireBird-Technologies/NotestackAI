@@ -46,6 +46,12 @@ def serialize_job(job: Job) -> dict:
 # Producer side
 
 
+def pending_job(db: Session, workspace_id: uuid.UUID, kind: str) -> bool:
+    """A job of this kind is already queued or running for the workspace."""
+    return db.scalar(select(Job.id).where(Job.workspace_id == workspace_id, Job.kind == kind,
+                                          Job.status.in_(("queued", "running"))).limit(1)) is not None
+
+
 def create_job(
     db: Session,
     workspace_id: uuid.UUID,

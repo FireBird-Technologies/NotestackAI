@@ -78,7 +78,7 @@ export default function Videos() {
   return (
     <div className="page-wrap">
       <PageHeader eyebrow="Videos" title="Your videos">
-        <Link to="/app/videos/voices" className="btn">Voices</Link>
+        <Link to="/app/voice?step=hosts#video-voices" className="btn">Voices</Link>
         {out && status?.can_upgrade ? (
           <button className="btn btn-primary" onClick={() => openUpgrade()}>Get more videos</button>
         ) : (

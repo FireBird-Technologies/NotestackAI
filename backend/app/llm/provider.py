@@ -66,8 +66,8 @@ FOCUS_MAX_TOKENS = 2000  # three titles and two-line descriptions plus GLM's low
 @lru_cache
 def focus_lm(retry: bool = False) -> dspy.LM:
     """The video wizard's focus suggestions: a little material in, three short topics out, so a small cap keeps it
-    quick. retry=True is the second try after an unusable answer: a different temperature, so it is a fresh call and
-    not that answer again from the cache."""
+    quick. Only for a source with no topics to show. retry=True is the second try after an unusable answer: a
+    different temperature, so it is a fresh call and not that answer again from the cache."""
     return _build(settings.llm_fast_model, effort="low", temperature=0.8 if retry else 0.4,
                   max_tokens=FOCUS_MAX_TOKENS)
 

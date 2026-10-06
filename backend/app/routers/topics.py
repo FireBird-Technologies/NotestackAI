@@ -234,8 +234,8 @@ def rebuild(ctx: Ctx = Depends(get_ctx), full: bool = False):
     if full:
         # Clear per post tags so every post is mapped again.
         for d in ctx.db.scalars(select(Document).where(Document.workspace_id == ctx.workspace.id)):
-            if d.metadata_json and "topics" in d.metadata_json:
-                d.metadata_json = {k: v for k, v in d.metadata_json.items() if k != "topics"}
+            if d.metadata_json and ({"topics", "topics_failures"} & d.metadata_json.keys()):
+                d.metadata_json = {k: v for k, v in d.metadata_json.items() if k not in ("topics", "topics_failures")}
         ctx.db.commit()
     job = create_job(ctx.db, ctx.workspace.id, "topics", {}, max_attempts=2)
     return serialize_job(job)

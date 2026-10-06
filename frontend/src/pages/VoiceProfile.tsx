@@ -1,7 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { voiceApi } from "../api/endpoints";
+import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { videoVoicesApi, voiceApi } from "../api/endpoints";
 import type { Delivery, Job, LibraryVoice, Voice, VoiceDesignInput, VoiceDesignPreview, VoiceProfileData, VoiceState } from "../api/types";
 import { DocPicker } from "../components/DocPicker";
+import { PlayButton } from "../components/video/parts";
+import { VideoVoicesSection } from "../components/video/VideoVoicesSection";
 import { ConfirmButton, errorMessage, formatDate, JobProgress, Loading, Modal, PageHeader, Tabs } from "../components/ui";
 import { useJob } from "../hooks/useJob";
 import { useUpgrade } from "../hooks/useUpgrade";
@@ -59,56 +62,12 @@ const PREBUILT: { voice_id: string; name: string; tag: string; icon: Icon }[] = 
   { voice_id: "cgSgspJ2msm6clMCkdW9", name: "Jessica", tag: "Bright and lively", icon: "spark" },
 ];
 
-const ICON_PATHS: Record<Icon, string> = {
-  sun: "M12 4V2m0 20v-2m8-8h2M2 12h2m13.66-5.66 1.41-1.41M4.93 19.07l1.41-1.41m0-11.32L4.93 4.93m14.14 14.14-1.41-1.41M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z",
-  book: "M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5v-15Zm0 15A2.5 2.5 0 0 0 6.5 23H20v-5",
-  mic: "M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Zm7 9a7 7 0 0 1-14 0m7 7v4m-4 0h8",
-  spark: "M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3Zm7 11 .8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8L19 14Z",
-  wave: "M3 12h2m3-5v10m4-13v16m4-11v6m4-3h1",
-  person: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 9a7 7 0 0 1 14 0",
-};
-
-function VoiceIcon({ icon }: { icon: Icon }) {
-  return (
-    <span className="voice-icon" aria-hidden="true">
-      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-        <path d={ICON_PATHS[icon]} />
-      </svg>
-    </span>
-  );
-}
-
 type Tile = { voice_id: string; name: string; tag: string; icon: Icon; preview_url?: string | null };
 
-function VoicePicker({
-  state,
-  voices,
-  onSaved,
-  onBrowse,
-  onGenerate,
-}: {
-  state: VoiceState;
-  voices: Voice[];
-  onSaved: (s: VoiceState) => void;
-  onBrowse: (host: Host) => void;
-  onGenerate: (host: Host) => void;
-}) {
-  const [host, setHost] = useState<Host>("host_a");
-  const [delivery, setDelivery] = useState<Delivery>(state.delivery[host]);
-  const [dirty, setDirty] = useState(false);
-  const [loading, setLoading] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const { play, playing } = usePlayer();
-  const current = state.host_voices[host];
-  const other: Host = host === "host_a" ? "host_b" : "host_a";
+/** The voices a host can use: the premade four, then the writer's own (clone, generated), then whatever else a host is
+ * set to (e.g. a library voice). Shared by the tiles and the Manage voices modal. */
+function hostTiles(state: VoiceState, voices: Voice[]): Tile[] {
   const byId = new Map(voices.map((v) => [v.voice_id, v]));
-
-  useEffect(() => {
-    setDelivery(state.delivery[host]);
-    setDirty(false);
-  }, [state.delivery, host]);
-
-  // Prebuilt first, then the writer's own voices, then whatever else a host is set to (e.g. a library voice).
   const tiles: Tile[] = PREBUILT.map((p) => ({ ...p, preview_url: byId.get(p.voice_id)?.preview_url }));
   if (state.clone.status === "ready" && state.clone.voice_id) {
     tiles.push({ voice_id: state.clone.voice_id, name: "My voice", tag: "Your clone", icon: "person", preview_url: state.clone.preview_url });
@@ -120,20 +79,54 @@ function VoicePicker({
       tiles.push({ voice_id: id, name: v?.name ?? "Current voice", tag: v?.labels?.accent ?? "Library voice", icon: "wave", preview_url: v?.preview_url });
     }
   }
+  return tiles;
+}
 
+/** Listen to a voice: its sample link when it has one, otherwise a line spoken with the host's delivery. */
+function useListen(host: Host, onError: (msg: string | null) => void) {
+  const [loading, setLoading] = useState<string | null>(null);
+  const { play, playing } = usePlayer();
   const listen = async (t: Tile) => {
     if (playing === t.voice_id || t.preview_url) return play(t.preview_url ?? "", t.voice_id);
     setLoading(t.voice_id);
-    setError(null);
+    onError(null);
     try {
       const { url } = await voiceApi.preview(t.voice_id, { host });
       play(url, t.voice_id);
     } catch (e) {
-      setError(errorMessage(e));
+      onError(errorMessage(e));
     } finally {
       setLoading(null);
     }
   };
+  return { listen, loading, playing };
+}
+
+function VoicePicker({
+  state,
+  voices,
+  onSaved,
+  onManage,
+}: {
+  state: VoiceState;
+  voices: Voice[];
+  onSaved: (s: VoiceState) => void;
+  onManage: (host: Host) => void;
+}) {
+  const [host, setHost] = useState<Host>("host_a");
+  const [delivery, setDelivery] = useState<Delivery>(state.delivery[host]);
+  const [dirty, setDirty] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { listen, loading, playing } = useListen(host, setError);
+  const current = state.host_voices[host];
+  const other: Host = host === "host_a" ? "host_b" : "host_a";
+
+  useEffect(() => {
+    setDelivery(state.delivery[host]);
+    setDirty(false);
+  }, [state.delivery, host]);
+
+  const tiles = hostTiles(state, voices);
 
   const choose = async (voice_id: string) => {
     if (voice_id === current) return;
@@ -147,6 +140,12 @@ function VoicePicker({
 
   return (
     <div className="stack">
+      <div className="row between wrap manage-top">
+        <p className="muted">Audio overviews are a conversation between two hosts. Tap a voice to use it, or add your own.</p>
+        <button className="btn btn-primary" onClick={() => onManage(host)}>
+          Manage voices
+        </button>
+      </div>
       <Tabs<Host>
         tabs={[
           { id: "host_a", label: "Host A · leads" },
@@ -155,74 +154,63 @@ function VoicePicker({
         value={host}
         onChange={setHost}
       />
-      <ul className="voice-grid" aria-label={`Voices for ${host === "host_a" ? "Host A" : "Host B"}`}>
+      {/* One row per voice, as in Video voiceovers: tap a row to give it to this host */}
+      <div className="vw-voice-list" role="radiogroup" aria-label={`Voices for ${host === "host_a" ? "Host A" : "Host B"}`}>
         {tiles.map((t) => {
           const selected = t.voice_id === current;
           const usedByOther = t.voice_id === state.host_voices[other];
           return (
-            <li key={t.voice_id} className={`voice-tile${selected ? " on" : ""}`}>
-              <button type="button" className="voice-pick" onClick={() => choose(t.voice_id)} aria-pressed={selected}>
-                <VoiceIcon icon={t.icon} />
+            <div key={t.voice_id} className={`vw-vrow${selected ? " on" : ""}`}>
+              <PlayButton on={playing === t.voice_id} label={t.name} onClick={() => listen(t)}
+                          disabled={loading !== null || (!t.preview_url && !state.tts_configured)} />
+              <button type="button" role="radio" aria-checked={selected} className="vw-vpick" onClick={() => choose(t.voice_id)}>
                 <strong>{t.name}</strong>
-                <span className="muted small">{t.tag}</span>
+                <span className="muted">{t.tag}</span>
               </button>
-              {selected && <span className="voice-badge mono">{host === "host_a" ? "Host A" : "Host B"}</span>}
-              {!selected && usedByOther && <span className="voice-badge dim mono">{other === "host_a" ? "Host A" : "Host B"}</span>}
-              <button
-                type="button"
-                className="icon-btn voice-play"
-                onClick={() => listen(t)}
-                disabled={loading !== null || (!t.preview_url && !state.tts_configured)}
-                aria-label={playing === t.voice_id ? `Stop ${t.name}` : `Play ${t.name}`}
-                title={playing === t.voice_id ? "Stop" : "Listen"}
-              >
-                {loading === t.voice_id ? (
-                  "…"
-                ) : (
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                    {playing === t.voice_id ? <path d="M6 5h4v14H6zM14 5h4v14h-4z" /> : <path d="M7 4.5v15l13-7.5z" />}
-                  </svg>
-                )}
-              </button>
-            </li>
+              {selected && <span className="voice-badge-inline mono">{host === "host_a" ? "Host A" : "Host B"}</span>}
+              {!selected && usedByOther && <span className="voice-badge-inline dim mono">{other === "host_a" ? "Host A" : "Host B"}</span>}
+            </div>
           );
         })}
-        <li className="voice-tile voice-new">
-          <button type="button" className="voice-pick" onClick={() => onGenerate(host)} aria-label="Add a voice">
-            <span className="voice-icon plus" aria-hidden="true">
-              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                <path d="M12 5v14M5 12h14" />
-              </svg>
-            </span>
-            <strong>Add a voice</strong>
-            <span className="muted small">Generate or clone your own</span>
-          </button>
-        </li>
-      </ul>
+      </div>
       {error && <p className="error-text">{error}</p>}
-      <details className="delivery">
-        <summary className="mono muted small">Delivery settings for {host === "host_a" ? "Host A" : "Host B"}</summary>
-        {SLIDERS.map((s) => (
-          <label key={s.key} className="slider" title={s.hint}>
-            <span className="row between">
-              <span>{s.label}</span>
-              <span className="mono muted">{Number(delivery[s.key]).toFixed(2)}</span>
-            </span>
-            <input
-              type="range"
-              min={s.min}
-              max={s.max}
-              step={s.step}
-              value={Number(delivery[s.key])}
-              onChange={(e) => {
-                setDelivery({ ...delivery, [s.key]: Number(e.target.value) });
-                setDirty(true);
-              }}
-            />
-          </label>
-        ))}
+      <details className="delivery-card">
+        <summary>
+          Delivery settings for {host === "host_a" ? "Host A" : "Host B"}
+          <svg className="delivery-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </summary>
+        <div className="delivery-grid">
+          {SLIDERS.map((s) => {
+            const value = Number(delivery[s.key]);
+            const pct = ((value - s.min) / (s.max - s.min)) * 100;
+            return (
+              <label key={s.key} className="delivery-slider">
+                <span className="row between">
+                  <span>{s.label}</span>
+                  <span className="delivery-value mono">{value.toFixed(2)}</span>
+                </span>
+                <input
+                  type="range"
+                  min={s.min}
+                  max={s.max}
+                  step={s.step}
+                  value={value}
+                  style={{ "--pct": `${pct}%` } as CSSProperties}
+                  onChange={(e) => {
+                    setDelivery({ ...delivery, [s.key]: Number(e.target.value) });
+                    setDirty(true);
+                  }}
+                />
+                <span className="muted small">{s.hint}</span>
+              </label>
+            );
+          })}
+        </div>
         {dirty && (
-          <div className="row end">
+          <div className="row end delivery-actions">
             <button className="btn btn-small" onClick={() => (setDelivery(state.delivery[host]), setDirty(false))}>
               Reset
             </button>
@@ -238,12 +226,6 @@ function VoicePicker({
           </div>
         )}
       </details>
-      <p className="muted small">
-        Want something else?{" "}
-        <button className="link-btn small" onClick={() => onBrowse(host)}>
-          Browse the full voice library
-        </button>
-      </p>
     </div>
   );
 }
@@ -266,17 +248,20 @@ const PROMPT_IDEAS = [
   "A thoughtful older narrator with a soft Irish lilt",
 ];
 
-function GenerateVoiceModal({
+/** Make a new voice: build it from options, describe it, or clone your own. Inside the Manage voices modals. */
+function GenerateVoicePanel({
   host,
   state,
-  onClose,
+  onDone,
   onSaved,
   onClone,
 }: {
-  host: Host;
+  /** The host the new voice is for; null when made for video voiceovers (no host changes). */
+  host: Host | null;
   state: VoiceState;
-  onClose: () => void;
-  onSaved: (s: VoiceState) => void;
+  /** Saved: the caller closes or switches away. */
+  onDone: () => void;
+  onSaved: (s: VoiceState, voiceId: string) => void;
   onClone: () => void;
 }) {
   const [mode, setMode] = useState<GenMode>("options");
@@ -289,7 +274,7 @@ function GenerateVoiceModal({
   const [error, setError] = useState<string | null>(null);
   const { play, playing } = usePlayer();
   const { openUpgrade } = useUpgrade();
-  const hostLabel = host === "host_a" ? "Host A" : "Host B";
+  const hostLabel = host === "host_a" ? "Host A" : host === "host_b" ? "Host B" : null;
 
   const generate = async () => {
     setBusy("generate");
@@ -312,8 +297,10 @@ function GenerateVoiceModal({
     setBusy("save");
     setError(null);
     try {
-      onSaved(await voiceApi.saveDesign({ generated_voice_id: picked, name: name.trim(), description: result.description, use_as: host }));
-      onClose();
+      const saved = await voiceApi.saveDesign({ generated_voice_id: picked, name: name.trim(), description: result.description,
+                                                ...(host ? { use_as: host } : {}) });
+      onSaved(saved, saved.voice_id);
+      onDone();
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -322,7 +309,7 @@ function GenerateVoiceModal({
   };
 
   return (
-    <Modal title="Generate a new voice" onClose={onClose} wide>
+    <>
       <div className="stack">
         <Tabs<GenMode>
           tabs={[
@@ -382,10 +369,7 @@ function GenerateVoiceModal({
                 <button
                   className="btn btn-primary"
                   disabled={!state.tts_configured}
-                  onClick={() => {
-                    onClose();
-                    onClone();
-                  }}
+                  onClick={onClone}
                 >
                   {state.clone.status === "ready" ? "Record my voice again" : "Start recording"}
                 </button>
@@ -430,7 +414,7 @@ function GenerateVoiceModal({
             <div className="row">
               <input className="input input-sm" placeholder="Name it, e.g. Late night narrator" maxLength={60} value={name} onChange={(e) => setName(e.target.value)} aria-label="Voice name" />
               <button className="btn btn-primary" onClick={save} disabled={busy !== null || !picked || !name.trim()}>
-                {busy === "save" ? "Saving..." : `Save and use as ${hostLabel}`}
+                {busy === "save" ? "Saving..." : hostLabel ? `Save and use as ${hostLabel}` : "Save voice"}
               </button>
             </div>
           </div>
@@ -438,13 +422,13 @@ function GenerateVoiceModal({
         {!state.tts_configured && <p className="muted small">Voice generation is unavailable right now.</p>}
         {error && <p className="error-text">{error}</p>}
       </div>
-    </Modal>
+    </>
   );
 }
 
 // Voice library (commercially licensed voices from ElevenLabs)
 
-function LibraryModal({ host, onClose, onAdded }: { host: Host; onClose: () => void; onAdded: (s: VoiceState) => void }) {
+function LibraryBrowser({ host, onAdded }: { host: Host; onAdded: (s: VoiceState) => void }) {
   const [filters, setFilters] = useState({ search: "", gender: "", age: "", accent: "", use_case: "" });
   const [voices, setVoices] = useState<LibraryVoice[] | null>(null);
   const [page, setPage] = useState(0);
@@ -485,7 +469,7 @@ function LibraryModal({ host, onClose, onAdded }: { host: Host; onClose: () => v
   );
 
   return (
-    <Modal title={`Voice library for ${host === "host_a" ? "Host A" : "Host B"}`} onClose={onClose} wide>
+    <>
       <div className="stack">
         <p className="muted small">
           Voices from the ElevenLabs Voice Library, licensed for commercial use on paid ElevenLabs plans. Adding one puts it in your ElevenLabs account.
@@ -521,7 +505,6 @@ function LibraryModal({ host, onClose, onAdded }: { host: Host; onClose: () => v
                   setError(null);
                   try {
                     onAdded(await voiceApi.addFromLibrary(v, host));
-                    onClose();
                   } catch (e) {
                     setError(errorMessage(e));
                   } finally {
@@ -539,6 +522,48 @@ function LibraryModal({ host, onClose, onAdded }: { host: Host; onClose: () => v
           <button className="btn" onClick={() => load(page + 1)}>
             More voices
           </button>
+        )}
+      </div>
+    </>
+  );
+}
+
+// Managing a host's voices: add one from the library, or make your own
+
+type ManageTab = "library" | "add";
+
+function ManageHostVoicesModal({
+  host,
+  state,
+  onClose,
+  onSaved,
+  onClone,
+}: {
+  host: Host;
+  state: VoiceState;
+  onClose: () => void;
+  onSaved: (s: VoiceState) => void;
+  onClone: () => void;
+}) {
+  const [tab, setTab] = useState<ManageTab>("library");
+  const { openUpgrade } = useUpgrade();
+
+  return (
+    <Modal title={`Voices for ${host === "host_a" ? "Host A" : "Host B"}`} onClose={onClose} wide>
+      <div className="stack">
+        <Tabs<ManageTab>
+          tabs={[
+            { id: "library", label: "Voice library" },
+            { id: "add", label: "Add your voice" },
+          ]}
+          value={tab}
+          onChange={setTab}
+        />
+        {/* Either way the voice is set for this host and shows in the rows, so the modal closes */}
+        {tab === "library" && <LibraryBrowser host={host} onAdded={(s) => { onSaved(s); onClose(); }} />}
+        {tab === "add" && (
+          <GenerateVoicePanel host={host} state={state} onSaved={(s) => onSaved(s)} onDone={onClose}
+                              onClone={() => (state.clone.allowed ? onClone() : openUpgrade("writer"))} />
         )}
       </div>
     </Modal>
@@ -748,14 +773,21 @@ export default function VoiceProfile() {
   const [state, setState] = useState<VoiceState | null>(null);
   const [draft, setDraft] = useState<VoiceProfileData | null>(null);
   const [voices, setVoices] = useState<Voice[]>([]);
-  const [step, setStep] = useState<Step | null>(null);
+  const [params] = useSearchParams();
+  // ?step=hosts opens Speaking voices (the old Videos > Voices link lands there, on the video voices).
+  const [step, setStep] = useState<Step | null>(params.get("step") === "hosts" ? "hosts" : null);
   const [picking, setPicking] = useState(false);
   const [samples, setSamples] = useState<string[]>([]);
   const [buildJob, setBuildJob] = useState<Job | null>(null);
   const [cloneJob, setCloneJob] = useState<Job | null>(null);
   const [cloning, setCloning] = useState(false);
-  const [browsing, setBrowsing] = useState<Host | null>(null);
-  const [generating, setGenerating] = useState<Host | null>(null);
+  const [managing, setManaging] = useState<Host | null>(null);
+  // The Speaking voices card's two tabs. #video-voices (the old Videos > Voices link) opens the video one.
+  const [speakTab, setSpeakTab] = useState<"hosts" | "video">(
+    typeof window !== "undefined" && window.location.hash === "#video-voices" ? "video" : "hosts",
+  );
+  const [videoKey, setVideoKey] = useState(0);
+  const { openUpgrade } = useUpgrade();
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const autoBuilt = useRef(false);
@@ -797,6 +829,7 @@ export default function VoiceProfile() {
   const clone = useJob(cloneJob, () => {
     load();
     loadVoices();
+    setVideoKey((k) => k + 1); // a new clone shows up under video voiceovers' Your voices
   });
 
   if (!state || !step) return <Loading />;
@@ -901,9 +934,41 @@ export default function VoiceProfile() {
       {step === "hosts" && (
         <section className="card stack vp-card">
           <h2>Who reads your work aloud</h2>
-          <p className="muted">Audio overviews are a conversation between two hosts. Tap a voice to use it, or add your own.</p>
+          <Tabs<"hosts" | "video">
+            tabs={[
+              { id: "hosts", label: "Hosts Audios" },
+              { id: "video", label: "Video voiceovers" },
+            ]}
+            value={speakTab}
+            onChange={setSpeakTab}
+          />
+          {speakTab === "video" && (
+            <VideoVoicesSection reloadKey={videoKey}
+                                renderAddVoice={(onDone, close) => (
+                                  <GenerateVoicePanel
+                                    host={null}
+                                    state={state}
+                                    onDone={onDone}
+                                    onSaved={(s, voiceId) => {
+                                      setState(s);
+                                      loadVoices();
+                                      // Made for video voiceovers: added there straight away (room and plan permitting).
+                                      videoVoicesApi.save(voiceId)
+                                        .catch((e) => setError(`Saved to your voices, not added to video voiceovers: ${errorMessage(e)}`))
+                                        .finally(() => setVideoKey((k) => k + 1));
+                                    }}
+                                    onClone={() => {
+                                      close(); // the recorder opens in its own modal
+                                      if (state.clone.allowed) setCloning(true);
+                                      else openUpgrade("writer");
+                                    }}
+                                  />
+                                )} />
+          )}
+          {speakTab === "hosts" && (
+          <>
           {!state.tts_configured && <p className="muted">Voice previews are unavailable right now.</p>}
-          <VoicePicker state={state} voices={voices} onSaved={setState} onBrowse={setBrowsing} onGenerate={setGenerating} />
+          <VoicePicker state={state} voices={voices} onSaved={setState} onManage={setManaging} />
 
           {showClone && (
             <div className="vp-clone">
@@ -937,8 +1002,15 @@ export default function VoiceProfile() {
             </div>
           )}
 
+          </>
+          )}
+
           <div className="row">
-            <button className="btn btn-small" onClick={() => setStep("writing")}>
+            <button className="back-link" onClick={() => setStep("writing")}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+                   strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M19 12H5m6-6-6 6 6 6" />
+              </svg>
               Back to writing voice
             </button>
           </div>
@@ -957,25 +1029,18 @@ export default function VoiceProfile() {
         </Modal>
       )}
       {cloning && <CloneModal state={state} onClose={() => setCloning(false)} onDone={setCloneJob} />}
-      {generating && (
-        <GenerateVoiceModal
-          host={generating}
+      {managing && (
+        <ManageHostVoicesModal
+          host={managing}
           state={state}
-          onClose={() => setGenerating(null)}
+          onClose={() => setManaging(null)}
           onSaved={(s) => {
             setState(s);
             loadVoices();
           }}
-          onClone={() => setCloning(true)}
-        />
-      )}
-      {browsing && (
-        <LibraryModal
-          host={browsing}
-          onClose={() => setBrowsing(null)}
-          onAdded={(s) => {
-            setState(s);
-            loadVoices();
+          onClone={() => {
+            setCloning(true);
+            setManaging(null);
           }}
         />
       )}

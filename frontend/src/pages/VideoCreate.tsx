@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { videosApi, videoVoicesApi } from "../api/endpoints";
+import { videosApi, videoVoicesApi, voiceApi } from "../api/endpoints";
 import type {
   VideoCatalog,
   VideoConfig,
+  VideoCreateBody,
   VideoFocusSource,
   VideoFocusTopic,
   VideoOptions,
@@ -18,13 +19,8 @@ import { CheckIcon, SparkleIcon } from "../components/icons/Icons";
 import { errorMessage, Loading, PageHeader } from "../components/ui";
 import { SourcePicker, type VideoSource } from "../components/video/SourcePicker";
 import { loadArchiveId, sourceCache } from "../components/video/sourceCache";
-import { PhoneIcon, PlayButton, ScreenIcon, TemplateThumb, useAudio } from "../components/video/parts";
+import { PlayButton, TemplateThumb, useAudio } from "../components/video/parts";
 import { useUpgrade } from "../hooks/useUpgrade";
-
-const FORMATS = [
-  { id: "landscape", name: "Landscape", label: "Landscape (16:9), for YouTube", Icon: ScreenIcon },
-  { id: "portrait", name: "Portrait", label: "Portrait (9:16), for TikTok and Reels", Icon: PhoneIcon },
-] as const;
 
 const FALLBACK_COLORS = { accent_color: "#7c3aed", bg_color: "#ffffff", text_color: "#000000" };
 
@@ -80,15 +76,23 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
       : sourceCache.archiveId ? { kind: "notebook", id: sourceCache.archiveId } : null,
   );
   const [postIds, setPostIds] = useState<string[]>([]);
-  const [chatIds, setChatIds] = useState<string[]>([]);
-  // Step 2's "focus on": the AI's three suggestions for the step 1 choice (sourceKey), and the one picked (none =
+  // Step 1's "focus on": the AI's three suggestions for the source chosen (sourceKey), and the one picked (none =
   // the whole material).
   const [topics, setTopics] = useState<VideoFocusTopic[] | null>(null);
   const topicsFor = useRef(""); // the sourceKey of the suggestions shown or on their way
   const [focus, setFocus] = useState<VideoFocusTopic | null>(null);
+  // Or the user's own topic: one or the other (or neither, for a general video).
+  const [custom, setCustom] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { playing, play } = useAudio();
+  const { playing, play, stop } = useAudio();
+
+  /** Notestack voices have no stored sample: the Voice page speaks a line in them. */
+  function playVoice(v: VideoSavedVoice) {
+    if (v.source !== "notestack") return play(v.voice_id, v.preview_url);
+    if (playing === v.voice_id) return stop();
+    voiceApi.preview(v.voice_id).then((r) => play(v.voice_id, r.url)).catch((e) => setError(errorMessage(e)));
+  }
 
   const [form, setForm] = useState<VideoOptions>({
     stock_footage_enabled: true,
@@ -141,7 +145,7 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
     }).catch((e) => setLoadError(errorMessage(e)));
     loadVoices()
       .then((v) => v.saved[0] && pickVoice(v.saved[0]))
-      .catch(() => setVoices({ saved: [], library: [], custom: [] }));
+      .catch(() => setVoices({ saved: [], library: [], custom: [], notestack: [], max_saved: 5 }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config?.configured]);
 
@@ -181,19 +185,16 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
     }));
   }
 
-  const sourceReady = source?.kind === "post" || (source?.kind === "chats" && chatIds.length > 0)
-    || (source?.kind === "notebook" && postIds.length > 0);
+  const sourceReady = source?.kind === "post" || (source?.kind === "notebook" && postIds.length > 0);
 
   /** Step 1's choice as API fields: the same for the focus suggestions and the create. */
   const sourceFields = (): VideoFocusSource | null => !source ? null
     : source.kind === "post" ? { document_id: source.id }
-    : source.kind === "chats" ? { chat_ids: chatIds }
     : { document_ids: postIds, notebook_id: source.id };
-  // The focus suggestions belong to one step 1 choice. They are asked for while still on step 1, as soon as the choice
-  // is complete, so they are usually there by step 2; a new source or other ticks asks again. The short wait lets a
-  // run of ticks settle into one request.
+  // The focus suggestions belong to one source choice. They are asked for as soon as the choice is complete and show
+  // below it on step 1; a new source or other ticks asks again. The short wait lets a run of ticks settle into one
+  // request.
   const sourceKey = !source ? ""
-    : source.kind === "chats" ? `chats:${[...chatIds].sort().join(",")}`
     : `${source.kind}:${source.id}:${source.kind === "notebook" ? [...postIds].sort().join(",") : ""}`;
 
   useEffect(() => {
@@ -217,6 +218,12 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
   // does Go to step 2). null = still loading; [] = none to show.
   const shownTopics = topicsFor.current === sourceKey ? topics : null;
 
+  /** The focus for the create: a suggested topic, the user's own, or none (a general video). */
+  function focusFields(): Pick<VideoCreateBody, "focus" | "focus_detail" | "focus_prompt"> {
+    if (focus) return { focus: focus.title, focus_detail: focus.description };
+    return custom.trim() ? { focus_prompt: custom.trim() } : {};
+  }
+
   function options(): VideoOptions {
     const o: VideoOptions = { ...form };
     if (o.voice_gender === "none") delete o.custom_voice_id;
@@ -229,7 +236,7 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
     try {
       const from = sourceFields();
       if (!from) return;
-      const a = await videosApi.create({ ...options(), ...from, ...(focus ? { focus: focus.title, focus_detail: focus.description } : {}) });
+      const a = await videosApi.create({ ...options(), ...from, ...focusFields() });
       navigate(`/app/videos/${a.id}`);
     } catch (e) {
       setError(errorMessage(e)); // 402 also opens the upgrade popup (api/client.ts)
@@ -281,39 +288,100 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
 
         {/* Stays mounted on steps 2 and 3, so going Back keeps the loaded posts and the ticks */}
         <div style={{ display: step === 1 ? "contents" : "none" }}>
-          <SourcePicker source={source} onSource={setSource} postIds={postIds} onPostIds={setPostIds}
-                        chatIds={chatIds} onChatIds={setChatIds} />
+          <SourcePicker source={source} onSource={setSource} postIds={postIds} onPostIds={setPostIds} />
         </div>
 
         {step === 1 && (
           <>
 
-            <div className="vw-row2">
+            {/* Landscape with stock footage, always: the form's defaults, no picker */}
+            <div className="vw-style-row">
               <div className="field">
-                <span className="vw-label">Format</span>
-                <div className="vw-formats" role="radiogroup" aria-label="Video format">
-                  {FORMATS.map(({ id, name, label, Icon }) => (
-                    <button key={id} type="button" role="radio" aria-checked={form.aspect_ratio === id} title={label}
-                            className={form.aspect_ratio === id ? "on" : ""} onClick={() => set({ aspect_ratio: id })}>
-                      <Icon />
-                      {name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="field">
-                <span className="vw-label">Stock footage</span>
-                <label className="vw-option">
-                  <input type="checkbox" checked={form.stock_footage_enabled}
-                         onChange={(e) => set({ stock_footage_enabled: e.target.checked })} />
-                  Insert stock footage automatically
-                </label>
+                <span className="vw-label">Video style</span>
+                {catalog === null ? <Loading label="Loading styles" /> : (
+                  <div className="vw-chips vw-style-chips">
+                    {styles.map((s) => (
+                      <button key={s.id} type="button" className={`vw-chip${form.video_style === s.id ? " on" : ""}`}
+                              aria-pressed={form.video_style === s.id} title={s.description ?? undefined}
+                              onClick={() => set({ video_style: s.id })}>
+                        {s.name}{s.kind === "custom" ? " (yours)" : ""}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {houseStyles && picked?.description && (
+                  <small className="muted vw-style-note">{picked.description}</small>
+                )}
               </div>
             </div>
 
+            {/* The suggestions are asked for as soon as the source is ready (hidden if there are none); the custom
+                topic is always there */}
+            {sourceReady && (
+              <div className="field vw-focus">
+                <span className="vw-label">What should the video focus on?</span>
+                {shownTopics?.length !== 0 && (
+                  <div className="vw-focus-grid" aria-busy={shownTopics === null}>
+                    {shownTopics === null
+                      ? [0, 1, 2].map((i) => (
+                        <div key={i} className="vw-focus-card wait" aria-hidden="true">
+                          <SparkleIcon size={16} />
+                          <span className="vw-focus-text">
+                            <span className="vw-focus-bar" />
+                            <span className="vw-focus-bar short" />
+                          </span>
+                        </div>
+                      ))
+                      : shownTopics.map((t) => {
+                        const on = focus?.title === t.title;
+                        return (
+                          <button key={t.title} type="button" className={`vw-focus-card${on ? " on" : ""}`}
+                                  aria-pressed={on} onClick={() => {
+                                    setFocus(on ? null : t);
+                                    setCustom("");
+                                  }}>
+                            <SparkleIcon size={16} />
+                            <span className="vw-focus-text">
+                              <strong>{t.title}</strong>
+                              {t.description && <small className="vw-focus-desc">{t.description}</small>}
+                            </span>
+                            {on && <CheckIcon size={16} />}
+                          </button>
+                        );
+                      })}
+                  </div>
+                )}
+                <label className={`vw-focus-custom${custom.trim() ? " on" : ""}`}>
+                  <span className="vw-focus-custom-head">Custom topic</span>
+                  <textarea rows={2} maxLength={500} value={custom}
+                            placeholder="Describe your own, e.g. how rebalancing protects a long-term portfolio"
+                            onFocus={() => setFocus(null)} // choosing the custom topic unpicks a suggested one
+                            onChange={(e) => {
+                              setCustom(e.target.value);
+                              setFocus(null);
+                            }} />
+                  <span className="vw-focus-custom-foot">
+                    <small className="muted">
+                      Keep it to what the selected posts cover; anything they don't cover is left out of the video.
+                    </small>
+                    <small className="muted mono">{custom.length}/500</small>
+                  </span>
+                </label>
+                {shownTopics && (
+                  <small className="muted vw-hint">
+                    {focus ? "The video is mainly about this topic."
+                      : custom.trim() ? "The video follows your topic, as far as the posts cover it."
+                      : "None picked: the video covers the material as a whole."}
+                  </small>
+                )}
+              </div>
+            )}
+
             {error && <p className="error-text">{error}</p>}
             <div className="vw-nav">
-              <button className="btn btn-primary vw-next" disabled={!sourceReady} onClick={() => setStep(2)}>
+              {/* Waits for the focus suggestions (shown, or none to show), so they are never skipped past */}
+              <button className="btn btn-primary vw-next" disabled={!sourceReady || shownTopics === null}
+                      onClick={() => setStep(2)}>
                 Go to step 2
               </button>
             </div>
@@ -348,24 +416,6 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
 
             <div className="vw-style-row">
               <div className="field">
-                <span className="vw-label">Video style</span>
-                {catalog === null ? <Loading label="Loading styles" /> : (
-                  <div className="vw-chips vw-style-chips">
-                    {styles.map((s) => (
-                      <button key={s.id} type="button" className={`vw-chip${form.video_style === s.id ? " on" : ""}`}
-                              aria-pressed={form.video_style === s.id} title={s.description ?? undefined}
-                              onClick={() => set({ video_style: s.id })}>
-                        {s.name}{s.kind === "custom" ? " (yours)" : ""}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {houseStyles && picked?.description && (
-                  <small className="muted vw-style-note">{picked.description}</small>
-                )}
-              </div>
-
-              <div className="field">
                 <span className="vw-label">Video colors</span>
                 <div className="vw-colors">
                   {([["accent_color", "Accent"], ["bg_color", "Background"], ["text_color", "Text"]] as const).map(([k, label]) => (
@@ -378,48 +428,9 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
               </div>
             </div>
 
-            {/* Asked for on step 1, so usually here already. Hidden only when the request failed */}
-            {sourceReady && shownTopics?.length !== 0 && (
-              <div className="field vw-focus">
-                <span className="vw-label">What should the video focus on?</span>
-                <div className="vw-focus-grid" aria-busy={shownTopics === null}>
-                  {shownTopics === null
-                    ? [0, 1, 2].map((i) => (
-                      <div key={i} className="vw-focus-card wait" aria-hidden="true">
-                        <SparkleIcon size={18} />
-                        <span className="vw-focus-text">
-                          <span className="vw-focus-bar" />
-                          <span className="vw-focus-bar short" />
-                        </span>
-                      </div>
-                    ))
-                    : shownTopics.map((t) => {
-                      const on = focus?.title === t.title;
-                      return (
-                        <button key={t.title} type="button" className={`vw-focus-card${on ? " on" : ""}`}
-                                aria-pressed={on} onClick={() => setFocus(on ? null : t)}>
-                          <SparkleIcon size={18} />
-                          <span className="vw-focus-text">
-                            <strong>{t.title}</strong>
-                            {t.description && <small className="vw-focus-desc">{t.description}</small>}
-                          </span>
-                          {on && <CheckIcon size={18} />}
-                        </button>
-                      );
-                    })}
-                </div>
-                {shownTopics && (
-                  <small className="muted vw-hint">
-                    {focus ? "The video is mainly about this topic." : "None picked: the video covers the material as a whole."}
-                  </small>
-                )}
-              </div>
-            )}
-
             <div className="vw-nav">
               <button className="btn" onClick={() => setStep(1)}>Back</button>
-              {/* Waits for the focus suggestions (shown, or none to show), so they are never skipped past */}
-              <button className="btn btn-primary vw-next" disabled={shownTopics === null} onClick={() => setStep(3)}>
+              <button className="btn btn-primary vw-next" onClick={() => setStep(3)}>
                 Go to step 3
               </button>
             </div>
@@ -460,19 +471,19 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
               {voices === null ? (
                 <Loading label="Loading voices" />
               ) : saved.length === 0 ? (
-                <p className="muted">No voices saved yet. Add some on the <Link to="/app/videos/voices">Voices</Link> page.</p>
+                <p className="muted">No voices saved yet. Add some on the <Link to="/app/voice?step=hosts#video-voices">Voice</Link> page.</p>
               ) : (
                 <div className="vw-voice-list vw-voice-list-compact" role="radiogroup" aria-label="Narration voice">
                   {saved.map((v) => {
                     const on = form.custom_voice_id === v.voice_id && form.voice_gender !== "none";
                     return (
                       <div key={v.voice_id} className={`vw-vrow${on ? " on" : ""}`}>
-                        <PlayButton on={playing === v.voice_id} disabled={!v.preview_url} label={v.name}
-                                    onClick={() => play(v.voice_id, v.preview_url)} />
+                        <PlayButton on={playing === v.voice_id} disabled={v.source !== "notestack" && !v.preview_url}
+                                    label={v.name} onClick={() => playVoice(v)} />
                         <button type="button" role="radio" aria-checked={on} className="vw-vpick"
                                 disabled={form.voice_gender === "none"} onClick={() => pickVoice(v)}>
                           <strong>{v.name}</strong>
-                          <span className="muted">{v.is_custom ? "Your voice" : [cap(v.gender), cap(v.accent)].filter(Boolean).join(" • ")}</span>
+                          <span className="muted">{v.source === "notestack" ? "Notestack voice" : v.is_custom ? "Your voice" : [cap(v.gender), cap(v.accent)].filter(Boolean).join(" • ")}</span>
                         </button>
                         {on && <span className="vw-hero-check"><CheckIcon size={14} /></span>}
                       </div>

@@ -458,6 +458,11 @@ select.input option {
   min-height: 80vh;
 }
 
+/* Inside a card (a tab still loading): centred, without claiming most of the window */
+.loading-center.inline {
+  min-height: 200px;
+}
+
 /* The label sits under the spinner, both centred */
 .loading-center .loading {
   flex-direction: column;
@@ -2175,7 +2180,8 @@ select.input option {
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  /* The voices and the Add a voice tile share one row, wrapping only when they no longer fit */
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 12px;
 }
 
@@ -3600,4 +3606,155 @@ details.map-legend[open] summary {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+
+.voice-new .voice-pick:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* The host a voice row belongs to (Audio hosts list) */
+.voice-badge-inline {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--blue);
+  color: var(--white);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+}
+
+.voice-badge-inline.dim {
+  background: var(--surface-2, rgba(255, 255, 255, 0.08));
+  color: var(--text-2);
+}
+
+/* Audio hosts / Video voiceovers: the explainer takes the room, the Manage button sits at the right end */
+.manage-top > p {
+  flex: 1;
+  min-width: 240px;
+  margin: 0;
+}
+
+.manage-top > .btn {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* A quiet way back: an arrow and text, no button outline */
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.back-link:hover {
+  color: var(--text);
+}
+
+.back-link:hover svg {
+  transform: translateX(-2px);
+}
+
+.back-link svg {
+  transition: transform 0.15s;
+}
+
+/* Delivery settings for a host: a text link with a chevron that opens a two-column grid of sliders */
+.delivery-card summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-2);
+  font-size: 0.9rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.delivery-card summary::-webkit-details-marker {
+  display: none;
+}
+
+.delivery-card summary:hover {
+  color: var(--text);
+}
+
+.delivery-chevron {
+  flex-shrink: 0;
+  transition: transform 0.2s;
+}
+
+.delivery-card[open] .delivery-chevron {
+  transform: rotate(180deg);
+}
+
+.delivery-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px 32px;
+  padding-top: 18px;
+}
+
+.delivery-slider {
+  display: grid;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
+.delivery-value {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(33, 124, 255, 0.14);
+  color: var(--blue);
+  font-size: 0.78rem;
+}
+
+/* A slim track, filled up to the thumb (--pct) */
+.delivery-slider input[type="range"] {
+  width: 100%;
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--blue) var(--pct, 50%), var(--line-strong) var(--pct, 50%));
+  appearance: none;
+  outline: none;
+  cursor: pointer;
+}
+
+.delivery-slider input[type="range"]::-webkit-slider-thumb {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--white);
+  border-radius: 50%;
+  background: var(--blue);
+  box-shadow: 0 0 0 4px rgba(33, 124, 255, 0.2);
+  appearance: none;
+}
+
+.delivery-slider input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--white);
+  border-radius: 50%;
+  background: var(--blue);
+}
+
+.delivery-slider input[type="range"]:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 6px rgba(33, 124, 255, 0.35);
+}
+
+.delivery-actions {
+  padding-top: 14px;
+}
+
+@media (max-width: 640px) {
+  .delivery-grid {
+    grid-template-columns: 1fr;
+  }
 }

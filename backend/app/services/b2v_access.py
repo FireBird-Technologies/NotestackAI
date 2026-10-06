@@ -14,6 +14,7 @@ from sqlalchemy import select
 from app.auth import Ctx
 from app.models import Artifact, B2VCustomVoice, B2VStyle, B2VTemplate, B2VVideo
 from app.services import blog2video as b2v
+from app.services.notestack_voices import is_notestack_voice
 from app.services.plans import Plan, effective_plan
 from app.services.video_limits import require_premium
 
@@ -157,7 +158,8 @@ def check_style(ctx: Ctx, style: str) -> None:
 
 
 def check_voice(ctx: Ctx, voice_id: str, plan: Plan) -> None:
-    """A built-in voice (premium if blog2video marks it paid) or one of this workspace's custom voices."""
+    """A built-in voice (premium if blog2video marks it paid), or one of this workspace's custom or Notestack
+    voices."""
     prebuilt = {v.get("voice_id"): v for v in b2v.prebuilt_voices()}
     if voice_id in prebuilt:
         if prebuilt[voice_id].get("plan") == "paid":
@@ -165,6 +167,10 @@ def check_voice(ctx: Ctx, voice_id: str, plan: Plan) -> None:
         return
     if ctx.db.scalar(select(B2VCustomVoice).where(B2VCustomVoice.voice_id == voice_id,
                                                   B2VCustomVoice.workspace_id == ctx.workspace.id)):
+        require_premium(ctx.db, ctx.workspace, "Custom voices", plan)
+        return
+    # One of this workspace's Notestack voices (clone, designed, added): same ElevenLabs account, premium like custom.
+    if is_notestack_voice(ctx.db, ctx.workspace.id, voice_id):
         require_premium(ctx.db, ctx.workspace, "Custom voices", plan)
         return
     raise not_found("Voice not found")

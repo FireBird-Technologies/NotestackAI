@@ -1,11 +1,10 @@
 import { notebooksApi } from "../../api/endpoints";
-import type { Doc, NotebookSummary, WorkspaceChat } from "../../api/types";
+import type { Doc, NotebookSummary } from "../../api/types";
 
 /** The video wizard's step 1 lists, kept for the browser session (until a full reload) so re-opening the wizard
  * shows them at once. Readers show what is cached, then refresh in the background through the loaders below. */
 export const sourceCache = {
   notebooks: null as NotebookSummary[] | null,
-  chats: null as WorkspaceChat[] | null,
   archiveId: null as string | null,
   docs: new Map<string, Doc[]>(),
 };
@@ -13,7 +12,6 @@ export const sourceCache = {
 /** Forget everything, so one account never sees another's posts (called on log in and log out). */
 export function clearSourceCache(): void {
   sourceCache.notebooks = null;
-  sourceCache.chats = null;
   sourceCache.archiveId = null;
   sourceCache.docs.clear();
   seededAt.clear();
@@ -23,12 +21,6 @@ export async function loadNotebooks(): Promise<NotebookSummary[]> {
   const n = await notebooksApi.list();
   sourceCache.notebooks = n;
   return n;
-}
-
-export async function loadChats(): Promise<WorkspaceChat[]> {
-  const c = await notebooksApi.allChats();
-  sourceCache.chats = c;
-  return c;
 }
 
 export async function loadArchiveId(): Promise<string> {

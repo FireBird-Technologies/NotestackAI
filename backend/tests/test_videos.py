@@ -20,15 +20,22 @@ from app.models import (
     B2VTemplate,
     B2VVideo,
     Chat,
+    Citation,
     Document,
+    DocumentTopic,
+    Job,
     Message,
     Notebook,
     Subscription,
+    Topic,
     UsageCounter,
+    User,
     UserSavedVoice,
+    VoiceConsent,
+    VoiceProfile,
     Workspace,
 )
-from app.services import blog2video, video_limits, video_quota
+from app.services import blog2video, video_focus, video_limits, video_quota
 from tests.conftest import last_code
 
 KEY = "b2v_live_test_key"
@@ -599,7 +606,7 @@ def test_focus_topics_for_posts_a_chat_and_one_post(client, owner, db_session, s
             {"title": "Why prices go up", "description": "Why raises happen. Once a year, with notice."},
             {"title": "Grandfathering early readers", "description": "Keep early prices."},
             {"title": "Annual raises", "description": "One raise a year."}]
-    assert [s["signature"] for s in suggest] == ["VideoFocusTopics"] * 3
+    assert [s["signature"] for s in suggest] == ["VideoFocusAngles"] * 3  # no topics to show: the AI writes them
     # Each item is a title and the start of its text: a little, never the whole post or transcript.
     posts, chat_item, one = (s["items"] for s in suggest)
     assert len(posts) == 2 and all(p.startswith("On Pricing\n") for p in posts)
@@ -660,6 +667,189 @@ def test_focus_topics_check_the_source(client, owner, other, db_session, suggest
     assert r.status_code == 400 and not suggest
 
 
+# Focus topics: the workspace's own, shown as they are
+
+
+@pytest.fixture()
+def angles(monkeypatch):
+    """The AI, canned: VideoFocusAngles (only when there are no topics to show) answers three fixed angles.
+    ExtractTopics (tagging on demand) answers per post from `tag_answers` (title -> tags; None = the call failed)."""
+    from app.llm import run
+    calls: dict = {"focus": [], "tagged": [], "tag_answers": {}}
+
+    def predict(signature, *, db, workspace_id, job=None, lm=None, **inputs):
+        calls["focus"].append(inputs)
+        return {"topics": [{"topic": f"AI angle {i}", "summary": "Written by the AI.", "tag": ""} for i in range(3)]}
+
+    def predict_many(signature, inputs_list, *, db, workspace_id, lm=None, workers=5):
+        calls["tagged"].append([i["title"] for i in inputs_list])
+        answers = [calls["tag_answers"].get(i["title"], []) for i in inputs_list]
+        return [None if a is None else {"topics": [{"name": n, "weight": 0.8} for n in a]} for a in answers]
+
+    monkeypatch.setattr(run, "predict", predict)
+    monkeypatch.setattr(run, "predict_many", predict_many)
+    monkeypatch.setattr(settings, "llm_api_key", "test-key")
+    return calls
+
+
+def tagged_doc(db, ws, slug: str, tags: list[str], title: str = "On Pricing",
+               weights: list[float] | None = None) -> Document:
+    doc = add_doc(db, ws, f"https://ada.example.com/p/{slug}", f"All about {slug}. " * 20)
+    weights = weights or [0.8] * len(tags)
+    doc.title = title
+    doc.metadata_json = {"topics": [{"name": t, "weight": w} for t, w in zip(tags, weights, strict=True)]}
+    db.commit()
+    return doc
+
+
+def merge(db, ws, name: str, summary: str, *links: tuple[Document, float]) -> Topic:
+    """A topic of the topic table (what rebuild_topics makes), linked to posts with a weight."""
+    topic = Topic(workspace_id=ws.id, name=name, slug=name.lower().replace(" ", "-"), summary=summary,
+                  post_count=len(links))
+    db.add(topic)
+    db.flush()
+    db.add_all([DocumentTopic(document_id=d.id, topic_id=topic.id, weight=w) for d, w in links])
+    db.commit()
+    return topic
+
+
+def focus(client, headers, **body) -> list[dict]:
+    r = client.post("/api/videos/focus-topics", json=body, headers=headers)
+    assert r.status_code == 200, r.text
+    return r.json()["topics"]
+
+
+def test_a_tag_shared_by_the_selection_outranks_one_posts_strongest(owner, db_session):
+    _, ws = owner
+    docs = [add_doc(db_session, ws, f"https://ada.example.com/p/{i}", "Text.") for i in range(3)]
+    merge(db_session, ws, "Pricing", "How to price.", *[(d, 0.5) for d in docs])
+    merge(db_session, ws, "Churn", "", (docs[0], 1.0))
+    pool = video_focus.build_pool(db_session, ws.id, {str(d.id): {d.id: 1.0} for d in docs}, docs)
+    assert [c.name for c in pool] == ["Pricing", "Churn"]
+    assert pool[0].summary == "How to price." and len(pool[0].sources) == 3 and pool[0].merged
+
+
+def test_a_posts_own_tags_join_the_merged_topics(owner, db_session):
+    """The merge folds a post's specific tags into a few broad topics; the specific ones still count."""
+    _, ws = owner
+    doc = tagged_doc(db_session, ws, "a", ["Content Repurposing", "Video Marketing", "Finance Writing"])
+    merge(db_session, ws, "Finance Substacks", "Growing a finance newsletter.", (doc, 0.9))
+    merge(db_session, ws, "Finance Writing", "", (doc, 0.4))
+    pool = video_focus.build_pool(db_session, ws.id, {str(doc.id): {doc.id: 1.0}}, [doc])
+    assert sorted((c.name, c.merged) for c in pool) == [
+        ("Content Repurposing", False), ("Finance Substacks", True), ("Finance Writing", True),  # once, merged
+        ("Video Marketing", False)]
+
+
+def test_existing_topics_are_shown_as_they_are_without_the_ai(client, owner, db_session, angles):
+    headers, ws = owner
+    doc = tagged_doc(db_session, ws, "a", ["Chinese LLMs", "Token Pricing", "Software Margins"],
+                     weights=[0.9, 0.7, 0.5])
+    merge(db_session, ws, "AI & China LLM Competition", "Why Chinese LLMs are cheaper.", (doc, 0.9))
+    cards = focus(client, headers, document_id=str(doc.id))
+    # Merged topics first (with their summary), then the post's own tags (a name only), best first.
+    assert cards == [{"title": "AI & China LLM Competition", "description": "Why Chinese LLMs are cheaper."},
+                     {"title": "Chinese LLMs", "description": ""},
+                     {"title": "Token Pricing", "description": ""}]
+    assert not angles["focus"] and not angles["tagged"]  # no AI at all
+
+
+def test_a_fresh_tag_that_names_a_merged_topic_is_shown_with_its_summary(client, owner, db_session, angles):
+    headers, ws = owner
+    merge(db_session, ws, "Annual Raises", "Once a year, with notice.")
+    doc = tagged_doc(db_session, ws, "a", ["annual raises"])
+    assert focus(client, headers, document_id=str(doc.id)) == [
+        {"title": "Annual Raises", "description": "Once a year, with notice."}]  # one topic: one card, no AI
+    assert not angles["focus"]
+
+
+def test_several_posts_show_their_shared_topics_first_spread_over_the_posts(client, owner, db_session, angles):
+    headers, ws = owner
+    a, b, c = (tagged_doc(db_session, ws, s, [f"{s} own"], title=f"Post {s}") for s in "abc")
+    merge(db_session, ws, "Pricing", "Shared by all.", (a, 0.5), (b, 0.5), (c, 0.5))
+    merge(db_session, ws, "A Big", "Post a's main topic.", (a, 1.0))
+    merge(db_session, ws, "A Small", "Post a again.", (a, 0.9))
+    merge(db_session, ws, "B Side", "Post b's.", (b, 0.8))
+    cards = focus(client, headers, document_ids=[str(d.id) for d in (a, b, c)])
+    # Pricing (in all three) first; then post a's topics are already covered, so b's comes before a's second one.
+    assert [x["title"] for x in cards] == ["Pricing", "A Big", "B Side"]
+    assert not angles["focus"]
+
+
+def test_untagged_posts_are_tagged_on_demand_then_shown(client, owner, db_session, angles):
+    headers, ws = owner
+    docs = [add_doc(db_session, ws, f"https://ada.example.com/p/{i}", "Some text. " * 20) for i in range(7)]
+    for i, d in enumerate(docs):
+        d.title, d.published_at = f"Post {i}", datetime(2026, 1, 1 + i, tzinfo=UTC)
+    db_session.commit()
+    angles["tag_answers"] = {f"Post {i}": [f"Theme {i}", "Pricing"] for i in range(7)}
+    angles["tag_answers"]["Post 6"] = None  # that call failed
+    body = {"document_ids": [str(d.id) for d in docs]}
+    cards = focus(client, headers, **body)
+    assert angles["tagged"] == [["Post 6", "Post 5", "Post 4", "Post 3", "Post 2"]]  # the newest five
+    assert cards[0] == {"title": "Pricing", "description": ""} and len(cards) == 3  # in 4 posts: first
+    assert not angles["focus"]
+    db_session.expire_all()
+    assert [d.metadata_json.get("topics", [{}])[0].get("name") for d in docs] == [
+        None, None, "Theme 2", "Theme 3", "Theme 4", "Theme 5", None]
+    jobs = db_session.scalars(select(Job).where(Job.workspace_id == ws.id, Job.kind == "topics")).all()
+    assert len(jobs) == 1 and jobs[0].params == {}
+    focus(client, headers, **body)  # the job is still queued: not again
+    assert len(db_session.scalars(select(Job).where(Job.workspace_id == ws.id, Job.kind == "topics")).all()) == 1
+
+
+def test_with_no_topics_to_show_the_ai_writes_them(client, owner, db_session, angles, monkeypatch):
+    headers, ws = owner
+    monkeypatch.setattr(settings, "llm_api_key", "")  # nothing is tagged
+    doc = add_doc(db_session, ws, "https://ada.example.com/p/a", "Raise prices once a year. " * 5)
+    cards = focus(client, headers, document_id=str(doc.id))
+    assert [c["title"] for c in cards] == ["AI angle 0", "AI angle 1", "AI angle 2"] and not angles["tagged"]
+    assert angles["focus"][0]["candidate_tags"] == [] and angles["focus"][0]["avoid_titles"] == []
+
+
+def cite(db, chat: Chat, *docs: Document) -> None:
+    answer = db.scalars(select(Message).where(Message.chat_id == chat.id, Message.role == "assistant")).first()
+    db.add_all([Citation(message_id=answer.id, document_id=d.id, marker=i + 1, path="sources/x/p.md", line_start=1,
+                         line_end=2) for i, d in enumerate(docs)])
+    db.commit()
+
+
+def test_a_chat_shows_the_topics_of_the_posts_it_cites(client, owner, db_session, angles):
+    headers, ws = owner
+    a = tagged_doc(db_session, ws, "a", ["Annual Raises"])
+    b = tagged_doc(db_session, ws, "b", ["Grandfathering"])
+    tagged_doc(db_session, ws, "c", ["Never Cited"])
+    merge(db_session, ws, "Pricing", "How to price.", (a, 0.9), (b, 0.9))
+    chat = add_chat(db_session, ws, [("user", "How should I price?"),
+                                     ("assistant", "Once a year [1], keep early [2].")])
+    cite(db_session, chat, a, b)
+    cards = focus(client, headers, chat_ids=[str(chat.id)])
+    assert cards[0] == {"title": "Pricing", "description": "How to price."}
+    assert {c["title"] for c in cards[1:]} == {"Annual Raises", "Grandfathering"} and not angles["focus"]
+
+
+def test_a_chats_cited_posts_get_tagged_and_locked_ones_are_skipped(client, owner, db_session, angles):
+    headers, ws = owner
+    fresh = add_doc(db_session, ws, "https://ada.example.com/p/fresh", "New post. " * 20)
+    fresh.title = "Fresh"
+    locked = add_doc(db_session, ws, "https://ada.example.com/p/locked")
+    locked.title, locked.path, locked.metadata_json = "Locked", None, {"locked": True}
+    db_session.commit()
+    angles["tag_answers"] = {"Fresh": ["Pricing", "Churn"]}
+    chat = add_chat(db_session, ws, [("user", "Q?"), ("assistant", "An answer [1] [2].")])
+    cite(db_session, chat, fresh, locked)
+    cards = focus(client, headers, chat_ids=[str(chat.id)])
+    assert angles["tagged"] == [["Fresh"]] and {c["title"] for c in cards} == {"Pricing", "Churn"}
+
+
+def test_a_chat_without_citations_gets_ai_topics(client, owner, db_session, angles):
+    headers, ws = owner
+    chat = add_chat(db_session, ws, [("user", "Hi there"), ("assistant", "Hello! Ask me about your posts.")])
+    cards = focus(client, headers, chat_ids=[str(chat.id)])
+    assert len(cards) == 3 and angles["focus"] and not angles["tagged"]
+    assert angles["focus"][0]["items"] == ["Pricing chat\nHi there\nHello! Ask me about your posts."]
+
+
 @pytest.mark.parametrize("style,length,words", [("custom:20", "short", "overview of that topic"),
                                                 ("custom:21", "medium", "deep dive into that topic")])
 def test_focus_goes_ahead_of_the_material_worded_for_the_style(client, b2v, owner, house, db_session,
@@ -678,6 +868,36 @@ def test_focus_goes_ahead_of_the_material_worded_for_the_style(client, b2v, owne
     make_video(client, headers, url=None, document_id=str(doc.id), video_style=style, focus="Annual raises")
     head = creates(b2v)[-1]["json"]["content"].split("\n\n---\n\n", 1)[0]
     assert '"Annual raises"' in head and "What to cover" not in head
+
+
+@pytest.mark.parametrize("style,depth", [("custom:20", "Make it a brief overview."),
+                                         ("custom:21", "Make it a deep dive.")])
+def test_a_custom_topic_goes_ahead_of_the_material(client, b2v, owner, house, db_session, style, depth):
+    headers, ws = owner
+    doc = add_doc(db_session, ws, "https://ada.example.com/p/a", "Raise prices once a year, and say why. " * 3)
+    make_video(client, headers, url=None, document_id=str(doc.id), video_style=style,
+               focus_prompt='  Why the  "yearly" raise\nbeats small ones ')
+    sent = creates(b2v)[-1]["json"]
+    assert "url" not in sent  # the instruction needs the text, not the link
+    head, material = sent["content"].split("\n\n---\n\n", 1)
+    assert head.startswith("The user wants this video to focus on: \"Why the 'yearly' raise beats small ones\".")
+    assert "only as far as the material below supports it" in head and "make a general video" in head
+    assert head.endswith(depth) and material.startswith("Raise prices")
+
+
+def test_a_blank_custom_topic_is_no_focus(client, b2v, owner, db_session):
+    headers, ws = owner
+    doc = add_doc(db_session, ws, "https://ada.example.com/p/a", "Raise prices once a year, and say why. " * 3)
+    make_video(client, headers, url=None, document_id=str(doc.id), focus_prompt="   ")
+    assert creates(b2v)[-1]["json"]["url"] == "https://ada.example.com/p/a"  # the link, as with no focus
+
+
+def test_a_suggested_and_a_custom_topic_together_are_refused(client, b2v, owner, db_session):
+    headers, ws = owner
+    doc = add_doc(db_session, ws, "https://ada.example.com/p/a", "Raise prices once a year, and say why. " * 3)
+    r = client.post("/api/videos", json={"document_id": str(doc.id), "focus": "Annual raises",
+                                         "focus_prompt": "My own angle"}, headers=headers)
+    assert r.status_code == 422 and "not both" in r.text and not creates(b2v)
 
 
 def test_chat_with_a_focus_keeps_the_chat_context_first(client, b2v, owner, house, db_session):
@@ -929,6 +1149,59 @@ def test_saved_voices_never_touch_blog2video_saved_list(client, b2v, owner, db_s
     client.post("/api/video-voices/saved", json={"voice_id": BELLA}, headers=headers)
     client.delete(f"/api/video-voices/saved/{BELLA}", headers=headers)
     assert not [p for p in b2v.paths() if "/voices/saved" in p]
+
+
+def notestack_voice(db, ws, voice_id="nv_narrator", name="Narrator") -> None:
+    """A voice the workspace designed on the Voice page (same ElevenLabs account as blog2video)."""
+    db.add(VoiceProfile(workspace_id=ws.id, host_voices={"custom": [{"voice_id": voice_id, "name": name}]}))
+    db.commit()
+
+
+def test_my_voices_are_capped_at_five(client, b2v, owner, db_session):
+    headers, ws = owner
+    client.get("/api/video-voices", headers=headers)  # the starter voice
+    for i in range(4):
+        db_session.add(UserSavedVoice(workspace_id=ws.id, voice_id=f"v{i}", name=f"V{i}"))
+    db_session.commit()
+    r = client.post("/api/video-voices/saved", json={"voice_id": BELLA}, headers=headers)
+    assert r.status_code == 409 and "5 voices" in r.json()["detail"]
+    assert client.get("/api/video-voices", headers=headers).json()["max_saved"] == 5
+
+
+def test_notestack_voices_can_be_saved_and_used_in_a_video(client, b2v, owner, other, db_session):
+    headers, ws = owner
+    notestack_voice(db_session, ws)
+    got = client.get("/api/video-voices", headers=headers).json()
+    assert got["notestack"] == [{"voice_id": "nv_narrator", "name": "Narrator", "kind": "designed", "saved": False}]
+    r = client.post("/api/video-voices/saved", json={"voice_id": "nv_narrator"}, headers=headers)
+    assert r.status_code == 201 and r.json()["source"] == "notestack" and r.json()["premium"]
+    saved = client.get("/api/video-voices", headers=headers).json()["saved"]
+    assert [v["source"] for v in saved if v["voice_id"] == "nv_narrator"] == ["notestack"]
+    make_video(client, headers, custom_voice_id="nv_narrator")
+    assert creates(b2v)[-1]["json"]["custom_voice_id"] == "nv_narrator"
+    # Another workspace cannot use it.
+    r = client.post("/api/videos", json={"url": "https://a.test/x", "custom_voice_id": "nv_narrator"},
+                    headers=other[0])
+    assert r.status_code == 404
+
+
+def test_notestack_voices_need_premium_in_videos(client, b2v, owner, db_session, free_plan):
+    headers, ws = owner
+    notestack_voice(db_session, ws)
+    assert client.post("/api/video-voices/saved", json={"voice_id": "nv_narrator"},
+                       headers=headers).status_code == 402
+
+
+def test_revoking_the_clone_drops_it_from_video_voices(client, b2v, owner, db_session, monkeypatch):
+    headers, ws = owner
+    monkeypatch.setattr(settings, "elevenlabs_api_key", "")  # no call out to delete the voice
+    user_id = db_session.scalar(select(User.id))
+    db_session.add(VoiceConsent(workspace_id=ws.id, user_id=user_id, sample_key="ws/x/sample.mp3",
+                                consent_text="ok", elevenlabs_voice_id="nv_clone"))
+    db_session.commit()
+    assert client.post("/api/video-voices/saved", json={"voice_id": "nv_clone"}, headers=headers).status_code == 201
+    client.delete("/api/voice/consent", headers=headers)
+    assert "nv_clone" not in [v["voice_id"] for v in client.get("/api/video-voices", headers=headers).json()["saved"]]
 
 
 def test_design_keep_and_delete_a_custom_voice(client, b2v, owner, other, db_session):

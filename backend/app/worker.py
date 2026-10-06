@@ -29,6 +29,7 @@ from app.config import settings
 from app.db import SessionLocal, engine
 from app.models import (
     Artifact,
+    Document,
     Job,
     Source,
     Subscription,
@@ -47,7 +48,15 @@ from app.pipeline.ingest import FeedNotFound, entry_from_upload, extract_article
 from app.services import launchpad, tts, video_quota
 from app.services.email import email_service
 from app.services.email_verification import purge_old_codes
-from app.services.jobs import claim_next, create_job, record_usage, retry_or_fail, stale_jobs, update_job
+from app.services.jobs import (
+    claim_next,
+    create_job,
+    pending_job,
+    record_usage,
+    retry_or_fail,
+    stale_jobs,
+    update_job,
+)
 from app.services.plans import effective_plan
 from app.services.renderer import PermanentJobError, request_render
 from app.services.storage import keys, storage
@@ -67,21 +76,16 @@ HANDED_OFF = object()  # the job continues elsewhere (renderer) and reports back
 # Handlers: (db, job) -> Done | HANDED_OFF. Raise to trigger a retry.
 
 
-def _pending(db: Session, workspace_id: uuid.UUID, kind: str) -> bool:
-    return db.scalar(select(Job.id).where(Job.workspace_id == workspace_id, Job.kind == kind,
-                                          Job.status.in_(("queued", "running"))).limit(1)) is not None
-
-
 def _after_import(db: Session, job: Job, workspace_id: uuid.UUID, changed: list[str]) -> None:
     """New or changed posts are mapped into the topic constellation and scored for resurfacing, and the
     first import builds the writing voice, so none of these need a button press."""
     if not changed or not settings.llm_api_key:
         return
     create_job(db, workspace_id, "topics", {"document_ids": changed}, max_attempts=2)
-    if not _pending(db, workspace_id, "resurface_scan"):
+    if not pending_job(db, workspace_id, "resurface_scan"):
         create_job(db, workspace_id, "resurface_scan", {}, max_attempts=2)
     vp = db.scalar(select(VoiceProfile).where(VoiceProfile.workspace_id == workspace_id))
-    if not (vp and vp.profile_json) and not _pending(db, workspace_id, "voice_profile"):
+    if not (vp and vp.profile_json) and not pending_job(db, workspace_id, "voice_profile"):
         create_job(db, workspace_id, "voice_profile", {"document_ids": []}, max_attempts=2)
 
 
@@ -307,6 +311,19 @@ def single_flight(name: str):
                 conn.commit()
 
 
+def topics_backfill(session_factory: Callable[[], Session] = SessionLocal) -> None:
+    """Every indexed post gets topics: one whose tagging failed (the model timed out, rate limited, answered nothing)
+    or that came before posts were tagged on import is asked for again here, one topics job per workspace that has
+    some, unless one is already queued. A post that keeps failing stops being asked (generate.MAX_TAG_FAILURES)."""
+    if not settings.llm_api_key:
+        return
+    with session_factory() as db:
+        rows = db.execute(select(Document.workspace_id, Document.metadata_json).where(Document.path.is_not(None)))
+        for workspace_id in {ws for ws, meta in rows if generate.needs_topics(meta)}:
+            if not pending_job(db, workspace_id, "topics"):
+                create_job(db, workspace_id, "topics", {}, max_attempts=2)
+
+
 def update_email_batch(session_factory: Callable[[], Session] = SessionLocal) -> None:
     """Sends one daily batch per scheduled campaign at its send hour (UTC)."""
     now = datetime.now(UTC)
@@ -363,6 +380,7 @@ PERIODIC = [
     Periodic("publish_due", 30, launchpad.publish_due),
     Periodic("sync_engagement", 3600, launchpad.sync_engagement),
     Periodic("update_email_batch", 300, update_email_batch),
+    Periodic("topics_backfill", 900, topics_backfill),
     Periodic("daily_cleanup", 24 * 3600, daily_cleanup),
     Periodic("video_period_reset", 3600, video_quota.reset_due_video_periods),
     Periodic("video_refund_sweep", 600, video_quota.sweep_failed_videos),
