@@ -2,24 +2,49 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { artifactsApi, notebooksApi, type GenerateBody } from "../api/endpoints";
 import { streamSSE } from "../api/stream";
-import type { Artifact, ChatSummary, Citation, Notebook } from "../api/types";
+import type { AnswerFeedback as Feedback, Artifact, ChatSummary, Citation, MemoryChange, Notebook } from "../api/types";
+import { AnswerFeedback } from "../components/AnswerFeedback";
 import { ArtifactCard, CitationList } from "../components/ArtifactCard";
 import { Markdown } from "../components/Markdown";
 import { DocPicker } from "../components/DocPicker";
 import { Dropdown } from "../components/Dropdown";
 import { ChevronIcon, TelescopeIcon } from "../components/icons/Icons";
+import { MindMapDialog, MindMapExplorer, MindMapRow } from "../components/MindMap";
 import { Reader } from "../components/Reader";
 import { seedDocs } from "../components/video/sourceCache";
 import { ConfirmButton, errorMessage, formatDate, Loading, Modal } from "../components/ui";
 import { VideoCreateForm } from "./VideoCreate";
 
-type Turn = { role: "user" | "assistant"; text: string; citations?: Citation[]; status?: string; steps?: string[] };
+type Turn = {
+  id?: string; // the saved message, once there is one: what a thumbs up or down is attached to
+  feedback?: Feedback | null;
+  role: "user" | "assistant";
+  text: string;
+  citations?: Citation[];
+  status?: string;
+  steps?: string[];
+  saved?: MemoryChange[];
+};
 
 
 const STARTERS = ["What are the strongest ideas across these posts?", "Where do I contradict myself?", "Which post is most worth updating, and why?"];
+const CHAT_RAIL_KEY = "ns_notebook_chat_rail";
+
+function readChatRailOpen(): boolean {
+  try {
+    return localStorage.getItem(CHAT_RAIL_KEY) !== "closed";
+  } catch {
+    return true;
+  }
+}
 
 /** Create: one click per format with sensible defaults, options folded away; then what was made from this notebook. */
-function StudioPanel({ notebookId, disabled, onCreateVideo }: { notebookId: string; disabled: boolean; onCreateVideo: () => void }) {
+function StudioPanel({ notebookId, docs, disabled, onCreateVideo }: {
+  notebookId: string;
+  docs: { id: string; title: string }[];
+  disabled: boolean;
+  onCreateVideo: () => void;
+}) {
   const [artifacts, setArtifacts] = useState<Artifact[] | null>(null);
   const [format, setFormat] = useState<"deep_dive" | "brief" | "debate">("deep_dive");
   const [minutes, setMinutes] = useState(6);
@@ -27,6 +52,11 @@ function StudioPanel({ notebookId, disabled, onCreateVideo }: { notebookId: stri
   const [busy, setBusy] = useState(false);
   const [reading, setReading] = useState<{ id: string; start: number; end: number } | null>(null);
   const [audioOpen, setAudioOpen] = useState(false); // the Audio overview tile is opened to its options
+  const [mapDialog, setMapDialog] = useState(false);
+  const [mapBusy, setMapBusy] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
+  const [waitingMap, setWaitingMap] = useState<string | null>(null); // a map the user just asked for: open it when ready
+  const [exploring, setExploring] = useState<Artifact | null>(null);
 
   const load = useCallback(() => notebooksApi.artifacts(notebookId).then(setArtifacts), [notebookId]);
   useEffect(() => {
@@ -45,6 +75,29 @@ function StudioPanel({ notebookId, disabled, onCreateVideo }: { notebookId: stri
       setBusy(false);
     }
   };
+
+  const makeMap = async (documentIds: string[], focus: string) => {
+    setMapBusy(true);
+    setMapError(null);
+    try {
+      const a = await artifactsApi.generate({
+        type: "mind_map",
+        notebook_id: notebookId,
+        document_ids: documentIds.length === docs.length ? undefined : documentIds,
+        focus: focus || undefined,
+      });
+      setArtifacts((list) => [a, ...(list ?? [])]);
+      setWaitingMap(a.id);
+      setMapDialog(false);
+    } catch (e) {
+      setMapError(errorMessage(e));
+    } finally {
+      setMapBusy(false);
+    }
+  };
+
+  const maps = artifacts?.filter((a) => a.type === "mind_map") ?? [];
+  const others = artifacts?.filter((a) => a.type !== "mind_map");
 
   const cite = (c: Citation) => c.document_id && setReading({ id: c.document_id, start: c.line_start, end: c.line_end });
   const off = disabled || busy;
@@ -97,13 +150,36 @@ function StudioPanel({ notebookId, disabled, onCreateVideo }: { notebookId: stri
         <button disabled={off} onClick={() => make({ type: "quote_card" })}>
           Make Quote Card
         </button>
+        <button className="nbv-make-map" disabled={off} onClick={() => setMapDialog(true)}>
+          <strong>Mind Constellation</strong>
+          <span className="muted small">A galaxy of your ideas. Zoom in on any orbit.</span>
+        </button>
       </div>
       {disabled && <p className="muted small">Add posts to this notebook to start creating.</p>}
       {error && <p className="error-text">{error}</p>}
-      {(!artifacts || artifacts.length > 0) && <span className="vw-label nbv-made-label">Made from this notebook</span>}
-      {(!artifacts || artifacts.length > 0) && <div className="studio-list nbv-made">
+      {maps.length > 0 && (
+        <section className="mm-list" aria-label="Mind Constellations">
+          <p className="nbv-chat-list-label">
+            Mind Constellations <span>{maps.length}</span>
+          </p>
+          {maps.map((a) => (
+            <MindMapRow
+              key={a.id}
+              artifact={a}
+              autoOpen={waitingMap === a.id}
+              onOpen={(m) => {
+                setWaitingMap(null);
+                setExploring(m);
+              }}
+              onRemoved={(id) => setArtifacts((list) => (list ?? []).filter((x) => x.id !== id))}
+            />
+          ))}
+        </section>
+      )}
+      {(!others || others.length > 0) && <span className="vw-label nbv-made-label">Made from this notebook</span>}
+      {(!others || others.length > 0) && <div className="studio-list nbv-made">
         {!artifacts && <Loading />}
-        {artifacts?.map((a) => (
+        {others?.map((a) => (
           <ArtifactCard
             key={a.id}
             artifact={a}
@@ -120,6 +196,8 @@ function StudioPanel({ notebookId, disabled, onCreateVideo }: { notebookId: stri
         ))}
       </div>}
       {reading && <Reader documentId={reading.id} highlight={{ start: reading.start, end: reading.end }} onClose={() => setReading(null)} />}
+      {mapDialog && <MindMapDialog docs={docs} busy={mapBusy} error={mapError} onClose={() => setMapDialog(false)} onCreate={makeMap} />}
+      {exploring && <MindMapExplorer artifact={exploring} onClose={() => setExploring(null)} />}
     </div>
   );
 }
@@ -130,19 +208,37 @@ export default function NotebookView() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [q, setQ] = useState("");
-  const [chatId, setChatId] = useState<string | null>(null);
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [busy, setBusy] = useState(false);
+  const [loadingChatId, setLoadingChatId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [makingVideo, setMakingVideo] = useState(false); // the video wizard is open in a modal
   const [toAdd, setToAdd] = useState<string[]>([]);
   const [addError, setAddError] = useState<string | null>(null);
   const [reading, setReading] = useState<{ id: string; start?: number; end?: number } | null>(null);
+  const [quoted, setQuoted] = useState<Citation | null>(null); // a chat citation: the earlier words, shown in a popup
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState("");
+  const [historyOpen, setHistoryOpen] = useState(readChatRailOpen);
   const [params, setParams] = useSearchParams();
+  // The open chat lives in the URL (?chat=<id>), not only in React state: a state reset, a reload or a hot reload can no
+  // longer turn the next message into a new chat. `shown` is the chat whose messages are on screen right now.
+  const chatId = params.get("chat");
+  const shown = useRef<string | null>(null);
+  const chatLoad = useRef(0);
   const asked = useRef(false);
   const bottom = useRef<HTMLDivElement>(null);
+
+  // Auto-save the title shortly after the user stops typing.
+  useEffect(() => {
+    if (!editingTitle || !nb) return;
+    const next = title.trim();
+    if (!next || next === nb.title) return;
+    const t = setTimeout(() => {
+      notebooksApi.update(nb.id, { title: next }).then(() => setNb((cur) => (cur ? { ...cur, title: next } : cur)));
+    }, 800);
+    return () => clearTimeout(t);
+  }, [title, editingTitle, nb]);
 
   const load = useCallback(
     () =>
@@ -160,34 +256,112 @@ export default function NotebookView() {
   useEffect(() => {
     load();
     loadChats();
-    setTurns([]);
-    setChatId(null);
   }, [load, loadChats]);
+
+  // A different notebook starts with an empty transcript. (Its URL has no ?chat, so no chat is selected either.)
+  useEffect(() => {
+    chatLoad.current += 1;
+    setLoadingChatId(null);
+    setTurns([]);
+    shown.current = null;
+  }, [id]);
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ block: "end" });
   }, [turns]);
 
+  /** Select a chat, or none, by writing it into the URL. Other query params (like ?q) are left alone. */
+  const selectChat = (cid: string | null) =>
+    setParams(
+      (p) => {
+        const next = new URLSearchParams(p);
+        if (cid) next.set("chat", cid);
+        else next.delete("chat");
+        return next;
+      },
+      { replace: true },
+    );
+
   const openChat = async (cid: string) => {
-    setChatId(cid);
-    const msgs = await notebooksApi.messages(cid);
-    setTurns(msgs.map((m) => ({ role: m.role, text: m.text, citations: m.citations })));
+    const request = ++chatLoad.current;
+    shown.current = cid;
+    selectChat(cid);
+    setLoadingChatId(cid);
+    setTurns([]);
+    let msgs;
+    try {
+      msgs = await notebooksApi.messages(cid);
+    } catch {
+      if (request !== chatLoad.current) return;
+      // A chat that is gone (deleted, or from another account): fall back to a clean new chat.
+      shown.current = null;
+      selectChat(null);
+      setTurns([]);
+      return;
+    } finally {
+      if (request === chatLoad.current) setLoadingChatId(null);
+    }
+    // If the user selected another conversation while this request was running, ignore this older response.
+    if (request !== chatLoad.current) return;
+    const history: Turn[] = msgs.map((m) => ({ id: m.id, feedback: m.feedback, role: m.role, text: m.text, citations: m.citations }));
+    // Early chats saved the answer but not the opening user message. Their title is the original question,
+    // so restore it in the transcript instead of showing an assistant answer with no visible prompt.
+    if (history[0]?.role === "assistant") {
+      const openingQuestion = chats.find((c) => c.id === cid)?.title?.trim();
+      if (openingQuestion) history.unshift({ role: "user", text: openingQuestion });
+    }
+    setTurns(history);
+  };
+
+  // A chat named in the URL that is not on screen yet (a reload, the back button, a shared link) is opened.
+  useEffect(() => {
+    if (chatId && chatId !== shown.current) void openChat(chatId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatId]);
+
+  const newChat = () => {
+    chatLoad.current += 1;
+    setLoadingChatId(null);
+    shown.current = null;
+    selectChat(null);
+    setTurns([]);
+    setQ("");
+  };
+
+  const removeChat = async (cid: string) => {
+    await notebooksApi.removeChat(cid);
+    if (cid === chatId) newChat();
+    await loadChats();
+  };
+
+  const setChatRail = (open: boolean) => {
+    setHistoryOpen(open);
+    try {
+      localStorage.setItem(CHAT_RAIL_KEY, open ? "open" : "closed");
+    } catch {
+      /* Private browsing can prevent persistence; the control still works for this visit. */
+    }
   };
 
   const ask = async (text: string) => {
     const question = text.trim();
-    if (!question || busy) return;
+    if (!question || busy || loadingChatId) return;
     setQ("");
     setBusy(true);
     setTurns((t) => [...t, { role: "user", text: question }, { role: "assistant", text: "", status: "Scanning" }]);
     const patchLast = (p: Partial<Turn>) => setTurns((t) => [...t.slice(0, -1), { ...t[t.length - 1], ...p }]);
+    const answerAt = turns.length + 1; // where this answer sits, so a late "saved" note lands on the right message
+    let answered = "";
     try {
       await streamSSE(
         `/api/notebooks/${id}/chat`,
         (event, data) => {
           const d = data as Record<string, unknown>;
           if (event === "status") {
-            if (d.chat_id) setChatId(d.chat_id as string);
+            if (d.chat_id) {
+              shown.current = d.chat_id as string; // its messages are already on screen: do not reload them
+              selectChat(d.chat_id as string);
+            }
             patchLast({ status: d.message as string });
           } else if (event === "step") {
             setTurns((t) => {
@@ -197,10 +371,16 @@ export default function NotebookView() {
           } else if (event === "error") {
             patchLast({ text: d.message as string, status: undefined });
           } else if (event === "answer") {
-            patchLast({ text: d.text as string, citations: d.citations as Citation[], status: undefined });
+            answered = d.text as string;
+            patchLast({ id: d.message_id as string, text: answered, citations: d.citations as Citation[], status: undefined });
+            setBusy(false); // the answer is here; the "saved to memory" note may follow a moment later
+          } else if (event === "memory") {
+            const saved = d.saved as MemoryChange[];
+            setTurns((t) => t.map((x, i) => (i === answerAt && x.role === "assistant" && x.text === answered ? { ...x, saved } : x)));
           }
         },
-        { method: "POST", body: JSON.stringify({ question, chat_id: chatId }) },
+        // Read at send time from the URL, the one place a stale closure or a state reset cannot change.
+        { method: "POST", body: JSON.stringify({ question, chat_id: new URLSearchParams(window.location.search).get("chat") }) },
       );
     } catch {
       patchLast({ text: "Lost signal. Try again.", status: undefined });
@@ -215,7 +395,14 @@ export default function NotebookView() {
     const pending = params.get("q");
     if (!nb || !pending || asked.current || !nb.documents.length) return;
     asked.current = true;
-    setParams({}, { replace: true });
+    setParams(
+      (p) => {
+        const next = new URLSearchParams(p);
+        next.delete("q");
+        return next;
+      },
+      { replace: true },
+    );
     void ask(pending);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nb]);
@@ -223,17 +410,96 @@ export default function NotebookView() {
   if (loadError) return <p className="error-text">{loadError}</p>;
   if (!nb) return <Loading label="Opening notebook" />;
 
-  const cite = (c: Citation) =>
-    c.document_id ? setReading({ id: c.document_id, start: c.line_start, end: c.line_end }) : window.open(c.url, "_blank");
+  const cite = (c: Citation) => {
+    if (c.kind === "chat") setQuoted(c);
+    else if (c.document_id) setReading({ id: c.document_id, start: c.line_start, end: c.line_end });
+    else window.open(c.url, "_blank");
+  };
 
   return (
-    <div className="nbv">
+    <div className={`nbv${historyOpen ? "" : " nbv-history-closed"}`}>
+      {historyOpen && <aside className="nbv-pane nbv-history" aria-label="Notebook chats">
+        <Link to="/app/notebooks" className="nbv-history-back">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="m15 18-6-6 6-6" />
+          </svg>
+          All notebooks
+        </Link>
+        <div className="nbv-history-head">
+          <div>
+            <h2>Chats</h2>
+            <span className="muted">In this notebook</span>
+          </div>
+          <div className="nbv-history-actions">
+            <button type="button" className="nbv-new-chat" onClick={newChat} disabled={busy} aria-label="New chat" title="New chat">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </button>
+            <button type="button" className="nbv-close-history" onClick={() => setChatRail(false)} aria-label="Close chat sidebar" title="Close chat sidebar">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
+                <path d="M9 4.5v15M15 10l-2 2 2 2" />
+              </svg>
+            </button>
+          </div>
+        </div>
+        <nav className="nbv-chat-list" aria-label="Chat history">
+          {chats.length === 0 ? (
+            <p className="nbv-history-empty muted small">Your conversations in this notebook will appear here.</p>
+          ) : (
+            <>
+              <p className="nbv-chat-list-label">
+                Recent <span>{chats.length}</span>
+              </p>
+              {chats.map((c) => {
+                const chatTitle = c.title?.trim() || "Untitled chat";
+                return (
+                  <div key={c.id} className={`nbv-chat-item${chatId === c.id ? " active" : ""}`}>
+                    <button
+                      type="button"
+                      className="nbv-chat-link"
+                      onClick={() => void openChat(c.id)}
+                      disabled={busy}
+                      aria-current={chatId === c.id ? "page" : undefined}
+                      aria-label={`${chatTitle}, updated ${formatDate(c.updated_at)}`}
+                    >
+                      <span>{chatTitle}</span>
+                    </button>
+                    <ConfirmButton
+                      className="nbv-chat-delete"
+                      confirmLabel="✓"
+                      onConfirm={() => removeChat(c.id)}
+                    >
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5" />
+                      </svg>
+                      <span className="sr-only">Delete {chatTitle}</span>
+                    </ConfirmButton>
+                  </div>
+                );
+              })}
+            </>
+          )}
+        </nav>
+      </aside>}
+
       <section className="card nbv-pane nbv-chat">
         <div className="chat-bar">
+          {!historyOpen && (
+            <button type="button" className="nbv-show-history" onClick={() => setChatRail(true)} aria-label="Show chat sidebar" title="Show chat sidebar">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
+                <path d="M9 4.5v15M13 10l2 2-2 2" />
+              </svg>
+            </button>
+          )}
           <div className="nbv-titlebar">
-            <Link to="/app/notebooks" className="mono muted small-link">
-              Notebooks /
-            </Link>
+            {!historyOpen && (
+              <Link to="/app/notebooks" className="mono muted small-link">
+                Notebooks /
+              </Link>
+            )}
             {editingTitle ? (
               <form
                 onSubmit={async (e) => {
@@ -243,46 +509,36 @@ export default function NotebookView() {
                   load();
                 }}
               >
-                <input className="input input-sm" autoFocus value={title} onChange={(e) => setTitle(e.target.value)} onBlur={() => setEditingTitle(false)} aria-label="Notebook title" />
+                <input
+                  className="input input-sm"
+                  autoFocus
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  onBlur={async () => {
+                    setEditingTitle(false);
+                    if (title.trim() && title !== nb.title) {
+                      await notebooksApi.update(nb.id, { title });
+                      load();
+                    } else {
+                      setTitle(nb.title);
+                    }
+                  }}
+                  aria-label="Notebook title"
+                />
               </form>
             ) : (
-              <h2 className="nbv-title" onDoubleClick={() => setEditingTitle(true)} title="Double click to rename">
+              <h2 className="nbv-title" onClick={() => setEditingTitle(true)} title="Click to rename">
                 {nb.title}
               </h2>
             )}
           </div>
-          <div className="row">
-            {(chats.length > 0 || chatId) && (
-              <select
-                className="input input-sm"
-                value={chatId ?? ""}
-                onChange={(e) => (e.target.value ? openChat(e.target.value) : (setChatId(null), setTurns([])))}
-                aria-label="Chat history"
-              >
-                <option value="">New chat</option>
-                {chats.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {(c.title ?? "Chat").slice(0, 60)} · {formatDate(c.updated_at)}
-                  </option>
-                ))}
-              </select>
-            )}
-            {chatId && (
-              <ConfirmButton
-                onConfirm={async () => {
-                  await notebooksApi.removeChat(chatId);
-                  setChatId(null);
-                  setTurns([]);
-                  loadChats();
-                }}
-              >
-                Delete chat
-              </ConfirmButton>
-            )}
-          </div>
         </div>
-        <div className="nbv-turns">
-          {turns.length === 0 && (
+        <div className="nbv-turns" aria-busy={Boolean(loadingChatId)}>
+          {loadingChatId ? (
+            <div className="nbv-chat-loading">
+              <Loading label="Loading conversation" />
+            </div>
+          ) : turns.length === 0 ? (
             <div className="nbv-empty">
               <TelescopeIcon size={32} />
               <p className="muted">Ask anything about {nb.documents.length} posts. Answers cite the passage they came from.</p>
@@ -296,8 +552,8 @@ export default function NotebookView() {
                 </div>
               )}
             </div>
-          )}
-          {turns.map((t, i) => (
+          ) : null}
+          {!loadingChatId && turns.map((t, i) => (
             <div key={i} className={`turn turn-${t.role}`}>
               {t.steps && t.steps.length > 0 && (
                 <details className="agent-steps mono">
@@ -316,7 +572,16 @@ export default function NotebookView() {
                 ) : (
                   <p className="turn-text">{t.text}</p>
                 ))}
-              {t.citations && <CitationList citations={t.citations} onCite={cite} />}
+              {t.citations && <CitationList citations={t.citations} onCite={cite} collapsible />}
+              {t.role === "assistant" && t.id && t.text && !t.status && <AnswerFeedback key={t.id} messageId={t.id} initial={t.feedback} />}
+              {t.saved && t.saved.length > 0 && (
+                <p className="mono muted small">
+                  {t.saved
+                    .map((c) => (c.op === "delete" ? `Removed note: ${c.key}` : `Saved note: ${c.key} = ${c.value}`))
+                    .join(" · ")}{" "}
+                  (edit in Settings)
+                </p>
+              )}
             </div>
           ))}
           <div ref={bottom} />
@@ -334,16 +599,28 @@ export default function NotebookView() {
             onChange={(e) => setQ(e.target.value)}
             placeholder={nb.documents.length ? "What have I written about pricing?" : "Add posts to start asking"}
             aria-label="Ask your notebook"
-            disabled={!nb.documents.length}
+            disabled={!nb.documents.length || Boolean(loadingChatId)}
           />
-          <button className="btn btn-primary" disabled={busy || !nb.documents.length}>
-            {busy ? "Researching..." : "Ask"}
+          <button
+            className="btn btn-primary nbv-send"
+            disabled={busy || Boolean(loadingChatId) || !nb.documents.length}
+            aria-label={loadingChatId ? "Loading conversation" : busy ? "Researching" : "Send message"}
+            title={loadingChatId ? "Loading conversation" : busy ? "Researching" : "Send message"}
+          >
+            {busy || loadingChatId ? (
+              <span className="nbv-send-spinner" aria-hidden="true" />
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 19V5M6 11l6-6 6 6" />
+              </svg>
+            )}
           </button>
         </form>
       </section>
 
-      <aside className="card nbv-pane nbv-side">
-        <StudioPanel notebookId={nb.id} disabled={nb.documents.length === 0}
+      <aside className="card nbv-pane nbv-side" aria-label="Notebook tools">
+        <StudioPanel notebookId={nb.id} docs={nb.documents.map((d) => ({ id: d.id, title: d.title }))}
+                     disabled={nb.documents.length === 0}
                      onCreateVideo={() => {
                        seedDocs(nb.id, nb.documents); // the posts this page already has: the wizard shows them at once
                        setMakingVideo(true);
@@ -417,6 +694,15 @@ export default function NotebookView() {
         </Modal>
       )}
       {reading && <Reader documentId={reading.id} highlight={reading.start ? { start: reading.start, end: reading.end ?? reading.start } : undefined} onClose={() => setReading(null)} />}
+      {quoted && (
+        <Modal title={quoted.title} onClose={() => setQuoted(null)}>
+          <p className="mono muted small">
+            lines {quoted.line_start}
+            {quoted.line_end > quoted.line_start ? ` to ${quoted.line_end}` : ""}
+          </p>
+          <blockquote className="chat-quote">{quoted.span}</blockquote>
+        </Modal>
+      )}
     </div>
   );
 }

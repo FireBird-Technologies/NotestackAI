@@ -32,7 +32,7 @@ MAX_READ_LINES = 160
 MAX_SEARCH_HITS = 40
 MAX_LINE_CHARS = 240
 
-_locks: dict[uuid.UUID, threading.Lock] = {}
+_locks: dict[tuple[uuid.UUID, str], threading.Lock] = {}
 
 
 def slugify(text: str, max_len: int = 60) -> str:
@@ -89,16 +89,20 @@ class Hit:
 
 
 class Corpus:
-    def __init__(self, workspace_id: uuid.UUID, store=None, cache_dir: str | None = None):
+    def __init__(self, workspace_id: uuid.UUID, store=None, cache_dir: str | None = None, area: str = "corpus"):
+        """`area` picks the folder inside the workspace: "corpus" for posts, "chats/{notebook_id}" for chat memory.
+        Each area has its own manifest, disk cache and lock."""
         self.workspace_id = workspace_id
+        self.area = area.strip("/")
         self.store = store or default_storage
-        self.root = Path(cache_dir or settings.corpus_cache_dir) / str(workspace_id)
-        self._lock = _locks.setdefault(workspace_id, threading.Lock())
+        base = Path(cache_dir or settings.corpus_cache_dir) / str(workspace_id)
+        self.root = base if self.area == "corpus" else base / self.area
+        self._lock = _locks.setdefault((workspace_id, self.area), threading.Lock())
 
     # Keys and paths
 
     def _key(self, rel: str) -> str:
-        return f"ws/{self.workspace_id}/corpus/{rel}"
+        return f"ws/{self.workspace_id}/{self.area}/{rel}"
 
     @staticmethod
     def clean_rel(rel: str) -> str:

@@ -216,6 +216,23 @@ class EmailService:
             )
         )
 
+    def send_support_escalation(self, *, from_email: str, name: str | None, plan: str | None, reason: str,
+                                concern: str, page: str | None, transcript: list[tuple[str, str]]) -> bool:
+        lines = [f"From: {name or 'unknown'} <{from_email}>", f"Plan: {plan or 'unknown'}", f"Reason: {reason}",
+                 f"Page: {page or 'unknown'}", "", "Concern:", concern]
+        if transcript:
+            lines += ["", "Recent chat:"] + [f"{role}: {text}" for role, text in transcript]
+        text = "\n".join(lines)
+        return self._send(
+            OutgoingEmail(
+                to=settings.alerts_email,
+                subject=f"[Notestack help] {reason}: {concern[:60]}",
+                html=_layout("Help request", f"<pre style='white-space:pre-wrap'>{html.escape(text)}</pre>"),
+                text=text,
+                headers={"Reply-To": from_email},
+            )
+        )
+
     # Broadcast
 
     def send_blast_email(self, user_id: str, user_email: str, user_name: str | None, subject: str, body: str) -> bool:

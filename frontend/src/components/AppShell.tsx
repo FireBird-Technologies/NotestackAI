@@ -7,28 +7,21 @@ import { FuelGauge, NudgeDock } from "./Nudges";
 import SkyCanvas from "./SkyCanvas";
 import UpgradeModal from "./UpgradeModal";
 import {
-  AsteroidIcon,
   CometIcon,
   HelmetIcon,
   LaunchpadIcon,
-  LaunchWindowIcon,
   OrbitIcon,
   PlanetIcon,
-  RadarIcon,
   SatelliteDishIcon,
 } from "./icons/Icons";
 
-// Theme in the icon, clarity in the label: the plain label always shows.
-// Eight stops: related pages share one entry (`also` keeps it lit on them).
-const NAV: { to: string; label: string; icon: typeof RadarIcon; end?: boolean; also?: string[] }[] = [
-  { to: "/app", label: "Home", icon: RadarIcon, end: true },
-  { to: "/app/sources", label: "Sources", icon: SatelliteDishIcon, also: ["/app/map"] },
+// Keep the primary navigation focused; related pages remain reachable through these destinations.
+const NAV: { to: string; label: string; icon: typeof PlanetIcon; end?: boolean; also?: string[] }[] = [
   { to: "/app/notebooks", label: "Notebooks", icon: PlanetIcon },
-  { to: "/app/studio", label: "Create", icon: LaunchWindowIcon, also: ["/app/launch-kit"] },
+  { to: "/app/sources", label: "Sources", icon: SatelliteDishIcon, also: ["/app/map"] },
   { to: "/app/videos", label: "Videos", icon: CometIcon },
+  { to: "/app/voice", label: "Voices", icon: HelmetIcon },
   { to: "/app/launchpad", label: "Launchpad", icon: LaunchpadIcon, also: ["/app/resurface"] },
-  { to: "/app/archive", label: "Library", icon: AsteroidIcon },
-  { to: "/app/voice", label: "Voice", icon: HelmetIcon },
 ];
 
 const COLLAPSED_KEY = "ns_sidebar_collapsed";
@@ -44,6 +37,7 @@ function readCollapsed(): boolean {
 export default function AppShell() {
   const { user, loading, logout } = useAuth();
   const location = useLocation();
+  const notebookFocus = /^\/app\/notebooks\/[^/]+$/.test(location.pathname);
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const toggle = () =>
     setCollapsed((c) => {
@@ -62,7 +56,7 @@ export default function AppShell() {
 
   return (
     <UpgradeProvider>
-      <div className={`shell${collapsed ? " collapsed" : ""}`}>
+      <div className={`shell${collapsed ? " collapsed" : ""}${notebookFocus ? " notebook-focus" : ""}`}>
         <SkyCanvas intensity={0.35} />
         <aside className="sidebar">
           <div className="sidebar-top">

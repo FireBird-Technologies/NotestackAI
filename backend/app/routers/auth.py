@@ -1,3 +1,4 @@
+import logging
 import secrets
 from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
@@ -25,6 +26,8 @@ from app.models import AuthProvider, User, VerificationPurpose
 from app.services import auth_identity as ident
 from app.services import email_verification as ev
 from app.services.email import email_service
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -79,9 +82,11 @@ def google_login(body: GoogleIn, db: Session = Depends(get_db)):
         raise HTTPException(503, "Google sign in is not configured")
     try:
         info = google_id_token.verify_oauth2_token(
-            body.credential, google_requests.Request(), settings.google_client_id
+            body.credential, google_requests.Request(), settings.google_client_id,
+            clock_skew_in_seconds=GOOGLE_CLOCK_SKEW_SECONDS,
         )
     except ValueError as exc:
+        log.warning("Google credential rejected: %s", exc)
         raise HTTPException(401, "Invalid Google credential") from exc
     if not info.get("email_verified"):
         raise HTTPException(401, "Google email is not verified")
@@ -113,6 +118,9 @@ def providers():
 
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+# Google stamps the ID token with its own clock. google-auth rejects a token issued even a second after the local clock
+# ("Token used too early"), and a laptop clock is often a few seconds behind, so allow some drift.
+GOOGLE_CLOCK_SKEW_SECONDS = 10
 STATE_COOKIE = "ns_oauth_state"
 STATE_TTL = timedelta(minutes=10)
 
@@ -145,7 +153,8 @@ def exchange_google_code(code: str) -> dict:
     )
     res.raise_for_status()
     return google_id_token.verify_oauth2_token(
-        res.json()["id_token"], google_requests.Request(), settings.google_client_id
+        res.json()["id_token"], google_requests.Request(), settings.google_client_id,
+        clock_skew_in_seconds=GOOGLE_CLOCK_SKEW_SECONDS,
     )
 
 
@@ -199,9 +208,12 @@ def google_callback(
         return _auth_error("Google sign in expired. Try again.")
     try:
         info = exchange_google_code(code)
-    except (httpx.HTTPError, KeyError, ValueError):
+    except (httpx.HTTPError, KeyError, ValueError) as exc:
+        # The cause (rejected code, bad client secret, token clock, wrong audience) is only in this exception.
+        log.warning("Google sign in failed while exchanging the code: %s: %s", type(exc).__name__, exc)
         return _auth_error("Google sign in failed. Try again.")
     if info.get("nonce") != saved["nonce"]:
+        log.warning("Google sign in failed: the ID token's nonce does not match this browser's")
         return _auth_error("Google sign in failed. Try again.")
     if not info.get("email_verified"):
         return _auth_error("Google email is not verified.")

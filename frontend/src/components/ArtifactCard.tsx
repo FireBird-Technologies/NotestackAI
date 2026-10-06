@@ -4,11 +4,20 @@ import { artifactsApi, videosApi } from "../api/endpoints";
 import type { Artifact, Citation, Segment } from "../api/types";
 import { useJob } from "../hooks/useJob";
 import { Markdown } from "./Markdown";
+import { MindMapExplorer } from "./MindMap";
 import { ConfirmButton, errorMessage, formatDate, formatDuration, JobProgress, StatusPill } from "./ui";
 
-export function CitationList({ citations, onCite }: { citations: Citation[]; onCite?: (c: Citation) => void }) {
+export function CitationList({
+  citations,
+  onCite,
+  collapsible = false,
+}: {
+  citations: Citation[];
+  onCite?: (c: Citation) => void;
+  collapsible?: boolean;
+}) {
   if (!citations.length) return null;
-  return (
+  const list = (
     <ol className="cites">
       {citations.map((c) => (
         <li key={c.marker} value={c.marker}>
@@ -23,6 +32,19 @@ export function CitationList({ citations, onCite }: { citations: Citation[]; onC
         </li>
       ))}
     </ol>
+  );
+  if (!collapsible) return list;
+  return (
+    <details className="citation-disclosure">
+      <summary>
+        <span>Citations</span>
+        <span className="citation-count mono">{citations.length}</span>
+        <svg className="citation-chevron" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="m7 10 5 5 5-5" />
+        </svg>
+      </summary>
+      {list}
+    </details>
   );
 }
 
@@ -47,6 +69,7 @@ function Transcript({ segments, onSeek }: { segments: Segment[]; onSeek: (t: num
 export function Body({ artifact, onCite }: { artifact: Artifact; onCite?: (c: Citation) => void }) {
   const [showTranscript, setShowTranscript] = useState(false);
   const [audioEl, setAudioEl] = useState<HTMLAudioElement | null>(null);
+  const [exploring, setExploring] = useState(false);
   const c = artifact.content;
   if (artifact.status !== "ready") return null;
   switch (artifact.type) {
@@ -120,6 +143,16 @@ export function Body({ artifact, onCite }: { artifact: Artifact; onCite?: (c: Ci
               <img src={u} alt={`Slide ${i + 1}`} className="still" />
             </a>
           ))}
+        </div>
+      );
+    case "mind_map":
+      return (
+        <div className="artifact-body">
+          <p className="muted">{c.node_count ?? 0} stars across {c.post_count ?? 0} posts.</p>
+          <button type="button" className="btn btn-small" onClick={() => setExploring(true)}>
+            Open Mind Constellation
+          </button>
+          {exploring && <MindMapExplorer artifact={artifact} onClose={() => setExploring(false)} />}
         </div>
       );
     case "launch_kit":

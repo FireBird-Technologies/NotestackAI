@@ -933,7 +933,7 @@ def test_chat_passes_history_as_memory(client, auth, run_jobs, feed, monkeypatch
     nb = client.post("/api/notebooks", json={"title": "N", "document_ids": [doc["id"]]}, headers=auth).json()
     calls = []
 
-    def fake_research(corpus, allowed, question, on_step=None, history=None, notebook_title=""):
+    def fake_research(corpus, allowed, question, on_step=None, history=None, notebook_title="", profile=""):
         calls.append((question, [(t.role, t.text) for t in history or []], notebook_title))
         return ResearchResult(f"answer to {question}", False, [])
 
@@ -951,3 +951,277 @@ def test_chat_passes_history_as_memory(client, auth, run_jobs, feed, monkeypatch
     assert calls[0][1] == [] and calls[0][2] == "N"
     assert calls[1][1] == [("user", "What did I say about pricing?"),
                            ("assistant", "answer to What did I say about pricing?")]
+
+
+def _memory_chat(client, auth, run_jobs, monkeypatch, kind="archive", key="x"):
+    """Connect a blog, make a notebook, turn the memory job on, and ask one question with research faked."""
+    from app.config import settings
+    from app.pipeline.research import ResearchResult
+    from app.routers import notebooks as nbr
+
+    connect(client, auth, run_jobs)
+    doc = docs(client, auth)[0]
+    nb = client.post("/api/notebooks", json={"title": "N", "document_ids": [doc["id"]]}, headers=auth).json()
+    monkeypatch.setattr(settings, "llm_api_key", key)  # after connect, so no import follow up jobs are queued
+    monkeypatch.setattr(settings, "memory_notice_wait_seconds", 0)
+    seen = []
+
+    def fake_research(corpus, allowed, question, on_step=None, history=None, notebook_title="", profile=""):
+        seen.append(profile)
+        return ResearchResult("ok", False, [], kind=kind)
+
+    monkeypatch.setattr(nbr, "research", fake_research)
+    return nb, seen
+
+
+def test_chat_passes_saved_notes_to_research(client, auth, run_jobs, feed, monkeypatch):
+    nb, seen = _memory_chat(client, auth, run_jobs, monkeypatch)
+    client.put("/api/memory/audience", json={"value": "indie founders"}, headers=auth)
+    client.put("/api/memory/tone", json={"value": "short answers"}, headers=auth)
+    other = client.post("/api/notebooks", json={"title": "Other"}, headers=auth).json()
+    for notebook in (nb, other):  # the same notes reach every notebook in the workspace
+        client.post(f"/api/notebooks/{notebook['id']}/chat", json={"question": "Why?"}, headers=auth)
+    assert all("- audience: indie founders" in p and "- tone: short answers" in p for p in seen) and len(seen) == 2
+
+
+def test_memory_job_saves_notes_from_a_chat_message(client, auth, run_jobs, feed, llm, monkeypatch):
+    nb, _ = _memory_chat(client, auth, run_jobs, monkeypatch)
+    llm["UpdateMemory"] = {"operations": [{"op": "add", "key": "audience", "value": "indie founders"}]}
+    client.post(f"/api/notebooks/{nb['id']}/chat", json={"question": "I write for indie founders"}, headers=auth)
+    jobs = run_jobs()
+    assert [j.kind for j in jobs] == ["memory_update"] and jobs[0].status == "done"
+    assert jobs[0].result["saved"] == [{"op": "add", "key": "audience", "value": "indie founders"}]
+    items = client.get("/api/memory", headers=auth).json()["items"]
+    assert [(i["key"], i["source"]) for i in items] == [("audience", "auto")]
+
+
+def test_memory_job_only_reads_the_writers_message(client, auth, run_jobs, feed, llm, monkeypatch):
+    nb, _ = _memory_chat(client, auth, run_jobs, monkeypatch)
+    seen = {}
+
+    def extract(**inputs):
+        seen.update(inputs)
+        return {"operations": []}
+
+    llm["UpdateMemory"] = extract
+    client.put("/api/memory/tone", json={"value": "short answers"}, headers=auth)
+    client.post(f"/api/notebooks/{nb['id']}/chat", json={"question": "What did I say about pricing?"}, headers=auth)
+    run_jobs()
+    assert seen["message"] == "What did I say about pricing?"
+    assert seen["saved_notes"] == "- tone: short answers"
+
+
+def test_memory_job_skips_the_llm_when_jev_sees_nothing_lasting(client, auth, run_jobs, feed, llm, monkeypatch):
+    from app.config import settings
+    from app.services import jev
+
+    nb, _ = _memory_chat(client, auth, run_jobs, monkeypatch)
+    monkeypatch.setattr(settings, "typesafe_api_key", "sk-test")
+    asked = {}
+
+    def decide(state, questions, timeout=6.0):
+        asked.update(state=state, questions=questions)
+        return {"remember": jev.Choice("no", 0.9, {})}
+
+    monkeypatch.setattr(jev, "decide", decide)
+    client.post(f"/api/notebooks/{nb['id']}/chat", json={"question": "What did I say about pricing?"}, headers=auth)
+    jobs = run_jobs()
+    assert jobs[0].result == {"saved": [], "skipped": "nothing lasting"}
+    assert "UpdateMemory" not in llm["_calls"]
+    assert asked["state"] == {"message": "What did I say about pricing?"}
+    assert "yes" in asked["questions"]["remember"]["criteria"]
+
+    # A shaky "no" is not trusted: the LLM decides.
+    monkeypatch.setattr(jev, "decide", lambda *a, **k: {"remember": jev.Choice("no", 0.3, {})})
+    llm["UpdateMemory"] = {"operations": []}
+    client.post(f"/api/notebooks/{nb['id']}/chat", json={"question": "I like short answers"}, headers=auth)
+    run_jobs()
+    assert "UpdateMemory" in llm["_calls"]
+
+
+def test_no_memory_job_for_small_talk_or_without_an_llm_key(client, auth, run_jobs, feed, monkeypatch, db_session):
+    from app.models import Job
+
+    nb, _ = _memory_chat(client, auth, run_jobs, monkeypatch, kind="chitchat")
+    client.post(f"/api/notebooks/{nb['id']}/chat", json={"question": "thanks!"}, headers=auth)
+    assert db_session.query(Job).filter_by(kind="memory_update").count() == 0
+
+    nb, _ = _memory_chat(client, auth, run_jobs, monkeypatch, key="")
+    client.post(f"/api/notebooks/{nb['id']}/chat", json={"question": "I write for founders"}, headers=auth)
+    assert db_session.query(Job).filter_by(kind="memory_update").count() == 0
+
+
+def test_chat_stream_says_what_was_saved(client, auth, run_jobs, feed, monkeypatch):
+    from app.routers import notebooks as nbr
+
+    nb, _ = _memory_chat(client, auth, run_jobs, monkeypatch)
+
+    async def learned(*a, **k):
+        return [{"op": "add", "key": "audience", "value": "indie founders"}]
+
+    monkeypatch.setattr(nbr, "_learn", learned)
+    body = client.post(f"/api/notebooks/{nb['id']}/chat", json={"question": "I write for founders"}, headers=auth).text
+    assert body.index("event: answer") < body.index("event: memory") < body.index("event: done")
+    assert '"key": "audience"' in body
+
+
+def test_mind_map_tree_is_capped_and_sources_verified(client, auth, run_jobs, feed, llm):
+    connect(client, auth, run_jobs)
+    pricing = next(d for d in docs(client, auth) if d["title"] == "On Pricing")
+    nb = client.post("/api/notebooks", json={"title": "Money", "document_ids": [pricing["id"]]}, headers=auth).json()
+    good = {"path": pricing["path"], "line_start": 12, "line_end": 14}
+    fake = {"path": "sources/fake.md", "line_start": 1, "line_end": 2}
+    detail = {"label": "Raise slowly", "note": "Small steps.", "sources": [good, fake]}
+    llm["ExtractIdeas"] = {"ideas": [{"label": f"Idea {i}", "note": "n", "sources": [good], "details": [detail] * 6}
+                                     for i in range(8)]}
+    llm["ArrangeMindMap"] = {"centre": "Pricing", "overview": "How prices change.", "branches": [
+        {"label": f"Theme {i}", "note": "n", "ideas": [f"0.{i}"]} for i in range(8)]}
+    art = client.post("/api/artifacts/generate", json={"type": "mind_map", "notebook_id": nb["id"],
+                      "document_ids": [pricing["id"]], "focus": "pricing"}, headers=auth).json()
+    run_jobs()
+    done = client.get(f"/api/artifacts/{art['id']}", headers=auth).json()
+    assert done["status"] == "ready" and done["type_label"] == "Mind Constellation"
+    root = done["content"]["root"]
+    assert len(root["children"]) == 8  # one branch per stored idea, under the cap of 10
+    leaf = root["children"][0]["children"][0]["children"]
+    assert len(leaf) == 4 and len(leaf[0]["sources"]) == 1  # the invented source was dropped
+    assert done["content"]["node_count"] == 1 + 8 * (1 + 1 + 4)
+
+
+def test_mind_map_reuses_stored_ideas_instead_of_rereading_posts(client, auth, run_jobs, feed, llm):
+    connect(client, auth, run_jobs)
+    pricing = next(d for d in docs(client, auth) if d["title"] == "On Pricing")
+    nb = client.post("/api/notebooks", json={"title": "Money", "document_ids": [pricing["id"]]}, headers=auth).json()
+    ref = {"path": pricing["path"], "line_start": 1, "line_end": 3}
+    llm["ExtractIdeas"] = {"ideas": [{"label": "Raise slowly", "note": "n", "sources": [ref], "details": []}]}
+    llm["ArrangeMindMap"] = {"centre": "Pricing", "overview": "x", "branches": [
+        {"label": "Theme", "note": "n", "ideas": ["0.0"]}]}
+    for focus in ("pricing", "trust"):
+        client.post("/api/artifacts/generate", json={"type": "mind_map", "notebook_id": nb["id"], "focus": focus},
+                    headers=auth)
+        run_jobs()
+    assert llm["_calls"].count("ExtractIdeas") == 1  # read once, arranged twice
+    assert llm["_calls"].count("ArrangeMindMap") == 2
+
+
+def test_extract_ideas_job_stores_ideas_on_the_post(client, auth, run_jobs, feed, llm, db_session):
+    from app.models import Document
+    from app.pipeline.generate import extract_ideas, ideas_fresh
+
+    connect(client, auth, run_jobs)
+    doc = db_session.get(Document, uuid.UUID(docs(client, auth)[0]["id"]))
+    ref = {"path": doc.path, "line_start": 1, "line_end": 3}
+    llm["ExtractIdeas"] = {"ideas": [{"label": "An idea", "note": "n", "sources": [ref], "details": []}]}
+    assert not ideas_fresh(doc)
+    assert extract_ideas(db_session, None, doc.workspace_id, [str(doc.id)])["extracted"] == 1
+    db_session.refresh(doc)
+    assert ideas_fresh(doc) and doc.metadata_json["ideas"][0]["sources"] == [ref]
+    extract_ideas(db_session, None, doc.workspace_id, [str(doc.id)])
+    assert llm["_calls"].count("ExtractIdeas") == 1  # current ideas are not re-extracted
+
+
+def _two_post_notebook(client, auth, run_jobs):
+    connect(client, auth, run_jobs)
+    items = docs(client, auth)
+    a, b = items[0], items[1]
+    nb = client.post("/api/notebooks", json={"title": "Two", "document_ids": [a["id"], b["id"]]},
+                     headers=auth).json()
+    return a, b, nb
+
+
+def _cited_docs(content):
+    found = set()
+
+    def walk(n):
+        found.update(s["document_id"] for s in n["sources"])
+        for c in n["children"]:
+            walk(c)
+
+    walk(content["root"])
+    return found
+
+
+def test_mind_map_files_ideas_the_model_left_out_so_no_post_is_dropped(client, auth, run_jobs, feed, llm):
+    a, b, nb = _two_post_notebook(client, auth, run_jobs)
+
+    def ideas(title, **inputs):
+        path = a["path"] if title == a["title"] else b["path"]
+        return {"ideas": [{"label": f"{title} idea", "note": "n", "details": [],
+                           "sources": [{"path": path, "line_start": 1, "line_end": 3}]}]}
+
+    llm["ExtractIdeas"] = ideas
+    # the model only places the first post's idea
+    llm["ArrangeMindMap"] = {"centre": "Both", "overview": "x", "branches": [
+        {"label": "Theme", "note": "n", "ideas": ["0.0", "9.9"]}]}
+    art = client.post("/api/artifacts/generate", json={"type": "mind_map", "notebook_id": nb["id"],
+                      "focus": "only the first"}, headers=auth).json()
+    run_jobs()
+    done = client.get(f"/api/artifacts/{art['id']}", headers=auth).json()
+    assert done["status"] == "ready"
+    assert _cited_docs(done["content"]) == {a["id"], b["id"]}
+    assert done["content"]["covered_count"] == 2
+    assert done["content"]["root"]["children"][-1]["label"] == "More from your posts"
+
+
+def test_mind_map_falls_back_to_opening_lines_when_extraction_fails(client, auth, run_jobs, feed, llm):
+    a, b, nb = _two_post_notebook(client, auth, run_jobs)
+
+    def ideas(title, **inputs):
+        if title == b["title"]:
+            raise RuntimeError("model down")
+        return {"ideas": [{"label": "Idea", "note": "n", "details": [],
+                           "sources": [{"path": a["path"], "line_start": 1, "line_end": 3}]}]}
+
+    llm["ExtractIdeas"] = ideas
+    llm["ArrangeMindMap"] = {"centre": "Both", "overview": "x", "branches": []}
+    art = client.post("/api/artifacts/generate", json={"type": "mind_map", "notebook_id": nb["id"]},
+                      headers=auth).json()
+    run_jobs()
+    done = client.get(f"/api/artifacts/{art['id']}", headers=auth).json()
+    assert _cited_docs(done["content"]) == {a["id"], b["id"]}
+
+
+def test_thumbs_feedback_is_saved_with_the_recall_trace(client, auth, run_jobs, feed, monkeypatch, db_session):
+    import json as _json
+    import re as _re
+
+    from app.models import MessageFeedback
+    from app.pipeline.research import ResearchResult
+    from app.routers import notebooks as nbr
+
+    connect(client, auth, run_jobs)
+    doc = docs(client, auth)[0]
+    nb = client.post("/api/notebooks", json={"title": "N", "document_ids": [doc["id"]]}, headers=auth).json()
+
+    def fake_research(corpus, allowed, question, on_step=None, history=None, notebook_title="", profile="", **_):
+        return ResearchResult("The answer", False, [], steps=[("search", "pricing")],
+                              recall={"route": {"memory": "lookup", "topic": "pricing"}, "memory_notes": "earlier: x"})
+
+    monkeypatch.setattr(nbr, "research", fake_research)
+    body = client.post(f"/api/notebooks/{nb['id']}/chat", json={"question": "What about pricing?"}, headers=auth).text
+    chat_id = _json.loads(_re.search(r"event: status\ndata: (.*)", body).group(1))["chat_id"]
+    msg_id = _json.loads(_re.search(r"event: answer\ndata: (.*)", body).group(1))["message_id"]
+
+    url = f"/api/notebooks/messages/{msg_id}/feedback"
+    down = client.put(url, json={"rating": "down", "reasons": ["forgot_chat", "nonsense"], "comment": " lost the thread "},
+                      headers=auth).json()["feedback"]
+    assert down == {"rating": "down", "reasons": ["forgot_chat"], "comment": "lost the thread"}  # unknown tag dropped
+
+    client.put(url, json={"rating": "up"}, headers=auth)  # rating again replaces, it does not add a second row
+    assert db_session.query(MessageFeedback).count() == 1
+    client.put(url, json={"rating": "down", "reasons": ["wrong"]}, headers=auth)
+
+    shown = client.get(f"/api/notebooks/chats/{chat_id}/messages", headers=auth).json()
+    assert shown[-1]["feedback"]["rating"] == "down" and shown[0]["feedback"] is None
+
+    rows = client.get("/api/notebooks/feedback/export?rating=down", headers=auth).json()
+    assert len(rows) == 1
+    r = rows[0]
+    assert r["question"] == "What about pricing?" and r["answer"] == "The answer" and r["reasons"] == ["wrong"]
+    assert r["recall"]["route"]["memory"] == "lookup" and r["recall"]["steps"] == [{"kind": "search", "detail": "pricing"}]
+    assert client.get("/api/notebooks/feedback/export?rating=up", headers=auth).json() == []
+
+    assert client.put(url, json={"rating": None}, headers=auth).json() == {"feedback": None}
+    assert client.get("/api/notebooks/feedback/export", headers=auth).json() == []
+    user_msg = shown[0]["id"]
+    assert client.put(f"/api/notebooks/messages/{user_msg}/feedback", json={"rating": "up"}, headers=auth).status_code == 404

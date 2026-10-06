@@ -25,12 +25,15 @@ import httpx
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
+from app.chat_memory.organize import forget_orphans, organize_chat, rebuild_chat
 from app.config import settings
 from app.db import SessionLocal, engine
 from app.models import (
     Artifact,
+    Chat,
     Document,
     Job,
+    Message,
     Source,
     Subscription,
     UpdateEmail,
@@ -45,6 +48,7 @@ from app.models import (
 from app.pipeline import generate, launchkit, media
 from app.pipeline.generate import NothingToDo
 from app.pipeline.ingest import FeedNotFound, entry_from_upload, extract_article, ingest_source, store_entries
+from app.pipeline.memory import learn_from_message
 from app.services import launchpad, tts, video_quota
 from app.services.email import email_service
 from app.services.email_verification import purge_old_codes
@@ -82,6 +86,7 @@ def _after_import(db: Session, job: Job, workspace_id: uuid.UUID, changed: list[
     if not changed or not settings.llm_api_key:
         return
     create_job(db, workspace_id, "topics", {"document_ids": changed}, max_attempts=2)
+    create_job(db, workspace_id, "ideas", {"document_ids": changed}, max_attempts=2)
     if not pending_job(db, workspace_id, "resurface_scan"):
         create_job(db, workspace_id, "resurface_scan", {}, max_attempts=2)
     vp = db.scalar(select(VoiceProfile).where(VoiceProfile.workspace_id == workspace_id))
@@ -113,6 +118,40 @@ def handle_ingest(db: Session, job: Job):
     return Done(result, f"All posts in orbit: {result['indexed']} new or updated")
 
 
+def handle_memory(db: Session, job: Job):
+    """Decide whether the writer's chat message holds a lasting note, and update their memory."""
+    msg = db.get(Message, uuid.UUID(job.params["message_id"]))
+    chat = db.get(Chat, msg.chat_id) if msg else None
+    if not msg or msg.role != "user" or not chat or chat.workspace_id != job.workspace_id:
+        return Done({"saved": []}, "Message no longer exists")
+    result = learn_from_message(db, job, job.workspace_id, msg.content)
+    return Done(result, "Notes updated" if result["saved"] else "Nothing to save")
+
+
+def handle_chat_memory(db: Session, job: Job):
+    """File a chat's new rounds under topics (summary, keywords, exact quotes) in the notebook's chat memory."""
+    chat = db.get(Chat, uuid.UUID(job.params["chat_id"]))
+    if not chat or chat.workspace_id != job.workspace_id:
+        return Done({"rounds": 0}, "Chat no longer exists")
+    result = organize_chat(db, job, chat)
+    return Done(result, f"Filed {result['rounds']} rounds" if result["rounds"] else "Nothing new to file")
+
+
+def handle_chat_memory_rebuild(db: Session, job: Job):
+    """Rebuild chat memory from the messages. Params: notebook_id, and optionally chat_id for just one chat."""
+    notebook_id = uuid.UUID(job.params["notebook_id"])
+    chats = db.scalars(select(Chat).where(Chat.notebook_id == notebook_id, Chat.workspace_id == job.workspace_id))
+    only = job.params.get("chat_id")
+    done = [rebuild_chat(db, job, c) for c in chats if not only or str(c.id) == only]
+    return Done({"chats": len(done), "rounds": sum(d["rounds"] for d in done)}, f"Rebuilt {len(done)} chats")
+
+
+def handle_chat_memory_cleanup(db: Session, job: Job):
+    """Remove chat memory whose chat is gone. Params: notebook_id."""
+    removed = forget_orphans(db, job.workspace_id, uuid.UUID(job.params["notebook_id"]))
+    return Done({"removed": removed}, f"Removed {removed} orphaned chats")
+
+
 def handle_import_url(db: Session, job: Job):
     source = db.get(Source, uuid.UUID(job.params["source_id"]))
     update_job(db, job, progress=0.1, message="Fetching the article")
@@ -139,6 +178,11 @@ def handle_import_upload(db: Session, job: Job):
 
 def handle_topics(db: Session, job: Job):
     return Done(generate.extract_topics(db, job, job.workspace_id, job.params.get("document_ids")), "Topic map ready")
+
+
+def handle_ideas(db: Session, job: Job):
+    result = generate.extract_ideas(db, job, job.workspace_id, job.params.get("document_ids"))
+    return Done(result, f"Read {result['extracted']} posts for their ideas")
 
 
 def handle_voice_profile(db: Session, job: Job):
@@ -225,10 +269,16 @@ HANDLERS: dict[str, Callable[[Session, Job], object]] = {
     "import_url": handle_import_url,
     "import_upload": handle_import_upload,
     "topics": handle_topics,
+    "ideas": handle_ideas,
+    "memory_update": handle_memory,
+    "chat_memory": handle_chat_memory,
+    "chat_memory_rebuild": handle_chat_memory_rebuild,
+    "chat_memory_cleanup": handle_chat_memory_cleanup,
     "voice_profile": handle_voice_profile,
     "voice_clone": handle_voice_clone,
     "resurface_scan": handle_resurface,
     "summary": _artifact_handler(generate.summarize_notebook, "Summary ready"),
+    "mind_map": _artifact_handler(generate.build_mind_map, "Mind Constellation ready"),
     "audio_overview": _artifact_handler(media.audio_overview, "Audio overview ready"),
     "video": _artifact_handler(media.make_video, "Audiogram ready"),  # audiograms; videos come from blog2video
     "quote_card": _artifact_handler(media.make_quote_card, "Quote card ready"),

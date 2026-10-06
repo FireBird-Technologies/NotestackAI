@@ -141,3 +141,29 @@ def test_safe_next():
     assert _safe_next("/app/notebooks/1?x=1") == "/app/notebooks/1?x=1"
     for bad in (None, "", "https://evil.example", "//evil.example", r"/\evil.example"):
         assert _safe_next(bad) == "/app"
+
+
+def test_google_id_token_check_allows_for_a_laptop_clock_that_runs_behind(monkeypatch):
+    """Seen on a dev machine whose clock was 2 seconds behind Google: google-auth refused the fresh ID token ("Token
+    used too early") and the writer only saw "Google sign in failed". Both Google flows now allow some drift."""
+    from app.config import settings
+    from app.routers import auth as auth_router
+
+    seen = []
+
+    class Reply:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"id_token": "t"}
+
+    def verify(token, request, audience=None, clock_skew_in_seconds=0):
+        seen.append(clock_skew_in_seconds)
+        return {"email": "a@b.co"}
+
+    monkeypatch.setattr(settings, "google_client_id", "cid")
+    monkeypatch.setattr(auth_router.httpx, "post", lambda *a, **k: Reply())
+    monkeypatch.setattr(auth_router.google_id_token, "verify_oauth2_token", verify)
+    auth_router.exchange_google_code("code")
+    assert seen == [auth_router.GOOGLE_CLOCK_SKEW_SECONDS] and seen[0] >= 5

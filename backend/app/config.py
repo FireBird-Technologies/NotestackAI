@@ -76,17 +76,37 @@ class Settings(BaseSettings):
     # Firecrawl: crawls sites without an RSS feed and renders JavaScript pages. Empty = plain HTTP only.
     firecrawl_api_key: str = ""
     firecrawl_url: str = "https://api.firecrawl.dev"
+    # Help bot (bottom right widget). Empty = LLM_FAST_MODEL.
+    support_llm_model: str = ""
+    support_enabled: bool = True
+    support_messages_per_minute: int = 20
     llm_api_base: str = "https://api.z.ai/api/paas/v4"
     llm_api_key: str = ""
     llm_temperature: float = 1.0  # Z.ai recommends 1.0 for GLM-5.x
     # Reasoning output counts against max_tokens, so leave headroom for the structured answer.
-    llm_max_tokens: int = 16000
+    llm_max_tokens: int = 10000
     # GLM-5.x always reasons (it cannot be disabled); this sets how hard. low | high | max
     llm_reasoning_effort: str = "low"
 
     # Corpus: posts as markdown files. R2 is the source of truth; each process keeps a disk cache.
     corpus_cache_dir: str = ".corpus-cache"
     research_max_steps: int = 10
+    # After an answer, how long the chat stream waits for the memory update so it can say what was saved.
+    memory_notice_wait_seconds: float = 25.0
+
+    # Chat memory: topic files built from a notebook's chats (docs/CHAT_RECALL_IMPLEMENTATION.md).
+    # CHAT_MEMORY_ENABLED writes the files after each answer. CHAT_MEMORY_READ lets answers use them.
+    chat_memory_enabled: bool = True
+    chat_memory_read: bool = False
+    chat_memory_delay_seconds: float = 10.0
+    chat_memory_max_rounds_per_job: int = 12
+    chat_memory_summary_chars: int = 1400
+    chat_memory_recent_rounds: int = 4
+    chat_memory_context_chars: int = 3000
+    chat_memory_topics_shown: int = 12
+    # Log what the research agent is given on every chat message (conversation, writer notes, chat memory). The logs
+    # then hold writers' text, so it is on only in development unless CHAT_CONTEXT_LOG=true. None follows ENV.
+    chat_context_log: bool | None = None
 
     # ElevenLabs (premade voices by default; a consented clone can replace host A)
     elevenlabs_api_key: str = ""

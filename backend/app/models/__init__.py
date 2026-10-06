@@ -13,6 +13,7 @@ from app.models.content import (
     EngagementEvent,
     Job,
     Message,
+    MessageFeedback,
     Notebook,
     NotebookDocument,
     SocialAccount,
@@ -25,11 +26,15 @@ from app.models.content import (
     UserSavedVoice,
     VoiceConsent,
     VoiceProfile,
+    WorkspaceMemory,
 )
 from app.models.email import EmailVerificationCode, UpdateEmail, UpdateEmailSend, VerificationPurpose
+from app.models.support import SupportConversation, SupportMessage
 from app.models.user import AuthProvider, BillingEvent, PlanRecord, Subscription, User, Workspace, WorkspaceMember
 
 __all__ = [
+    "SupportConversation",
+    "SupportMessage",
     "Artifact",
     "AuthProvider",
     "B2VCustomVoice",
@@ -47,6 +52,7 @@ __all__ = [
     "EngagementEvent",
     "Job",
     "Message",
+    "MessageFeedback",
     "Notebook",
     "PlanRecord",
     "NotebookDocument",
@@ -67,4 +73,5 @@ __all__ = [
     "VoiceProfile",
     "Workspace",
     "WorkspaceMember",
+    "WorkspaceMemory",
 ]
