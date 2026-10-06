@@ -37,7 +37,7 @@ FALLBACK_TOPIC = "General chat"
 # A new topic whose words overlap an existing topic's this much is the same topic, so its rounds join that one.
 MERGE_OVERLAP = 0.5  # shared words as a share of the smaller of the two word sets
 MERGE_MIN_SHARED = 4  # and at least this many shared words, so two short lists cannot match by luck
-REFUSAL_OPENING = "I only answer from the posts in this notebook"  # the canned off-topic reply, for rows saved before kinds
+REFUSAL_OPENING = "I only answer from the posts in this notebook"  # canned off-topic reply, rows saved before kinds
 
 
 def chat_corpus(workspace_id: uuid.UUID, notebook_id: uuid.UUID, store=None, cache_dir: str | None = None) -> Corpus:

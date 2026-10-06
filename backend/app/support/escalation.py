@@ -28,9 +28,13 @@ _HUMAN = re.compile(
     | \bhuman+\b | \brepresent(?:i|a)tive\b
     """
 )
-_REFUND = re.compile(r"(?ix) \brefun\w*\b | \bchargeback\b | \bmoney\s+back\b | \bbilling\s+dispute\b | \bcancel\s+(?:my\s+)?(?:charge|payment)\b")
+_REFUND = re.compile(
+    r"(?ix) \brefun\w*\b | \bchargeback\b | \bmoney\s+back\b | \bbilling\s+dispute\b"
+    r" | \bcancel\s+(?:my\s+)?(?:charge|payment)\b"
+)
 _FRUSTRATION = re.compile(
-    r"(?ix) \bcan.?t\s+help\b | \bcannot\s+help\b | \buseless\b | \bgive\s+up\b | \bnot\s+helpful\b | \bwaste\s+of\s+(?:time|money)\b | \bfed\s+up\b"
+    r"(?ix) \bcan.?t\s+help\b | \bcannot\s+help\b | \buseless\b | \bgive\s+up\b | \bnot\s+helpful\b"
+    r" | \bwaste\s+of\s+(?:time|money)\b | \bfed\s+up\b"
 )
 # A request verb, never a capability question: "what formats do you support" must stay quiet.
 _FEATURE = re.compile(
@@ -46,7 +50,9 @@ _FEATURE = re.compile(
 _BARE_ASK = re.compile(r"^\s*(?:support|help)\s*[!.?]*\s*$", re.I)
 
 # The bot offering the team in its own answer ("I can pass this to our team").
-_ANSWER_OFFERS_TEAM = re.compile(r"(?i)\b(?:pass|send|forward|route|hand)\b[^.?!]{0,30}\b(?:team|human|person|someone)\b|\bour\s+team\b")
+_ANSWER_OFFERS_TEAM = re.compile(
+    r"(?i)\b(?:pass|send|forward|route|hand)\b[^.?!]{0,30}\b(?:team|human|person|someone)\b|\bour\s+team\b"
+)
 
 
 def classify_question(message: str) -> Reason | None:
@@ -70,7 +76,8 @@ def classify_answer(answer: str) -> Reason | None:
 
 # Claims the bot cannot back up: nothing is sent until the writer submits the form.
 _FALSE_ACTION = re.compile(
-    r"(?i)\b(?:i(?:'ve|\s+have|\s+will|'ll)?\s+(?:sent|forwarded|passed|escalated|opened|created|notified|contacted|connected))\b"
+    r"(?i)\b(?:i(?:'ve|\s+have|\s+will|'ll)?\s+"
+    r"(?:sent|forwarded|passed|escalated|opened|created|notified|contacted|connected))\b"
     r"|\b(?:you(?:'re|\s+are)\s+(?:now\s+)?connected)\b|\bticket\s+(?:has\s+been|is)\b"
 )
 
@@ -99,8 +106,9 @@ def short_circuit_reply(reason: Reason, seed: int = 0) -> str:
 def handoff_prompt(reason: Reason) -> str:
     topic = "a refund or billing problem" if reason is Reason.REFUND else "talking to a person"
     return (
-        f"You are the help assistant for Notestack. The writer is asking about {topic}. Reply in one or two short, warm "
-        "sentences that respond to what they said, and tell them to use the form below to reach the team. Never say you "
-        "have sent, forwarded, opened or escalated anything, and never say they are connected to someone: nothing is "
-        "sent until they submit the form. Do not use em dashes. Do not answer the underlying question."
+        f"You are the help assistant for Notestack. The writer is asking about {topic}. Reply in one or two "
+        "short, warm sentences that respond to what they said, and tell them to use the form below to reach "
+        "the team. Never say you have sent, forwarded, opened or escalated anything, and never say they are "
+        "connected to someone: nothing is sent until they submit the form. Do not use em dashes. "
+        "Do not answer the underlying question."
     )

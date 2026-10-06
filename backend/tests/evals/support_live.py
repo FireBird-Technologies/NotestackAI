@@ -59,7 +59,8 @@ async def run(question: str) -> None:
         ):
             text += tok
         safe = esc.handoff_line_is_safe(text)
-        print(f"[hand off, reason={reason.value}, safe={safe}]\n{strip_em_dashes(text.strip()) if safe else esc.short_circuit_reply(reason)}")
+        reply = strip_em_dashes(text.strip()) if safe else esc.short_circuit_reply(reason)
+        print(f"[hand off, reason={reason.value}, safe={safe}]\n{reply}")
         return
     scored = get_retriever().retrieve(question)
     system = prompts.ANSWER_PROMPT.format(docs=_docs_block(scored, question), user_context="USER CONTEXT: (none)", summary="(none)")

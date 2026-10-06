@@ -67,7 +67,7 @@ class ResearchResult:
     steps: list[tuple[str, str]] = field(default_factory=list)
     kind: str = "archive"  # archive | chitchat | about_app | off_topic
     question: str = ""  # the standalone question that was researched
-    recall: dict = field(default_factory=dict)  # how recall behaved for this answer (saved with the message, for feedback)
+    recall: dict = field(default_factory=dict)  # how recall behaved for this answer (saved with the message)
 
 
 @dataclass

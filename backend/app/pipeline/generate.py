@@ -10,7 +10,15 @@ from sqlalchemy.orm import Session
 from app.corpus import Corpus, slugify
 from app.llm import run
 from app.llm.provider import fast_lm
-from app.llm.signatures import ArrangeMindMap, BuildVoiceProfile, ConsolidateTopics, EvergreenScore, ExtractIdeas, ExtractTopics, SummarizeNotebook
+from app.llm.signatures import (
+    ArrangeMindMap,
+    BuildVoiceProfile,
+    ConsolidateTopics,
+    EvergreenScore,
+    ExtractIdeas,
+    ExtractTopics,
+    SummarizeNotebook,
+)
 from app.models import Artifact, DocumentTopic, Job, Notebook, Topic, VoiceProfile
 from app.pipeline.passages import as_citations, notebook_docs, passages_for, tools_for, verify_refs, workspace_docs
 from app.pipeline.research import verify_citations
@@ -118,7 +126,7 @@ def extract_ideas(db: Session, job: Job | None, workspace_id: uuid.UUID, doc_ids
             continue
         tools = tools_for(corpus, [d])
 
-        def keep(items) -> list[dict]:
+        def keep(items, tools=tools, d=d) -> list[dict]:
             return [{"path": r["path"], "line_start": r["line_start"], "line_end": r["line_end"]}
                     for r in verify_refs(tools, items or []) if r["path"] == d.path]
 
@@ -224,8 +232,8 @@ def build_mind_map(db: Session, job: Job, artifact: Artifact) -> dict:
         return 1 + sum(count(c) for c in n["children"])
 
     artifact.content_json = {
-        "title": f"Mind Constellation: {focus[:60] or nb.title}", "focus": focus, "root": root, "node_count": count(root),
-        "document_ids": [str(d.id) for d in docs], "post_count": len(docs),
+        "title": f"Mind Constellation: {focus[:60] or nb.title}", "focus": focus, "root": root,
+        "node_count": count(root), "document_ids": [str(d.id) for d in docs], "post_count": len(docs),
         "covered_count": len(_cited(branches) & {str(d.id) for d in docs}),
     }
     artifact.status = "ready"

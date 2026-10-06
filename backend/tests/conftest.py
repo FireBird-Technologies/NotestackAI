@@ -11,6 +11,12 @@ os.environ["ELEVENLABS_API_KEY"] = ""
 os.environ["FIRECRAWL_API_KEY"] = ""
 os.environ["R2_PREFIX"] = ""
 os.environ["TYPESAFE_API_KEY"] = ""
+os.environ["STRIPE_SECRET_KEY"] = ""
+os.environ["STRIPE_WEBHOOK_SECRET"] = ""
+os.environ["STRIPE_PRICE_WRITER_MONTHLY"] = ""
+os.environ["STRIPE_PRICE_WRITER_ANNUAL"] = ""
+os.environ["STRIPE_PRICE_STUDIO_MONTHLY"] = ""
+os.environ["STRIPE_PRICE_STUDIO_ANNUAL"] = ""
 os.environ.setdefault("EMAIL_PROVIDER", "console")
 os.environ.setdefault("JWT_SECRET", "test-secret-that-is-at-least-32-bytes-long")
 os.environ.setdefault("BILLING_ENABLED", "false")

@@ -470,7 +470,7 @@ async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)
         try:
             result = task.result()
         except Exception:
-            log.exception("Research failed for chat %s: %r", chat_row.id, body.question[:200])  # the cause, not just "lost signal"
+            log.exception("Research failed for chat %s: %r", chat_row.id, body.question[:200])  # cause, not just "lost signal"
             trace.error = "research raised (see the traceback above); no answer was saved"
             yield _sse("error", {"message": "Lost signal while researching. Try again."})
             return

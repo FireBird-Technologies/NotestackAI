@@ -59,7 +59,8 @@ def _rate_limit(user_id: uuid.UUID) -> None:
     while window and now - window[0] > 60:
         window.popleft()
     if len(window) >= settings.support_messages_per_minute:
-        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "You are sending messages quickly. Try again in a minute.")
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS,
+                            "You are sending messages quickly. Try again in a minute.")
     window.append(now)
 
 
@@ -73,7 +74,8 @@ def _excerpt(body: str, query: str, budget: int = DOC_BUDGET_CHARS) -> str:
         return body
     words = set(re.findall(r"[a-z0-9]+", query.lower()))
     sections = re.split(r"(?m)^(?=#{1,3}\s)", body)
-    ranked = sorted(range(len(sections)), key=lambda i: -len(words & set(re.findall(r"[a-z0-9]+", sections[i].lower()))))
+    ranked = sorted(range(len(sections)),
+                    key=lambda i: -len(words & set(re.findall(r"[a-z0-9]+", sections[i].lower()))))
     keep, used = set(), 0
     for i in ranked:
         if used + len(sections[i]) > budget and keep:
@@ -144,13 +146,15 @@ async def chat_stream(body: ChatIn, ctx: Ctx = Depends(get_ctx)) -> StreamingRes
             drafted = ""
             try:  # buffered, not streamed: the line is checked before the writer sees it
                 async for tok in llm.stream_answer(
-                    [{"role": "system", "content": esc.handoff_prompt(question_reason)}, {"role": "user", "content": message}]
+                    [{"role": "system", "content": esc.handoff_prompt(question_reason)},
+                     {"role": "user", "content": message}]
                 ):
                     drafted += tok
             except LLMError:
                 drafted = ""
             drafted = strip_em_dashes(drafted.strip())
-            answer = drafted if drafted and esc.handoff_line_is_safe(drafted) else esc.short_circuit_reply(question_reason, len(recent))
+            answer = (drafted if drafted and esc.handoff_line_is_safe(drafted)
+                      else esc.short_circuit_reply(question_reason, len(recent)))
             escalate_reason = question_reason
             yield _sse("token", answer)
         else:
@@ -202,7 +206,8 @@ async def chat_stream(body: ChatIn, ctx: Ctx = Depends(get_ctx)) -> StreamingRes
                 try:
                     conv.summary = strip_em_dashes(await llm.complete_text(
                         [{"role": "system", "content": prompts.SUMMARY_PROMPT},
-                         {"role": "user", "content": f"Previous summary: {conv.summary or '(none)'}\n\nNew turns:\n{transcript}"}],
+                         {"role": "user", "content": f"Previous summary: {conv.summary or '(none)'}\n\n"
+                                                      f"New turns:\n{transcript}"}],
                         max_tokens=500))[:1200]
                     db.commit()
                 except LLMError:
@@ -221,7 +226,8 @@ def latest(ctx: Ctx = Depends(get_ctx)):
     if not conv:
         return {"conversation_id": None, "messages": []}
     msgs = ctx.db.scalars(
-        select(SupportMessage).where(SupportMessage.conversation_id == conv.id).order_by(SupportMessage.created_at).limit(60)
+        select(SupportMessage).where(SupportMessage.conversation_id == conv.id)
+        .order_by(SupportMessage.created_at).limit(60)
     ).all()
     return {"conversation_id": str(conv.id), "messages": [_message_out(m) for m in msgs]}
 

@@ -74,22 +74,24 @@ def _plans_doc() -> Doc:
         lines += [
             f"## {p.name}",
             f"{p.tagline}. Price: {price}.",
-            f"Limits: {p.sources} sources, {p.indexed_posts} indexed posts, {p.audio_minutes} minutes of audio a month, "
+            f"Limits: {p.sources} sources, {p.indexed_posts} indexed posts, "
+            f"{p.audio_minutes} minutes of audio a month, "
             f"{p.video_minutes} minutes of video a month, {kits} Launch Kits a month. "
             f"Voice cloning: {'yes' if p.voice_cloning else 'no'}. Brand kit: {'yes' if p.brand_kit else 'no'}.",
             "Includes: " + "; ".join(p.features) + ".",
         ]
     lines += [
         "## Billing",
-        "Upgrade, change plan or manage billing from Settings under Plan and usage. Annual billing is cheaper than monthly. "
-        "Checkout may be switched off while billing is being finished, in which case every workspace gets Studio limits.",
+        "Upgrade, change plan or manage billing from Settings under Plan and usage. "
+        "Annual billing is cheaper than monthly. Checkout may be switched off while billing is being finished, "
+        "in which case every workspace gets Studio limits.",
         "Refunds and billing problems are handled by the team: use the Talk to a human button in this chat.",
     ]
     body = "\n".join(lines)
     return Doc(
         id="plans-and-billing", title="Plans, pricing and billing", route="/pricing",
-        keywords=("price", "pricing", "plan", "plans", "free", "writer", "studio", "cost", "billing", "upgrade", "limits",
-                  "annual", "monthly", "subscription", "refund", "cancel", "usage"),
+        keywords=("price", "pricing", "plan", "plans", "free", "writer", "studio", "cost", "billing", "upgrade",
+                  "limits", "annual", "monthly", "subscription", "refund", "cancel", "usage"),
         questions=("How much does Notestack cost?", "What is in the free plan?", "What are the plan limits?",
                    "How do I upgrade?", "Is there annual billing?"),
         related_paths=("/app/settings",), headings=tuple(re.findall(r"^#{1,3}\s+(.+)$", body, re.M)), body=body,

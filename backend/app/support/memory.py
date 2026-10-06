@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.base import utcnow
-from app.models.support import SupportConversation, SupportMessage
+from app.models.support import SupportMessage
 
 RECENT_MESSAGES = 6  # about three turns
 RECENT_HOURS = 24
@@ -18,7 +18,8 @@ FOLD_BATCH = 4
 def recent_messages(db: Session, conv_id) -> list[SupportMessage]:
     rows = db.scalars(
         select(SupportMessage)
-        .where(SupportMessage.conversation_id == conv_id, SupportMessage.created_at >= utcnow() - timedelta(hours=RECENT_HOURS))
+        .where(SupportMessage.conversation_id == conv_id,
+               SupportMessage.created_at >= utcnow() - timedelta(hours=RECENT_HOURS))
         .order_by(SupportMessage.created_at.desc())
         .limit(RECENT_MESSAGES)
     ).all()
