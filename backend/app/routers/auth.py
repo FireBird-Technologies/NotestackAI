@@ -36,6 +36,15 @@ def _err(exc: ident.IdentityError | ev.VerificationError, status: int = 400) -> 
     return HTTPException(getattr(exc, "status", status), {"code": exc.code, "message": exc.message})
 
 
+def _sent_or_fail(db: Session, sent: bool, email: str, purpose: VerificationPurpose) -> None:
+    """A code the user never receives is useless: drop it and say so instead of reporting success."""
+    if sent:
+        return
+    ev.clear_codes(db, email, purpose)
+    db.commit()
+    raise HTTPException(502, {"code": "email_failed", "message": "We couldn't send the code. Try again in a moment."})
+
+
 def _serialize_user(user: User) -> dict:
     return {
         "id": str(user.id),
@@ -279,7 +288,7 @@ def register_start(body: RegisterStartIn, db: Session = Depends(get_db)):
     except (ident.IdentityError, ev.VerificationError) as exc:
         raise _err(exc, 429 if getattr(exc, "code", "") == "cooldown" else 400) from exc
     db.commit()
-    email_service.send_verification_code(email, issued.code)
+    _sent_or_fail(db, email_service.send_verification_code(email, issued.code), email, VerificationPurpose.SIGNUP)
     return {"ok": True}
 
 
@@ -314,7 +323,7 @@ def register_resend(body: EmailIn, db: Session = Depends(get_db)):
     except ev.VerificationError as exc:
         raise _err(exc, 429) from exc
     db.commit()
-    email_service.send_verification_code(email, issued.code)
+    _sent_or_fail(db, email_service.send_verification_code(email, issued.code), email, VerificationPurpose.SIGNUP)
     return {"ok": True}
 
 
@@ -338,14 +347,19 @@ def email_login(body: LoginIn, db: Session = Depends(get_db)):
 @router.post("/password/forgot/start")
 def forgot_start(body: EmailIn, db: Session = Depends(get_db)):
     user = ident.find_user(db, body.email)
-    # Always 200 so the endpoint does not reveal which emails exist.
-    if user and user.auth_provider == AuthProvider.EMAIL and user.is_active:
-        try:
-            issued = ev.issue_code(db, user.email, VerificationPurpose.PASSWORD_RESET)
-            db.commit()
-            email_service.send_password_reset_code(user.email, issued.code)
-        except ev.VerificationError:
-            pass
+    # Sign up already tells whether an email is taken, so naming the problem here leaks nothing new.
+    if not user or user.deleted_at or not user.is_active:
+        raise HTTPException(404, {"code": "not_found", "message": "No account found with this email. Create one instead."})
+    if user.auth_provider != AuthProvider.EMAIL:
+        raise _err(ident.wrong_provider_error(user))
+    try:
+        issued = ev.issue_code(db, user.email, VerificationPurpose.PASSWORD_RESET)
+    except ev.VerificationError as exc:
+        raise _err(exc, 429) from exc
+    db.commit()
+    _sent_or_fail(
+        db, email_service.send_password_reset_code(user.email, issued.code), user.email, VerificationPurpose.PASSWORD_RESET
+    )
     return {"ok": True}
 
 

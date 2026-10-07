@@ -1684,6 +1684,9 @@ select.input option {
   padding: 32px var(--gutter) 64px;
   display: grid;
   gap: 24px;
+  /* Sit the onboarding block in the vertical middle of the screen rather than pinned to the top. */
+  min-height: 100vh;
+  align-content: center;
 }
 
 .welcome-top {
@@ -1706,6 +1709,11 @@ select.input option {
 .welcome-steps li {
   display: grid;
   gap: 8px;
+}
+
+.welcome-step-num {
+  margin-right: 8px;
+  color: var(--blue);
 }
 
 .welcome-dot {

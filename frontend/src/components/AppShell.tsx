@@ -33,7 +33,7 @@ function readCollapsed(): boolean {
 }
 
 export default function AppShell() {
-  const { user, loading, logout } = useAuth();
+  const { user, loading, signingOut, logout } = useAuth();
   const location = useLocation();
   const notebookFocus = /^\/app\/notebooks\/[^/]+$/.test(location.pathname);
   const [collapsed, setCollapsed] = useState(readCollapsed);
@@ -47,10 +47,7 @@ export default function AppShell() {
       return !c;
     });
   if (loading) return <div className="boot"><div className="orbit-loader"><span /></div></div>;
-  if (!user) {
-    const next = new URLSearchParams({ next: location.pathname + location.search });
-    return <Navigate to={`/auth?${next}`} replace />;
-  }
+  if (!user) return <Navigate to="/" replace />;
 
   return (
     <UpgradeProvider>
@@ -103,7 +100,7 @@ export default function AppShell() {
           </NavLink>
           <div className="sidebar-user">
             <span className="mono muted side-label">{user.email}</span>
-            <button className="link-btn" onClick={logout} title="Sign out">
+            <button className="link-btn" onClick={logout} disabled={signingOut} title="Sign out">
               Sign out
             </button>
           </div>
