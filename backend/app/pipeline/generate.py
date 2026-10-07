@@ -152,9 +152,6 @@ def extract_ideas(db: Session, job: Job | None, workspace_id: uuid.UUID, doc_ids
 
 
 def build_mind_map(db: Session, job: Job, artifact: Artifact) -> dict:
-    """A tree (centre, branches, sub-themes, points) over the picked posts, arranged from the ideas already stored
-    on each post. A focus decides how they are grouped and weighted, never which posts are on the map: every idea
-    the model leaves out is filed next to a sibling from the same post, or under a catch-all branch."""
     nb = db.get(Notebook, artifact.notebook_id)
     docs = notebook_docs(db, nb.id)
     picked = {str(i) for i in job.params.get("document_ids") or []}
@@ -162,12 +159,25 @@ def build_mind_map(db: Session, job: Job, artifact: Artifact) -> dict:
         docs = [d for d in docs if str(d.id) in picked]
     if not docs:
         raise NothingToDo("Pick at least one post for the Mind Constellation.")
-    focus = (job.params.get("focus") or "").strip()
-    corpus = Corpus(nb.workspace_id)
+    artifact.content_json = mind_map_content(db, job, nb.workspace_id, nb.title, docs,
+                                             (job.params.get("focus") or "").strip())
+    artifact.status = "ready"
+    db.commit()
+    return {"artifact_id": str(artifact.id)}
+
+
+def mind_map_content(db: Session, job: Job | None, workspace_id: uuid.UUID, title: str, docs: list[Document],
+                     focus: str = "") -> dict:
+    """A tree (centre, branches, sub-themes, points) over the given posts, arranged from the ideas already stored
+    on each post. A focus decides how they are grouped and weighted, never which posts are on the map: every idea
+    the model leaves out is filed next to a sibling from the same post, or under a catch-all branch. Used for a
+    Mind Constellation artifact and for the map inside a report."""
+    corpus = Corpus(workspace_id)
     stale = [d for d in docs if not ideas_fresh(d)]
     if stale:  # background extraction has not reached these yet, so do it now
-        update_job(db, job, progress=0.1, message=f"Reading {len(stale)} posts")
-        extract_ideas(db, None, nb.workspace_id, [str(d.id) for d in stale])
+        if job:
+            update_job(db, job, progress=0.1, message=f"Reading {len(stale)} posts")
+        extract_ideas(db, None, workspace_id, [str(d.id) for d in stale])
     tools = tools_for(corpus, docs)
 
     def refs(items) -> list[dict]:
@@ -196,9 +206,10 @@ def build_mind_map(db: Session, job: Job, artifact: Artifact) -> dict:
     # A very large notebook lists labels only, and the leftover rule below files whatever is not listed.
     brief = len(pool) > BRIEF_ABOVE
     listing = [f"{i} | {n['label']}" if brief else f"{i} | {n['label']}: {n['note'][:140]}" for i, n in pool.items()]
-    update_job(db, job, progress=0.4, message="Charting the constellation")
-    out = run.predict(ArrangeMindMap, db=db, workspace_id=nb.workspace_id, job=job,
-                      title=nb.title, focus=focus or "(none)", ideas=listing)
+    if job:
+        update_job(db, job, progress=0.4, message="Charting the constellation")
+    out = run.predict(ArrangeMindMap, db=db, workspace_id=workspace_id, job=job,
+                      title=title, focus=focus or "(none)", ideas=listing)
 
     placed: set[str] = set()
     branches: list[dict] = []
@@ -228,21 +239,18 @@ def build_mind_map(db: Session, job: Job, artifact: Artifact) -> dict:
 
     for i, b in enumerate(branches):
         _number(b, str(i))
-    centre = (out.get("centre") or focus or nb.title).strip()[:80]
+    centre = (out.get("centre") or focus or title).strip()[:80]
     root = {"id": "root", "label": centre, "note": (out.get("overview") or "").strip()[:500], "sources": [],
             "children": branches}
 
     def count(n: dict) -> int:
         return 1 + sum(count(c) for c in n["children"])
 
-    artifact.content_json = {
-        "title": f"Mind Constellation: {focus[:60] or nb.title}", "focus": focus, "root": root,
+    return {
+        "title": f"Mind Constellation: {focus[:60] or title}", "focus": focus, "root": root,
         "node_count": count(root), "document_ids": [str(d.id) for d in docs], "post_count": len(docs),
         "covered_count": len(_cited(branches) & {str(d.id) for d in docs}),
     }
-    artifact.status = "ready"
-    db.commit()
-    return {"artifact_id": str(artifact.id)}
 
 
 # Topic map

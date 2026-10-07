@@ -1516,3 +1516,349 @@ def test_thumbs_feedback_is_saved_with_the_recall_trace(client, auth, run_jobs, 
     assert client.get("/api/notebooks/feedback/export", headers=auth).json() == []
     user_msg = shown[0]["id"]
     assert client.put(f"/api/notebooks/messages/{user_msg}/feedback", json={"rating": "up"}, headers=auth).status_code == 404
+
+
+def _quiz_output(path):
+    ref = {"path": path, "line_start": 1, "line_end": 3}
+    fake = {"path": "sources/fake.md", "line_start": 1, "line_end": 2}
+    return {"questions": [
+        {"type": "multiple_choice", "question": "Q1?", "options": ["a", "b", "c"], "correct": [1, 2],
+         "explanation": "e", "sources": [ref, fake]},
+        {"type": "multiple_select", "question": "Q2?", "options": ["a", "b", "c"], "correct": [0], "explanation": "e"},
+        {"type": "fill_blank", "question": "The answer is", "answer": "x", "accepted": ["y"], "explanation": "e"},
+        {"type": "short_answer", "question": "Why?", "answer": "Because.", "explanation": "e"},
+        {"type": "multiple_choice", "question": "No right option", "options": ["a", "b"], "correct": [9],
+         "explanation": "e"},
+    ]}
+
+
+def test_quiz_from_posts_keeps_only_playable_questions_and_real_sources(client, auth, run_jobs, feed, llm):
+    connect(client, auth, run_jobs)
+    pricing = next(d for d in docs(client, auth) if d["title"] == "On Pricing")
+    nb = client.post("/api/notebooks", json={"title": "Money", "document_ids": [pricing["id"]]}, headers=auth).json()
+    llm["GenerateQuiz"] = _quiz_output(pricing["path"])
+    art = client.post("/api/artifacts/generate", json={
+        "type": "quiz", "notebook_id": nb["id"], "document_ids": [pricing["id"]], "difficulty": "hard",
+        "question_types": ["multiple_choice", "multiple_select", "fill_blank", "short_answer"]}, headers=auth).json()
+    run_jobs()
+    done = client.get(f"/api/artifacts/{art['id']}", headers=auth).json()
+    assert done["status"] == "ready" and done["type_label"] == "Quiz"
+    qs = done["content"]["questions"]
+    assert [q["type"] for q in qs] == ["multiple_choice", "multiple_choice", "fill_blank", "short_answer"]
+    assert qs[0]["correct"] == [1] and len(qs[0]["sources"]) == 1  # one right answer; the invented source is gone
+    assert qs[1]["correct"] == [0]  # a multiple select with one right answer is asked as a multiple choice
+    assert qs[2]["question"].count("____") == 1 and qs[2]["accepted"] == ["y"]
+    assert done["content"]["question_count"] == 4 and done["content"]["source"]["kind"] == "posts"
+
+
+def test_quiz_from_a_chat_belongs_to_the_chats_notebook(client, auth, run_jobs, feed, llm, db_session):
+    from app.models import Chat, Message, Notebook
+
+    connect(client, auth, run_jobs)
+    pricing = next(d for d in docs(client, auth) if d["title"] == "On Pricing")
+    nb = client.post("/api/notebooks", json={"title": "Money", "document_ids": [pricing["id"]]}, headers=auth).json()
+    row = db_session.get(Notebook, uuid.UUID(nb["id"]))
+    chat = Chat(workspace_id=row.workspace_id, notebook_id=row.id, title="Pricing chat")
+    db_session.add(chat)
+    db_session.flush()
+    db_session.add_all([Message(chat_id=chat.id, role="user", content="How should I price?"),
+                        Message(chat_id=chat.id, role="assistant", content="Raise slowly [1].")])
+    db_session.commit()
+    llm["GenerateQuiz"] = _quiz_output(pricing["path"])
+    art = client.post("/api/artifacts/generate", json={"type": "quiz", "chat_ids": [str(chat.id)]},
+                      headers=auth).json()
+    assert art["notebook_id"] == nb["id"]
+    run_jobs()
+    done = client.get(f"/api/artifacts/{art['id']}", headers=auth).json()
+    assert done["status"] == "ready" and done["content"]["source"]["kind"] == "chats"
+    assert all(q["sources"] == [] for q in done["content"]["questions"])  # a chat has no lines to cite
+    missing = client.post("/api/artifacts/generate", json={"type": "quiz", "chat_ids": [str(uuid.uuid4())]},
+                          headers=auth)
+    assert missing.status_code == 404
+
+
+def _notebook_with_pricing(client, auth, run_jobs):
+    connect(client, auth, run_jobs)
+    pricing = next(d for d in docs(client, auth) if d["title"] == "On Pricing")
+    nb = client.post("/api/notebooks", json={"title": "Money", "document_ids": [pricing["id"]]}, headers=auth).json()
+    return pricing, nb
+
+
+def test_flashcards_drop_repeats_empties_and_invented_sources(client, auth, run_jobs, feed, llm):
+    pricing, nb = _notebook_with_pricing(client, auth, run_jobs)
+    good = {"path": pricing["path"], "line_start": 1, "line_end": 3}
+    fake = {"path": "sources/fake.md", "line_start": 1, "line_end": 2}
+    llm["GenerateFlashcards"] = {"cards": [
+        {"front": "Raise slowly?", "back": "Yes.", "sources": [good, fake]},
+        {"front": "raise slowly?", "back": "Repeat.", "sources": []},
+        {"front": "No back", "back": "", "sources": []},
+    ]}
+    art = client.post("/api/artifacts/generate", json={"type": "flashcards", "notebook_id": nb["id"],
+                      "document_ids": [pricing["id"]], "count": "fewer"}, headers=auth).json()
+    run_jobs()
+    done = client.get(f"/api/artifacts/{art['id']}", headers=auth).json()
+    assert done["status"] == "ready" and done["type_label"] == "Flashcards"
+    cards = done["content"]["cards"]
+    assert len(cards) == 1 and len(cards[0]["sources"]) == 1
+
+
+def _make_report(client, auth, run_jobs, llm, pricing, nb):
+    good = {"path": pricing["path"], "line_start": 1, "line_end": 3}
+    fake = {"path": "sources/fake.md", "line_start": 1, "line_end": 2}
+    llm["WriteReport"] = {"report_title": "Pricing Brief", "markdown": "## One\nFirst point [1].\n\n## Two\nSecond [2].",
+                          "citations": [{"marker": 1, **good}, {"marker": 2, **fake}]}
+    llm["SuggestEmbeds"] = {"suggestions": [
+        {"after_block_id": "b1", "kind": "flashcards", "brief": "Terms", "why": "Learn them"},
+        {"after_block_id": "nope", "kind": "quiz", "brief": "x", "why": "y"},
+        {"after_block_id": "b2", "kind": "mind_map", "brief": "Links", "why": "See them"}]}
+    art = client.post("/api/artifacts/generate", json={
+        "type": "report", "notebook_id": nb["id"], "document_ids": [pricing["id"]], "report_format": "document",
+        "template_id": "briefing", "instructions": "Write a brief."}, headers=auth).json()
+    run_jobs()
+    return client.get(f"/api/artifacts/{art['id']}", headers=auth).json()
+
+
+def test_document_report_is_blocks_with_checked_citations_and_suggestions(client, auth, run_jobs, feed, llm):
+    pricing, nb = _notebook_with_pricing(client, auth, run_jobs)
+    done = _make_report(client, auth, run_jobs, llm, pricing, nb)
+    c = done["content"]
+    assert done["status"] == "ready" and done["type_label"] == "Report" and c["format"] == "document"
+    assert [b["type"] for b in c["blocks"]] == ["prose", "prose"] and c["blocks"][0]["id"] == "b1"
+    assert len(c["citations"]) == 1 and "[2]" not in c["blocks"][1]["text"]  # the invented source was dropped
+    assert [s["after_block_id"] for s in c["suggestions"]] == ["b1", "b2"]  # the unknown section was dropped
+    assert c["sources"][0]["title"] == "On Pricing"
+
+
+def test_add_and_remove_a_suggested_visual(client, auth, run_jobs, feed, llm):
+    pricing, nb = _notebook_with_pricing(client, auth, run_jobs)
+    done = _make_report(client, auth, run_jobs, llm, pricing, nb)
+    llm["GenerateFlashcards"] = {"cards": [{"front": "Term", "back": "Meaning", "sources": []}]}
+    r = client.post(f"/api/reports/{done['id']}/blocks", json={
+        "kind": "flashcards", "after_block_id": "b1", "suggestion_id": "s1", "brief": "Terms"}, headers=auth)
+    assert r.status_code == 200, r.text
+    run_jobs()
+    c = client.get(f"/api/artifacts/{done['id']}", headers=auth).json()["content"]
+    assert [b["type"] for b in c["blocks"]] == ["prose", "flashcards", "prose"]
+    assert c["blocks"][1]["after"] == "b1" and [s["id"] for s in c["suggestions"]] == ["s2"]
+    added = c["blocks"][1]["id"]
+    assert client.delete(f"/api/reports/{done['id']}/blocks/b1", headers=auth).status_code == 404  # prose stays
+    assert client.delete(f"/api/reports/{done['id']}/blocks/{added}", headers=auth).status_code == 200
+    # a kind of visual the report does not know is refused
+    assert client.post(f"/api/reports/{done['id']}/blocks", json={"kind": "poem"}, headers=auth).status_code == 422
+
+
+def test_shared_report_shows_only_the_whitelist_and_can_be_revoked(client, auth, run_jobs, feed, llm):
+    import json
+
+    pricing, nb = _notebook_with_pricing(client, auth, run_jobs)
+    done = _make_report(client, auth, run_jobs, llm, pricing, nb)
+    share = client.post(f"/api/artifacts/{done['id']}/share", headers=auth).json()
+    assert share["shared"] and "/r/" in share["url"]
+    token = share["url"].rsplit("/", 1)[1]
+    public = client.get(f"/api/public/reports/{token}")  # no auth header
+    assert public.status_code == 200 and public.headers["x-robots-tag"].startswith("noindex")
+    body = public.json()
+    raw = json.dumps(body)
+    assert body["title"] == "Pricing Brief" and "[1]" not in raw
+    for leak in (pricing["path"], pricing["id"], '"quote"', '"span"', '"suggestions"', "Write a brief.",
+                 str(done["id"]), '"citations"'):
+        assert leak not in raw
+    assert body["sources"]["posts"][0]["title"] == "On Pricing"
+    client.patch(f"/api/artifacts/{done['id']}/share", json={"show_sources": False}, headers=auth)
+    assert "sources" not in client.get(f"/api/public/reports/{token}").json()
+    client.patch("/api/settings", json={"allow_public_links": False}, headers=auth)
+    assert client.get(f"/api/public/reports/{token}").status_code == 404  # the workspace switch ends every link
+    assert client.post(f"/api/artifacts/{done['id']}/share", headers=auth).status_code == 403
+    client.patch("/api/settings", json={"allow_public_links": True}, headers=auth)
+    assert client.delete(f"/api/artifacts/{done['id']}/share", headers=auth).json()["shared"] is False
+    assert client.get(f"/api/public/reports/{token}").status_code == 404
+    assert client.get("/api/public/reports/not-a-token").status_code == 404
+
+
+def test_interactive_report_only_suggests_visuals_until_the_reader_adds_them(client, auth, run_jobs, feed, llm,
+                                                                              monkeypatch):
+    from app.llm import run
+
+    pricing, nb = _notebook_with_pricing(client, auth, run_jobs)
+    good = {"path": pricing["path"], "line_start": 1, "line_end": 3}
+    llm["PlanInteractiveReport"] = {"report_title": "Pricing, Visually", "sections": [
+        {"heading": "Why price", "brief": "b",
+         "embed": {"kind": "flashcards", "title": "Terms", "brief": "terms", "why": "Learn them"}},
+        {"heading": "How to raise", "brief": "b",
+         "embed": {"kind": "flashcards", "title": "Again", "brief": "x", "why": "dup"}},
+        {"heading": "Compare", "brief": "b",
+         "embed": {"kind": "table", "title": "Options", "brief": "options", "why": "Not a kind we offer"}}]}
+    monkeypatch.setattr(run, "predict_many", lambda sig, inputs, **kw: [
+        {"markdown": f"Body {i} [1].", "citations": [{"marker": 1, **good}]} for i, _ in enumerate(inputs)])
+    art = client.post("/api/artifacts/generate", json={
+        "type": "report", "notebook_id": nb["id"], "document_ids": [pricing["id"]], "report_format": "interactive",
+        "instructions": "Make it interactive."}, headers=auth).json()
+    run_jobs()
+    c = client.get(f"/api/artifacts/{art['id']}", headers=auth).json()["content"]
+    assert c["format"] == "interactive"
+    assert [b["type"] for b in c["blocks"]] == ["prose", "prose", "prose"]  # nothing is built until the reader asks
+    assert [(s["after_block_id"], s["kind"]) for s in c["suggestions"]] == [("b1", "flashcards")]  # a table is not a visual we offer
+    assert "GenerateFlashcards" not in llm["_calls"]
+    assert [x["marker"] for x in c["citations"]] == [1, 2, 3] and "[3]" in c["blocks"][2]["text"]  # renumbered
+
+    r = client.post(f"/api/reports/{art['id']}/blocks", json={
+        "kind": "table", "after_block_id": "b3", "brief": "options"}, headers=auth)
+    assert r.status_code == 422  # only a mind map, flashcards, a quiz or an infographic can be added
+
+    llm["PlanInteractiveReport"] = {"report_title": "x", "sections": []}  # an unusable plan
+    llm["WriteReport"] = {"report_title": "Plain", "markdown": "## A\nText.\n\n## B\nMore.", "citations": []}
+    art2 = client.post("/api/artifacts/generate", json={
+        "type": "report", "notebook_id": nb["id"], "document_ids": [pricing["id"]], "report_format": "interactive"},
+        headers=auth).json()
+    run_jobs()
+    done = client.get(f"/api/artifacts/{art2['id']}", headers=auth).json()
+    assert done["status"] == "ready" and done["content"]["format"] == "document"
+
+
+def test_quiz_can_be_made_from_posts_and_chats_together(client, auth, run_jobs, feed, llm, db_session):
+    from app.models import Chat, Message, Notebook
+
+    pricing, nb = _notebook_with_pricing(client, auth, run_jobs)
+    row = db_session.get(Notebook, uuid.UUID(nb["id"]))
+    chat = Chat(workspace_id=row.workspace_id, notebook_id=row.id, title="Pricing chat")
+    db_session.add(chat)
+    db_session.flush()
+    db_session.add_all([Message(chat_id=chat.id, role="user", content="How should I price?"),
+                        Message(chat_id=chat.id, role="assistant", content="Raise slowly.")])
+    db_session.commit()
+    seen = {}
+
+    def quiz(**inputs):
+        seen["material"] = inputs["material"]
+        return {"questions": [{"type": "multiple_choice", "question": "Q?", "options": ["a", "b"], "correct": [0],
+                               "explanation": "e", "sources": []}]}
+
+    llm["GenerateQuiz"] = quiz
+    art = client.post("/api/artifacts/generate", json={
+        "type": "quiz", "notebook_id": nb["id"], "document_ids": [pricing["id"]], "chat_ids": [str(chat.id)]},
+        headers=auth).json()
+    assert art["notebook_id"] == nb["id"]
+    run_jobs()
+    done = client.get(f"/api/artifacts/{art['id']}", headers=auth).json()
+    assert done["status"] == "ready" and done["content"]["source"]["kind"] == "mixed"
+    assert done["content"]["source"]["document_ids"] == [pricing["id"]] and len(done["content"]["source"]["chat_ids"]) == 1
+    assert any(m.startswith("FILE ") for m in seen["material"]) and any(m.startswith("CHAT ") for m in seen["material"])
+
+
+def test_a_quiz_section_the_ai_wrote_becomes_a_suggestion_unless_it_was_asked_for(client, auth, run_jobs, feed, llm):
+    pricing, nb = _notebook_with_pricing(client, auth, run_jobs)
+    llm["WriteReport"] = {"report_title": "Pricing", "citations": [], "markdown":
+                          "## Why price\nText.\n\n## How to raise\nMore.\n\n## Quick quiz\n1. What is a price? (Answer: x)"}
+    llm["SuggestEmbeds"] = {"suggestions": []}
+
+    def make(instructions):
+        art = client.post("/api/artifacts/generate", json={
+            "type": "report", "notebook_id": nb["id"], "document_ids": [pricing["id"]], "report_format": "document",
+            "instructions": instructions}, headers=auth).json()
+        run_jobs()
+        return client.get(f"/api/artifacts/{art['id']}", headers=auth).json()["content"]
+
+    c = make("Write a short brief.")
+    assert [b["text"].split("\n")[0] for b in c["blocks"]] == ["## Why price", "## How to raise"]  # no quiz in the text
+    assert [(s["after_block_id"], s["kind"]) for s in c["suggestions"]] == [("b2", "quiz")]  # offered, not added
+
+    c = make("Write a study guide with a quiz at the end.")  # the reader asked for it: it stays
+    assert [b["text"].split("\n")[0] for b in c["blocks"]][-1] == "## Quick quiz" and c["suggestions"] == []
+
+
+# ---- infographics ----------------------------------------------------------------------------------------------
+
+def _fake_infographic(**over):
+    out = {"title": "Pricing <script>x</script> Plan", "subtitle": "How to raise prices", "items_label": "Ideas",
+           "items": [{"name": f"Idea {i}", "text": "A short plain sentence about it."} for i in range(4)],
+           "steps_label": "Steps", "steps": [{"name": f"Step {i}", "text": "Do the thing."} for i in range(5)],
+           "rule": "Raise slowly.", "notes": ["One.", "Two.", "Three."]}
+    return {"infographic": {**out, **over}}
+
+
+def test_every_theme_escapes_and_clamps_model_text():
+    from app.infographics.content import SAMPLE, STRESS, clamp
+    from app.infographics.render import build_html
+    from app.infographics.themes import THEMES
+
+    evil = clamp({**SAMPLE, "title": "<img src=x onerror=alert(1)> Hello", "rule": "<script>bad()</script> ok"})
+    assert "<" not in evil["title"] and "<" not in evil["rule"]
+    long = clamp(STRESS)
+    assert len(long["title"]) <= 60 and len(long["items"]) == 5 and len(long["steps"]) == 8
+    assert clamp({**SAMPLE, "items": SAMPLE["items"][:2]}) is None  # too few to draw
+    for tid in THEMES:
+        html = build_html(tid, evil)
+        assert "<script" not in html and "onerror" not in html and "Hello" in html, tid
+    for tid in THEMES:
+        assert '<div class="mark">notestack.ai</div>' in build_html(tid, evil)  # every theme carries the mark
+
+
+def test_infographic_is_a_page_at_once_and_can_be_shared_by_link(client, auth, run_jobs, feed, llm):
+    pricing, nb = _notebook_with_pricing(client, auth, run_jobs)
+    llm["ExtractIdeas"] = {"ideas": []}
+    llm["PlanInfographic"] = _fake_infographic()
+    art = client.post("/api/artifacts/generate", json={"type": "infographic", "notebook_id": nb["id"],
+                      "document_ids": [pricing["id"]], "theme": "galaxy", "instructions": "About raising prices"},
+                      headers=auth).json()
+    assert art["type_label"] == "Infographic"
+    run_jobs()
+    done = client.get(f"/api/artifacts/{art['id']}", headers=auth).json()
+    assert done["status"] == "ready" and done["content"]["theme"] == "galaxy" and not done["download_url"]
+    assert "Idea 0" in done["content"]["html"] and "<script" not in done["content"]["html"]
+    assert 'class="mark">notestack.ai' in done["content"]["html"]
+
+    share = client.post(f"/api/artifacts/{art['id']}/share", headers=auth).json()
+    assert share["shared"] and "/r/" in share["url"]
+    token = share["url"].rsplit("/", 1)[1]
+    public = client.get(f"/api/public/reports/{token}")  # no auth header
+    assert public.status_code == 200 and public.headers["x-robots-tag"].startswith("noindex")
+    body = public.json()
+    assert body["kind"] == "infographic" and "Idea 0" in body["html"]
+    raw = str(body)
+    for leak in (pricing["path"], pricing["id"], art["id"], "About raising prices", "document_ids"):
+        assert leak not in raw
+    assert client.delete(f"/api/artifacts/{art['id']}/share", headers=auth).json()["shared"] is False
+    assert client.get(f"/api/public/reports/{token}").status_code == 404
+
+
+def test_infographic_needs_a_source_and_enough_text_and_obeys_its_limit(client, auth, run_jobs, feed, llm, monkeypatch):
+    from app.pipeline import infographic
+
+    pricing, nb = _notebook_with_pricing(client, auth, run_jobs)
+    llm["ExtractIdeas"] = {"ideas": []}
+    llm["PlanInfographic"] = _fake_infographic(items=[])
+    art = client.post("/api/artifacts/generate", json={"type": "infographic", "notebook_id": nb["id"],
+                      "document_ids": [pricing["id"]]}, headers=auth).json()
+    run_jobs()
+    failed = client.get(f"/api/artifacts/{art['id']}", headers=auth).json()
+    assert failed["status"] == "failed" and "enough" in failed["content"]["error"]
+
+    assert client.post("/api/artifacts/generate", json={"type": "infographic", "notebook_id": nb["id"],
+                       "document_ids": []}, headers=auth).status_code == 400
+    import dataclasses
+
+    from app.services import usage
+
+    real = usage.effective_plan
+    monkeypatch.setattr(usage, "effective_plan", lambda db, ws: dataclasses.replace(real(db, ws), infographics=1))
+    r = client.post("/api/artifacts/generate", json={"type": "infographic", "notebook_id": nb["id"],
+                    "document_ids": [pricing["id"]]}, headers=auth)
+    assert r.status_code == 402
+
+
+def test_a_report_can_add_an_infographic_that_shows_on_the_shared_page(client, auth, run_jobs, feed, llm):
+    pricing, nb = _notebook_with_pricing(client, auth, run_jobs)
+    done = _make_report(client, auth, run_jobs, llm, pricing, nb)
+    llm["ExtractIdeas"] = {"ideas": []}
+    llm["PlanInfographic"] = _fake_infographic()
+    r = client.post(f"/api/reports/{done['id']}/blocks", json={"kind": "infographic", "after_block_id": "b1",
+                    "brief": "The steps to raise prices", "theme": "moonbase"}, headers=auth)
+    assert r.status_code == 200, r.text
+    run_jobs()  # adds the block, and writes the infographic it points at
+    block = next(b for b in client.get(f"/api/artifacts/{done['id']}", headers=auth).json()["content"]["blocks"]
+                 if b["type"] == "infographic")
+    assert block["theme"] == "moonbase" and block["status"] == "ready" and "Idea 0" in block["html"]
+    token = client.post(f"/api/artifacts/{done['id']}/share", headers=auth).json()["url"].rsplit("/", 1)[1]
+    public = client.get(f"/api/public/reports/{token}").json()
+    shared = next(b for b in public["blocks"] if b["type"] == "infographic")
+    assert "Idea 0" in shared["html"] and "artifact_id" not in shared and "theme" not in shared

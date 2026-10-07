@@ -206,3 +206,52 @@ export const TrashIcon = (p: P) => (
     <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6" />
   </Icon>
 );
+
+/** Headphones: the audio overview. */
+export const HeadphonesIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M4 15v-3a8 8 0 0 1 16 0v3" />
+    <rect x="3" y="14" width="4.5" height="6.5" rx="1.8" />
+    <rect x="16.5" y="14" width="4.5" height="6.5" rx="1.8" />
+  </Icon>
+);
+
+/** A page with a heading and lines: the report. */
+export const ReportIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M6 3h8.5L19 7.5V19a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" />
+    <path d="M14 3v5h5M8 12h8M8 15.5h8M8 8.5h3" />
+  </Icon>
+);
+
+/** Short lines of text, the last one shorter: a summary. */
+export const SummaryIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M4 6h16M4 10.5h16M4 15h16M4 19.5h9" />
+  </Icon>
+);
+
+/** Bars on a baseline inside a frame: an infographic. */
+export const InfographicIcon = (p: P) => (
+  <Icon {...p}>
+    <rect x="3" y="3" width="18" height="18" rx="2.5" />
+    <path d="M8 17v-5M12 17V8M16 17v-3" />
+  </Icon>
+);
+
+/** A question mark in a circle: the quiz. */
+export const QuizIcon = (p: P) => (
+  <Icon {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M9.5 9.5a2.6 2.6 0 0 1 5 .9c0 1.7-2.5 2.2-2.5 3.8M12 17.2v.01" />
+  </Icon>
+);
+
+/** Two cards, one behind the other: flashcards. */
+export const FlashcardsIcon = (p: P) => (
+  <Icon {...p}>
+    <rect x="3" y="7" width="14" height="11" rx="2" />
+    <path d="M7 7V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2" />
+    <path d="M7 12.5h6" />
+  </Icon>
+);

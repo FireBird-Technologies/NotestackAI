@@ -14,6 +14,8 @@ import MissionControl from "./pages/MissionControl";
 import Notebooks from "./pages/Notebooks";
 import NotebookLMAlternative from "./pages/NotebookLMAlternative";
 import NotebookView from "./pages/NotebookView";
+import PublicReport from "./pages/PublicReport";
+import ReportPage from "./pages/ReportPage";
 import Resurface from "./pages/Resurface";
 import Settings from "./pages/Settings";
 import Sources from "./pages/Sources";
@@ -51,6 +53,7 @@ export default function App() {
       <Route path="/tools/:slug" element={<ToolPage />} />
       <Route path="/blogs" element={<Blog />} />
       <Route path="/blogs/:slug" element={<BlogPostPage />} />
+      <Route path="/r/:token" element={<PublicReport />} />
       <Route path="/auth" element={<AuthPage />} />
       <Route path="/auth/callback" element={<AuthCallback />} />
       <Route path="/welcome" element={<Welcome />} />
@@ -58,6 +61,7 @@ export default function App() {
         <Route index element={<MissionControl />} />
         <Route path="notebooks" element={<Notebooks />} />
         <Route path="notebooks/:id" element={<NotebookView />} />
+        <Route path="reports/:id" element={<ReportPage />} />
         <Route path="videos" element={<Navigate to="/app/archive?tab=videos" replace />} />
         <Route path="videos/new" element={<VideoCreate />} />
         <Route path="videos/voices" element={<Navigate to="/app/archive?tab=voices" replace />} />

@@ -177,7 +177,10 @@ export function ConfirmButton({
   confirmLabel = "Click again to confirm",
   className = "btn btn-small btn-danger",
   label,
+  busyLabel = "Working...",
 }: {
+  /** What the button says while the confirmed action runs. */
+  busyLabel?: string;
   onConfirm: () => unknown; // the result (e.g. act's success flag) is awaited, not used
   children: ReactNode;
   confirmLabel?: string;
@@ -210,7 +213,7 @@ export function ConfirmButton({
         }
       }}
     >
-      {busy ? "Working..." : armed ? confirmLabel : children}
+      {busy ? <><span className="nbv-send-spinner" aria-hidden="true" /> {busyLabel}</> : armed ? confirmLabel : children}
     </button>
   );
 }

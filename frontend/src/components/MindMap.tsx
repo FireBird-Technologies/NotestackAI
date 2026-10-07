@@ -242,7 +242,16 @@ const camTransform = (c: Cam, size: { w: number; h: number }) => `translate(${si
 
 /* ---------- The explorer ---------- */
 
-export function MindMapExplorer({ artifact, onClose, warp = true, startAt = "root" }: { artifact: Artifact; onClose: () => void; warp?: boolean; startAt?: string }) {
+export function MindMapExplorer({ artifact, onClose, warp = true, startAt = "root", embedded = false, onExpand }: {
+  artifact: Artifact;
+  onClose: () => void;
+  warp?: boolean;
+  startAt?: string;
+  /** Shown inside the page (a report) in a frame instead of full screen; the wheel zooms only with Ctrl or Cmd held. */
+  embedded?: boolean;
+  /** Embedded: the button that opens the full-screen explorer. */
+  onExpand?: () => void;
+}) {
   const root = artifact.content.root as MindNode | undefined;
   const storeKey = `ns_mindmap_shape_${artifact.id}`;
   const [shape, setShape] = useState<Shape>(() => {
@@ -397,6 +406,7 @@ export function MindMapExplorer({ artifact, onClose, warp = true, startAt = "roo
   }, [byId, focus, focusId]);
 
   useEffect(() => {
+    if (embedded) return; // in a page the keys belong to the page (scrolling), not the map
     const onKey = (e: KeyboardEvent) => {
       if (reading) return;
       if (e.key === "Escape") onClose();
@@ -407,7 +417,7 @@ export function MindMapExplorer({ artifact, onClose, warp = true, startAt = "roo
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [onClose, up, reading]);
+  }, [onClose, up, reading, embedded]);
 
   // Wheel zooms around the cursor (a native listener, so the page behind never scrolls).
   const svgRef = useRef<SVGSVGElement>(null);
@@ -424,13 +434,14 @@ export function MindMapExplorer({ artifact, onClose, warp = true, startAt = "roo
     const el = svgRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
+      if (embedded && !(e.ctrlKey || e.metaKey)) return; // let the page scroll past an embedded map
       e.preventDefault();
       const r = el.getBoundingClientRect();
       zoomBy(Math.exp(clamp(-e.deltaY * 0.0018, -0.35, 0.35)), e.clientX - r.left, e.clientY - r.top);
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
-  }, [zoomBy]);
+  }, [zoomBy, embedded]);
 
   const onPointerDown = (e: ReactPointerEvent<SVGSVGElement>) => {
     cancelAnimationFrame(anim.current);
@@ -471,8 +482,9 @@ export function MindMapExplorer({ artifact, onClose, warp = true, startAt = "roo
   const trail: Placed[] = [];
   for (let c: Placed | null = focused; c; c = c.parent) trail.unshift(c);
 
-  return createPortal(
-    <div className="mm-overlay" role="dialog" aria-modal="true" aria-label={mindConstellationTitle(artifact.title)}>
+  const view = (
+    <div className={`mm-overlay${embedded ? " mm-embedded" : ""}`} role={embedded ? "group" : "dialog"} aria-modal={embedded ? undefined : true}
+         aria-label={mindConstellationTitle(artifact.title)}>
       <div className="mm-stage" ref={wrapRef}>
         <svg
           ref={svgRef}
@@ -647,11 +659,21 @@ export function MindMapExplorer({ artifact, onClose, warp = true, startAt = "roo
         <div className="mm-meteor" aria-hidden="true" />
 
         <header className="mm-top" style={{ right: 14 + panelW }}>
-          <button type="button" className="mm-btn" onClick={onClose} aria-label="Close Mind Constellation">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-              <path d="M6 6l12 12M18 6L6 18" />
-            </svg>
-          </button>
+          {embedded ? (
+            onExpand && (
+              <button type="button" className="mm-btn" onClick={onExpand} aria-label="Open full screen" title="Open full screen">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7" />
+                </svg>
+              </button>
+            )
+          ) : (
+            <button type="button" className="mm-btn" onClick={onClose} aria-label="Close Mind Constellation">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+          )}
           <div className="mm-title">
             <strong>{mindConstellationTitle(artifact.title)}</strong>
             <nav className="mm-trail mono" aria-label="Where you are">
@@ -755,9 +777,9 @@ export function MindMapExplorer({ artifact, onClose, warp = true, startAt = "roo
         </aside>
       </div>
       {reading && <Reader documentId={reading.id} highlight={{ start: reading.start, end: reading.end }} onClose={() => setReading(null)} />}
-    </div>,
-    document.body,
+    </div>
   );
+  return embedded ? view : createPortal(view, document.body);
 }
 
 /* ---------- The right-rail list: every mind map in this notebook, one row each ---------- */

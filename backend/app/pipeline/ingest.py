@@ -681,6 +681,34 @@ def ingest_source(db: Session, source: Source, job: Job, max_posts: int) -> dict
             "changed": [str(i) for i in changed]}
 
 
+_VTT_TIME = re.compile(r"^(\d+:)?\d{1,2}:\d{2}[.,]\d{3}\s+-->\s+")
+
+
+def vtt_to_text(text: str) -> str:
+    """The spoken words of a WebVTT transcript: the header, notes, cue ids, timestamps and markup dropped, a line
+    repeated from the cue before (rolling captions) kept once, the rest joined into paragraphs."""
+    lines: list[str] = []
+    in_cue = False
+    skipping = False  # inside a NOTE / STYLE / REGION block, until the blank line
+    for raw in text.lstrip("\ufeff").splitlines():
+        line = raw.strip()
+        if not line:
+            in_cue = skipping = False
+            continue
+        if skipping or line.startswith(("WEBVTT", "NOTE", "STYLE", "REGION")) and not in_cue:
+            skipping = True
+            continue
+        if _VTT_TIME.match(line):
+            in_cue = True
+            continue
+        if not in_cue:
+            continue  # a cue id
+        line = re.sub(r"<[^>]+>", "", line).strip()
+        if line and (not lines or lines[-1] != line):
+            lines.append(line)
+    return "\n\n".join(" ".join(lines[i:i + 8]) for i in range(0, len(lines), 8))
+
+
 def entry_from_upload(filename: str, content_type: str, data: bytes) -> FeedEntry:
     name = filename.rsplit("/", 1)[-1]
     stem = re.sub(r"\.[A-Za-z0-9]+$", "", name).replace("-", " ").replace("_", " ").strip() or "Untitled"
@@ -693,6 +721,8 @@ def entry_from_upload(filename: str, content_type: str, data: bytes) -> FeedEntr
         soup = BeautifulSoup(text, "html.parser")
         title = soup.title.get_text(strip=True) if soup.title else stem
         return FeedEntry(title=title, url=url, published_at=None, html=text)
+    if lower.endswith(".vtt") or text.lstrip("\ufeff").startswith("WEBVTT"):
+        text = vtt_to_text(text)
     sections = markdown_to_sections(text)
     first_heading = re.search(r"^#\s+(.+)$", text, re.M)
     title = first_heading.group(1).strip() if first_heading else stem

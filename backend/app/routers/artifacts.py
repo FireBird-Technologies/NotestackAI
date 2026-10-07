@@ -1,24 +1,30 @@
+import re
 import uuid
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
 
 from app.auth import Ctx, get_ctx
 from app.config import settings
-from app.models import Artifact, CalendarItem, Document, Job, Notebook, UserSavedVoice
+from app.models import Artifact, CalendarItem, Chat, Document, Job, Notebook, UserSavedVoice
 from app.routers.notebooks import ensure_archive_notebook
+from app.infographics.image import ImageUnavailable, render_png
 from app.services.artifacts import latest_jobs, serialize_artifact, start_artifact
 from app.services.jobs import create_job, serialize_job
 from app.services.plans import effective_plan, plan_limit_error
+from app.infographics.themes import theme_id
 from app.services.renderer import COMPOSITIONS
 from app.services.storage import storage
 from app.services.usage import check_limit
 
 router = APIRouter(prefix="/api/artifacts", tags=["artifacts"])
 
-ArtifactType = Literal["summary", "audio_overview", "video", "quote_card", "carousel", "launch_kit", "mind_map"]
+ArtifactType = Literal["summary", "audio_overview", "video", "quote_card", "carousel", "launch_kit", "mind_map", "quiz", "flashcards", "report", "infographic"]
+
+
+SOURCE_TYPES = ("quiz", "flashcards", "report", "infographic")  # made from posts or chats picked in the dialog
 
 
 class RenderIn(BaseModel):
@@ -27,7 +33,7 @@ class RenderIn(BaseModel):
 
 
 class GenerateIn(BaseModel):
-    type: Literal["summary", "audio_overview", "video", "quote_card", "carousel", "launch_kit", "mind_map"]
+    type: Literal["summary", "audio_overview", "video", "quote_card", "carousel", "launch_kit", "mind_map", "quiz", "flashcards", "report", "infographic"]
     notebook_id: uuid.UUID | None = None
     document_id: uuid.UUID | None = None
     archive: bool = False  # no notebook or post picked: use the "All posts" notebook
@@ -46,6 +52,20 @@ class GenerateIn(BaseModel):
     # mind_map: the posts to chart (none picked means every post in the notebook) and what to centre on
     document_ids: list[uuid.UUID] | None = None
     focus: str | None = Field(None, max_length=500)
+    topic: str | None = Field(None, max_length=500)  # quiz: what to ask about (none: the material as a whole)
+    # quiz: from a notebook's posts (notebook_id and document_ids) or from notebook chats (chat_ids)
+    chat_ids: list[uuid.UUID] | None = Field(None, min_length=1, max_length=5)
+    count: Literal["fewer", "standard", "more"] = "standard"
+    difficulty: Literal["easy", "medium", "hard"] = "medium"
+    question_types: list[Literal["multiple_choice", "multiple_select", "fill_blank", "short_answer"]] = Field(
+        default_factory=lambda: ["multiple_choice", "multiple_select"], min_length=1)
+    language: str | None = Field(None, max_length=40)
+    theme: str | None = Field(None, max_length=30)  # infographic: one of app.infographics.themes
+    # report: a written "document" or an "interactive" one, the template it started from, and the instructions the
+    # writer is given (the dialog's editable text; empty means the template's own)
+    report_format: Literal["document", "interactive"] = "document"
+    template_id: str | None = Field(None, max_length=40)
+    instructions: str | None = Field(None, max_length=4000)
 
 
 def _hosts(ctx: Ctx, body: GenerateIn) -> dict:
@@ -115,7 +135,21 @@ def generate(body: GenerateIn, ctx: Ctx = Depends(get_ctx)):
         if not body.slides:
             raise HTTPException(400, "A carousel needs slides")
         content = {"slides": body.slides[:12], "parent_id": str(body.parent_id) if body.parent_id else None}
-    target = _target_title(ctx, body.notebook_id, body.document_id)
+    if body.type in SOURCE_TYPES and body.chat_ids:
+        chats = list(ctx.db.scalars(select(Chat).where(Chat.id.in_(set(body.chat_ids)),
+                                                       Chat.workspace_id == ctx.workspace.id)
+                                    .order_by(Chat.created_at)))
+        if len(chats) != len(set(body.chat_ids)):
+            raise HTTPException(404, "Chat not found")
+        if not body.notebook_id and not body.document_id:
+            body.notebook_id = chats[0].notebook_id  # listed with its chats' notebook
+        target = chats[0].title or "Chat"
+    else:
+        if body.type in SOURCE_TYPES and not (body.notebook_id or body.document_id):
+            raise HTTPException(400, "Pick posts or chats to make this from")
+        if body.type in SOURCE_TYPES and body.notebook_id and not body.document_id and body.document_ids == []:
+            raise HTTPException(400, "Pick at least one post or chat to make this from")
+        target = _target_title(ctx, body.notebook_id, body.document_id)
     if body.type == "audio_overview":
         check_limit(ctx.db, ctx.workspace, "audio_minutes", body.minutes)
         params = {"format": body.format, "minutes": body.minutes, **_hosts(ctx, body)}
@@ -125,6 +159,33 @@ def generate(body: GenerateIn, ctx: Ctx = Depends(get_ctx)):
             raise HTTPException(400, "A Mind Constellation is made from a notebook")
         params = {"document_ids": [str(i) for i in body.document_ids or []], "focus": (body.focus or "").strip()}
         title = f"Mind Constellation: {params['focus'][:60] or target}"
+    elif body.type == "flashcards":
+        ids = body.document_ids or ([body.document_id] if body.document_id else [])
+        params = {"document_ids": [str(i) for i in ids], "chat_ids": [str(i) for i in body.chat_ids or []],
+                  "topic": (body.topic or "").strip(), "count": body.count, "difficulty": body.difficulty,
+                  "language": body.language}
+        title = f"Flashcards: {params['topic'][:60] or target}"
+    elif body.type == "report":
+        check_limit(ctx.db, ctx.workspace, "reports", 1)
+        ids = body.document_ids or ([body.document_id] if body.document_id else [])
+        params = {"document_ids": [str(i) for i in ids], "chat_ids": [str(i) for i in body.chat_ids or []],
+                  "topic": (body.topic or "").strip(), "language": body.language,
+                  "report_format": body.report_format, "template_id": body.template_id,
+                  "instructions": (body.instructions or "").strip()}
+        title = f"Report: {params['topic'][:60] or target}"
+    elif body.type == "infographic":
+        check_limit(ctx.db, ctx.workspace, "infographics", 1)
+        ids = body.document_ids or ([body.document_id] if body.document_id else [])
+        params = {"document_ids": [str(i) for i in ids], "chat_ids": [str(i) for i in body.chat_ids or []],
+                  "theme": theme_id(body.theme), "instructions": (body.instructions or "").strip()[:600]}
+        title = f"Infographic: {params['instructions'][:60] or target}"
+    elif body.type == "quiz":
+        ids = body.document_ids or ([body.document_id] if body.document_id else [])
+        params = {"document_ids": [str(i) for i in ids],
+                  "chat_ids": [str(i) for i in body.chat_ids or []], "topic": (body.topic or "").strip(),
+                  "count": body.count, "difficulty": body.difficulty,
+                  "question_types": list(dict.fromkeys(body.question_types)), "language": body.language}
+        title = f"Quiz: {params['topic'][:60] or target}"
     elif body.type == "launch_kit":
         if not body.document_id:
             raise HTTPException(400, "A Launch Kit is made from one post")
@@ -179,6 +240,22 @@ def get_artifact(artifact_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
     return serialize_artifact(a, latest_jobs(ctx.db, [a.id]).get(a.id))
 
 
+@router.get("/{artifact_id}/image")
+def infographic_image(artifact_id: uuid.UUID, layout: Literal["landscape", "portrait"] = "landscape", ctx: Ctx = Depends(get_ctx)):
+    """A finished infographic as a PNG, wide (the default) or tall, for its Download button."""
+    a = get_artifact_or_404(ctx, artifact_id)
+    shown = serialize_artifact(a) if a.type == "infographic" and a.status == "ready" else {}
+    html = (shown.get("content") or {}).get("html_landscape" if layout == "landscape" else "html")
+    if not html:
+        raise HTTPException(404, "This infographic has no image to download.")
+    try:
+        png = render_png(html, layout)
+    except ImageUnavailable as exc:
+        raise HTTPException(503, str(exc)) from exc
+    name = re.sub(r"[^\w\- ]+", "", shown.get("title") or "infographic").strip()[:80] or "infographic"
+    return Response(png, media_type="image/png", headers={"Content-Disposition": f'attachment; filename="{name} ({layout}).png"'})
+
+
 @router.patch("/{artifact_id}")
 def patch_artifact(artifact_id: uuid.UUID, body: PatchIn, ctx: Ctx = Depends(get_ctx)):
     a = get_artifact_or_404(ctx, artifact_id)
@@ -224,6 +301,8 @@ def retry_artifact(artifact_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
         raise HTTPException(400, "Nothing to retry")
     if last.status not in {"failed", "done"}:
         raise HTTPException(409, "Still running")
+    if last.kind == "report_block":
+        raise HTTPException(409, "Add it again from the report")
     a.status = "pending"
     content = dict(a.content_json or {})
     content.pop("error", None)

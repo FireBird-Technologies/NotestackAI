@@ -1,0 +1,65 @@
+{#- Shared layout of every infographic theme. A theme extends this and fills the style, the background, the hero drawing and a few
+    words. All text is autoescaped; nothing from the model is ever marked safe. The notestack.ai mark is added by the renderer. -#}
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family={{ fonts.h|replace(' ', '+') }}:wght@400;500;600;700&family={{ fonts.b|replace(' ', '+') }}:wght@300;400;500;600&family={{ fonts.m|replace(' ', '+') }}:wght@400;700&display=swap">
+<style>
+.ig,.ig *{box-sizing:border-box;margin:0;padding:0}
+.ig{position:relative;width:{{ width }}px;height:{{ height }}px;overflow:hidden;color:var(--ink);font-family:var(--fb);
+  background:radial-gradient(1300px 800px at 62% 14%,var(--bg2),var(--bg1) 72%)}
+.ig .bg{position:absolute;inset:0;pointer-events:none}
+.ig .main{position:absolute;left:110px;right:110px;top:84px;bottom:116px;display:flex;flex-direction:column}
+.ig .head{display:flex;justify-content:space-between;align-items:flex-start;gap:30px;height:var(--hh,400px);flex:none}
+.ig .head .txt{width:900px}
+.ig .eyebrow{font-family:var(--fm);font-size:21px;letter-spacing:.24em;text-transform:uppercase;color:var(--a);margin-bottom:18px}
+.ig h1{font-family:var(--fh);font-weight:var(--hw,700);font-size:72px;line-height:1.05;letter-spacing:var(--hl,0);text-transform:var(--ht,none);margin-bottom:20px}
+.ig .sub{font-size:31px;line-height:1.35;color:var(--mute)}
+.ig .hero{flex:none;width:480px;height:400px}
+.ig .lab{font-family:var(--fm);font-size:21px;letter-spacing:.22em;text-transform:uppercase;color:var(--a);margin:12px 0 16px;flex:none;display:flex;align-items:center;gap:18px}
+.ig .lab.gap{margin-top:12px}
+.ig .lab:after{content:"";flex:1;height:2px;background:var(--line)}
+.ig .fill{flex:1;min-height:0;display:flex;flex-direction:column;justify-content:space-evenly}
+.ig .band{margin-top:0;display:grid;grid-template-columns:1.05fr 1fr;gap:48px;align-items:center;padding:34px 50px;border-radius:var(--r);background:var(--paper);color:var(--paperink);flex:none}
+.ig .band .q{font-family:var(--fh);font-weight:700;font-size:40px;line-height:1.14;text-transform:var(--ht,none)}
+.ig .band ul{list-style:none;font-size:24px;line-height:1.35}
+.ig .band li{position:relative;padding-left:26px;margin:7px 0}
+.ig .band li:before{content:"";position:absolute;left:0;top:11px;width:12px;height:12px;border-radius:50%;background:var(--b)}
+.ig .mark{position:absolute;right:44px;bottom:34px;display:flex;align-items:center;gap:16px;font-family:'Space Mono',monospace;font-size:30px;font-weight:700;letter-spacing:.06em;color:#fff;padding:8px 26px 8px 10px;border-radius:999px;background:rgba(10,14,20,.7);border:1px solid rgba(255,255,255,.3)}
+.ig .mark svg{width:52px;height:52px;display:block}
+.ig .left{display:contents}
+.ig .head{order:1}.ig .fill{order:2}.ig .band{order:3}
+.ig.landscape .main{top:70px;bottom:90px;flex-direction:row;gap:60px}
+.ig.landscape .left{display:flex;flex-direction:column;justify-content:space-between;gap:28px;width:600px;flex:none;min-height:0}
+.ig.landscape .head{display:block;height:auto}
+.ig.landscape .head .txt{width:100%}
+.ig.landscape h1{font-size:60px}
+.ig.landscape .sub{font-size:28px}
+.ig.landscape .hero{display:block;width:360px;height:300px;margin:22px 0 0 auto}
+.ig.landscape .fill{order:0;width:1380px;flex:none}
+.ig.landscape .band{grid-template-columns:1fr;gap:18px;padding:30px 34px}
+.ig.landscape .band .q{font-size:36px}
+.ig.landscape .band ul{font-size:22px}
+{% block css %}{% endblock %}
+</style>
+<div class="ig {{ layout }}" style="--bg1:{{ pal.bg1 }};--bg2:{{ pal.bg2 }};--ink:{{ pal.ink }};--mute:{{ pal.mute }};--a:{{ pal.a }};--b:{{ pal.b }};--card:{{ pal.card }};--line:{{ pal.line }};--paper:{{ pal.paper }};--paperink:{{ pal.paperink }};--r:{{ pal.r }}px;--fh:'{{ fonts.h }}',serif;--fb:'{{ fonts.b }}',sans-serif;--fm:'{{ fonts.m }}',monospace;--hw:{{ fonts.hw }};--ht:{{ fonts.ht }};--bt:{{ fonts.bt }}">
+  <svg class="bg" width="{{ width }}" height="{{ height }}" viewBox="0 0 {{ width }} {{ height }}">
+    {% for s in stars %}<circle cx="{{ s[0] }}" cy="{{ s[1] }}" r="{{ s[2] }}" fill="{{ pal.ink }}" opacity="{{ s[3] }}"/>{% endfor %}
+    <g{% if layout == "landscape" %} transform="translate(660 0)"{% endif %}>{% block bg %}{% endblock %}</g>
+  </svg>
+  <div class="main">
+    <div class="left">
+      <div class="head">
+        <div class="txt">
+          <div class="eyebrow">{{ eyebrow }}</div>
+          <h1>{{ c.title }}</h1>
+          <p class="sub">{{ c.subtitle }}</p>
+        </div>
+        <svg class="hero" viewBox="0 0 480 400">{% block hero %}{% endblock %}</svg>
+      </div>
+      <div class="band">
+        <div class="q">{{ c.rule }}</div>
+        <ul>{% for n in c.notes %}<li>{{ n }}</li>{% endfor %}</ul>
+      </div>
+    </div>
+    <div class="fill">{% block body %}{% endblock %}</div>
+  </div>
+  <div class="mark">{{ logo }}<span>notestack.ai</span></div>
+</div>

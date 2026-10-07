@@ -19,7 +19,7 @@ const MODES: { id: Mode; label: string }[] = [
   { id: "file", label: "Upload files" },
 ];
 
-const FILE_ACCEPT = ".md,.markdown,.txt,.html,.htm,.pdf,text/markdown,text/plain,text/html,application/pdf";
+const FILE_ACCEPT = ".md,.markdown,.txt,.vtt,.html,.htm,.pdf,text/vtt,text/markdown,text/plain,text/html,application/pdf";
 
 const EXAMPLES = ["yourblog.com", "yourname.substack.com", "medium.com/@you"];
 
@@ -234,7 +234,7 @@ export default function Welcome() {
             <p className="muted small">
               {mode === "feed" && "Substack, Ghost, WordPress, Medium or anything with a feed. We find the feed, pull in your archive and keep it in sync."}
               {mode === "url" && "Any single article on the web. Add more later from Sources."}
-              {mode === "file" && "Markdown, text, HTML or PDF: drafts, exports and posts that never had a feed. Add as many as you like."}
+              {mode === "file" && "Markdown, text, VTT transcripts, HTML or PDF: drafts, exports and posts that never had a feed. Add as many as you like."}
             </p>
             <form onSubmit={submit} className="welcome-form">
               {mode === "file" ? (

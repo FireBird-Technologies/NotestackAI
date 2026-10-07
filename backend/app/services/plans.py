@@ -41,6 +41,8 @@ class Plan:
     # Per-workspace shares of what blog2video only limits account-wide (keys in VIDEO_LIMITS; 0 = none).
     video_limits: dict = field(default_factory=dict)
     videos_monthly: bool = True
+    reports: int = 0  # reports a month; -1 = unlimited
+    infographics: int = 0  # infographics a month; -1 = unlimited
 
 
 # metric -> period it counts over (app/services/video_limits.py)
@@ -72,6 +74,8 @@ DEFAULT_PLANS: dict[str, Plan] = {
         audio_minutes=3,
         videos=1,
         launch_kits=2,
+        reports=2,
+        infographics=2,
         voice_cloning=False,
         brand_kit=False,
         features=(
@@ -80,6 +84,8 @@ DEFAULT_PLANS: dict[str, Plan] = {
             "3 min of audio overviews a month",
             "1 video to try it",
             "2 Launch Kits a month",
+            "2 reports a month",
+            "2 infographics a month",
         ),
         video_limits=FREE_VIDEO_LIMITS,
         videos_monthly=False,
@@ -94,6 +100,8 @@ DEFAULT_PLANS: dict[str, Plan] = {
         audio_minutes=60,
         videos=10,
         launch_kits=50,
+        reports=30,
+        infographics=30,
         voice_cloning=True,
         brand_kit=True,
         features=(
@@ -101,6 +109,8 @@ DEFAULT_PLANS: dict[str, Plan] = {
             "60 min of audio overviews a month",
             "10 videos a month",
             "50 Launch Kits a month",
+            "30 reports a month",
+            "30 infographics a month",
             "Voice cloning with consent",
             "Your brand colors and logo",
         ),
@@ -117,6 +127,8 @@ DEFAULT_PLANS: dict[str, Plan] = {
         audio_minutes=240,
         videos=20,
         launch_kits=-1,
+        reports=-1,
+        infographics=-1,
         voice_cloning=True,
         brand_kit=True,
         features=(
@@ -124,6 +136,8 @@ DEFAULT_PLANS: dict[str, Plan] = {
             "240 min of audio overviews a month",
             "20 videos a month",
             "Unlimited Launch Kits",
+            "Unlimited reports",
+            "Unlimited infographics",
             "Launchpad calendar and resurfacing",
             "Priority rendering",
         ),
@@ -140,7 +154,8 @@ def _plan_from_row(row: PlanRecord) -> Plan:
     return Plan(id=row.id, name=row.name, tagline=row.tagline or "",
                 price_monthly_usd=float(row.price_monthly_usd or 0), sources=row.sources,
                 indexed_posts=row.indexed_posts, audio_minutes=row.audio_minutes,
-                videos=row.videos, launch_kits=row.launch_kits, voice_cloning=bool(row.voice_cloning),
+                videos=row.videos, launch_kits=row.launch_kits, reports=row.reports, infographics=row.infographics,
+                voice_cloning=bool(row.voice_cloning),
                 brand_kit=bool(row.brand_kit), features=tuple(row.features or ()),
                 video_premium=bool(row.video_premium), videos_monthly=bool(row.videos_monthly),
                 video_limits={**{k: 0 for k in VIDEO_LIMITS}, **(row.video_limits or {})})

@@ -20,6 +20,7 @@ feedparser==6.*
 beautifulsoup4==4.*
 pypdf==5.*
 stripe==13.*
+jinja2==3.*
 
 # Dev tools (tests, lint)
 pytest==8.*

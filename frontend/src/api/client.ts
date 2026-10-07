@@ -143,6 +143,7 @@ const TYPES_BY_EXT: Record<string, string> = {
   markdown: "text/markdown",
   txt: "text/plain",
   html: "text/html",
+  vtt: "text/vtt",
   htm: "text/html",
   pdf: "application/pdf",
   mp3: "audio/mpeg",

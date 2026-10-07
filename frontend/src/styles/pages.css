@@ -3394,8 +3394,8 @@ select.input,
 
 .nbv-chat-delete:hover,
 .nbv-chat-delete.armed {
-  color: var(--white);
-  background: var(--blue-20);
+  color: #ff8a8a;
+  background: rgba(239, 68, 68, 0.22);
 }
 
 .nbv-history-empty {
@@ -3415,7 +3415,7 @@ select.input,
   }
 
   .nbv {
-    grid-template-columns: clamp(11rem, 15vw, 13rem) minmax(0, 1fr);
+    grid-template-columns: clamp(16rem, 20vw, 20rem) minmax(0, 1fr);
     grid-template-areas:
       "history chat"
       "history side";
@@ -3483,7 +3483,7 @@ select.input,
   }
 
   .nbv {
-    grid-template-columns: clamp(11rem, 15vw, 13rem) minmax(0, 1fr) clamp(18rem, 24vw, 24rem);
+    grid-template-columns: clamp(16rem, 20vw, 20rem) minmax(0, 1fr) clamp(18rem, 24vw, 24rem);
     grid-template-areas: "history chat side";
   }
 
@@ -5546,4 +5546,2678 @@ details.map-legend[open] summary {
   font-size: 0.9rem;
   resize: vertical;
   line-height: 1.5;
+}
+
+/* Quiz: settings dialog and player. Black, white and blue only: a right answer is filled blue with a tick, a wrong
+   one is outlined and struck through. */
+.quiz-lang {
+  max-width: 260px;
+}
+
+.nbv-chat-quiz {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.quiz-play {
+  display: grid;
+  gap: 14px;
+}
+
+.quiz-progress {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+
+.quiz-progress span {
+  display: block;
+  height: 100%;
+  background: var(--blue);
+  transition: width 0.25s ease;
+}
+
+.quiz-q {
+  margin: 0;
+  font: 500 1.15rem/1.45 var(--font-display);
+}
+
+.quiz-options {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.quiz-opt {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--white);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.quiz-opt:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.quiz-opt.on {
+  border-color: var(--blue);
+  background: var(--blue-10);
+}
+
+.quiz-opt.right {
+  border-color: var(--blue);
+  background: var(--blue-20);
+}
+
+.quiz-opt.wrong {
+  border-style: dashed;
+  color: var(--text-3);
+  text-decoration: line-through;
+}
+
+.quiz-opt:disabled {
+  cursor: default;
+}
+
+.quiz-mark {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+}
+
+.quiz-mark.square {
+  border-radius: 5px;
+}
+
+.quiz-opt.on .quiz-mark,
+.quiz-opt.right .quiz-mark {
+  border-color: var(--blue);
+  background: var(--blue);
+}
+
+.quiz-short.input {
+  height: auto;
+  resize: vertical;
+}
+
+.quiz-feedback {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.quiz-feedback.right {
+  border-color: var(--blue-60);
+  background: var(--blue-10);
+}
+
+.quiz-feedback p {
+  margin: 0;
+}
+
+.quiz-result {
+  display: grid;
+  gap: 14px;
+}
+
+.quiz-score {
+  margin: 0;
+  font: 600 3rem var(--font-display);
+}
+
+.quiz-score span {
+  color: var(--text-3);
+  font-size: 1.5rem;
+}
+
+.quiz-review {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 20px;
+}
+
+.quiz-review li.wrong {
+  color: var(--text-3);
+}
+
+
+/* Flashcards: a card that flips between its front and its answer. */
+.fc-deck {
+  display: grid;
+  gap: 14px;
+}
+
+.fc-count {
+  margin: 0;
+}
+
+.fc-card {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 12px;
+  min-height: 240px;
+  padding: 28px 24px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--white);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+
+.fc-card.flipped {
+  border-color: var(--blue-60);
+  background: var(--blue-10);
+}
+
+.fc-side {
+  font: 0.75rem var(--font-mono);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.fc-text {
+  font: 500 1.25rem/1.5 var(--font-display);
+}
+
+.fc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* Reports: the create dialog and the report page. Black, white and blue only. */
+.rp-dialog {
+  gap: 18px;
+}
+
+.rp-source {
+  display: grid;
+  gap: 12px;
+}
+
+.rp-source-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-self: start;
+  padding: 8px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--white);
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.rp-formats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.rp-format {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  padding: 18px 20px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--white);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rp-format.on {
+  border-color: var(--blue);
+  background: var(--blue-20);
+}
+
+.rp-format svg {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+}
+
+.rp-new {
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--white);
+  color: var(--black);
+  font: 600 0.7rem var(--font-body);
+}
+
+.rp-templates {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.rp-template {
+  position: relative;
+  display: grid;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+}
+
+.rp-template.on {
+  border-color: var(--blue);
+  background: var(--blue-10);
+}
+
+.rp-template.wait {
+  min-height: 110px;
+  background: var(--surface);
+}
+
+.rp-template-main {
+  display: grid;
+  gap: 8px;
+  padding: 16px 56px 16px 18px;
+  border: 0;
+  background: transparent;
+  color: var(--white);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rp-pencil {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--white);
+  cursor: pointer;
+}
+
+.rp-pencil:hover {
+  background: var(--blue-20);
+}
+
+.rp-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+}
+
+.rp-header {
+  display: grid;
+  gap: 6px;
+  padding: 16px 18px;
+  border-radius: var(--radius);
+  background: var(--blue-10);
+}
+
+.rp-instructions.input {
+  height: auto;
+  min-height: 190px;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.rp-page {
+  display: grid;
+  gap: 18px;
+  max-width: 820px;
+}
+
+.rp-head h1 {
+  margin: 4px 0 12px;
+}
+
+.rp {
+  display: grid;
+  gap: 22px;
+}
+
+.rp-block {
+  display: grid;
+  gap: 10px;
+}
+
+.rp-h {
+  margin: 0;
+  font: 500 1.1rem var(--font-display);
+}
+
+.rp-callout {
+  padding: 14px 18px;
+  border-left: 2px solid var(--blue);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--blue-10);
+}
+
+.rp-callout p {
+  margin: 4px 0 0;
+}
+
+.rp-terms {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.rp-terms dt {
+  font-weight: 600;
+}
+
+.rp-terms dd {
+  margin: 2px 0 0;
+  color: var(--text-2);
+}
+
+.rp-table-wrap {
+  overflow-x: auto;
+}
+
+.rp-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rp-table th,
+.rp-table td {
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.rp-table th {
+  background: var(--surface-2);
+}
+
+.rp-timeline {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0 0 0 18px;
+  border-left: 1px solid var(--blue-60);
+  list-style: none;
+}
+
+.rp-timeline li {
+  display: grid;
+  gap: 2px;
+}
+
+.rp-timeline p {
+  margin: 0;
+  color: var(--text-2);
+}
+
+.rp-visual {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+
+@media (max-width: 640px) {
+  .rp-formats,
+  .rp-templates {
+    grid-template-columns: 1fr;
+  }
+}
+
+.rp-suggest-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+/* A spot in a report where the AI thinks a visual would help */
+.rp-suggestion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 16px;
+  border: 1px dashed var(--blue-60);
+  border-radius: var(--radius);
+  background: var(--blue-05);
+}
+
+.rp-suggestion p {
+  margin: 2px 0 0;
+}
+
+.rp-visual-wrap {
+  position: relative;
+}
+
+.rp-remove {
+  justify-self: end;
+}
+
+.rp-add-options {
+  display: grid;
+  gap: 10px;
+}
+
+.rp-share-link {
+  display: flex;
+  gap: 8px;
+}
+
+.rp-share-link .input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The page a share link opens */
+.rp-public {
+  display: grid;
+  align-content: start;
+  gap: 24px;
+  min-height: 100vh;
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 20px var(--gutter) 56px;
+}
+
+.rp-public-empty {
+  justify-items: center;
+  align-content: center;
+  text-align: center;
+}
+
+.rp-public-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rp-public-body h1 {
+  margin: 4px 0 20px;
+}
+
+.rp-public-foot {
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+  text-align: center;
+}
+
+.rp-sources {
+  position: relative;
+}
+
+.rp-sources-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  width: min(360px, 86vw);
+  max-height: 60vh;
+  overflow: auto;
+  padding: 14px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--black);
+  box-shadow: var(--glow-md);
+}
+
+.rp-sources-pop ul {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+/* Quiz and flashcard dialogs: wide, source on the left and focus on the right, so nothing needs scrolling. */
+.modal.modal-wide:has(.sf-grid) {
+  width: min(1180px, 100%);
+}
+
+.sf-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 28px;
+  align-items: start;
+}
+
+.sf-col {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  min-width: 0;
+}
+
+.sf-grid .picker-list {
+  max-height: 168px;
+}
+
+.sf-grid .vw-focus-grid {
+  grid-template-columns: 1fr;
+}
+
+.sf-grid .vw-focus-desc {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.sf-grid .vw-focus-custom textarea {
+  min-height: 56px;
+}
+
+.sf-settings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 28px;
+}
+
+/* The dialog itself never scrolls when the window is tall enough for it; the post list scrolls on its own. */
+@media (min-height: 760px) {
+  .modal:has(.sf-grid) {
+    overflow: hidden;
+  }
+}
+
+@media (max-width: 860px) {
+  .sf-grid,
+  .sf-settings {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Quiz, flashcards: the notebook dropdown with a posts dropdown beside it (no list underneath), and three columns */
+.sp-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.sp-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 46px;
+  padding: 0 18px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--white);
+  font: inherit;
+  cursor: pointer;
+}
+
+.sp-trigger.open,
+.sp-trigger:focus-visible {
+  border-color: var(--blue);
+  outline: none;
+}
+
+.sp-trigger:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.sp-panel {
+  position: fixed;
+  z-index: 70;
+  display: grid;
+  gap: 8px;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--black);
+  box-shadow: var(--glow-lg);
+}
+
+.sp-note {
+  margin: 0;
+}
+
+.modal.modal-wide:has(.sf-3) {
+  width: min(1360px, 100%);
+}
+
+.sf-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 36px;
+}
+
+.sf-3 .sf-col {
+  gap: 18px;
+}
+
+/* In the third column the settings stack, one under another, with the button last */
+.sf-3 .sf-settings {
+  grid-template-columns: 1fr;
+  gap: 18px;
+}
+
+@media (max-width: 1100px) {
+  .sf-3 {
+    grid-template-columns: 1fr;
+  }
+
+  .sp-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Create report: one size for every view, wide, so it never grows or scrolls. */
+/* videos.css also sizes a modal that holds .vw-in-modal, and loads later: the extra class wins over it */
+.modal.modal-wide:has(.rp-dialog) {
+  width: min(1320px, 100%);
+}
+
+.rp-dialog {
+  height: min(620px, calc(100vh - 100px));
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 14px;
+}
+
+.rp-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.rp-source-view {
+  grid-row: 2 / 4;
+  align-content: start;
+  overflow: auto;
+}
+
+.rp-formats {
+  gap: 12px;
+}
+
+.rp-format {
+  gap: 4px;
+  padding: 12px 18px;
+}
+
+.rp-area {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-height: 0;
+}
+
+.rp-templates {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.rp-template-main {
+  align-content: start;
+  gap: 6px;
+  padding: 14px 54px 14px 16px;
+}
+
+.rp-template-main strong {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: break-word;
+}
+
+.rp-template-main .muted {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 0.85rem;
+}
+
+.rp-template.wait {
+  align-content: center;
+  gap: 10px;
+  min-height: 104px;
+  padding: 16px;
+}
+
+.rp-spin {
+  margin-left: 4px;
+}
+
+.rp-loading-text {
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-3);
+}
+
+.rp-suggest-label {
+  margin-top: 6px;
+}
+
+.rp-editor {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  height: 100%;
+  min-height: 0;
+}
+
+.rp-editor-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.rp-lang {
+  width: 220px;
+  flex-shrink: 0;
+}
+
+/* A text area, not the single line pill the other inputs are */
+.rp-instructions.input {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 140px;
+  padding: 16px 18px;
+  border-radius: var(--radius);
+  line-height: 1.65;
+  resize: none;
+}
+
+.rp-editing {
+  margin: 0;
+}
+
+.rp-bar {
+  grid-row: 1;
+}
+
+.rp-formats {
+  grid-row: 2;
+}
+
+.rp-area {
+  grid-row: 3;
+}
+
+/* The instructions fill the frame, so the Interactive view has no empty gap under it */
+.rp-area:has(.rp-editor) {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rp-area > .rp-editor {
+  flex: 1;
+  height: auto;
+}
+
+/* Interactive: the instructions box is a comfortable size, not the whole frame (the pencil editor still fills it) */
+.rp-area:not(:has(.rp-editing)) > .rp-editor {
+  flex: 0 1 auto;
+  height: 300px;
+  max-height: 100%;
+}
+
+.rp-foot {
+  grid-row: 4;
+  display: grid;
+  gap: 8px;
+  align-self: end;
+}
+
+@media (max-width: 900px) {
+  .rp-dialog {
+    height: auto;
+  }
+
+  .rp-templates {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .rp-editor-top {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* The instructions label: bigger and clear of the format cards above it */
+.rp-editor-top .vw-label {
+  color: var(--white);
+  font: 500 1.05rem var(--font-body);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.rp-area:not(:has(.rp-editing)) > .rp-editor {
+  margin-top: 20px;
+}
+
+/* Create report, the template editor: the template and source on the left, the instructions filling the right */
+.rp-edit {
+  grid-row: 1 / 4;
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 32px;
+  min-height: 0;
+}
+
+.rp-edit-side {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+}
+
+.rp-back {
+  justify-self: start;
+  padding: 6px 2px;
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  cursor: pointer;
+}
+
+.rp-back:hover {
+  color: var(--white);
+}
+
+.rp-edit-side .rp-header {
+  gap: 8px;
+  padding: 20px;
+  border: 1px solid var(--blue-35);
+  border-radius: var(--radius);
+}
+
+.rp-edit-side .rp-header strong {
+  font: 500 1.35rem/1.2 var(--font-display);
+}
+
+.rp-edit-tip {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.rp-edit-main {
+  min-height: 0;
+}
+
+.rp-edit-main .rp-editor {
+  height: 100%;
+}
+
+@media (max-width: 900px) {
+  .rp-edit {
+    grid-template-columns: 1fr;
+    grid-row: 1 / 4;
+  }
+}
+
+/* A report on the page: contents on the left, large light headings and roomy text on the right */
+.rp-page,
+.rp-public {
+  max-width: 1240px;
+}
+
+.rp-layout {
+  display: block;
+}
+
+.rp-layout.has-toc {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 56px;
+  align-items: start;
+}
+
+.rp-toc {
+  position: sticky;
+  top: 24px;
+  display: grid;
+  gap: 18px;
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+}
+
+.rp-toc-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--surface-2);
+}
+
+.rp-toc ol {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rp-toc button {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-2);
+  font: 400 1rem/1.4 var(--font-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+.rp-toc button:hover {
+  color: var(--white);
+}
+
+.rp-toc button.on {
+  background: var(--surface-2);
+  color: var(--white);
+}
+
+.rp-toc-n {
+  flex-shrink: 0;
+  color: var(--text-3);
+}
+
+.rp {
+  gap: 36px;
+  min-width: 0;
+}
+
+.rp-slot {
+  display: grid;
+  gap: 18px;
+  scroll-margin-top: 24px;
+}
+
+.rp-prose h2 {
+  margin: 0 0 18px;
+  font: 400 clamp(2rem, 3.2vw, 2.9rem) / 1.15 var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+.rp-prose h3 {
+  margin: 28px 0 10px;
+  font: 500 1.45rem/1.3 var(--font-display);
+}
+
+.rp-prose p,
+.rp-prose li {
+  font-size: 1.1rem;
+  line-height: 1.75;
+  color: var(--text-2);
+}
+
+.rp-prose strong {
+  color: var(--white);
+}
+
+.rp-prose ul {
+  display: grid;
+  gap: 12px;
+  padding-left: 28px;
+  list-style: circle;
+}
+
+.rp-prose li::marker {
+  color: var(--text-2);
+}
+
+@media (max-width: 960px) {
+  .rp-layout.has-toc {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+
+  .rp-toc {
+    display: none;
+  }
+}
+
+/* Sources under an answer: each source once, with a clickable number for every place it was cited */
+.cites-grouped {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cites-grouped li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+
+.cite-nums {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.cite-num {
+  vertical-align: baseline;
+  height: 22px;
+  min-width: 22px;
+  margin: 0 3px;
+  font-size: 0.75rem;
+}
+
+.sp-row {
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+}
+
+.sp-trigger-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The fixed notebook and its posts dropdown, one under the other */
+.sp-fixed {
+  display: grid;
+  gap: 10px;
+}
+
+.sp-notebook {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 0 18px;
+  border: 1px solid var(--blue-60);
+  border-radius: 999px;
+  background: var(--blue-10);
+  min-width: 0;
+}
+
+.sp-notebook strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.sp-notebook-label {
+  flex-shrink: 0;
+  font: 0.7rem var(--font-mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+.sp-notebook .muted {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* Quiz and flashcards layout: source and its settings, then the focus, then the rest. */
+.sf-below {
+  display: grid;
+  gap: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.sf-submit {
+  display: grid;
+  justify-items: end;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+/* The character count stays on one line */
+.vw-focus-custom-foot .mono {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.rp-bar-title {
+  font: 500 1.15rem var(--font-display);
+}
+
+/* The source view: a title row, the two columns, and Done */
+.rp-source-view {
+  gap: 0;
+}
+
+/* Create report, one screen: the sources and focus on the left, the format and templates on the right */
+.rp-dialog {
+  height: min(740px, calc(100vh - 100px));
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 16px;
+}
+
+.rp-split {
+  grid-row: 1;
+  grid-template-columns: 420px minmax(0, 1fr);
+  gap: 40px;
+  min-height: 0;
+}
+
+.rp-left {
+  align-content: start;
+  gap: 14px;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.rp-left .vw-focus-grid {
+  grid-template-columns: 1fr;
+}
+
+.rp-left .vw-focus-desc {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.rp-left .vw-focus-custom textarea {
+  min-height: 56px;
+}
+
+.rp-right {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 16px;
+  min-height: 0;
+}
+
+.rp-right .rp-area {
+  grid-row: auto;
+}
+
+.rp-right .rp-templates {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.rp-edit {
+  grid-row: 1;
+}
+
+.rp-foot {
+  grid-row: 2;
+}
+
+@media (max-width: 1000px) {
+  .rp-dialog {
+    height: auto;
+  }
+
+  .rp-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Quiz and flashcards open full screen like the Mind Constellation, and can be minimised to a pill */
+.so-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 45; /* under the dialogs (50), so a source opened from a citation shows above it */
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: auto;
+  color: var(--white);
+  background:
+    radial-gradient(ellipse 60% 50% at 18% 28%, rgba(33, 124, 255, 0.14), transparent 70%),
+    radial-gradient(ellipse 55% 55% at 82% 72%, rgba(33, 124, 255, 0.22), transparent 70%),
+    radial-gradient(ellipse at 50% 45%, #13224a 0%, #0a1430 60%, #060c20 100%);
+  animation: so-open 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.so-overlay[hidden] {
+  display: none;
+}
+
+@keyframes so-open {
+  from {
+    opacity: 0;
+    transform: scale(1.06);
+    filter: blur(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+.so-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 28px;
+}
+
+.so-title {
+  margin: 0;
+  overflow: hidden;
+  font: 500 1.1rem var(--font-display);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.so-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.so-body {
+  display: grid;
+  align-items: center;
+  justify-items: center;
+  padding: 8px 20px 48px;
+}
+
+.so-card {
+  width: min(860px, 100%);
+  padding: 28px 32px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--glow-lg);
+}
+
+.so-pill {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  max-width: min(420px, calc(100vw - 40px));
+  border: 1px solid var(--blue-60);
+  border-radius: 999px;
+  background: #060c20;
+  box-shadow: var(--glow-md);
+  animation: so-open 0.3s ease;
+}
+
+.so-pill-open {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 6px 10px 16px;
+  border: 0;
+  background: transparent;
+  color: var(--white);
+  font: inherit;
+  cursor: pointer;
+}
+
+.so-pill-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.so-pill-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--blue);
+  box-shadow: 0 0 10px var(--blue);
+}
+
+.so-pill-close {
+  margin-right: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .so-overlay,
+  .so-pill {
+    animation: none;
+  }
+}
+
+/* Create report, one column: the sources in a row on top, then the format, then the templates or instructions */
+.rp-split {
+  grid-template-columns: 1fr;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 16px;
+  align-content: start;
+}
+
+.rp-source-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 16px;
+}
+
+.rp-source-row > .field {
+  flex: 0 0 auto;
+}
+
+.rp-source-row .sp-fixed {
+  flex: 1 1 560px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+}
+
+.rp-source-row .vw-label {
+  display: none;
+}
+
+.rp-split > .rp-formats {
+  grid-row: auto;
+}
+
+.rp-split .rp-format {
+  align-content: start;
+  min-height: 0;
+  padding: 14px 20px;
+}
+
+.rp-split .rp-area {
+  grid-row: auto;
+}
+
+.rp-split .rp-templates {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+@media (max-width: 1000px) {
+  .rp-split .rp-templates {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.rp-source-row > .field:has(.picker) {
+  flex: 1 1 100%;
+}
+
+.rp-dialog {
+  height: min(680px, calc(100vh - 100px));
+}
+
+/* Posts and chats: two matching dropdowns side by side under the notebook bar */
+.sp-menus {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+/* The sources at the end of a report */
+.rp-sources-section {
+  margin-top: 12px;
+  padding-top: 28px;
+  border-top: 1px solid var(--line);
+}
+
+.rp-sources-h {
+  margin: 0;
+  font: 400 clamp(1.6rem, 2.4vw, 2.2rem) / 1.2 var(--font-display);
+}
+
+/* A suggested visual while it is being built */
+.rp-suggestion.building {
+  border-style: solid;
+  border-color: var(--blue-60);
+}
+
+.rp-building {
+  display: grid;
+  gap: 8px;
+  max-width: 420px;
+  margin-top: 10px;
+}
+
+.rp-building-label {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 10px;
+  color: var(--text-2);
+  font-size: 0.875rem;
+}
+
+/* A report, cleaner: a clear title, a light contents list, a readable line length and quiet section dividers */
+.rp-public {
+  max-width: 1160px;
+  gap: 20px;
+}
+
+.rp-public-bar {
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.rp-public-body h1,
+.rp-head h1 {
+  margin: 8px 0 12px;
+  font: 500 clamp(2.2rem, 4.2vw, 3.4rem) / 1.08 var(--font-display);
+  letter-spacing: -0.02em;
+}
+
+.rp-meta {
+  margin: 0 0 36px;
+  color: var(--text-3);
+  font-size: 0.9rem;
+}
+
+.rp-layout.has-toc {
+  grid-template-columns: 250px minmax(0, 1fr);
+  gap: 64px;
+}
+
+/* Contents: a small label and a plain list, the current section marked by a blue bar */
+.rp-toc {
+  gap: 12px;
+  top: 28px;
+}
+
+.rp-toc-icon {
+  display: none;
+}
+
+.rp-toc::before {
+  content: "Contents";
+  padding-left: 14px;
+  color: var(--text-3);
+  font: 0.7rem var(--font-mono);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.rp-toc ol {
+  gap: 2px;
+}
+
+.rp-toc button {
+  padding: 8px 14px;
+  border-radius: 0;
+  box-shadow: inset 1px 0 0 var(--line-strong);
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.rp-toc button.on {
+  background: transparent;
+  box-shadow: inset 2px 0 0 var(--blue);
+  color: var(--white);
+}
+
+.rp {
+  gap: 0;
+}
+
+.rp-slot {
+  gap: 20px;
+}
+
+/* Each section is set apart by a quiet rule and room, the first one is not */
+.rp-slot:has(> .rp-prose h2) {
+  padding: 40px 0 8px;
+  border-top: 1px solid var(--line);
+}
+
+.rp-slot:first-child:has(> .rp-prose h2) {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.rp-slot:not(:has(> .rp-prose h2)) {
+  padding: 8px 0;
+}
+
+.rp-prose h2 {
+  margin: 0 0 18px;
+  font: 500 clamp(1.7rem, 2.6vw, 2.2rem) / 1.2 var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+.rp-prose h3 {
+  margin: 30px 0 10px;
+  font: 500 1.25rem/1.3 var(--font-display);
+}
+
+.rp-prose p,
+.rp-prose li {
+  max-width: 70ch;
+  font-size: 1.05rem;
+  line-height: 1.8;
+}
+
+.rp-prose p {
+  margin: 0 0 16px;
+}
+
+.rp-sources-section {
+  margin-top: 24px;
+}
+
+.rp-public-foot {
+  margin-top: 24px;
+}
+
+@media (max-width: 960px) {
+  .rp-public-body h1,
+  .rp-head h1 {
+    font-size: 2.1rem;
+  }
+}
+
+/* A Mind Constellation inside a report: the same map, in a frame */
+.mm-overlay.mm-embedded {
+  position: relative;
+  inset: auto;
+  z-index: auto;
+  height: clamp(420px, 62vh, 640px);
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  animation: none;
+}
+
+.rp-map-hint {
+  margin: 0;
+}
+
+/* Cards with action buttons: the buttons and Delete share one line, and every button is the same size */
+.artifact-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 8px;
+}
+
+.artifact-inline > * {
+  flex: 0 0 100%;
+  min-width: 0;
+}
+
+.artifact-inline .artifact-body,
+.artifact-inline .artifact-body .row,
+.artifact-inline .artifact-actions {
+  display: contents;
+}
+
+.artifact-inline .artifact-body > p {
+  flex: 0 0 100%;
+  margin: 0;
+}
+
+.artifact-inline .btn,
+.artifact-inline .artifact-actions button {
+  flex: 0 0 auto;
+  width: auto;
+  height: 40px;
+  padding: 0 20px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+/* Infographics: the dialog (source and prompt left, themes right), the theme cards and the full-screen viewer */
+.modal.modal-wide:has(.ig-grid) {
+  width: min(1180px, 100%);
+}
+
+.ig-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+  gap: 32px;
+  align-items: start;
+}
+
+/* .input is a one-line pill: this is a multi-line box, so it gets a height, padding and a softer corner */
+.ig-prompt.input {
+  height: auto;
+  min-height: 170px;
+  padding: 14px 18px;
+  border-radius: 18px;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.ig-themes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.ig-theme {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  text-align: left;
+  border: 1px solid var(--line, rgba(128, 128, 128, 0.3));
+  border-radius: 12px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.ig-theme img {
+  width: 100%;
+  aspect-ratio: 1600 / 1000;
+  object-fit: cover;
+  object-position: top;
+  border-radius: 8px;
+}
+
+.ig-theme-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.ig-theme.on {
+  border-color: var(--accent, #7aa2ff);
+  box-shadow: 0 0 0 2px var(--accent, #7aa2ff);
+}
+
+.ig-theme:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.ig-thumb {
+  display: block;
+  width: 100%;
+  max-width: 280px;
+  padding: 0;
+  border: 1px solid var(--line, rgba(128, 128, 128, 0.3));
+  border-radius: 10px;
+  overflow: hidden;
+  background: none;
+  cursor: zoom-in;
+}
+
+/* The page is 1600 x 2260; the frame is scaled down to the width it is given */
+.ig-frame {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  background: #0f1720;
+  border-radius: 10px;
+}
+
+.ig-frame iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border: 0;
+  transform-origin: top left;
+  pointer-events: none;
+}
+
+/* The page (1600 x 2260) fills the modal, so its text is easy to read; the modal scrolls */
+/* Sized from the window's height so the whole page fits with no scrolling: 170px is the modal's title and toolbar, 1600 x 2260 is the page */
+.modal.modal-wide:has(.ig-viewer) {
+  width: min(calc((100vh - 170px) * 1600 / 2260 + 36px), 100%);
+  max-height: calc(100vh - 16px);
+  overflow: hidden;
+}
+
+.ig-viewer {
+  position: relative;
+  display: grid;
+  gap: 10px;
+  width: 100%;
+}
+
+.ig-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Over the picture, so opening it never changes the layout */
+.ig-info {
+  position: absolute;
+  top: 44px;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  display: grid;
+  gap: 4px;
+  padding: 14px 18px;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.94);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+}
+
+.ig-info p {
+  margin: 0;
+}
+
+.ig-viewer .ig-frame {
+  border-radius: 6px;
+}
+
+.ig-public .ig-frame {
+  border-radius: 10px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+}
+
+@media (max-width: 1000px) {
+  .ig-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ig-themes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.rp-infographic {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+  margin: 0;
+}
+
+.rp-infographic .ig-frame {
+  max-width: 100%;
+}
+
+.rp-public.ig-public {
+  max-width: 1000px;
+}
+
+/* A report as a flight: a "Flight plan" contents list, a path that fills as you read, and a waypoint for each section (the look of the blog posts) */
+.rp-layout.has-toc {
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 48px;
+}
+
+.rp-toc::before {
+  content: none;
+}
+
+.rp-toc-label,
+.rp-stop-label {
+  display: block;
+  font-size: 0.68rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--blue);
+}
+
+.rp-toc ol {
+  gap: 2px;
+  border-left: 1px solid var(--line);
+}
+
+.rp-toc button {
+  gap: 10px;
+  margin-left: -1px;
+  padding: 7px 10px;
+  box-shadow: none;
+  border-left: 2px solid transparent;
+  color: var(--text-3);
+  font-size: 0.85rem;
+}
+
+.rp-toc button .rp-toc-n {
+  padding-top: 2px;
+  font-size: 0.68rem;
+}
+
+.rp-toc li.done button {
+  color: var(--text-2);
+}
+
+.rp-toc button.on {
+  box-shadow: none;
+  border-left-color: var(--blue);
+  background: linear-gradient(90deg, var(--blue-10), transparent);
+  color: var(--white);
+}
+
+.rp {
+  position: relative;
+  padding-left: 40px;
+}
+
+.rp-path {
+  position: absolute;
+  left: 11px;
+  top: 6px;
+  bottom: 0;
+  width: 2px;
+  background: repeating-linear-gradient(180deg, var(--line-strong) 0 6px, transparent 6px 12px);
+}
+
+.rp-path-fill {
+  width: 100%;
+  background: linear-gradient(180deg, var(--blue-35), var(--blue));
+  box-shadow: 0 0 10px var(--blue-60);
+}
+
+.rp-path-ship {
+  position: absolute;
+  left: 50%;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 50%;
+  background: var(--white);
+  box-shadow: 0 0 12px var(--white), 0 0 24px var(--blue);
+}
+
+.rp-slot.rp-stop {
+  position: relative;
+  margin-bottom: 24px;
+  padding: 0;
+  border-top: 0;
+}
+
+.rp-slot.rp-stop:first-of-type,
+.rp-slot.rp-stop:first-of-type:has(> .rp-prose h2) {
+  padding-top: 0;
+}
+
+.rp-slot.rp-stop:has(> .rp-prose h2) {
+  padding: 0;
+  border-top: 0;
+}
+
+.rp-node {
+  position: absolute;
+  left: -36px;
+  top: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--line-strong);
+  background: var(--black);
+  transition: all 0.4s ease;
+}
+
+.rp-stop.reached .rp-node {
+  border-color: var(--blue);
+  background: var(--blue);
+  box-shadow: 0 0 14px var(--blue);
+}
+
+.rp-stop-label {
+  margin: 0;
+  color: var(--text-3);
+}
+
+.rp-stop.reached .rp-stop-label {
+  color: var(--blue);
+}
+
+.rp-prose a {
+  color: var(--white);
+  text-decoration: underline;
+  text-decoration-color: var(--blue);
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 960px) {
+  .rp {
+    padding-left: 32px;
+  }
+
+  .rp-node {
+    left: -30px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rp-node {
+    transition: none;
+  }
+}
+
+/* Quiz settings: one clean column, the way it is read (difficulty, types, sources, topic), the button in a footer */
+.qz-setup {
+  gap: 24px;
+}
+
+.qz-setup .vw-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.qz-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.modal.modal-wide:has(.qz-setup) {
+  width: min(900px, 100%);
+}
+
+/* A source's buttons stay on one row */
+.source-actions {
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+/* While a source is deleted the Delete button stays the way it looks once armed: solid white, with a dark spinner */
+.source-card.removing {
+  pointer-events: none;
+}
+
+.btn-danger.armed:disabled {
+  opacity: 1;
+}
+
+.btn-danger.armed .nbv-send-spinner {
+  border-color: rgba(0, 0, 0, 0.25);
+  border-top-color: var(--black);
+}
+
+/* Create buttons: two to a row. Audio overview (with its options) and Mind Constellation take a whole row. */
+.nbv-make {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.nbv-make .nbv-make-main,
+.nbv-make .nbv-audio-opts,
+.nbv-make .nbv-make-stars {
+  grid-column: 1 / -1;
+}
+
+/* Mind Constellation: a little night sky of its own, stars that twinkle and a slow shine across it */
+.nbv-make .nbv-make-stars {
+  position: relative;
+  overflow: hidden;
+  min-height: 64px;
+  border-color: var(--blue-35);
+  background:
+    radial-gradient(1.5px 1.5px at 12% 28%, #fff 50%, transparent 52%),
+    radial-gradient(1px 1px at 27% 70%, #fff 50%, transparent 52%),
+    radial-gradient(2px 2px at 44% 36%, #cfe0ff 50%, transparent 52%),
+    radial-gradient(1px 1px at 58% 78%, #fff 50%, transparent 52%),
+    radial-gradient(1.5px 1.5px at 72% 24%, #fff 50%, transparent 52%),
+    radial-gradient(1px 1px at 86% 62%, #cfe0ff 50%, transparent 52%),
+    radial-gradient(120% 140% at 85% 0%, var(--blue-20), transparent 60%),
+    linear-gradient(135deg, #05070f, #0a1224);
+  box-shadow: inset 0 0 24px var(--blue-10);
+}
+
+.nbv-make .nbv-make-stars::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(1px 1px at 20% 52%, #fff 50%, transparent 52%),
+    radial-gradient(1.5px 1.5px at 36% 18%, #fff 50%, transparent 52%),
+    radial-gradient(1px 1px at 52% 58%, #cfe0ff 50%, transparent 52%),
+    radial-gradient(2px 2px at 66% 46%, #fff 50%, transparent 52%),
+    radial-gradient(1px 1px at 80% 84%, #fff 50%, transparent 52%),
+    radial-gradient(1.5px 1.5px at 94% 30%, #cfe0ff 50%, transparent 52%);
+  animation: nbv-stars-twinkle 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.nbv-make .nbv-make-stars::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 40%;
+  left: -50%;
+  background: linear-gradient(100deg, transparent, rgba(160, 190, 255, 0.22), transparent);
+  animation: nbv-stars-shine 5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.nbv-make .nbv-make-stars > * {
+  position: relative;
+  z-index: 1;
+}
+
+.nbv-make .nbv-make-stars svg {
+  color: var(--white);
+  filter: drop-shadow(0 0 6px var(--blue));
+}
+
+.nbv-make .nbv-make-stars:hover:not(:disabled) {
+  box-shadow: inset 0 0 24px var(--blue-20), 0 0 18px var(--blue-35);
+}
+
+@keyframes nbv-stars-twinkle {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@keyframes nbv-stars-shine {
+  0%,
+  55% {
+    left: -50%;
+  }
+
+  100% {
+    left: 130%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nbv-make .nbv-make-stars::before,
+  .nbv-make .nbv-make-stars::after {
+    animation: none;
+  }
+}
+
+/* Mind Constellation, better: a constellation drawn in it, a title with a line under it, a deeper night sky */
+.nbv-make .nbv-make-stars {
+  min-height: 78px;
+  gap: 14px;
+  padding: 0 16px;
+  justify-content: flex-start;
+  border-color: var(--blue-60);
+  background:
+    radial-gradient(1.5px 1.5px at 8% 22%, #fff 50%, transparent 52%),
+    radial-gradient(1px 1px at 31% 82%, #fff 50%, transparent 52%),
+    radial-gradient(2px 2px at 52% 20%, #cfe0ff 50%, transparent 52%),
+    radial-gradient(1px 1px at 66% 74%, #fff 50%, transparent 52%),
+    radial-gradient(1.5px 1.5px at 78% 30%, #fff 50%, transparent 52%),
+    radial-gradient(1px 1px at 92% 70%, #cfe0ff 50%, transparent 52%),
+    radial-gradient(70% 120% at 100% 0%, rgba(80, 120, 255, 0.35), transparent 65%),
+    radial-gradient(60% 100% at 0% 100%, rgba(140, 90, 255, 0.22), transparent 65%),
+    linear-gradient(135deg, #04060e, #0b1530);
+  box-shadow: inset 0 0 30px var(--blue-10), 0 0 0 1px var(--blue-10);
+}
+
+.nbv-make .nbv-make-stars .nbv-stars-art {
+  flex: none;
+  color: #dbe6ff;
+  filter: drop-shadow(0 0 5px var(--blue));
+  animation: nbv-stars-float 6s ease-in-out infinite;
+}
+
+.nbv-make .nbv-make-stars .nbv-stars-text {
+  display: grid;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.nbv-make .nbv-make-stars .nbv-stars-text strong {
+  font: 600 1.05rem var(--font-display);
+  letter-spacing: 0.01em;
+}
+
+.nbv-make .nbv-make-stars .nbv-stars-text small {
+  color: var(--text-2);
+  font: 0.78rem var(--font-body);
+}
+
+@keyframes nbv-stars-float {
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+/* The list of maps: each a small card with its own sky, the facts on one line, a quiet delete */
+.mm-row {
+  gap: 10px;
+  padding: 8px 10px 8px 8px;
+  border-color: var(--line-strong);
+  border-radius: var(--radius-sm);
+  background:
+    radial-gradient(1px 1px at 82% 30%, #fff 50%, transparent 52%),
+    radial-gradient(1px 1px at 92% 70%, #cfe0ff 50%, transparent 52%),
+    radial-gradient(80% 140% at 0% 0%, var(--blue-10), transparent 70%),
+    var(--surface);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.mm-row.is-ready:hover {
+  box-shadow: 0 0 16px var(--blue-20);
+}
+
+.mm-row-main {
+  gap: 12px;
+  padding: 4px;
+}
+
+.mm-row-art {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border: 1px solid var(--blue-35);
+  border-radius: 50%;
+  background: var(--blue-10);
+}
+
+.mm-row-text {
+  gap: 3px;
+}
+
+.mm-row-text strong {
+  font-size: 0.95rem;
+}
+
+.mm-row-text .small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mm-row .mm-row-del {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-3);
+  gap: 6px;
+}
+
+.mm-row .mm-row-del:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-2);
+  color: var(--white);
+}
+
+.mm-row .mm-row-del.armed {
+  width: auto;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--white);
+  color: var(--black);
+  font-size: 0.8rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nbv-make .nbv-make-stars .nbv-stars-art {
+    animation: none;
+  }
+}
+
+/* Mind Constellation, calmer: blue and black only, the text on one line, the constellation tucked at the right */
+.nbv-make .nbv-make-stars {
+  min-height: 72px;
+  justify-content: space-between;
+  padding: 0 18px;
+  border-color: var(--blue-35);
+  background:
+    radial-gradient(1.5px 1.5px at 46% 24%, #fff 50%, transparent 52%),
+    radial-gradient(1px 1px at 58% 78%, #cfe0ff 50%, transparent 52%),
+    radial-gradient(1px 1px at 74% 16%, #fff 50%, transparent 52%),
+    radial-gradient(1px 1px at 90% 84%, #cfe0ff 50%, transparent 52%),
+    radial-gradient(90% 160% at 100% 50%, var(--blue-20), transparent 70%),
+    linear-gradient(135deg, #05070d, #08101f);
+  box-shadow: none;
+}
+
+.nbv-make .nbv-make-stars::before {
+  background:
+    radial-gradient(1px 1px at 52% 60%, #fff 50%, transparent 52%),
+    radial-gradient(1.5px 1.5px at 66% 40%, #cfe0ff 50%, transparent 52%),
+    radial-gradient(1px 1px at 84% 30%, #fff 50%, transparent 52%);
+}
+
+.nbv-make .nbv-make-stars .nbv-stars-text {
+  flex: 1 1 auto;
+}
+
+.nbv-make .nbv-make-stars .nbv-stars-text strong {
+  font: 600 1rem var(--font-display);
+  white-space: nowrap;
+}
+
+.nbv-make .nbv-make-stars .nbv-stars-text small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nbv-make .nbv-make-stars .nbv-stars-art {
+  flex: none;
+  width: 56px;
+  height: auto;
+  color: #cfe0ff;
+}
+
+.nbv-make .nbv-make-stars:hover:not(:disabled) {
+  border-color: var(--blue-60);
+  box-shadow: 0 0 16px var(--blue-20);
+}
+
+/* The map's card: plain, no stray dots behind the text */
+.mm-row {
+  background:
+    radial-gradient(80% 140% at 0% 0%, var(--blue-05), transparent 70%),
+    var(--surface);
+}
+
+.mm-row .mm-row-text .small {
+  font-size: 0.8rem;
+}
+
+/* Create buttons: a small icon before each label, white, the blue glow on hover */
+.nbv-make > button:not(.nbv-make-stars),
+.nbv-make .nbv-make-label {
+  gap: 10px;
+  justify-content: flex-start;
+}
+
+.nbv-make > button.nbv-make-main {
+  justify-content: space-between;
+}
+
+.nbv-make .nbv-make-label {
+  display: inline-flex;
+  align-items: center;
+}
+
+.nbv-make > button svg.icon,
+.nbv-make .nbv-make-label svg.icon {
+  flex: none;
+  color: var(--text-2);
+  transition: color 0.2s, filter 0.2s;
+}
+
+.nbv-make > button:hover:not(:disabled) svg.icon {
+  color: var(--blue);
+  filter: drop-shadow(0 0 6px var(--blue-60));
+}
+
+/* The quiz: the question type on the left, how far along on the right, always in view */
+.quiz-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.quiz-meta p {
+  margin: 0;
+}
+
+.quiz-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  color: var(--text-3);
+  font: 500 0.95rem var(--font-mono);
+}
+
+.quiz-count strong {
+  color: var(--white);
+  font-size: 1.15rem;
+}
+
+.quiz-count svg {
+  color: var(--blue);
+}
+
+/* The quiz result: a medal and a verdict, the score big, the per-question results folded away under it */
+.quiz-result {
+  display: grid;
+  gap: 20px;
+}
+
+.quiz-hero {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 28px 16px 24px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: radial-gradient(80% 120% at 50% 0%, var(--blue-10), transparent 70%);
+  text-align: center;
+}
+
+.quiz-hero p {
+  margin: 0;
+}
+
+.quiz-badge {
+  display: grid;
+  place-items: center;
+  width: 92px;
+  height: 92px;
+  margin-bottom: 6px;
+  border: 1px solid var(--blue-35);
+  border-radius: 50%;
+  background: var(--blue-10);
+  color: var(--blue);
+  box-shadow: 0 0 28px var(--blue-20);
+}
+
+.quiz-hero.gold .quiz-badge {
+  border-color: rgba(255, 200, 70, 0.6);
+  background: rgba(255, 200, 70, 0.12);
+  color: #ffc846;
+  box-shadow: 0 0 32px rgba(255, 200, 70, 0.28);
+}
+
+.quiz-hero.silver .quiz-badge {
+  border-color: rgba(210, 220, 235, 0.6);
+  background: rgba(210, 220, 235, 0.1);
+  color: #dbe4f0;
+  box-shadow: 0 0 28px rgba(210, 220, 235, 0.2);
+}
+
+.quiz-hero.bronze .quiz-badge {
+  border-color: rgba(214, 140, 80, 0.6);
+  background: rgba(214, 140, 80, 0.12);
+  color: #e0955a;
+  box-shadow: 0 0 28px rgba(214, 140, 80, 0.22);
+}
+
+.quiz-hero.low .quiz-badge {
+  border-color: var(--line-strong);
+  background: var(--surface-2);
+  color: var(--text-2);
+  box-shadow: none;
+}
+
+.quiz-verdict {
+  font: 600 clamp(1.6rem, 3.4vw, 2.2rem) / 1.15 var(--font-display);
+}
+
+.quiz-hero .quiz-score {
+  font: 600 clamp(3rem, 8vw, 4.5rem) / 1 var(--font-display);
+}
+
+.quiz-detail-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--white);
+  font: 500 0.95rem var(--font-body);
+  cursor: pointer;
+}
+
+.quiz-detail-toggle:hover,
+.quiz-detail-toggle.open {
+  border-color: var(--blue-60);
+}
+
+.quiz-result .quiz-review {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.quiz-review button {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-2);
+  font: 0.92rem/1.45 var(--font-body);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.quiz-review button:hover {
+  border-color: var(--blue-60);
+  color: var(--white);
+}
+
+.quiz-review-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  border-radius: 50%;
+}
+
+.quiz-review .right .quiz-review-mark {
+  background: rgba(60, 200, 120, 0.18);
+  color: #5fe0a0;
+}
+
+.quiz-review .wrong .quiz-review-mark {
+  background: rgba(239, 68, 68, 0.18);
+  color: #ff8a8a;
+}
+
+.quiz-review-n {
+  flex: none;
+  min-width: 1.6em;
+  padding-top: 2px;
+  color: var(--text-3);
+  font-size: 0.8rem;
+}
+
+.quiz-review-q {
+  min-width: 0;
+}
+
+/* The result fits on one screen: a smaller medal, the questions in two columns, one line each (the full text on hover) */
+.quiz-result {
+  gap: 14px;
+}
+
+.quiz-hero {
+  gap: 4px;
+  padding: 18px 16px 16px;
+}
+
+.quiz-badge {
+  width: 68px;
+  height: 68px;
+  margin-bottom: 2px;
+}
+
+.quiz-badge svg {
+  width: 40px;
+  height: 40px;
+}
+
+.quiz-hero .quiz-score {
+  font-size: clamp(2.4rem, 6vw, 3.4rem);
+}
+
+.quiz-result .quiz-review {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.quiz-review button {
+  align-items: center;
+  padding: 8px 10px;
+}
+
+.quiz-review-q {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .quiz-result .quiz-review {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The quiz's custom topic: a roomy box to type in */
+.qz-setup .vw-focus-custom textarea {
+  min-height: 140px;
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+/* The infographic viewer: wide by default (the modal is as wide as the window's height lets the whole page be), or tall */
+.modal.modal-wide:has(.ig-viewer.landscape) {
+  width: min(calc((100vh - 170px) * 2260 / 1600 + 36px), 100%);
+}
+
+.ig-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ig-layout {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+}
+
+.ig-layout button {
+  padding: 5px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-2);
+  font: 500 0.8rem var(--font-body);
+  cursor: pointer;
+}
+
+.ig-layout button.on {
+  background: var(--blue);
+  color: var(--white);
+}
+
+.ig-dl {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ig-dl-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 5;
+  display: grid;
+  min-width: 190px;
+  padding: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--black);
+  box-shadow: var(--glow-lg);
+}
+
+.ig-dl-menu button {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--white);
+  font: 500 0.88rem var(--font-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ig-dl-menu button:hover {
+  background: var(--surface-2);
+}
+
+.ig-dl-menu small {
+  font-size: 0.72rem;
+}
+
+.ig-thumb:has(.ig-frame) {
+  max-width: 320px;
+}
+
+/* The odd one out in the Create grid takes a whole row, so no tile sits alone beside a gap */
+.nbv-make .nbv-make-wide {
+  grid-column: 1 / -1;
+}
+
+/* A make that was just asked for, until the server has it: a card with a spinner and a shimmer */
+.nbv-starting {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--blue-35);
+  border-radius: var(--radius-sm);
+  background: var(--blue-05);
+}
+
+.nbv-starting .nbv-send-spinner {
+  flex: none;
+  margin-top: 2px;
+}
+
+.nbv-starting-text {
+  display: grid;
+  flex: 1;
+  gap: 8px;
+  min-width: 0;
+}
+
+.nbv-starting-text strong {
+  font: 500 0.92rem var(--font-body);
 }

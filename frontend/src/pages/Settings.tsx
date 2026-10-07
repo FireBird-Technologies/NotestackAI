@@ -157,6 +157,10 @@ export default function Settings() {
               Let Notestack use my generations to improve its prompts. Off by default; your posts are never shared.
             </label>
             <label className="check">
+              <input type="checkbox" checked={s.workspace.allow_public_links} onChange={(e) => save({ allow_public_links: e.target.checked }, "privacy")} />
+              Allow public report links. Turn this off and no report can be shared, and links you already made stop working.
+            </label>
+            <label className="check">
               <input type="checkbox" checked={!s.user.email_unsubscribed} onChange={(e) => save({ email_unsubscribed: !e.target.checked }, "privacy")} />
               Product updates by email. Reminders for scheduled posts always send.
             </label>
@@ -182,6 +186,8 @@ export default function Settings() {
             <Meter label="Audio overviews" used={u.used.audio_minutes} limit={u.limits.audio_minutes} unit="min" />
             <Meter label="Videos" used={u.used.videos} limit={u.limits.videos} unit="" />
             <Meter label="Launch Kits" used={u.used.launch_kits} limit={u.limits.launch_kits} unit="" />
+            <Meter label="Reports" used={u.used.reports} limit={u.limits.reports} unit="" />
+            <Meter label="Infographics" used={u.used.infographics} limit={u.limits.infographics} unit="" />
             <p className="mono muted small">
               Refills on the 1st of every month.
               {u.videos_resets_at && ` Videos refill on ${formatDate(u.videos_resets_at)}.`}

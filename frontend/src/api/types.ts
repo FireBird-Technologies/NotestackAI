@@ -89,8 +89,64 @@ export type AnswerFeedback = { rating: "up" | "down"; reasons: string[]; comment
 export type WorkspaceChat = ChatSummary & { notebook_id: string; notebook_title: string };
 export type ChatMessage = { id: string; role: "user" | "assistant"; text: string; citations: Citation[]; feedback?: AnswerFeedback | null };
 
-export type ArtifactType = "summary" | "audio_overview" | "video" | "quote_card" | "carousel" | "launch_kit" | "mind_map"
-  | "upload"; // a file the user brought from their computer, to post
+export type ArtifactType = "summary" | "audio_overview" | "video" | "quote_card" | "carousel" | "launch_kit" | "mind_map" | "quiz" | "flashcards" | "report" | "infographic"| "upload";
+
+export type QuizQuestionType = "multiple_choice" | "multiple_select" | "fill_blank" | "short_answer";
+export type QuizQuestion = {
+  type: QuizQuestionType;
+  question: string;
+  options?: string[];
+  /** Indexes into options (the choice types). */
+  correct?: number[];
+  /** fill_blank: the word for the blank. short_answer: a model answer. */
+  answer?: string;
+  accepted?: string[];
+  explanation: string;
+  sources: { document_id: string; title: string; line_start: number; line_end: number; quote: string }[];
+};
+
+export type FlashcardData = {
+  front: string;
+  back: string;
+  sources: { document_id: string; title: string; line_start: number; line_end: number; quote: string }[];
+};
+
+/** One block of a report. Prose has Markdown whose [n] markers point into the report's citations. */
+export type ReportBlock =
+  | { id: string; type: "prose"; text: string }
+  | { id: string; type: "callout"; title?: string; text: string }
+  | { id: string; type: "key_terms"; title?: string; terms: { term: string; definition: string }[] }
+  | { id: string; type: "table"; title?: string; headers: string[]; rows: string[][] }
+  | { id: string; type: "timeline"; title?: string; events: { when: string; title: string; detail: string }[] }
+  | { id: string; type: "mind_map"; title?: string; root: MindNode; node_count?: number; post_count?: number }
+  | { id: string; type: "flashcards"; title?: string; cards: FlashcardData[] }
+  | { id: string; type: "quiz"; title?: string; questions: QuizQuestion[] }
+  /** An infographic (its own artifact, also in the Library): its page, once written (filled in when the report is read). */
+  | { id: string; type: "infographic"; title?: string; artifact_id?: string; theme?: string; status?: string; html?: string | null; html_landscape?: string | null };
+
+export type ReportSuggestionKind = "mind_map" | "flashcards" | "quiz" | "table" | "timeline" | "key_terms" | "infographic";
+/** A spot where the AI thinks a visual would help: shown in the app with an Add button, never on a shared page. */
+export type ReportSuggestion = { id: string; after_block_id: string; kind: ReportSuggestionKind; brief: string; why: string };
+
+/** The link state of a report. */
+export type ShareInfo = { shared: boolean; url: string | null; show_sources: boolean };
+
+/** A report as the public sees it: no ids, quotes or paths. */
+export type PublicReportData = {
+  kind?: "report";
+  title: string;
+  format: "document" | "interactive";
+  language: string;
+  created_at: string | null;
+  blocks: ReportBlock[];
+  show_sources: boolean;
+  sources?: { chats: number; posts: { title: string; url: string | null }[] };
+};
+
+/** An infographic as the public sees it: its title and the page (our own template output, shown in a sandboxed frame). */
+export type PublicInfographicData = { kind: "infographic"; title: string; html: string; html_landscape?: string; created_at: string | null };
+
+export type ReportTemplate = { id: string; name: string; description: string; prompt: string };
 
 export type SourceRef = { path: string; line_start: number; line_end: number; title?: string | null; quote?: string };
 
@@ -347,20 +403,22 @@ export type Plan = {
   /** blog2video videos per period */
   videos: number;
   launch_kits: number;
+  reports: number;
+  infographics: number;
   voice_cloning: boolean;
   brand_kit: boolean;
 };
 
 export type Usage = {
   plan: string;
-  used: { audio_minutes: number; videos: number; launch_kits: number; llm_tokens: number; since: string };
-  limits: { audio_minutes: number; videos: number; launch_kits: number; sources: number; indexed_posts: number };
+  used: { audio_minutes: number; videos: number; launch_kits: number; reports: number; infographics: number; llm_tokens: number; since: string };
+  limits: { audio_minutes: number; videos: number; launch_kits: number; reports: number; infographics: number; sources: number; indexed_posts: number };
   videos_resets_at: string | null;
 };
 
 export type Settings = {
   user: { name: string | null; email: string; auth_provider: string; email_unsubscribed: boolean };
-  workspace: { id: string; name: string; training_opt_in: boolean };
+  workspace: { id: string; name: string; training_opt_in: boolean; allow_public_links: boolean };
   brand: { name: string | null; accent: string; logo_url: string | null };
   plan: Plan;
   billing_enabled: boolean;

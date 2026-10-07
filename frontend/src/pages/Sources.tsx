@@ -23,7 +23,7 @@ export function SourcesNav() {
   );
 }
 
-export const FILE_ACCEPT = ".md,.markdown,.txt,.html,.htm,.pdf,text/markdown,text/plain,text/html,application/pdf";
+export const FILE_ACCEPT = ".md,.markdown,.txt,.vtt,.html,.htm,.pdf,text/vtt,text/markdown,text/plain,text/html,application/pdf";
 
 /** A bare domain, a Substack or a feed URL is a whole archive; a deep link is one article. */
 export function looksLikeArticle(raw: string): boolean {
@@ -114,7 +114,7 @@ export function AddSource({ onAdded }: { onAdded: (source: Source, job: Job) => 
         <input ref={fileRef} type="file" multiple accept={FILE_ACCEPT} hidden onChange={(e) => upload(e.target.files)} aria-label="Files to upload" />
       </form>
       <p className="muted small">
-        {!value.trim() && "Substack, Ghost, WordPress, Medium or any site with a feed. Markdown, text, HTML and PDF files work too; drop them anywhere on this page."}
+        {!value.trim() && "Substack, Ghost, WordPress, Medium or any site with a feed. Markdown, text, VTT transcripts, HTML and PDF files work too; drop them anywhere on this page."}
         {value.trim() && mode === "feed" && (
           <>
             We will pull in the whole archive and keep it in sync.{" "}
@@ -148,6 +148,7 @@ export default function Sources() {
   const [total, setTotal] = useState(0);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<string>("");
+  const [removing, setRemoving] = useState<Set<string>>(new Set()); // sources being deleted: dimmed at once, gone when done
   const [offset, setOffset] = useState(0);
   const [reading, setReading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -156,7 +157,7 @@ export default function Sources() {
   const loadDocs = useCallback(
     (reset = true) => {
       const start = reset ? 0 : offset + PAGE;
-      return docsApi.list({ q, source_id: filter || undefined, limit: PAGE, offset: start }).then((p) => {
+      return docsApi.list({ q, source_id: filter || undefined, indexed_only: true, limit: PAGE, offset: start }).then((p) => {
         setTotal(p.total);
         setOffset(start);
         setDocs((d) => (reset ? p.items : [...d, ...p.items]));
@@ -234,13 +235,12 @@ export default function Sources() {
           const job = jobs[s.id];
           const active = job && (job.status === "queued" || job.status === "running");
           return (
-            <article key={s.id} className="card source-card">
+            <article key={s.id} className={`card source-card${removing.has(s.id) ? " removing" : ""}`}>
               <header className="row between">
                 <div className="source-title">
                   <strong>{s.title ?? s.feed_url}</strong>
                   <span className="mono muted">
-                    {s.is_imports ? "imports" : s.platform} · {s.document_count} posts
-                    {s.locked_count > 0 ? ` found, ${s.document_count - s.locked_count} indexed` : ""}
+                    {s.is_imports ? "imports" : s.platform} · {s.document_count - s.locked_count} posts
                     {s.last_synced_at ? ` · synced ${formatDate(s.last_synced_at, true)}` : ""}
                   </span>
                 </div>
@@ -267,7 +267,7 @@ export default function Sources() {
                 </div>
               )}
               {s.sync_status === "error" && s.sync_error && !active && <p className="error-text">{s.sync_error}</p>}
-              <footer className="row">
+              <footer className="row source-actions">
                 {!s.is_imports && (
                   <button
                     className="btn btn-small"
@@ -281,18 +281,32 @@ export default function Sources() {
                   </button>
                 )}
                 <button className="btn btn-small" onClick={() => setFilter(filter === s.id ? "" : s.id)}>
-                  {filter === s.id ? "Show all posts" : "Show posts"}
+                  {filter === s.id ? "Hide posts" : "Show posts"}
                 </button>
                 <ConfirmButton
-                  confirmLabel={`Delete ${s.document_count} posts?`}
+                  confirmLabel="Click again to delete"
+                  busyLabel="Deleting..."
                   onConfirm={async () => {
-                    await sourcesApi.remove(s.id);
+                    setRemoving((r) => new Set(r).add(s.id));
+                    try {
+                      await sourcesApi.remove(s.id);
+                    } catch (e) {
+                      setRemoving((r) => {
+                        const next = new Set(r);
+                        next.delete(s.id);
+                        return next;
+                      });
+                      throw e;
+                    }
+                    // Gone from the page now; the lists refresh behind it.
+                    setSources((list) => (list ?? []).filter((x) => x.id !== s.id));
+                    setDocs((list) => list.filter((d) => d.source_id !== s.id));
                     if (filter === s.id) setFilter("");
                     loadSources();
                     loadDocs();
                   }}
                 >
-                  Remove
+                  Delete
                 </ConfirmButton>
               </footer>
             </article>
@@ -303,7 +317,7 @@ export default function Sources() {
         <EmptyState title="No sources yet" body="A lone satellite, waiting for signal. Connect a blog or site above, or upload your markdown files." />
       )}
 
-      {sources && sources.length > 0 && (
+      {sources && sources.length > 0 && filter && (
         <section className="card posts-table">
           <div className="row between">
             <h2>
