@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { authApi } from "../api/auth";
 import { tokens, uploadFile } from "../api/client";
@@ -27,10 +27,13 @@ function Meter({ label, used, limit, unit }: { label: string; used: number; limi
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({ title, saved, children }: { title: string; saved?: boolean; children: ReactNode }) {
   return (
     <section className="card stack">
-      <h2>{title}</h2>
+      <div className="row between">
+        <h2>{title}</h2>
+        {saved && <span className="mono muted small">Saved</span>}
+      </div>
       {children}
     </section>
   );
@@ -44,7 +47,6 @@ export default function Settings() {
   const [accent, setAccent] = useState("#217cff");
   const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const logoRef = useRef<HTMLInputElement>(null);
   const [sounds, setSounds] = useState(soundsEnabled);
   const { logout } = useAuth();
   const upgrade = useUpgrade();
@@ -75,6 +77,13 @@ export default function Settings() {
 
   if (!s) return error ? <p className="error-text">{error}</p> : <Loading />;
   const u = s.usage;
+  // Fields save on their own when the writer leaves them, so there are no Save buttons.
+  const saveProfile = () => {
+    if (name !== (s.user.name ?? "") || workspace !== s.workspace.name) void save({ name, workspace_name: workspace }, "profile");
+  };
+  const saveBrand = (next = { brandName, accent }) => {
+    if (next.brandName !== (s.brand.name ?? "") || next.accent !== s.brand.accent) void save({ brand_name: next.brandName, brand_accent: next.accent }, "brand");
+  };
 
   return (
     <div className="page-wrap">
@@ -82,69 +91,60 @@ export default function Settings() {
       {error && <p className="error-text">{error}</p>}
       <div className="two-col">
         <div className="stack">
-          <Section title="Profile">
+          <Section title="Profile" saved={saved === "profile"}>
             <label className="field">
               <span>Name</span>
-              <input className="input input-sm" value={name} onChange={(e) => setName(e.target.value)} />
+              <input className="input input-sm" value={name} onChange={(e) => setName(e.target.value)} onBlur={saveProfile} />
             </label>
             <p className="mono muted">
               {s.user.email} · signed in with {s.user.auth_provider === "google" ? "Google" : "email and password"}
             </p>
             <label className="field">
               <span>Workspace name</span>
-              <input className="input input-sm" value={workspace} onChange={(e) => setWorkspace(e.target.value)} />
+              <input className="input input-sm" value={workspace} onChange={(e) => setWorkspace(e.target.value)} onBlur={saveProfile} />
             </label>
-            <div className="row end">
-              <button className="btn btn-primary btn-small" onClick={() => save({ name, workspace_name: workspace }, "profile")}>
-                {saved === "profile" ? "Saved" : "Save"}
-              </button>
-            </div>
           </Section>
 
-          <Section title="Brand kit">
+          <Section title="Brand kit" saved={saved === "brand" || saved === "logo"}>
             <p className="muted">Used on videos, quote cards and carousels.</p>
             <label className="field">
               <span>Name on renders</span>
-              <input className="input input-sm" placeholder="Your publication" value={brandName} onChange={(e) => setBrandName(e.target.value)} />
+              <input className="input input-sm" placeholder="Your publication" value={brandName} onChange={(e) => setBrandName(e.target.value)} onBlur={() => saveBrand()} />
             </label>
             <label className="field">
               <span>Accent color</span>
               <div className="row">
-                <input type="color" value={accent} onChange={(e) => setAccent(e.target.value)} aria-label="Accent color" className="color" />
-                <input className="input input-sm mono" value={accent} onChange={(e) => setAccent(e.target.value)} />
+                <input type="color" value={accent} onChange={(e) => setAccent(e.target.value)} onBlur={() => saveBrand()} aria-label="Accent color" className="color" />
+                <input className="input input-sm mono" value={accent} onChange={(e) => setAccent(e.target.value)} onBlur={() => saveBrand()} aria-label="Accent hex" />
               </div>
             </label>
             <div className="field">
               <span>Logo</span>
               <div className="row">
                 {s.brand.logo_url && <img src={s.brand.logo_url} alt="Logo" className="logo-preview" />}
-                <input ref={logoRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="input file-input" aria-label="Logo file" />
-                <button
-                  className="btn btn-small"
-                  onClick={async () => {
-                    const file = logoRef.current?.files?.[0];
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                  className="input file-input"
+                  aria-label="Logo file"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = "";
                     if (!file) return;
                     try {
                       const up = await uploadFile(file);
                       await save({ logo_upload_id: up.upload_id }, "logo");
-                    } catch (e) {
-                      setError(errorMessage(e));
+                    } catch (err) {
+                      setError(errorMessage(err));
                     }
                   }}
-                >
-                  Upload
-                </button>
+                />
                 {s.brand.logo_url && (
                   <button className="btn btn-small" onClick={() => save({ logo_upload_id: "" }, "logo")}>
                     Remove
                   </button>
                 )}
               </div>
-            </div>
-            <div className="row end">
-              <button className="btn btn-primary btn-small" onClick={() => save({ brand_name: brandName, brand_accent: accent }, "brand")}>
-                {saved === "brand" ? "Saved" : "Save brand"}
-              </button>
             </div>
           </Section>
 
@@ -198,34 +198,8 @@ export default function Settings() {
             )}
             {upgrade.error && !upgrade.modal && <p className="error-text">{upgrade.error}</p>}
             <p className="mono muted small">
-              {s.plan.sources} sources · {s.plan.indexed_posts.toLocaleString()} indexed posts · {u.used.llm_tokens.toLocaleString()} LLM tokens this month
+              {s.plan.sources} sources · {s.plan.indexed_posts.toLocaleString()} indexed posts
             </p>
-          </Section>
-
-          <Section title="Connections">
-            <ul className="integrations mono">
-              <li>
-                LLM <span className={s.integrations.llm ? "ok" : "off"}>{s.integrations.llm ? "configured" : "set LLM_API_KEY"}</span>
-              </li>
-              <li>
-                ElevenLabs <span className={s.integrations.elevenlabs ? "ok" : "off"}>{s.integrations.elevenlabs ? "configured" : "set ELEVENLABS_API_KEY"}</span>
-              </li>
-              <li>
-                X app <span className={s.integrations.x ? "ok" : "off"}>{s.integrations.x ? "configured" : "set X_CLIENT_ID"}</span>
-              </li>
-              <li>
-                LinkedIn app <span className={s.integrations.linkedin ? "ok" : "off"}>{s.integrations.linkedin ? "configured" : "set LINKEDIN_CLIENT_ID"}</span>
-              </li>
-              <li>
-                Storage <span className="ok">{s.integrations.storage === "local" ? "local disk" : "Cloudflare R2"}</span>
-              </li>
-              <li>
-                Renderer <span className="muted">{s.integrations.renderer}</span>
-              </li>
-            </ul>
-            <button className="btn btn-small" onClick={() => navigate("/app/launchpad")}>
-              Manage social accounts
-            </button>
           </Section>
 
           <Section title="Account">

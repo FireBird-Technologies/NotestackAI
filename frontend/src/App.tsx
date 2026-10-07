@@ -19,6 +19,7 @@ import Settings from "./pages/Settings";
 import Sources from "./pages/Sources";
 import Studio from "./pages/Studio";
 import TopicMap from "./pages/TopicMap";
+import { ToolPage, ToolsHub } from "./pages/Tools";
 import VoiceProfile from "./pages/VoiceProfile";
 import Welcome from "./pages/Welcome";
 
@@ -43,6 +44,8 @@ export default function App() {
       <Route path="/" element={<Landing />} />
       <Route path="/pricing" element={<PricingPage />} />
       <Route path="/notebooklm-alternative" element={<NotebookLMAlternative />} />
+      <Route path="/tools" element={<ToolsHub />} />
+      <Route path="/tools/:slug" element={<ToolPage />} />
       <Route path="/blogs" element={<Blog />} />
       <Route path="/blogs/:slug" element={<BlogPostPage />} />
       <Route path="/auth" element={<AuthPage />} />

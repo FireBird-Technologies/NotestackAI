@@ -67,10 +67,22 @@ HANDED_OFF = object()  # the job continues elsewhere (renderer) and reports back
 # Handlers: (db, job) -> Done | HANDED_OFF. Raise to trigger a retry.
 
 
+def _pending(db: Session, workspace_id: uuid.UUID, kind: str) -> bool:
+    return db.scalar(select(Job.id).where(Job.workspace_id == workspace_id, Job.kind == kind,
+                                          Job.status.in_(("queued", "running"))).limit(1)) is not None
+
+
 def _after_import(db: Session, job: Job, workspace_id: uuid.UUID, changed: list[str]) -> None:
-    """New or changed posts get mapped into the topic constellation automatically."""
-    if changed and settings.llm_api_key:
-        create_job(db, workspace_id, "topics", {"document_ids": changed}, max_attempts=2)
+    """New or changed posts are mapped into the topic constellation and scored for resurfacing, and the
+    first import builds the writing voice, so none of these need a button press."""
+    if not changed or not settings.llm_api_key:
+        return
+    create_job(db, workspace_id, "topics", {"document_ids": changed}, max_attempts=2)
+    if not _pending(db, workspace_id, "resurface_scan"):
+        create_job(db, workspace_id, "resurface_scan", {}, max_attempts=2)
+    vp = db.scalar(select(VoiceProfile).where(VoiceProfile.workspace_id == workspace_id))
+    if not (vp and vp.profile_json) and not _pending(db, workspace_id, "voice_profile"):
+        create_job(db, workspace_id, "voice_profile", {"document_ids": []}, max_attempts=2)
 
 
 def handle_ingest(db: Session, job: Job):
@@ -91,6 +103,9 @@ def handle_ingest(db: Session, job: Job):
             raise PermanentJobError(str(exc)) from exc
         raise
     _after_import(db, job, source.workspace_id, result.get("changed", []))
+    if result.get("locked"):
+        return Done(result, f"Found {result['found']} posts. Your latest {result['available']} are indexed; "
+                            f"upgrade to index the other {result['locked']}")
     return Done(result, f"All posts in orbit: {result['indexed']} new or updated")
 
 

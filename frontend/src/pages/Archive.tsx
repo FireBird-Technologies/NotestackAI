@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { artifactsApi } from "../api/endpoints";
 import type { Artifact } from "../api/types";
 import { ArtifactCard } from "../components/ArtifactCard";
@@ -10,7 +11,6 @@ const PAGE = 30;
 
 export default function Archive() {
   const [filter, setFilter] = useState<Filter>("all");
-  const [status, setStatus] = useState<"" | "ready" | "failed">("");
   const [q, setQ] = useState("");
   const [items, setItems] = useState<Artifact[] | null>(null);
   const [total, setTotal] = useState(0);
@@ -19,12 +19,12 @@ export default function Archive() {
   const load = useCallback(
     (offset = 0) =>
       artifactsApi
-        .list({ type: filter === "all" ? undefined : filter, status: status || undefined, q, limit: PAGE, offset })
+        .list({ type: filter === "all" ? undefined : filter, q, limit: PAGE, offset })
         .then((p) => {
           setTotal(p.total);
           setItems((cur) => (offset ? [...(cur ?? []), ...p.items] : p.items));
         }),
-    [filter, status, q],
+    [filter, q],
   );
 
   useEffect(() => {
@@ -34,7 +34,7 @@ export default function Archive() {
 
   return (
     <div className="page-wrap">
-      <PageHeader eyebrow="Archive" title="Everything you have launched" />
+      <PageHeader eyebrow="Library" title="Everything you have made" />
       <div className="row between wrap">
         <Tabs<Filter>
           tabs={[
@@ -48,18 +48,16 @@ export default function Archive() {
           value={filter}
           onChange={setFilter}
         />
-        <div className="row">
-          <select className="input input-sm" value={status} onChange={(e) => setStatus(e.target.value as typeof status)} aria-label="Status">
-            <option value="">Any status</option>
-            <option value="ready">Ready</option>
-            <option value="failed">Failed</option>
-          </select>
-          <input className="input input-sm search" placeholder="Search by post or notebook" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search" />
-        </div>
+        <input className="input input-sm search" placeholder={`Search ${total} items by post or notebook`} value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search" />
       </div>
-      <p className="mono muted">{total} artifacts</p>
       {!items && <Loading />}
-      {items?.length === 0 && <EmptyState title="Nothing here yet" body="Summaries, audio, videos and launch kits you create show up here." />}
+      {items?.length === 0 && <EmptyState title="Nothing here yet" body="Summaries, audio, videos and launch kits you create show up here."
+          action={
+            <Link className="btn btn-primary" to="/app/studio">
+              Create something
+            </Link>
+          }
+        />}
       <div className="gallery">
         {items?.map((a) => (
           <ArtifactCard

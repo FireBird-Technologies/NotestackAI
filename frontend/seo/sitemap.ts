@@ -1,5 +1,6 @@
 import type { Plugin } from "vite";
 import { blogPosts } from "../src/content/blogPosts";
+import { tools } from "../src/content/tools";
 
 /**
  * sitemap.xml and robots.txt, generated from src/content/blogPosts.ts on every build (and served live
@@ -13,6 +14,8 @@ const STATIC_PAGES: { path: string; priority: string; changefreq: string }[] = [
   { path: "/notebooklm-alternative", priority: "0.9", changefreq: "monthly" },
   { path: "/pricing", priority: "0.8", changefreq: "monthly" },
   { path: "/blogs", priority: "0.9", changefreq: "weekly" },
+  { path: "/tools", priority: "0.8", changefreq: "monthly" },
+  ...tools.map((t) => ({ path: `/tools/${t.slug}`, priority: "0.8", changefreq: "monthly" })),
 ];
 
 const escapeXml = (s: string) =>
@@ -93,7 +96,7 @@ differs from NotebookLM.
   SEO pack, carousel).
 - **Publishing:** a Launchpad calendar that auto posts to X, LinkedIn and Bluesky, plus a topic map of rising and
   dormant themes and evergreen resurfacing of old posts.
-- **Pricing (USD):** Free: 1 source, first 5 posts indexed, 3 audio minutes, 1 video minute, 2 launch kits a month.
+- **Pricing (USD):** Free: 1 source, latest 5 posts indexed, 3 audio minutes, 1 video minute, 2 launch kits a month.
   Writer: $24.99 a month ($18.99 a month billed annually): 3 sources, 500 posts, 60 audio minutes, 30 video minutes,
   50 launch kits. Studio: $48.99 a month ($36.99 a month billed annually): 10 sources, 5,000 posts, 240 audio
   minutes, 120 video minutes, unlimited launch kits. Annual billing saves 24%.
@@ -106,6 +109,7 @@ differs from NotebookLM.
 - [Notestack vs NotebookLM](${base}/notebooklm-alternative): side by side comparison and FAQ
 - [Pricing](${base}/pricing): plans and limits
 - [Blog](${base}/blogs): guides on NotebookLM alternatives, AI for research and AI tools for writers
+- [Free tools](${base}/tools): ${tools.map((t) => `[${t.heroTitle}](${base}/tools/${t.slug})`).join(", ")} (free with sign in)
 
 ## Blog
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { artifactsApi, notebooksApi, type GenerateBody } from "../api/endpoints";
 import { streamSSE } from "../api/stream";
 import type { Artifact, ChatSummary, Citation, Notebook } from "../api/types";
@@ -8,15 +8,19 @@ import { Markdown } from "../components/Markdown";
 import { DocPicker } from "../components/DocPicker";
 import { TelescopeIcon } from "../components/icons/Icons";
 import { Reader } from "../components/Reader";
-import { ConfirmButton, errorMessage, formatDate, Loading, Modal } from "../components/ui";
+import { ConfirmButton, errorMessage, formatDate, Loading, Modal, Tabs } from "../components/ui";
 
 type Turn = { role: "user" | "assistant"; text: string; citations?: Citation[]; status?: string; steps?: string[] };
 
+type Pane = "create" | "posts";
+
+const STARTERS = ["What are the strongest ideas across these posts?", "Where do I contradict myself?", "Which post is most worth updating, and why?"];
+
+/** The Create tab: one click per format with sensible defaults, options folded away. */
 function StudioPanel({ notebookId, disabled }: { notebookId: string; disabled: boolean }) {
   const [artifacts, setArtifacts] = useState<Artifact[] | null>(null);
   const [format, setFormat] = useState<"deep_dive" | "brief" | "debate">("deep_dive");
   const [minutes, setMinutes] = useState(6);
-  const [style, setStyle] = useState<"short" | "explainer">("short");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [reading, setReading] = useState<{ id: string; start: number; end: number } | null>(null);
@@ -40,19 +44,32 @@ function StudioPanel({ notebookId, disabled }: { notebookId: string; disabled: b
   };
 
   const cite = (c: Citation) => c.document_id && setReading({ id: c.document_id, start: c.line_start, end: c.line_end });
+  const off = disabled || busy;
 
   return (
-    <aside className="card nbv-pane nbv-studio">
-      <p className="eyebrow">Studio</p>
-      <div className="studio-buttons">
-        <button className="btn btn-small" disabled={disabled || busy} onClick={() => make({ type: "summary" })}>
+    <div className="stack">
+      <div className="nbv-make">
+        <button className="nbv-make-main" disabled={off} onClick={() => make({ type: "audio_overview", format, minutes })}>
+          <strong>Audio overview</strong>
+          <span className="muted small">
+            {format === "deep_dive" ? "Deep dive" : format === "brief" ? "Brief" : "Debate"} · {minutes} min
+          </span>
+        </button>
+        <button disabled={off} onClick={() => make({ type: "video", style: "short" })}>
+          Short video
+        </button>
+        <button disabled={off} onClick={() => make({ type: "video", style: "explainer" })}>
+          Explainer
+        </button>
+        <button disabled={off} onClick={() => make({ type: "summary" })}>
           Summary
         </button>
-        <button className="btn btn-small" disabled={disabled || busy} onClick={() => make({ type: "quote_card" })}>
+        <button disabled={off} onClick={() => make({ type: "quote_card" })}>
           Quote card
         </button>
       </div>
-      <div className="studio-group">
+      <details className="delivery">
+        <summary className="mono muted small">Audio options</summary>
         <div className="row">
           <select className="input input-sm" value={format} onChange={(e) => setFormat(e.target.value as typeof format)} aria-label="Audio format">
             <option value="deep_dive">Deep dive</option>
@@ -67,19 +84,7 @@ function StudioPanel({ notebookId, disabled }: { notebookId: string; disabled: b
             ))}
           </select>
         </div>
-        <button className="btn btn-small btn-primary" disabled={disabled || busy} onClick={() => make({ type: "audio_overview", format, minutes })}>
-          Audio overview
-        </button>
-      </div>
-      <div className="studio-group">
-        <select className="input input-sm" value={style} onChange={(e) => setStyle(e.target.value as typeof style)} aria-label="Video style">
-          <option value="short">Short, vertical 9:16</option>
-          <option value="explainer">Explainer, 16:9</option>
-        </select>
-        <button className="btn btn-small" disabled={disabled || busy} onClick={() => make({ type: "video", style })}>
-          Video
-        </button>
-      </div>
+      </details>
       {disabled && <p className="muted small">Add posts to this notebook to start creating.</p>}
       {error && <p className="error-text">{error}</p>}
       <div className="studio-list">
@@ -101,7 +106,7 @@ function StudioPanel({ notebookId, disabled }: { notebookId: string; disabled: b
         ))}
       </div>
       {reading && <Reader documentId={reading.id} highlight={{ start: reading.start, end: reading.end }} onClose={() => setReading(null)} />}
-    </aside>
+    </div>
   );
 }
 
@@ -120,6 +125,9 @@ export default function NotebookView() {
   const [reading, setReading] = useState<{ id: string; start?: number; end?: number } | null>(null);
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState("");
+  const [pane, setPane] = useState<Pane>("create");
+  const [params, setParams] = useSearchParams();
+  const asked = useRef(false);
   const bottom = useRef<HTMLDivElement>(null);
 
   const load = useCallback(
@@ -152,9 +160,8 @@ export default function NotebookView() {
     setTurns(msgs.map((m) => ({ role: m.role, text: m.text, citations: m.citations })));
   };
 
-  const ask = async (e: FormEvent) => {
-    e.preventDefault();
-    const question = q.trim();
+  const ask = async (text: string) => {
+    const question = text.trim();
     if (!question || busy) return;
     setQ("");
     setBusy(true);
@@ -189,6 +196,16 @@ export default function NotebookView() {
     }
   };
 
+  // A question passed in the link (from the Home ask box) is asked as soon as the notebook opens.
+  useEffect(() => {
+    const pending = params.get("q");
+    if (!nb || !pending || asked.current || !nb.documents.length) return;
+    asked.current = true;
+    setParams({}, { replace: true });
+    void ask(pending);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nb]);
+
   if (loadError) return <p className="error-text">{loadError}</p>;
   if (!nb) return <Loading label="Opening notebook" />;
 
@@ -197,90 +214,73 @@ export default function NotebookView() {
 
   return (
     <div className="nbv">
-      <aside className="card nbv-pane">
-        <Link to="/app/notebooks" className="mono muted small-link">
-          All notebooks
-        </Link>
-        {editingTitle ? (
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              await notebooksApi.update(nb.id, { title });
-              setEditingTitle(false);
-              load();
-            }}
-          >
-            <input className="input input-sm" autoFocus value={title} onChange={(e) => setTitle(e.target.value)} onBlur={() => setEditingTitle(false)} aria-label="Notebook title" />
-          </form>
-        ) : (
-          <h2 className="nbv-title" onDoubleClick={() => setEditingTitle(true)} title="Double click to rename">
-            {nb.title}
-          </h2>
-        )}
-        <div className="row between">
-          <p className="eyebrow">{nb.documents.length} posts</p>
-          <button className="btn btn-small" onClick={() => setAdding(true)}>
-            Add posts
-          </button>
-        </div>
-        <ul className="nbv-docs">
-          {nb.documents.map((d) => (
-            <li key={d.id} className="nbv-doc">
-              <button className="link-btn" onClick={() => setReading({ id: d.id })}>
-                {d.title}
-              </button>
-              <span className="mono muted">{formatDate(d.published_at)}</span>
-              <button
-                className="icon-btn nbv-remove"
-                aria-label={`Remove ${d.title}`}
-                title="Remove from notebook"
-                onClick={async () => {
-                  await notebooksApi.removeDoc(nb.id, d.id);
+      <section className="card nbv-pane nbv-chat">
+        <div className="chat-bar">
+          <div className="nbv-titlebar">
+            <Link to="/app/notebooks" className="mono muted small-link">
+              Notebooks /
+            </Link>
+            {editingTitle ? (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  await notebooksApi.update(nb.id, { title });
+                  setEditingTitle(false);
                   load();
                 }}
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
-                  <path d="M6 6l12 12M18 6L6 18" />
-                </svg>
-              </button>
-            </li>
-          ))}
-        </ul>
-      </aside>
-
-      <section className="card nbv-pane nbv-chat">
-        <div className="chat-bar">
-          <select
-            className="input input-sm"
-            value={chatId ?? ""}
-            onChange={(e) => (e.target.value ? openChat(e.target.value) : (setChatId(null), setTurns([])))}
-            aria-label="Chat history"
-          >
-            <option value="">New chat</option>
-            {chats.map((c) => (
-              <option key={c.id} value={c.id}>
-                {(c.title ?? "Chat").slice(0, 60)} · {formatDate(c.updated_at)}
-              </option>
-            ))}
-          </select>
-          {chatId && (
-            <ConfirmButton
-              onConfirm={async () => {
-                await notebooksApi.removeChat(chatId);
-                setChatId(null);
-                setTurns([]);
-                loadChats();
-              }}
-            >
-              Delete chat
-            </ConfirmButton>
-          )}
+                <input className="input input-sm" autoFocus value={title} onChange={(e) => setTitle(e.target.value)} onBlur={() => setEditingTitle(false)} aria-label="Notebook title" />
+              </form>
+            ) : (
+              <h2 className="nbv-title" onDoubleClick={() => setEditingTitle(true)} title="Double click to rename">
+                {nb.title}
+              </h2>
+            )}
+          </div>
+          <div className="row">
+            {(chats.length > 0 || chatId) && (
+              <select
+                className="input input-sm"
+                value={chatId ?? ""}
+                onChange={(e) => (e.target.value ? openChat(e.target.value) : (setChatId(null), setTurns([])))}
+                aria-label="Chat history"
+              >
+                <option value="">New chat</option>
+                {chats.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {(c.title ?? "Chat").slice(0, 60)} · {formatDate(c.updated_at)}
+                  </option>
+                ))}
+              </select>
+            )}
+            {chatId && (
+              <ConfirmButton
+                onConfirm={async () => {
+                  await notebooksApi.removeChat(chatId);
+                  setChatId(null);
+                  setTurns([]);
+                  loadChats();
+                }}
+              >
+                Delete chat
+              </ConfirmButton>
+            )}
+          </div>
         </div>
         <div className="nbv-turns">
           {turns.length === 0 && (
-            <div className="empty-state small">
+            <div className="nbv-empty">
               <TelescopeIcon size={32} />
-              <p className="muted">Ask anything about these posts. Answers cite the passage they came from.</p>
+              <p className="muted">Ask anything about {nb.documents.length} posts. Answers cite the passage they came from.</p>
+              {nb.documents.length > 0 && (
+                <div className="nbv-starters">
+                  {STARTERS.map((s) => (
+                    <button key={s} type="button" className="nbv-starter" onClick={() => ask(s)}>
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
           {turns.map((t, i) => (
@@ -307,7 +307,13 @@ export default function NotebookView() {
           ))}
           <div ref={bottom} />
         </div>
-        <form onSubmit={ask} className="inline-form">
+        <form
+          onSubmit={(e: FormEvent) => {
+            e.preventDefault();
+            void ask(q);
+          }}
+          className="inline-form nbv-ask"
+        >
           <input
             className="input"
             value={q}
@@ -322,7 +328,53 @@ export default function NotebookView() {
         </form>
       </section>
 
-      <StudioPanel notebookId={nb.id} disabled={nb.documents.length === 0} />
+      <aside className="card nbv-pane nbv-side">
+        <Tabs<Pane>
+          tabs={[
+            { id: "create", label: "Create" },
+            { id: "posts", label: "Posts", count: nb.documents.length },
+          ]}
+          value={pane}
+          onChange={setPane}
+        />
+        {pane === "create" && <StudioPanel notebookId={nb.id} disabled={nb.documents.length === 0} />}
+        {pane === "posts" && (
+          <>
+            {nb.is_archive ? (
+              <p className="muted small">Every indexed post. New posts join automatically.</p>
+            ) : (
+              <button className="btn btn-small" onClick={() => setAdding(true)}>
+                Add posts
+              </button>
+            )}
+            <ul className="nbv-docs">
+              {nb.documents.map((d) => (
+                <li key={d.id} className="nbv-doc">
+                  <button className="link-btn" onClick={() => setReading({ id: d.id })}>
+                    {d.title}
+                  </button>
+                  <span className="mono muted">{formatDate(d.published_at)}</span>
+                  {!nb.is_archive && (
+                    <button
+                      className="icon-btn nbv-remove"
+                      aria-label={`Remove ${d.title}`}
+                      title="Remove from notebook"
+                      onClick={async () => {
+                        await notebooksApi.removeDoc(nb.id, d.id);
+                        load();
+                      }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+                        <path d="M6 6l12 12M18 6L6 18" />
+                      </svg>
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </aside>
 
       {adding && (
         <Modal title="Add posts" onClose={() => setAdding(false)} wide>

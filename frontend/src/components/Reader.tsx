@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { docsApi } from "../api/endpoints";
 import type { DocDetail } from "../api/types";
+import { useUpgrade } from "../hooks/useUpgrade";
 import { Drawer, formatDate, Loading } from "./ui";
 
 /** Reads a post from the corpus with the exact line numbers citations point at. */
@@ -16,6 +17,7 @@ export function Reader({
   const [doc, setDoc] = useState<DocDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const first = useRef<HTMLDivElement>(null);
+  const { openUpgrade } = useUpgrade();
 
   useEffect(() => {
     setDoc(null);
@@ -69,6 +71,20 @@ export function Reader({
               );
             })}
           </div>
+          {doc.preview && (
+            <div className="welcome-cap locked-cap">
+              <div>
+                <strong>This post is not indexed</strong>
+                <p className="muted small">
+                  Your plan indexes your latest {doc.limit ?? 5} posts. Upgrade to index this one and the rest of your
+                  archive, so you can ask about it and turn it into audio, video and Launch Kits.
+                </p>
+              </div>
+              <button type="button" className="btn btn-small btn-primary" onClick={() => openUpgrade("indexed_posts")}>
+                Upgrade to index it
+              </button>
+            </div>
+          )}
         </article>
       )}
     </Drawer>

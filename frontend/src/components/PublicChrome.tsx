@@ -1,6 +1,7 @@
 import { Link, NavLink } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { blogPosts } from "../content/blogPosts";
+import { tools } from "../content/tools";
 import Logo from "./Logo";
 
 export function PublicNav() {
@@ -14,6 +15,7 @@ export function PublicNav() {
         <nav className="nav-links" aria-label="Main">
           <NavLink to="/#features">Features</NavLink>
           <NavLink to="/pricing">Pricing</NavLink>
+          <NavLink to="/tools">Free tools</NavLink>
           <NavLink to="/blogs">Blog</NavLink>
         </nav>
         {user ? (
@@ -51,6 +53,14 @@ export function PublicFooter() {
             <Link to="/pricing">Pricing</Link>
             <Link to="/blogs">Blog</Link>
             <Link to="/auth">Sign in</Link>
+          </div>
+          <div>
+            <p className="eyebrow">Free tools</p>
+            {tools.map((t) => (
+              <Link key={t.slug} to={`/tools/${t.slug}`}>
+                {t.eyebrow}
+              </Link>
+            ))}
           </div>
           <div>
             <p className="eyebrow">From the blog</p>

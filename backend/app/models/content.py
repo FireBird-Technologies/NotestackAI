@@ -65,6 +65,8 @@ class Notebook(IdMixin, TimestampMixin, Base):
     title: Mapped[str] = mapped_column(String(300))
     description: Mapped[str | None] = mapped_column(Text)
     summary: Mapped[str | None] = mapped_column(Text)
+    # The workspace's "All posts" notebook: created on demand, kept in step with every indexed post.
+    is_archive: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class NotebookDocument(Base):

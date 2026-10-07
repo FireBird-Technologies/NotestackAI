@@ -289,6 +289,29 @@ def clone_voice(name: str, samples: list[tuple[str, bytes, str]], *, remove_back
     return resp.json()["voice_id"]
 
 
+def design_voice(description: str) -> list[dict]:
+    """Voice Design: three short previews of a new voice from a text description.
+    Each preview's generated_voice_id is temporary until saved with create_designed_voice."""
+    data = _request("POST", "/text-to-voice/design", attempts=2, timeout=90,
+                    json={"voice_description": description[:1000], "auto_generate_text": True}).json()
+    return [
+        {"generated_voice_id": p["generated_voice_id"], "audio": base64.b64decode(p["audio_base_64"]),
+         "seconds": p.get("duration_secs")}
+        for p in data.get("previews", []) if p.get("generated_voice_id") and p.get("audio_base_64")
+    ]
+
+
+def create_designed_voice(name: str, description: str, generated_voice_id: str) -> str:
+    """Turns a Voice Design preview into a permanent voice on the account."""
+    resp = _request("POST", "/text-to-voice/create-voice-from-preview", attempts=2, timeout=30, json={
+        "voice_name": name[:100],
+        "voice_description": (description or name)[:1000],
+        "generated_voice_id": generated_voice_id,
+        "labels": {"source": "notestack"},
+    })
+    return resp.json()["voice_id"]
+
+
 def delete_voice(voice_id: str) -> None:
     _request("DELETE", f"/voices/{voice_id}", attempts=2, timeout=30)
 

@@ -1,80 +1,137 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { NavLink } from "react-router-dom";
 import { docsApi, jobsApi, sourcesApi } from "../api/endpoints";
 import type { Doc, Job, Source } from "../api/types";
 import { Reader } from "../components/Reader";
-import { ConfirmButton, EmptyState, errorMessage, formatDate, JobProgress, Loading, PageHeader, StatusPill, Tabs } from "../components/ui";
+import { ConfirmButton, EmptyState, errorMessage, formatDate, JobProgress, Loading, PageHeader, StatusPill } from "../components/ui";
 import { useJobMap } from "../hooks/useJob";
-
-type AddMode = "feed" | "url" | "file";
+import { useUpgrade } from "../hooks/useUpgrade";
 
 const PAGE = 50;
 
+/** Sources and the Topic map share one sidebar entry; this strip switches between them. */
+export function SourcesNav() {
+  return (
+    <nav className="tabs" aria-label="Sources views">
+      <NavLink to="/app/sources" className={({ isActive }) => `tab${isActive ? " active" : ""}`}>
+        Posts
+      </NavLink>
+      <NavLink to="/app/map" className={({ isActive }) => `tab${isActive ? " active" : ""}`}>
+        Topic map
+      </NavLink>
+    </nav>
+  );
+}
+
+export const FILE_ACCEPT = ".md,.markdown,.txt,.html,.htm,.pdf,text/markdown,text/plain,text/html,application/pdf";
+
+/** A bare domain, a Substack or a feed URL is a whole archive; a deep link is one article. */
+export function looksLikeArticle(raw: string): boolean {
+  const v = raw.trim();
+  if (!v) return false;
+  try {
+    const u = new URL(v.includes("://") ? v : `https://${v}`);
+    const path = u.pathname.replace(/\/+$/, "");
+    if (!path || /(feed|rss|atom)(\.xml)?$/i.test(path) || /^\/@[^/]+$/.test(path)) return false;
+    const parts = path.split("/").filter(Boolean);
+    return /\/p\/|\/posts?\/|\/\d{4}\/|\.html?$/i.test(path) || parts.length >= 2 || path.length > 24;
+  } catch {
+    return false;
+  }
+}
+
+/** Imports each file as its own post. Returns how many failed. */
+export async function importFiles(files: File[], onAdded: (source: Source, job: Job) => void): Promise<number> {
+  let failed = 0;
+  for (const f of files) {
+    try {
+      const res = await sourcesApi.importFile(f);
+      onAdded(res.source, res.job);
+    } catch {
+      failed += 1;
+    }
+  }
+  return failed;
+}
+
+/** One box for everything: paste a link (feed or article is worked out for you) or add files. */
 export function AddSource({ onAdded }: { onAdded: (source: Source, job: Job) => void }) {
-  const [mode, setMode] = useState<AddMode>("feed");
   const [value, setValue] = useState("");
+  const [override, setOverride] = useState<"feed" | "url" | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const mode = override ?? (looksLikeArticle(value) ? "url" : "feed");
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (!value.trim()) return;
     setError(null);
     setBusy(true);
     try {
-      if (mode === "file") {
-        const file = fileRef.current?.files?.[0];
-        if (!file) throw new Error("Choose a file first.");
-        const res = await sourcesApi.importFile(file);
-        onAdded(res.source, res.job);
-        if (fileRef.current) fileRef.current.value = "";
-      } else {
-        if (!value.trim()) return;
-        const res = mode === "feed" ? await sourcesApi.connect(value.trim()) : await sourcesApi.importUrl(value.trim());
-        onAdded(res.source, res.job);
-        setValue("");
-      }
+      const res = mode === "feed" ? await sourcesApi.connect(value.trim()) : await sourcesApi.importUrl(value.trim());
+      onAdded(res.source, res.job);
+      setValue("");
+      setOverride(null);
     } catch (err) {
-      setError(errorMessage(err, "Could not add that."));
+      setError(errorMessage(err, mode === "feed" ? "We could not find a feed there." : "We could not import that page."));
     } finally {
       setBusy(false);
     }
   };
 
+  const upload = async (files: FileList | null) => {
+    const list = Array.from(files ?? []);
+    if (!list.length) return;
+    setError(null);
+    setBusy(true);
+    const failed = await importFiles(list, onAdded);
+    if (failed) setError(`${failed} of ${list.length} files could not be uploaded.`);
+    setBusy(false);
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
   return (
     <div className="card add-source">
-      <Tabs<AddMode>
-        tabs={[
-          { id: "feed", label: "Connect a feed" },
-          { id: "url", label: "Import one URL" },
-          { id: "file", label: "Upload a file" },
-        ]}
-        value={mode}
-        onChange={(m) => {
-          setMode(m);
-          setError(null);
-        }}
-      />
-      <p className="muted">
-        {mode === "feed" && "Any blog, newsletter or site: Substack, Ghost, WordPress, Medium or anything with an RSS feed. We find the feed and pull in your archive."}
-        {mode === "url" && "One article from anywhere on the web. It lands in Imported posts."}
-        {mode === "file" && "Markdown, text, HTML or PDF. Handy for drafts and posts that never had a feed."}
-      </p>
-      <form onSubmit={submit} className="inline-form">
-        {mode === "file" ? (
-          <input ref={fileRef} className="input file-input" type="file" accept=".md,.markdown,.txt,.html,.htm,.pdf,text/markdown,text/plain,text/html,application/pdf" aria-label="File" />
-        ) : (
-          <input
-            className="input"
-            placeholder={mode === "feed" ? "yourblog.com" : "https://example.com/my-essay"}
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            aria-label={mode === "feed" ? "Feed or site URL" : "Article URL"}
-          />
-        )}
-        <button className="btn btn-primary" type="submit" disabled={busy}>
-          {busy ? (mode === "feed" ? "Finding feed..." : "Starting...") : mode === "feed" ? "Connect" : "Import"}
+      <form onSubmit={submit} className="add-smart">
+        <input
+          className="input"
+          placeholder="Paste a blog, newsletter or article link"
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value);
+            setOverride(null);
+          }}
+          aria-label="Blog, newsletter or article link"
+        />
+        <button className="btn btn-primary" type="submit" disabled={busy || !value.trim()}>
+          {busy ? "Working..." : mode === "feed" ? "Connect" : "Import article"}
         </button>
+        <span className="muted small">or</span>
+        <button type="button" className="btn" disabled={busy} onClick={() => fileRef.current?.click()}>
+          Upload files
+        </button>
+        <input ref={fileRef} type="file" multiple accept={FILE_ACCEPT} hidden onChange={(e) => upload(e.target.files)} aria-label="Files to upload" />
       </form>
+      <p className="muted small">
+        {!value.trim() && "Substack, Ghost, WordPress, Medium or any site with a feed. Markdown, text, HTML and PDF files work too; drop them anywhere on this page."}
+        {value.trim() && mode === "feed" && (
+          <>
+            We will pull in the whole archive and keep it in sync.{" "}
+            <button type="button" className="link-btn small" onClick={() => setOverride("url")}>
+              Just this one page instead
+            </button>
+          </>
+        )}
+        {value.trim() && mode === "url" && (
+          <>
+            Looks like a single article, so we will import just this page.{" "}
+            <button type="button" className="link-btn small" onClick={() => setOverride("feed")}>
+              Connect the whole site instead
+            </button>
+          </>
+        )}
+      </p>
       {error && (
         <p className="error-text" role="alert">
           {error}
@@ -86,6 +143,7 @@ export function AddSource({ onAdded }: { onAdded: (source: Source, job: Job) => 
 
 export default function Sources() {
   const [sources, setSources] = useState<Source[] | null>(null);
+  const { openUpgrade } = useUpgrade();
   const [docs, setDocs] = useState<Doc[]>([]);
   const [total, setTotal] = useState(0);
   const [q, setQ] = useState("");
@@ -113,7 +171,7 @@ export default function Sources() {
   });
 
   useEffect(() => {
-    loadSources().catch(() => setError("Could not reach the API. Is it running?"));
+    loadSources().catch(() => setError("Could not load your sources. Refresh to try again."));
   }, [loadSources]);
 
   useEffect(() => {
@@ -142,8 +200,29 @@ export default function Sources() {
     watch(source.id, job);
   };
 
+  const [dropping, setDropping] = useState(false);
+
   return (
-    <div className="page-wrap">
+    <div
+      className={`page-wrap${dropping ? " drop-over" : ""}`}
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes("Files")) return;
+        e.preventDefault();
+        setDropping(true);
+      }}
+      onDragLeave={(e) => {
+        if (e.currentTarget === e.target) setDropping(false);
+      }}
+      onDrop={async (e) => {
+        if (!e.dataTransfer.files.length) return;
+        e.preventDefault();
+        setDropping(false);
+        const files = Array.from(e.dataTransfer.files);
+        const failed = await importFiles(files, added);
+        setError(failed ? `${failed} of ${files.length} files could not be uploaded.` : null);
+      }}
+    >
+      <SourcesNav />
       <PageHeader eyebrow="Sources" title="Your knowledge, in orbit" />
       <AddSource onAdded={added} />
       {error && <p className="error-text">{error}</p>}
@@ -160,6 +239,7 @@ export default function Sources() {
                   <strong>{s.title ?? s.feed_url}</strong>
                   <span className="mono muted">
                     {s.is_imports ? "imports" : s.platform} · {s.document_count} posts
+                    {s.locked_count > 0 ? ` found, ${s.document_count - s.locked_count} indexed` : ""}
                     {s.last_synced_at ? ` · synced ${formatDate(s.last_synced_at, true)}` : ""}
                   </span>
                 </div>
@@ -171,6 +251,20 @@ export default function Sources() {
                 </a>
               )}
               {job && (active || job.status === "failed") && <JobProgress job={job} compact />}
+              {s.locked_count > 0 && !active && (
+                <div className="welcome-cap locked-cap">
+                  <div>
+                    <strong>{s.locked_count} posts not indexed</strong>
+                    <p className="muted small">
+                      Your plan only indexes your latest posts. Upgrade to index the rest so answers, audio and Launch Kits
+                      can use your whole archive.
+                    </p>
+                  </div>
+                  <button type="button" className="btn btn-small btn-primary" onClick={() => openUpgrade("indexed_posts")}>
+                    Index all {s.document_count}
+                  </button>
+                </div>
+              )}
               {s.sync_status === "error" && s.sync_error && !active && <p className="error-text">{s.sync_error}</p>}
               <footer className="row">
                 {!s.is_imports && (
@@ -222,6 +316,11 @@ export default function Sources() {
                 <button className="link-btn doc-title" onClick={() => setReading(d.id)}>
                   {d.title}
                 </button>
+                {d.locked && (
+                  <span className="mono muted small" title="Upgrade to index this post">
+                    Not indexed
+                  </span>
+                )}
                 <span className="mono muted">
                   {d.source_title ?? ""} · {formatDate(d.published_at)} · {d.words} words
                 </span>

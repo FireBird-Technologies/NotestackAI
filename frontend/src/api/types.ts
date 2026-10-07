@@ -25,6 +25,8 @@ export type Source = {
   sync_error: string | null;
   last_synced_at: string | null;
   document_count: number;
+  /** Found but past the plan's post limit: listed, not indexed until the workspace upgrades. */
+  locked_count: number;
   is_imports: boolean;
 };
 
@@ -38,9 +40,11 @@ export type Doc = {
   published_at: string | null;
   words: number;
   evergreen_score: number | null;
+  /** Found but past the plan's post limit: title and link only, not indexed until the workspace upgrades. */
+  locked: boolean;
 };
 
-export type DocDetail = Doc & { lines: string[] };
+export type DocDetail = Doc & { lines: string[]; preview?: boolean; limit?: number };
 
 export type Page<T> = { total: number; items: T[] };
 
@@ -52,6 +56,8 @@ export type NotebookSummary = {
   document_count: number;
   chat_count: number;
   artifact_count: number;
+  /** The always-present "All posts" notebook. */
+  is_archive: boolean;
   updated_at: string | null;
 };
 
@@ -60,6 +66,7 @@ export type Notebook = {
   title: string;
   description: string | null;
   summary: string | null;
+  is_archive: boolean;
   documents: Doc[];
 };
 
@@ -195,8 +202,13 @@ export type VoiceState = {
     error: string | null;
     preview_url: string | null;
   };
+  /** Voices this workspace generated with Voice Design. */
+  custom_voices: { voice_id: string; name: string; description?: string }[];
   tts_configured: boolean;
 };
+
+export type VoiceDesignInput = { prompt?: string; gender?: string; age?: string; persona?: string; pace?: string; accent?: string };
+export type VoiceDesignPreview = { generated_voice_id: string; url: string; seconds: number | null };
 
 export type Delivery = { stability: number; similarity_boost: number; style: number; speed: number; use_speaker_boost?: boolean };
 

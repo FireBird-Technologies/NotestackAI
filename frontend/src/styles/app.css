@@ -1046,8 +1046,8 @@
   display: grid;
   justify-items: center;
   text-align: center;
-  gap: 14px;
-  padding: 80px 16px;
+  gap: 12px;
+  padding: 40px 16px;
 }
 
 .empty-state.small {

@@ -77,6 +77,7 @@ export const missionPosts: BlogPost[] = [
       {
         heading: "For audio and video overviews",
         paragraphs: [
+          "For a quick start, the free [AI podcast generator](/tools/ai-podcast-generator) turns any post into a two host script, and [PDF to podcast](/tools/pdf-to-podcast) does the same for papers and reports.",
           "Audio overviews are the feature people miss most. Notestack makes two host audio overviews from a post or a notebook, with every line tied back to a passage, and you can pick from ElevenLabs voices or clone your own with consent.",
           "Video is where dedicated tools win. If your source is a report, paper or deck, [PDF2Video](https://pdf2vid.com) turns any PDF into a narrated video. If it is a blog post, URL or script, [Blog2Video](https://blog2video.app) turns it into a finished video without you touching an editor. Both are a better fit than a notebook when the video itself is the deliverable.",
         ],
@@ -86,7 +87,7 @@ export const missionPosts: BlogPost[] = [
         heading: "How to switch without losing your work",
         paragraphs: [
           "Export what you can first: your notes, saved answers and the list of sources. Then rebuild around the job you named at the start rather than recreating every notebook one to one.",
-          "If you are a writer, the fastest path is to connect your publication and let the archive rebuild itself. Once it is indexed, list it on [BlogHub](https://bloghub.app), a free blog and newsletter directory, so new readers can find the work you are now researching and repurposing.",
+          "If you are a writer, the fastest path is to connect your publication and let the archive rebuild itself. Once it is indexed, list it on [BlogHub](https://bloghub.app/submit-your-newsletter), a free blog and newsletter directory, so new readers can find the work you are now researching and repurposing.",
         ],
       },
     ],
@@ -173,7 +174,7 @@ export const missionPosts: BlogPost[] = [
         heading: "Stage four: share what you found",
         paragraphs: [
           "Research that stays in a document rarely gets read. Turn the dense parts into formats people actually consume. [PDF2Video](https://pdf2vid.com) turns a paper, report or slide deck into a narrated video, which is often the fastest way to brief a team or a class.",
-          "For findings you have written up as a post, [Blog2Video](https://blog2video.app) makes a video from the URL, and an audio overview gives listeners the two host version while you keep every line grounded in the source.",
+          "For findings you have written up as a post, [Blog2Video](https://blog2video.app/url-to-video) makes a video from the URL, and an audio overview gives listeners the two host version while you keep every line grounded in the source.",
         ],
       },
       {
@@ -274,7 +275,7 @@ export const missionPosts: BlogPost[] = [
         heading: "Distribution without the busywork",
         paragraphs: [
           "Deep posts deserve a long life, and that is where AI saves the most time. A Launch Kit turns one post into a thread, a LinkedIn post, Substack Notes and a carousel, written from claims the post actually makes.",
-          "Video extends the reach further: [Blog2Video](https://blog2video.app) turns a finished post into a video for YouTube or Shorts. And make sure new readers can find you at all by listing your publication on [BlogHub](https://bloghub.app), a free directory of blogs and newsletters.",
+          "Video extends the reach further: [Blog2Video](https://blog2video.app/blog-to-shorts) turns a finished post into a video for YouTube or Shorts. And make sure new readers can find you at all by listing your publication on [BlogHub](https://bloghub.app/submit-your-newsletter), a free directory of blogs and newsletters.",
         ],
       },
       {
@@ -302,7 +303,7 @@ export const missionPosts: BlogPost[] = [
       {
         question: "How do I grow readers for a newsletter?",
         answer:
-          "Repurpose each post into formats people discover on other platforms, and list your publication on [BlogHub](https://bloghub.app) so readers browsing for new blogs and newsletters can find it.",
+          "Repurpose each post into formats people discover on other platforms, and list your publication on [BlogHub](https://bloghub.app/submit-your-newsletter) so readers browsing for new blogs and newsletters can find it. For more places to share your work, see this list of [article submission sites](https://bloghub.app/blogs/article-submission-sites).",
       },
       {
         question: "Can AI turn my blog posts into videos?",
@@ -348,7 +349,7 @@ export const missionPosts: BlogPost[] = [
         heading: "Where ChatGPT wins",
         paragraphs: [
           "ChatGPT is the better thinking partner when you do not have sources yet. It explains unfamiliar concepts, suggests angles, drafts outlines and argues the other side.",
-          "Use it early and loosely. Anything factual that survives into your final draft should be checked against a real source.",
+          "Use it early and loosely. Anything factual that survives into your final draft should be checked against a real source. And if you are wondering whether it can go further and produce media, here is the honest answer to [can ChatGPT make videos](https://blog2video.app/blogs/can-chatgpt-make-videos).",
         ],
         bullets: ["Brainstorming and outlining", "Explaining concepts you are new to", "Stress testing an argument"],
       },

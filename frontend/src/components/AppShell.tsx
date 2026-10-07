@@ -8,31 +8,25 @@ import SkyCanvas from "./SkyCanvas";
 import UpgradeModal from "./UpgradeModal";
 import {
   AsteroidIcon,
-  CometIcon,
-  ConstellationIcon,
   HelmetIcon,
   LaunchpadIcon,
   LaunchWindowIcon,
   OrbitIcon,
   PlanetIcon,
   RadarIcon,
-  RocketIcon,
   SatelliteDishIcon,
 } from "./icons/Icons";
 
 // Theme in the icon, clarity in the label: the plain label always shows.
-const NAV = [
-  { to: "/app", label: "Mission Control", icon: RadarIcon, end: true },
+// Seven stops: related pages share one entry (`also` keeps it lit on them).
+const NAV: { to: string; label: string; icon: typeof RadarIcon; end?: boolean; also?: string[] }[] = [
+  { to: "/app", label: "Home", icon: RadarIcon, end: true },
+  { to: "/app/sources", label: "Sources", icon: SatelliteDishIcon, also: ["/app/map"] },
   { to: "/app/notebooks", label: "Notebooks", icon: PlanetIcon },
-  { to: "/app/sources", label: "Sources", icon: SatelliteDishIcon },
-  { to: "/app/map", label: "Topic map", icon: ConstellationIcon },
-  { to: "/app/voice", label: "Voice profile", icon: HelmetIcon },
-  { to: "/app/studio", label: "Video and audio", icon: LaunchWindowIcon },
-  { to: "/app/launch-kit", label: "Launch Kit", icon: RocketIcon },
-  { to: "/app/launchpad", label: "Launchpad", icon: LaunchpadIcon },
-  { to: "/app/archive", label: "Archive", icon: AsteroidIcon },
-  { to: "/app/resurface", label: "Resurfacing", icon: CometIcon },
-  { to: "/app/settings", label: "Settings", icon: OrbitIcon },
+  { to: "/app/studio", label: "Create", icon: LaunchWindowIcon, also: ["/app/launch-kit"] },
+  { to: "/app/launchpad", label: "Launchpad", icon: LaunchpadIcon, also: ["/app/resurface"] },
+  { to: "/app/archive", label: "Library", icon: AsteroidIcon },
+  { to: "/app/voice", label: "Voice", icon: HelmetIcon },
 ];
 
 const COLLAPSED_KEY = "ns_sidebar_collapsed";
@@ -95,14 +89,24 @@ export default function AppShell() {
             </button>
           </div>
           <nav aria-label="App">
-            {NAV.map(({ to, label, icon: Icon, end }) => (
-              <NavLink key={to} to={to} end={end} title={collapsed ? label : undefined} className={({ isActive }) => `side-link${isActive ? " active" : ""}`}>
+            {NAV.map(({ to, label, icon: Icon, end, also }) => (
+              <NavLink
+                key={to}
+                to={to}
+                end={end}
+                title={collapsed ? label : undefined}
+                className={({ isActive }) => `side-link${isActive || also?.some((p) => location.pathname.startsWith(p)) ? " active" : ""}`}
+              >
                 <Icon />
                 <span className="side-label">{label}</span>
               </NavLink>
             ))}
           </nav>
           <FuelGauge collapsed={collapsed} />
+          <NavLink to="/app/settings" title={collapsed ? "Settings" : undefined} className={({ isActive }) => `side-link side-settings${isActive ? " active" : ""}`}>
+            <OrbitIcon />
+            <span className="side-label">Settings</span>
+          </NavLink>
           <div className="sidebar-user">
             <span className="mono muted side-label">{user.email}</span>
             <button className="link-btn" onClick={logout} title="Sign out">

@@ -46,6 +46,7 @@ export const blogPosts: BlogPost[] = [
         paragraphs: [
           "Paste your Substack URL. Pick a post or build a notebook of related posts. Choose a format: deep dive, brief or debate. Notestack writes the script, you review it, and ElevenLabs voices it.",
           "Publish the file to your podcast feed, attach it to the original post, or cut a 60 second audiogram for social.",
+          "Want to see the shape of the episode before you connect anything? Paste a post into the free [AI podcast generator](/tools/ai-podcast-generator) for a two host script, or use the [podcast script generator](/tools/podcast-script-generator) if you plan to record it yourself.",
         ],
       },
     ],

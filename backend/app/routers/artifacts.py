@@ -7,10 +7,12 @@ from sqlalchemy import func, or_, select
 
 from app.auth import Ctx, get_ctx
 from app.models import Artifact, CalendarItem, Document, Job, Notebook
+from app.routers.notebooks import ensure_archive_notebook
 from app.services.artifacts import latest_jobs, serialize_artifact, start_artifact
 from app.services.jobs import create_job, serialize_job
 from app.services.renderer import COMPOSITIONS
 from app.services.storage import storage
+from app.services.plans import effective_plan, plan_limit_error
 from app.services.usage import check_limit
 
 router = APIRouter(prefix="/api/artifacts", tags=["artifacts"])
@@ -27,6 +29,7 @@ class GenerateIn(BaseModel):
     type: Literal["summary", "audio_overview", "video", "quote_card", "carousel", "launch_kit"]
     notebook_id: uuid.UUID | None = None
     document_id: uuid.UUID | None = None
+    archive: bool = False  # no notebook or post picked: use the "All posts" notebook
     # audio_overview
     format: Literal["deep_dive", "brief", "debate"] = "deep_dive"
     minutes: int = Field(6, ge=1, le=30)
@@ -56,6 +59,11 @@ def _target_title(ctx: Ctx, notebook_id: uuid.UUID | None, document_id: uuid.UUI
                                                    Document.workspace_id == ctx.workspace.id))
         if not doc:
             raise HTTPException(404, "Post not found")
+        if not doc.path:
+            plan = effective_plan(ctx.db, ctx.workspace)
+            raise plan_limit_error(plan, "indexed_posts",
+                                   f"This post is not indexed. Your plan indexes your latest {plan.indexed_posts} "
+                                   "posts; upgrade to use your whole archive.")
         return doc.title
     if notebook_id:
         nb = ctx.db.scalar(select(Notebook).where(Notebook.id == notebook_id,
@@ -69,6 +77,8 @@ def _target_title(ctx: Ctx, notebook_id: uuid.UUID | None, document_id: uuid.UUI
 @router.post("/generate")
 def generate(body: GenerateIn, ctx: Ctx = Depends(get_ctx)):
     """One entry point for every generated artifact."""
+    if body.archive and not body.notebook_id and not body.document_id:
+        body.notebook_id = ensure_archive_notebook(ctx).id
     params: dict = {}
     content: dict = {}
     if body.type == "video" and body.style == "audiogram":

@@ -9,7 +9,8 @@ import {
   type RefObject,
 } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { notebooksApi, topicsApi } from "../api/endpoints";
+import { artifactsApi, notebooksApi, topicsApi } from "../api/endpoints";
+import { SourcesNav } from "./Sources";
 import type { Job, TopicDetail, TopicMap as TopicMapData, TopicNode } from "../api/types";
 import { Reader } from "../components/Reader";
 import { EmptyState, errorMessage, formatDate, JobProgress, Loading, PageHeader, Tabs } from "../components/ui";
@@ -299,6 +300,9 @@ export default function TopicMap() {
   const [data, setData] = useState<TopicMapData | null>(null);
   const [job, setJob] = useState<Job | null>(null);
   const [selected, setSelected] = useState<TopicDetail | null>(null);
+  const [briefing, setBriefing] = useState(false);
+  const [menu, setMenu] = useState(false);
+  const [acting, setActing] = useState<string | null>(null);
   const [hover, setHover] = useState<string | null>(null);
   const [mode, setMode] = useState<ColorMode>("recency");
   const [reading, setReading] = useState<string | null>(null);
@@ -458,6 +462,7 @@ export default function TopicMap() {
 
   return (
     <div className="page-wrap">
+      <SourcesNav />
       <PageHeader eyebrow="Topic map" title="The constellations in your archive">
         <Tabs<ColorMode>
           tabs={[
@@ -467,12 +472,35 @@ export default function TopicMap() {
           value={mode}
           onChange={setMode}
         />
-        <button className="btn btn-small" disabled={Boolean(running)} onClick={() => rebuild(false)}>
-          {data?.has_untagged_posts ? "Map new posts" : "Refresh"}
-        </button>
-        <button className="btn btn-small" disabled={Boolean(running)} onClick={() => rebuild(true)}>
-          Rebuild
-        </button>
+        {data && data.nodes.length > 0 && (
+          <button className={`btn btn-small${briefing ? " btn-primary" : ""}`} onClick={() => setBriefing(!briefing)} aria-pressed={briefing}>
+            Briefing
+          </button>
+        )}
+        {data?.has_untagged_posts && (
+          <button className="btn btn-small" disabled={Boolean(running)} onClick={() => rebuild(false)}>
+            Map new posts
+          </button>
+        )}
+        <div className="card-menu map-menu">
+          <button type="button" className="icon-btn" aria-label="Map options" aria-expanded={menu} onClick={() => setMenu(!menu)}>
+            ⋯
+          </button>
+          {menu && (
+            <div className="card-menu-list" onMouseLeave={() => setMenu(false)}>
+              <button
+                type="button"
+                disabled={Boolean(running)}
+                onClick={() => {
+                  setMenu(false);
+                  rebuild(true);
+                }}
+              >
+                Rebuild the whole map
+              </button>
+            </div>
+          )}
+        </div>
       </PageHeader>
       {live && (running || live.status === "failed") && <JobProgress job={live} />}
       {error && <p className="error-text">{error}</p>}
@@ -489,7 +517,7 @@ export default function TopicMap() {
         />
       )}
       {data && data.nodes.length > 0 && (
-        <div className="map-layout">
+        <div className={`map-layout${selected || briefing ? "" : " map-full"}`}>
           <div className="card map-canvas">
             <div className="map-controls">
               <button className="icon-btn" onClick={() => zoomAt(0.75)} aria-label="Zoom in" title="Zoom in">
@@ -524,7 +552,8 @@ export default function TopicMap() {
               )}
             </div>
 
-            <div className="map-legend mono" aria-label="Legend">
+            <details className="map-legend mono" aria-label="Legend">
+              <summary>Legend</summary>
               <span>
                 <i className="lg-size" /> size = posts
               </span>
@@ -545,7 +574,7 @@ export default function TopicMap() {
               <span>
                 <i className="lg-line" /> lines = shared posts
               </span>
-            </div>
+            </details>
 
             <svg
               ref={svgRef}
@@ -713,6 +742,7 @@ export default function TopicMap() {
             </svg>
           </div>
 
+          {(selected || briefing) && (
           <aside className="card map-side">
             {!selected && (
               <>
@@ -771,7 +801,7 @@ export default function TopicMap() {
                     {data.insights.dormant.length === 0 && <li className="muted small">Every topic has been visited lately.</li>}
                   </ul>
                   {data.insights.dormant.length > 0 && (
-                    <Link to="/app/resurface" className="small-link mono">
+                    <Link to="/app/launchpad#ideas" className="small-link mono">
                       Resurface old posts
                     </Link>
                   )}
@@ -802,7 +832,7 @@ export default function TopicMap() {
             {selected && (
               <>
                 <button className="link-btn mono muted small" onClick={() => setSelected(null)}>
-                  Back to briefing
+                  {briefing ? "Back to briefing" : "Close"}
                 </button>
                 <div className="row between">
                   <h2>{selected.name}</h2>
@@ -851,15 +881,39 @@ export default function TopicMap() {
                   </div>
                 )}
 
-                <button
-                  className="btn btn-small btn-primary"
-                  onClick={async () => {
-                    const nb = await notebooksApi.fromTopic(selected.id);
-                    navigate(`/app/notebooks/${nb.id}`);
-                  }}
-                >
-                  Make a notebook from this topic
-                </button>
+                <div className="topic-actions">
+                  <button
+                    className="btn btn-small btn-primary"
+                    disabled={acting !== null}
+                    onClick={async () => {
+                      setActing("audio");
+                      try {
+                        const nb = await notebooksApi.fromTopic(selected.id);
+                        await artifactsApi.generate({ type: "audio_overview", notebook_id: nb.id, format: "deep_dive", minutes: 6 });
+                        navigate(`/app/notebooks/${nb.id}`);
+                      } finally {
+                        setActing(null);
+                      }
+                    }}
+                  >
+                    {acting === "audio" ? "Starting..." : "Audio about this"}
+                  </button>
+                  {selected.posts[0] && (
+                    <button className="btn btn-small" disabled={acting !== null} onClick={() => navigate(`/app/launch-kit?post=${selected.posts[0].id}`)}>
+                      Launch Kit for the latest post
+                    </button>
+                  )}
+                  <button
+                    className="btn btn-small"
+                    disabled={acting !== null}
+                    onClick={async () => {
+                      const nb = await notebooksApi.fromTopic(selected.id);
+                      navigate(`/app/notebooks/${nb.id}`);
+                    }}
+                  >
+                    Open as notebook
+                  </button>
+                </div>
                 <ul className="doc-list">
                   {selected.posts.map((d) => (
                     <li key={d.id} className="doc-row">
@@ -873,6 +927,7 @@ export default function TopicMap() {
               </>
             )}
           </aside>
+          )}
         </div>
       )}
       {reading && <Reader documentId={reading} onClose={() => setReading(null)} />}
