@@ -52,6 +52,16 @@ def fast_lm() -> dspy.LM:
     return _build(settings.llm_fast_model, effort="low", temperature=None, max_tokens=8000)
 
 
+REPORT_MAX_TOKENS = 16000  # a few pages of prose plus GLM's low-effort reasoning
+
+
+@lru_cache
+def report_lm() -> dspy.LM:
+    """Writes reports: the fast model unless LLM_REPORT_MODEL names another, with room for a long answer."""
+    return _build(settings.llm_report_model or settings.llm_fast_model, effort="low", temperature=None,
+                  max_tokens=REPORT_MAX_TOKENS)
+
+
 @lru_cache
 def triage_lm() -> dspy.LM:
     """Cheap model that decides whether a chat message needs research at all."""

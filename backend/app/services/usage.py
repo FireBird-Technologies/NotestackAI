@@ -31,9 +31,21 @@ def month_usage(db: Session, workspace_id) -> dict:
             Artifact.workspace_id == workspace_id, Artifact.type == "launch_kit", Artifact.created_at >= since
         )
     ) or 0
+    reports = db.scalar(
+        select(func.count()).select_from(Artifact).where(
+            Artifact.workspace_id == workspace_id, Artifact.type == "report", Artifact.created_at >= since
+        )
+    ) or 0
+    infographics = db.scalar(
+        select(func.count()).select_from(Artifact).where(
+            Artifact.workspace_id == workspace_id, Artifact.type == "infographic", Artifact.created_at >= since
+        )
+    ) or 0
     return {
         "audio_minutes": round(total("tts", "seconds") / 60, 1),
         "launch_kits": kits,
+        "reports": reports,
+        "infographics": infographics,
         "llm_tokens": int(total("llm", "tokens")),
         "since": since.isoformat(),
     }
@@ -49,7 +61,7 @@ def usage_report(db: Session, workspace: Workspace) -> dict:
         "used": used,
         "videos_resets_at": videos["resets_at"],
         "limits": {"audio_minutes": plan.audio_minutes, "videos": videos["limit"],
-                   "launch_kits": plan.launch_kits, "sources": plan.sources, "indexed_posts": plan.indexed_posts},
+                   "launch_kits": plan.launch_kits, "reports": plan.reports, "infographics": plan.infographics, "sources": plan.sources, "indexed_posts": plan.indexed_posts},
     }
 
 
@@ -57,7 +69,8 @@ def check_limit(db: Session, workspace: Workspace, kind: str, amount: float = 1)
     """Raise 402 plan_limit when this request would go over the monthly allowance."""
     plan = effective_plan(db, workspace)
     used = month_usage(db, workspace.id)
-    limit = {"audio_minutes": plan.audio_minutes, "launch_kits": plan.launch_kits}[kind]
+    limit = {"audio_minutes": plan.audio_minutes, "launch_kits": plan.launch_kits, "reports": plan.reports,
+             "infographics": plan.infographics}[kind]
     if limit >= 0 and used[kind] + amount > limit:
         label = kind.replace("_", " ")
         raise plan_limit_error(plan, kind, f"This would go over your {limit} {label} this month.")

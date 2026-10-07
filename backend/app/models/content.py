@@ -15,6 +15,7 @@ from sqlalchemy import (
     UniqueConstraint,
     Uuid,
     text,
+    true,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -193,6 +194,18 @@ class Artifact(IdMixin, TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String(40), default="pending")
     content_json: Mapped[dict] = mapped_column(JSON, default=dict)
     storage_key: Mapped[str | None] = mapped_column(String(500))
+
+
+class ArtifactShare(IdMixin, TimestampMixin, Base):
+    """A public link to one artifact (a report): anyone holding the token can read the shared view, nothing else.
+    Revoking deletes the row, so a new link is a new token."""
+
+    __tablename__ = "artifact_shares"
+
+    workspace_id: Mapped[uuid.UUID] = _ws_fk()
+    artifact_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("artifacts.id", ondelete="CASCADE"), unique=True)
+    token: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    show_sources: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
 
 
 class B2VVideo(IdMixin, TimestampMixin, Base):

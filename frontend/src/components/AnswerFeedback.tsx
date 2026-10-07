@@ -17,14 +17,39 @@ const Thumb = ({ down }: { down?: boolean }) => (
   </svg>
 );
 
-/** Thumbs up or down under an answer. A thumbs down opens a few reasons and an optional note. Saved as soon as it is chosen. */
-export function AnswerFeedback({ messageId, initial }: { messageId: string; initial?: Feedback | null }) {
+const CopyGlyph = ({ done }: { done?: boolean }) => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    {done ? <path d="M5 12.5l4.5 4.5L19 7.5" /> : (
+      <>
+        <rect x="9" y="9" width="11" height="11" rx="2" />
+        <path d="M5 15V6a2 2 0 0 1 2-2h9" />
+      </>
+    )}
+  </svg>
+);
+
+/** The answer as plain text for pasting: the [1] citation markers are left out. */
+const forCopy = (text: string) => text.replace(/\s*\[\d+\](?:\[\d+\])*/g, "").trim();
+
+/** Copy, thumbs up and thumbs down under an answer. A thumbs down opens a few reasons and an optional note. Saved as soon as it is chosen. */
+export function AnswerFeedback({ messageId, initial, text }: { messageId: string; initial?: Feedback | null; text?: string }) {
   const [fb, setFb] = useState<Feedback | null>(initial ?? null);
   const [open, setOpen] = useState(false);
   const [reasons, setReasons] = useState<string[]>(initial?.reasons ?? []);
   const [comment, setComment] = useState(initial?.comment ?? "");
   const [error, setError] = useState(false);
   const [thanks, setThanks] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(forCopy(text ?? ""));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch {
+      setError(true); // the browser refused the clipboard
+    }
+  };
 
   const save = async (rating: "up" | "down" | null, r: string[] = [], c = "") => {
     const before = fb;
@@ -57,6 +82,11 @@ export function AnswerFeedback({ messageId, initial }: { messageId: string; init
   return (
     <div className="fb">
       <div className="fb-row">
+        {text && (
+          <button type="button" className="fb-btn" aria-label={copied ? "Copied" : "Copy answer"} title={copied ? "Copied" : "Copy answer"} onClick={copy}>
+            <CopyGlyph done={copied} />
+          </button>
+        )}
         <button type="button" className={`fb-btn${fb?.rating === "up" ? " is-on" : ""}`} aria-pressed={fb?.rating === "up"} aria-label="Good answer" title="Good answer" onClick={() => choose("up")}>
           <Thumb />
         </button>

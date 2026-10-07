@@ -45,7 +45,7 @@ from app.models import (
     Workspace,
     WorkspaceMember,
 )
-from app.pipeline import generate, launchkit, media
+from app.pipeline import flashcards, generate, infographic, launchkit, media, quiz, report
 from app.pipeline.generate import NothingToDo
 from app.pipeline.ingest import FeedNotFound, entry_from_upload, extract_article, ingest_source, store_entries
 from app.pipeline.memory import learn_from_message
@@ -282,6 +282,11 @@ HANDLERS: dict[str, Callable[[Session, Job], object]] = {
     "resurface_scan": handle_resurface,
     "summary": _artifact_handler(generate.summarize_notebook, "Summary ready"),
     "mind_map": _artifact_handler(generate.build_mind_map, "Mind Constellation ready"),
+    "quiz": _artifact_handler(quiz.build_quiz, "Quiz ready"),
+    "flashcards": _artifact_handler(flashcards.build_flashcards, "Flashcards ready"),
+    "report": _artifact_handler(report.build_report, "Report ready"),
+    "infographic": _artifact_handler(infographic.build_infographic, "Infographic ready"),
+    "report_block": report.handle_report_block,
     "audio_overview": _artifact_handler(media.audio_overview, "Audio overview ready"),
     "video": _artifact_handler(media.make_video, "Audiogram ready"),  # audiograms; videos come from blog2video
     "quote_card": _artifact_handler(media.make_quote_card, "Quote card ready"),
@@ -292,7 +297,8 @@ HANDLERS: dict[str, Callable[[Session, Job], object]] = {
 
 
 def mark_artifact_failed(db: Session, job: Job, error: str) -> None:
-    if job.artifact_id:
+    # A failed "add a visual" job leaves the report as it was; the job's own error tells the page what went wrong.
+    if job.artifact_id and job.kind != "report_block":
         artifact = db.get(Artifact, job.artifact_id)
         if artifact:
             artifact.status = "failed"

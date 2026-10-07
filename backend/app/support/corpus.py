@@ -74,12 +74,15 @@ def _plans_doc() -> Doc:
             monthly, yearly = annual_prices(p)
             price += f", or ${monthly:g} a month billed yearly (${yearly:g} a year)"
         kits = "unlimited" if p.launch_kits < 0 else str(p.launch_kits)
+        reports = "unlimited" if p.reports < 0 else str(p.reports)
+        infographics = "unlimited" if p.infographics < 0 else str(p.infographics)
         lines += [
             f"## {p.name}",
             f"{p.tagline}. Price: {price}.",
             f"Limits: {p.sources} sources, {p.indexed_posts} indexed posts, "
             f"{p.audio_minutes} minutes of audio a month, "
-            f"{p.videos} videos {'a month' if p.videos_monthly else 'in total'}, {kits} Launch Kits a month. "
+            f"{p.videos} videos {'a month' if p.videos_monthly else 'in total'}, {kits} Launch Kits a month, "
+            f"{reports} reports a month, {infographics} infographics a month. "
             f"Voice cloning: {'yes' if p.voice_cloning else 'no'}. Brand kit: {'yes' if p.brand_kit else 'no'}.",
             "Includes: " + "; ".join(p.features) + ".",
         ]
@@ -94,7 +97,7 @@ def _plans_doc() -> Doc:
     return Doc(
         id="plans-and-billing", title="Plans, pricing and billing", route="/pricing",
         keywords=("price", "pricing", "plan", "plans", "free", "writer", "studio", "cost", "billing", "upgrade",
-                  "limits", "annual", "monthly", "subscription", "refund", "cancel", "usage"),
+                  "limits", "annual", "monthly", "subscription", "refund", "cancel", "usage", "reports", "infographics"),
         questions=("How much does Notestack cost?", "What is in the free plan?", "What are the plan limits?",
                    "How do I upgrade?", "Is there annual billing?"),
         related_paths=("/app/settings",), headings=tuple(re.findall(r"^#{1,3}\s+(.+)$", body, re.M)), body=body,

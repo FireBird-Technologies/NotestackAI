@@ -4,7 +4,7 @@ means: artifact row + queued job, returned together so the UI can stream progres
 import uuid
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
 from app.models import Artifact, Job
 from app.services.jobs import create_job, serialize_job
@@ -18,6 +18,10 @@ TYPE_LABELS = {
     "carousel": "Carousel",
     "launch_kit": "Launch Kit",
     "mind_map": "Mind Constellation",
+    "quiz": "Quiz",
+    "flashcards": "Flashcards",
+    "report": "Report",
+    "infographic": "Infographic",
 }
 
 
@@ -50,8 +54,37 @@ def latest_jobs(db: Session, artifact_ids: list[uuid.UUID]) -> dict[uuid.UUID, J
     return {j.artifact_id: j for j in jobs}  # later rows win, so this is the newest job per artifact
 
 
+def report_blocks(a: Artifact) -> list[dict]:
+    """A report's blocks, each infographic block with its page: the child artifact's html and status (or "missing"
+    once it was deleted). Read when the report is read, so one still being written shows up when it is ready."""
+    from app.pipeline.infographic import infographic_html  # not at import: pipeline imports this module
+
+    blocks = list((a.content_json or {}).get("blocks") or [])
+    ids = [uuid.UUID(b["artifact_id"]) for b in blocks if b.get("type") == "infographic" and b.get("artifact_id")]
+    db = object_session(a)
+    kids = {k.id: k for k in db.scalars(select(Artifact).where(Artifact.id.in_(ids), Artifact.workspace_id == a.workspace_id))} \
+        if ids and db else {}
+    out = []
+    for b in blocks:
+        if b.get("type") != "infographic":
+            out.append(b)
+            continue
+        kid = kids.get(uuid.UUID(b["artifact_id"])) if b.get("artifact_id") else None
+        ready = bool(kid and kid.status == "ready" and (kid.content_json or {}).get("content"))
+        out.append({**b, "status": kid.status if kid else "missing",
+                    "html": infographic_html(kid.content_json) if ready else None,
+                    "html_landscape": infographic_html(kid.content_json, "landscape") if ready else None})
+    return out
+
+
 def serialize_artifact(a: Artifact, job: Job | None = None) -> dict:
     content = a.content_json or {}
+    if a.type == "infographic" and a.status == "ready":
+        from app.pipeline.infographic import infographic_html  # not at import: pipeline imports this module
+
+        content = {**content, "html": infographic_html(content), "html_landscape": infographic_html(content, "landscape")}
+    if a.type == "report" and any(b.get("type") == "infographic" for b in content.get("blocks") or []):
+        content = {**content, "blocks": report_blocks(a)}
     slides = content.get("slide_keys") or []
     return {
         "id": str(a.id),

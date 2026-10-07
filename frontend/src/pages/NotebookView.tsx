@@ -8,8 +8,13 @@ import { ArtifactCard, CitationList } from "../components/ArtifactCard";
 import { Markdown } from "../components/Markdown";
 import { DocPicker } from "../components/DocPicker";
 import { Dropdown } from "../components/Dropdown";
-import { ChevronIcon, TelescopeIcon } from "../components/icons/Icons";
+import { ChevronIcon, FlashcardsIcon, HeadphonesIcon, InfographicIcon, QuizIcon, ReportIcon, TelescopeIcon, VideoIcon } from "../components/icons/Icons";
 import { MindMapDialog, MindMapExplorer, MindMapRow } from "../components/MindMap";
+import { FlashcardsDialog, type FlashcardsRequest } from "../components/Flashcards";
+import { InfographicDialog, type InfographicRequest } from "../components/Infographic";
+import { QuizDialog, type QuizRequest } from "../components/Quiz";
+import { MAX_STUDY_POSTS, prefetchFocus } from "../components/SourceFocusFields";
+import { ReportDialog, type ReportRequest } from "../components/ReportDialog";
 import { Reader } from "../components/Reader";
 import { seedDocs } from "../components/video/sourceCache";
 import { ConfirmButton, errorMessage, formatDate, Loading, Modal } from "../components/ui";
@@ -39,10 +44,25 @@ function readChatRailOpen(): boolean {
 }
 
 /** Create: one click per format with sensible defaults, options folded away; then what was made from this notebook. */
-function StudioPanel({ notebookId, docs, disabled, onCreateVideo }: {
+function StudioPanel({ notebookId, notebookTitle, docs, chats, currentChatId, disabled, quizOpen, onQuizClose, onCreateQuiz, cardsOpen, onCardsClose, onCreateCards, infographicOpen, onInfographicClose, onCreateInfographic, reportOpen, onReportClose, onCreateReport, onCreateVideo }: {
   notebookId: string;
-  docs: { id: string; title: string }[];
+  notebookTitle: string;
+  docs: { id: string; title: string; locked?: boolean }[];
+  chats: ChatSummary[];
+  currentChatId: string | null;
   disabled: boolean;
+  quizOpen: boolean; // the quiz settings are open (from here, or from the chat's own Quiz button)
+  onQuizClose: () => void;
+  onCreateQuiz: () => void;
+  cardsOpen: boolean;
+  onCardsClose: () => void;
+  onCreateCards: () => void;
+  infographicOpen: boolean;
+  onInfographicClose: () => void;
+  onCreateInfographic: () => void;
+  reportOpen: boolean;
+  onReportClose: () => void;
+  onCreateReport: () => void;
   onCreateVideo: () => void;
 }) {
   const [artifacts, setArtifacts] = useState<Artifact[] | null>(null);
@@ -56,8 +76,6 @@ function StudioPanel({ notebookId, docs, disabled, onCreateVideo }: {
   const [hostVoices, setHostVoices] = useState<VideoSavedVoice[] | null>(null);
   const [hosts, setHosts] = useState<[string, string]>(["", ""]);
   const [mapDialog, setMapDialog] = useState(false);
-  const [mapBusy, setMapBusy] = useState(false);
-  const [mapError, setMapError] = useState<string | null>(null);
   const [waitingMap, setWaitingMap] = useState<string | null>(null); // a map the user just asked for: open it when ready
   const [exploring, setExploring] = useState<Artifact | null>(null);
 
@@ -85,6 +103,12 @@ function StudioPanel({ notebookId, docs, disabled, onCreateVideo }: {
     load();
   }, [load]);
 
+  // The focus suggestions the study dialogs show, made now so they are waiting when a dialog opens.
+  const startIds = docs.filter((d) => !d.locked).slice(0, MAX_STUDY_POSTS).map((d) => d.id).join(",");
+  useEffect(() => {
+    if (startIds) prefetchFocus(notebookId, startIds.split(","));
+  }, [notebookId, startIds]);
+
   const make = async (body: Omit<GenerateBody, "notebook_id">) => {
     setBusy(true);
     setError(null);
@@ -98,25 +122,41 @@ function StudioPanel({ notebookId, docs, disabled, onCreateVideo }: {
     }
   };
 
-  const makeMap = async (documentIds: string[], focus: string) => {
-    setMapBusy(true);
-    setMapError(null);
+  // Every "make" from a dialog works the same way: the dialog closes at once, a card in the panel says it is starting, the
+  // artifact replaces it as soon as the server has it (and shows its own progress), and a failure is shown in the panel.
+  const [starting, setStarting] = useState<string[]>([]);
+  const launch = async (label: string, close: () => void, request: () => Promise<Artifact>, after?: (a: Artifact) => void) => {
+    setError(null);
+    close();
+    setStarting((l) => [...l, label]);
     try {
-      const a = await artifactsApi.generate({
-        type: "mind_map",
-        notebook_id: notebookId,
-        document_ids: documentIds.length === docs.length ? undefined : documentIds,
-        focus: focus || undefined,
-      });
+      const a = await request();
       setArtifacts((list) => [a, ...(list ?? [])]);
-      setWaitingMap(a.id);
-      setMapDialog(false);
+      after?.(a);
     } catch (e) {
-      setMapError(errorMessage(e));
+      setError(errorMessage(e)); // 402 also opens the upgrade popup (api/client.ts)
     } finally {
-      setMapBusy(false);
+      setStarting((l) => {
+        const i = l.indexOf(label);
+        return i < 0 ? l : [...l.slice(0, i), ...l.slice(i + 1)];
+      });
     }
   };
+  const makeMap = (documentIds: string[], focus: string) =>
+    launch("Mind Constellation", () => setMapDialog(false), () => artifactsApi.generate({
+      type: "mind_map",
+      notebook_id: notebookId,
+      document_ids: documentIds.length === docs.length ? undefined : documentIds,
+      focus: focus || undefined,
+    }), (a) => setWaitingMap(a.id));
+  const makeQuiz = (body: QuizRequest) =>
+    launch("quiz", onQuizClose, () => artifactsApi.generate({ notebook_id: notebookId, ...body, type: "quiz" }));
+  const makeReport = (body: ReportRequest) =>
+    launch("report", onReportClose, () => artifactsApi.generate({ notebook_id: notebookId, ...body, type: "report" }));
+  const makeInfographic = (body: InfographicRequest) =>
+    launch("infographic", onInfographicClose, () => artifactsApi.generate({ notebook_id: notebookId, ...body, type: "infographic" }));
+  const makeCards = (body: FlashcardsRequest) =>
+    launch("flashcards", onCardsClose, () => artifactsApi.generate({ notebook_id: notebookId, ...body, type: "flashcards" }));
 
   const maps = artifacts?.filter((a) => a.type === "mind_map") ?? [];
   const others = artifacts?.filter((a) => a.type !== "mind_map");
@@ -128,14 +168,25 @@ function StudioPanel({ notebookId, docs, disabled, onCreateVideo }: {
     <div className="stack">
       <span className="vw-label">Create</span>
       <div className="nbv-make">
+        <button className="nbv-make-stars" disabled={off} onClick={() => setMapDialog(true)}>
+          <span className="nbv-stars-text">
+            <strong>Mind Constellation</strong>
+            <small>Explore your posts as stars</small>
+          </span>
+          <svg className="nbv-stars-art" viewBox="0 0 64 40" width="64" height="40" aria-hidden="true">
+            <path d="M6 28 20 14 34 22 46 8 58 18" fill="none" stroke="currentColor" strokeOpacity=".5" strokeWidth="1" />
+            <circle cx="6" cy="28" r="2" fill="currentColor" />
+            <circle cx="20" cy="14" r="2.6" fill="currentColor" />
+            <circle cx="34" cy="22" r="1.8" fill="currentColor" />
+            <circle cx="46" cy="8" r="3" fill="currentColor" />
+            <circle cx="58" cy="18" r="2" fill="currentColor" />
+          </svg>
+        </button>
         {/* Opens its options (format, length) right under it; the audio is made from there */}
         <button className={`nbv-make-main${audioOpen ? " open" : ""}`} disabled={off} aria-expanded={audioOpen}
                 onClick={() => setAudioOpen(!audioOpen)}>
-          <span>Audio overview</span>
+          <span className="nbv-make-label"><HeadphonesIcon size={18} /> Audio overview</span>
           <span className="nbv-make-meta">
-            <span className="muted small">
-              {format === "deep_dive" ? "Deep dive" : format === "brief" ? "Brief" : "Debate"} · {minutes} min
-            </span>
             <ChevronIcon size={16} className={`chevron${audioOpen ? " open" : ""}`} />
           </span>
         </button>
@@ -173,17 +224,19 @@ function StudioPanel({ notebookId, docs, disabled, onCreateVideo }: {
           </div>
         )}
         <button disabled={off} onClick={onCreateVideo}>
-          Create Video
+          <VideoIcon size={18} /> Video
         </button>
-        <button disabled={off} onClick={() => make({ type: "summary" })}>
-          Generate Summary
+        <button disabled={off} onClick={onCreateReport}>
+          <ReportIcon size={18} /> Report
         </button>
-        <button disabled={off} onClick={() => make({ type: "quote_card" })}>
-          Make Quote Card
+        <button disabled={off} onClick={onCreateInfographic}>
+          <InfographicIcon size={18} /> Infographic
         </button>
-        <button className="nbv-make-map" disabled={off} onClick={() => setMapDialog(true)}>
-          <strong>Mind Constellation</strong>
-          <span className="muted small">A galaxy of your ideas. Zoom in on any orbit.</span>
+        <button disabled={off} onClick={onCreateQuiz}>
+          <QuizIcon size={18} /> Quiz
+        </button>
+        <button className="nbv-make-wide" disabled={off} onClick={onCreateCards}>
+          <FlashcardsIcon size={18} /> Flashcards
         </button>
       </div>
       {disabled && <p className="muted small">Add posts to this notebook to start creating.</p>}
@@ -207,9 +260,19 @@ function StudioPanel({ notebookId, docs, disabled, onCreateVideo }: {
           ))}
         </section>
       )}
-      {(!others || others.length > 0) && <span className="vw-label nbv-made-label">Made from this notebook</span>}
-      {(!others || others.length > 0) && <div className="studio-list nbv-made">
+      {(!others || others.length > 0 || starting.length > 0) && <span className="vw-label nbv-made-label">Made from this notebook</span>}
+      {(!others || others.length > 0 || starting.length > 0) && <div className="studio-list nbv-made">
         {!artifacts && <Loading />}
+        {starting.map((label, i) => (
+          <div key={`${label}-${i}`} className="nbv-starting" role="status" aria-live="polite">
+            <span className="nbv-send-spinner" aria-hidden="true" />
+            <span className="nbv-starting-text">
+              <strong>Starting your {label}</strong>
+              <span className="vw-focus-bar" />
+              <span className="vw-focus-bar short" />
+            </span>
+          </div>
+        ))}
         {others?.map((a) => (
           <ArtifactCard
             key={a.id}
@@ -227,7 +290,15 @@ function StudioPanel({ notebookId, docs, disabled, onCreateVideo }: {
         ))}
       </div>}
       {reading && <Reader documentId={reading.id} highlight={{ start: reading.start, end: reading.end }} onClose={() => setReading(null)} />}
-      {mapDialog && <MindMapDialog docs={docs} busy={mapBusy} error={mapError} onClose={() => setMapDialog(false)} onCreate={makeMap} />}
+      {quizOpen && <QuizDialog notebookId={notebookId} notebookTitle={notebookTitle} chats={chats} currentChatId={currentChatId} busy={false} error={null}
+                               onClose={onQuizClose} onCreate={makeQuiz} />}
+      {reportOpen && <ReportDialog notebookId={notebookId} notebookTitle={notebookTitle} chats={chats} currentChatId={currentChatId} busy={false}
+                                   error={null} onClose={onReportClose} onCreate={makeReport} />}
+      {infographicOpen && <InfographicDialog notebookId={notebookId} notebookTitle={notebookTitle} chats={chats} currentChatId={currentChatId}
+                                             busy={false} error={null} onClose={onInfographicClose} onCreate={makeInfographic} />}
+      {cardsOpen && <FlashcardsDialog notebookId={notebookId} notebookTitle={notebookTitle} chats={chats} currentChatId={currentChatId} busy={false}
+                                      error={null} onClose={onCardsClose} onCreate={makeCards} />}
+      {mapDialog && <MindMapDialog docs={docs} busy={false} error={null} onClose={() => setMapDialog(false)} onCreate={makeMap} />}
       {exploring && <MindMapExplorer artifact={exploring} onClose={() => setExploring(null)} />}
     </div>
   );
@@ -244,6 +315,10 @@ export default function NotebookView() {
   const [loadingChatId, setLoadingChatId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [makingVideo, setMakingVideo] = useState(false); // the video wizard is open in a modal
+  const [makingQuiz, setMakingQuiz] = useState(false); // the quiz settings are open in a modal
+  const [makingInfographic, setMakingInfographic] = useState(false); // the infographic settings are open in a modal
+  const [makingCards, setMakingCards] = useState(false); // the flashcard settings are open in a modal
+  const [makingReport, setMakingReport] = useState(false); // the report dialog is open in a modal
   const [toAdd, setToAdd] = useState<string[]>([]);
   const [addError, setAddError] = useState<string | null>(null);
   const [reading, setReading] = useState<{ id: string; start?: number; end?: number } | null>(null);
@@ -441,6 +516,26 @@ export default function NotebookView() {
   if (loadError) return <p className="error-text">{loadError}</p>;
   if (!nb) return <Loading label="Opening notebook" />;
 
+  const openReport = () => {
+    seedDocs(nb.id, nb.documents);
+    setMakingReport(true);
+  };
+
+  const openInfographic = () => {
+    seedDocs(nb.id, nb.documents);
+    setMakingInfographic(true);
+  };
+
+  const openCards = () => {
+    seedDocs(nb.id, nb.documents);
+    setMakingCards(true);
+  };
+
+  const openQuiz = () => {
+    seedDocs(nb.id, nb.documents); // the posts this page already has: the dialog shows them at once
+    setMakingQuiz(true);
+  };
+
   const cite = (c: Citation) => {
     if (c.kind === "chat") setQuoted(c);
     else if (c.document_id) setReading({ id: c.document_id, start: c.line_start, end: c.line_end });
@@ -535,8 +630,9 @@ export default function NotebookView() {
               <form
                 onSubmit={async (e) => {
                   e.preventDefault();
-                  await notebooksApi.update(nb.id, { title });
                   setEditingTitle(false);
+                  if (title.trim()) setNb({ ...nb, title }); // shown at once, everywhere; the reload confirms it
+                  await notebooksApi.update(nb.id, { title });
                   load();
                 }}
               >
@@ -548,6 +644,7 @@ export default function NotebookView() {
                   onBlur={async () => {
                     setEditingTitle(false);
                     if (title.trim() && title !== nb.title) {
+                      setNb({ ...nb, title }); // shown at once, everywhere (the dialogs too); the reload confirms it
                       await notebooksApi.update(nb.id, { title });
                       load();
                     } else {
@@ -604,7 +701,7 @@ export default function NotebookView() {
                   <p className="turn-text">{t.text}</p>
                 ))}
               {t.citations && <CitationList citations={t.citations} onCite={cite} collapsible />}
-              {t.role === "assistant" && t.id && t.text && !t.status && <AnswerFeedback key={t.id} messageId={t.id} initial={t.feedback} />}
+              {t.role === "assistant" && t.id && t.text && !t.status && <AnswerFeedback key={t.id} messageId={t.id} initial={t.feedback} text={t.text} />}
               {t.saved && t.saved.length > 0 && (
                 <p className="mono muted small">
                   {t.saved
@@ -650,7 +747,12 @@ export default function NotebookView() {
       </section>
 
       <aside className="card nbv-pane nbv-side" aria-label="Notebook tools">
-        <StudioPanel notebookId={nb.id} docs={nb.documents.map((d) => ({ id: d.id, title: d.title }))}
+        <StudioPanel notebookId={nb.id} notebookTitle={nb.title} docs={nb.documents.map((d) => ({ id: d.id, title: d.title, locked: d.locked }))}
+                     chats={chats} currentChatId={chatId} quizOpen={makingQuiz}
+                     onQuizClose={() => setMakingQuiz(false)} onCreateQuiz={openQuiz}
+                     reportOpen={makingReport} onReportClose={() => setMakingReport(false)} onCreateReport={openReport}
+                     infographicOpen={makingInfographic} onInfographicClose={() => setMakingInfographic(false)} onCreateInfographic={openInfographic}
+                     cardsOpen={makingCards} onCardsClose={() => setMakingCards(false)} onCreateCards={openCards}
                      disabled={nb.documents.length === 0}
                      onCreateVideo={() => {
                        seedDocs(nb.id, nb.documents); // the posts this page already has: the wizard shows them at once

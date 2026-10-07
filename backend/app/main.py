@@ -17,7 +17,9 @@ from app.routers import (
     launchpad,
     memory,
     notebooks,
+    reports,
     resurface,
+    share,
     sources,
     storage,
     support,
@@ -94,7 +96,7 @@ def health():
 
 # video_templates (custom templates) is switched off: users pick only from the built-in templates.
 for r in (auth, billing, storage, sources, notebooks, artifacts, jobs, unsubscribe, topics, voice, resurface,
-          launchpad, videos, video_edit, video_voices, video_styles, settings_router, memory, support):
+          launchpad, videos, video_edit, video_voices, video_styles, settings_router, memory, support, reports, share):
     app.include_router(r.router)
 app.include_router(sources.documents_router)
 app.include_router(launchpad.links_router)

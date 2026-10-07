@@ -30,6 +30,7 @@ ALLOWED_TYPES = {
     "text/markdown",
     "text/plain",
     "text/html",
+    "text/vtt",
 }
 
 

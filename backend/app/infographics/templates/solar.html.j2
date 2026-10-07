@@ -1,0 +1,47 @@
+{% extends "base.html.j2" %}
+{% set eyebrow = "A tour of the solar system" %}
+{% set pal = {"bg1":"#1a2230","bg2":"#2e3d52","ink":"#f0ead9","mute":"#c2c9cf","a":"#d9a441","b":"#7fa3b8","card":"rgba(240,234,217,.07)","line":"rgba(240,234,217,.2)","paper":"#f0ead9","paperink":"#1a2230","r":16} %}
+{% set fonts = {"h":"Playfair Display","b":"Outfit","m":"Space Mono","hw":700,"ht":"none","bt":"none"} %}
+{% set cycle = ["#d9a441","#c8745f","#7fa3b8","#8fb0a0","#b79ad6"] %}
+{% block bg %}
+<g fill="none" stroke="#f0ead9" stroke-opacity=".12" stroke-width="2"><circle cx="-120" cy="1100" r="620"/><circle cx="-120" cy="1100" r="900"/><circle cx="-120" cy="1100" r="1180"/><circle cx="-120" cy="1100" r="1460"/></g>
+<circle cx="-120" cy="1100" r="190" fill="#d9a441" opacity=".13"/>
+<circle cx="1556" cy="860" r="18" fill="#c8745f" opacity=".6"/><circle cx="1560" cy="1500" r="26" fill="#7fa3b8" opacity=".5"/>
+{% endblock %}
+{% block hero %}
+<circle cx="-40" cy="200" r="120" fill="#d9a441"/><circle cx="-40" cy="200" r="150" fill="#d9a441" opacity=".25"/>
+<path d="M0 340Q240 360 480 300" stroke="#f0ead9" stroke-opacity=".5" stroke-width="2" stroke-dasharray="3 9" fill="none"/>
+<circle cx="150" cy="120" r="22" fill="#b9ad90"/><circle cx="220" cy="270" r="34" fill="#c8745f"/><circle cx="300" cy="150" r="42" fill="#7fa3b8"/><circle cx="305" cy="145" r="42" fill="none" stroke="#f0ead9" stroke-opacity=".0"/>
+<g transform="translate(400 250)"><ellipse rx="70" ry="18" fill="none" stroke="#e6d3a1" stroke-width="7" transform="rotate(-18)"/><circle r="40" fill="#d9a441"/><path d="M-72 10Q0 34 72 -6" stroke="#e6d3a1" stroke-width="7" fill="none" transform="rotate(-18)"/></g>
+<circle cx="420" cy="80" r="26" fill="#8fb0a0"/>
+{% endblock %}
+{% block css %}
+.ig h1{font-size:70px}
+.sp{display:flex;gap:18px;flex:none;align-items:stretch}
+.sp .pl{flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;padding:0 6px}
+.sp .og{height:140px;display:flex;align-items:flex-end;margin-bottom:-34px;z-index:1}
+.sp .orb{position:relative;display:grid;place-items:center;border-radius:50%;font-family:var(--fh);font-weight:700;font-size:42px;color:#1a2230;background:radial-gradient(circle at 32% 28%,#fff9,var(--c) 62%);box-shadow:inset -14px -12px 0 rgba(0,0,0,.2)}
+.sp .card{width:100%;padding:48px 18px 20px;border-radius:var(--r);background:var(--card);border:1px solid var(--line);flex:1}
+.sp b{display:block;font-family:var(--fh);font-weight:700;font-size:31px;margin-bottom:8px;line-height:1.1}
+.sp p{font-size:22px;line-height:1.34;color:var(--mute)}
+.sm{display:grid;grid-template-columns:repeat(4,1fr);gap:0 24px;row-gap:22px;flex:none}
+.sm .stop{position:relative;padding-top:44px}
+.sm .stop:before{content:"";position:absolute;left:0;right:-24px;top:14px;height:8px;border-radius:4px;background:var(--c);opacity:.85}
+.sm .stop:nth-child(4n):before{right:0}
+.sm .stop:after{content:"";position:absolute;left:6px;top:7px;width:22px;height:22px;border-radius:50%;background:#f0ead9;border:6px solid var(--c);box-sizing:border-box;width:22px;height:22px}
+.sm small{display:block;font-family:var(--fm);font-size:19px;letter-spacing:.1em;color:var(--c);margin-bottom:3px}
+.sm b{display:block;font-family:var(--fh);font-weight:700;font-size:31px;margin-bottom:5px}
+.sm p{font-size:22px;line-height:1.32;color:var(--mute)}
+{% endblock %}
+{% block body %}{% set n = c["items"]|length %}{% set sizes = [124, 100, 138, 92, 116] %}
+<section><div class="lab">{{ c.items_label }}</div>
+<div class="sp">
+  {% for e in c["items"] %}{% set d = sizes[loop.index0] %}
+  <div class="pl" style="--c:{{ cycle[loop.index0 % cycle|length] }}"><div class="og"><div class="orb" style="width:{{ d }}px;height:{{ d }}px">{{ loop.index }}</div></div><div class="card"><b>{{ e.name }}</b><p>{{ e.text }}</p></div></div>
+  {% endfor %}
+</div></section>
+<section><div class="lab">{{ c.steps_label }}</div>
+<div class="sm">
+  {% for e in c.steps %}<div class="stop" style="--c:{{ cycle[loop.index0 % cycle|length] }}"><small>Stop {{ loop.index }}</small><b>{{ e.name }}</b><p>{{ e.text }}</p></div>{% endfor %}
+</div></section>
+{% endblock %}

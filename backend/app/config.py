@@ -67,6 +67,7 @@ class Settings(BaseSettings):
     # LLM (LiteLLM model strings; Z.ai GLM by default)
     llm_model: str = "openai/glm-5.3"
     llm_fast_model: str = "openai/glm-5.3-flash"
+    llm_report_model: str = ""  # optional: writes report prose (default: the fast model, with a bigger output cap)
     # Chat triage (small talk, off topic, follow up rewriting). Empty = LLM_FAST_MODEL.
     llm_triage_model: str = ""
     # TypeSafe Jev classifier for chat triage. When set, triage uses Jev instead of an LLM call.

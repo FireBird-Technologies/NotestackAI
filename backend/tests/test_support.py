@@ -115,6 +115,10 @@ def test_scrub_path_removes_ids_and_queries():
     "what did we discuss in my last chat",
     "recap my previous conversation",
     "what did the notebook say about pricing in our chat",
+    "what's in my quiz",
+    "summarize my report",
+    "show my flashcards",
+    "list my infographics",
 ])
 def test_questions_about_the_writers_own_content_are_blocked(message):
     assert scope.about_user_data(message), message
@@ -135,6 +139,11 @@ def test_questions_about_the_writers_own_content_are_blocked(message):
     "how do I start a new chat",
     "how do I see my chat history",
     "where is the chat sidebar",
+    "can people see my posts if I share a report",
+    "will anyone see my quiz",
+    "i want to test myself on my blog",
+    "make me a quiz of my posts",
+    "how do I make a report from my notebook",
 ])
 def test_product_how_to_questions_pass(message):
     assert not scope.about_user_data(message), message
@@ -210,6 +219,24 @@ def test_corpus_routes_are_real_routes():
             assert route in real, f"{d.id} points at {route}, which is not a route"
 
 
+def test_plan_doc_lists_report_and_infographic_limits():
+    from app.services.plans import PLANS
+
+    body = next(d for d in get_corpus() if d.id == "plans-and-billing").body
+    free = PLANS["free"]
+    assert f"{free.reports} reports a month" in body and f"{free.infographics} infographics a month" in body
+    assert "unlimited reports a month" in body
+
+
+def test_create_panel_buttons_in_the_docs_exist_in_the_app():
+    """The docs name the Create panel's buttons; each must still be a real button in NotebookView."""
+    view = (FRONTEND / "pages" / "NotebookView.tsx").read_text(encoding="utf-8")
+    docs = " ".join(d.body for d in get_corpus())
+    for label in ("Report", "Summary", "Infographic", "Quiz", "Flashcards", "Mind Constellation", "Video"):
+        assert re.search(rf">\s*{label}\s*<", view) or re.search(rf"\n\s*{label}\n", view), f"{label} button is gone"
+        assert f"**{label}**" in docs, f"{label} is not documented"
+
+
 def test_plan_doc_matches_the_plan_table():
     from app.services.plans import PLANS
 
@@ -227,7 +254,19 @@ def test_plan_doc_matches_the_plan_table():
     ("what file types can I upload", "sources-and-syncing"),
     ("what do the numbers in brackets mean in answers", "notebooks-and-chat"),
     ("how do I make an audio overview", "audio-and-video"),
-    ("how do I make a quote card", "audio-and-video"),
+    ("how do I make a report", "reports"),
+    ("what report templates are there", "reports"),
+    ("how do I add a timeline to an interactive report", "reports"),
+    ("can I download a report as markdown", "reports"),
+    ("how do I make a quiz", "study-tools"),
+    ("how do I study my flashcards", "study-tools"),
+    ("what is a mind constellation", "study-tools"),
+    ("how do I make an infographic", "infographics"),
+    ("what infographic themes are there", "infographics"),
+    ("how do I share a report with a link", "sharing"),
+    ("how do I stop sharing", "sharing"),
+    ("where is the library", "library"),
+    ("where do I find my quizzes", "library"),
     ("what is a launch kit", "launch-kit"),
     ("how do I schedule a post to linkedin", "launchpad"),
     ("why did I get an email reminder instead of an auto post", "launchpad"),
