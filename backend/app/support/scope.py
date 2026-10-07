@@ -47,7 +47,10 @@ _ABOUT_MY_DATA = re.compile(
     """
 )
 # Words that mean something went wrong with their work; the reply also offers the human form.
-_BROKEN = re.compile(r"(?i)\b(?:fail\w*|slow|forever|too\s+long|taking\s+(?:so\s+|way\s+)?long|hang\w*|never\s+(?:finish|load|appear)\w*|error|broken|stuck|crash\w*|not\s+working|won'?t|doesn'?t\s+work|missing|lost)\b")
+_BROKEN = re.compile(
+    r"(?i)\b(?:fail\w*|slow|forever|too\s+long|taking\s+(?:so\s+|way\s+)?long|hang\w*"
+    r"|never\s+(?:finish|load|appear)\w*|error|broken|stuck|crash\w*|not\s+working|won'?t|doesn'?t\s+work|missing|lost)\b"
+)
 
 OUT_OF_SCOPE_REPLY = (
     "I can help with how Notestack works, but I can't see your notebooks, posts, files or account, so I can't answer "

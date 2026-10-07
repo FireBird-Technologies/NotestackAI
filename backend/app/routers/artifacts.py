@@ -8,20 +8,21 @@ from sqlalchemy import func, or_, select
 
 from app.auth import Ctx, get_ctx
 from app.config import settings
+from app.infographics.image import ImageUnavailable, render_png
+from app.infographics.themes import theme_id
 from app.models import Artifact, CalendarItem, Chat, Document, Job, Notebook, UserSavedVoice
 from app.routers.notebooks import ensure_archive_notebook
-from app.infographics.image import ImageUnavailable, render_png
 from app.services.artifacts import latest_jobs, serialize_artifact, start_artifact
 from app.services.jobs import create_job, serialize_job
 from app.services.plans import effective_plan, plan_limit_error
-from app.infographics.themes import theme_id
 from app.services.renderer import COMPOSITIONS
 from app.services.storage import storage
 from app.services.usage import check_limit
 
 router = APIRouter(prefix="/api/artifacts", tags=["artifacts"])
 
-ArtifactType = Literal["summary", "audio_overview", "video", "quote_card", "carousel", "launch_kit", "mind_map", "quiz", "flashcards", "report", "infographic"]
+ArtifactType = Literal["summary", "audio_overview", "video", "quote_card", "carousel", "launch_kit", "mind_map", "quiz",
+                       "flashcards", "report", "infographic"]
 
 
 SOURCE_TYPES = ("quiz", "flashcards", "report", "infographic")  # made from posts or chats picked in the dialog
@@ -33,7 +34,7 @@ class RenderIn(BaseModel):
 
 
 class GenerateIn(BaseModel):
-    type: Literal["summary", "audio_overview", "video", "quote_card", "carousel", "launch_kit", "mind_map", "quiz", "flashcards", "report", "infographic"]
+    type: ArtifactType
     notebook_id: uuid.UUID | None = None
     document_id: uuid.UUID | None = None
     archive: bool = False  # no notebook or post picked: use the "All posts" notebook

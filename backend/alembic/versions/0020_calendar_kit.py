@@ -1,14 +1,14 @@
 """calendar_items.kit_id: the Launch Kit a scheduled post was written from, kept apart from its attachment
 
-Revision ID: 0017_calendar_kit
-Revises: 0016_support_chat
+Revision ID: 0020_calendar_kit
+Revises: 0019_infographics_limit
 Create Date: 2026-10-06
 """
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0017_calendar_kit"
-down_revision = "0016_support_chat"
+revision = "0020_calendar_kit"
+down_revision = "0019_infographics_limit"
 branch_labels = None
 depends_on = None
 

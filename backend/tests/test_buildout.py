@@ -1822,7 +1822,6 @@ def test_infographic_is_a_page_at_once_and_can_be_shared_by_link(client, auth, r
 
 
 def test_infographic_needs_a_source_and_enough_text_and_obeys_its_limit(client, auth, run_jobs, feed, llm, monkeypatch):
-    from app.pipeline import infographic
 
     pricing, nb = _notebook_with_pricing(client, auth, run_jobs)
     llm["ExtractIdeas"] = {"ideas": []}
