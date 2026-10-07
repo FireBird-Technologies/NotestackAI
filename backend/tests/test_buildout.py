@@ -542,7 +542,10 @@ def test_launch_kit(client, auth, run_jobs, feed, llm, monkeypatch, db_session):
         "PickQuotes": {"quotes": [{"quote": "Charging more made my readers take the work seriously.",
                                    "source": ref}]},
     })
+    from app.services import renderer
+
     monkeypatch.setattr(media, "request_render", lambda *a, **k: None)
+    monkeypatch.setattr(renderer, "available", lambda: True)
     art = client.post("/api/artifacts/generate", json={"type": "launch_kit", "document_id": doc["id"]},
                       headers=auth).json()
     run_jobs()
@@ -563,6 +566,15 @@ def test_launch_kit(client, auth, run_jobs, feed, llm, monkeypatch, db_session):
 
     listing = client.get("/api/artifacts", params={"type": "launch_kit"}, headers=auth).json()
     assert listing["total"] == 1
+
+    # Renderer down: the kit keeps its quotes as text and makes no quote cards that could only fail.
+    monkeypatch.setattr(renderer, "available", lambda: False)
+    art = client.post("/api/artifacts/generate", json={"type": "launch_kit", "document_id": doc["id"]},
+                      headers=auth).json()
+    run_jobs()
+    kit = client.get(f"/api/artifacts/{art['id']}", headers=auth).json()
+    assert kit["status"] == "ready"
+    assert kit["content"]["quotes"] and kit["content"]["quote_card_ids"] == []
     assert client.delete(f"/api/artifacts/{art['id']}", headers=auth).status_code == 200
 
 
@@ -580,14 +592,14 @@ def _bluesky(client, auth, monkeypatch):
     return r.json()["accounts"][0]
 
 
-def test_schedule_and_publish_bluesky_thread(client, auth, monkeypatch, session_factory, db_session):
+def test_schedule_and_publish_bluesky_thread(client, auth, monkeypatch, session_factory, db_session, run_jobs):
     from app.services import launchpad
     from app.services.social import bluesky
 
     account = _bluesky(client, auth, monkeypatch)
     published = {}
 
-    def publish(db, acct, posts):
+    def publish(db, acct, posts, media=None):
         published["posts"] = posts
         return "at://did:plc:ada/app.bsky.feed.post/abc", "https://bsky.app/profile/ada.bsky.social/post/abc"
 
@@ -602,14 +614,15 @@ def test_schedule_and_publish_bluesky_thread(client, auth, monkeypatch, session_
     }, headers=auth).json()
     assert item["auto_post"] is True
 
-    assert launchpad.publish_due(session_factory) == 1
+    assert launchpad.publish_due(session_factory) == 1  # queued as a publish_post job
+    assert [j.kind for j in run_jobs()] == ["publish_post"]
     assert published["posts"] == ["First", "Second"]
     got = client.get("/api/calendar", headers=auth).json()[0]
     assert got["status"] == "posted" and got["external_url"].startswith("https://bsky.app/")
     assert client.patch(f"/api/calendar/{item['id']}", json={"content": "late"}, headers=auth).status_code == 409
 
 
-def test_substack_notes_send_reminder_email(client, auth, session_factory):
+def test_substack_notes_send_reminder_email(client, auth, session_factory, run_jobs):
     from app.services import launchpad
 
     ConsoleEmailProvider.sent.clear()
@@ -618,17 +631,18 @@ def test_substack_notes_send_reminder_email(client, auth, session_factory):
                        headers=auth).json()
     assert item["remind_by_email"] is True
     launchpad.publish_due(session_factory)
+    run_jobs()
     assert client.get("/api/calendar", headers=auth).json()[0]["status"] == "reminded"
     assert ConsoleEmailProvider.sent[-1].subject == "Time to post on Substack Notes"
 
 
-def test_publish_retries_then_fails(client, auth, monkeypatch, session_factory):
+def test_publish_retries_then_fails(client, auth, monkeypatch, session_factory, run_jobs):
     from app.services import launchpad
     from app.services.social import SocialError, bluesky
 
     account = _bluesky(client, auth, monkeypatch)
 
-    def boom(db, acct, posts):
+    def boom(db, acct, posts, media=None):
         raise SocialError("Bluesky 500: busy")
 
     monkeypatch.setattr(bluesky, "publish", boom)
@@ -642,6 +656,7 @@ def test_publish_retries_then_fails(client, auth, monkeypatch, session_factory):
             db.query(CalendarItem).update({"scheduled_at": datetime.now(UTC) - timedelta(seconds=1)})
             db.commit()
         launchpad.publish_due(session_factory)
+        run_jobs()
     assert client.get("/api/calendar", headers=auth).json()[0]["status"] == "failed"
 
 
@@ -695,6 +710,226 @@ def test_oauth_callback_redirects_with_ticket(client, monkeypatch):
     assert r.status_code == 302 and "link=" in r.headers["location"] and "/app/launchpad" in r.headers["location"]
     bad = client.get("/api/social/linkedin/callback", params={"code": "c", "state": "junk"}, follow_redirects=False)
     assert "error=" in bad.headers["location"]
+
+
+# Launchpad: posting what was made (images and videos) to X and LinkedIn
+
+
+def _made(db, ws, type_, *, status="ready", key=None, **content):
+    """An artifact as the pipeline leaves it (its file in storage when it has one)."""
+    from app.models import Artifact
+    from app.services.storage import storage
+
+    if key:
+        storage.put_bytes(key, b"PNG" if key.endswith(".png") else bytes(range(256)) * 400)  # a 100 KB "video"
+    a = Artifact(workspace_id=ws.id, type=type_, status=status, storage_key=key,
+                 content_json={"title": f"A {type_}", **content})
+    db.add(a)
+    db.commit()
+    return a
+
+
+def _account(db, ws, platform, scopes="tweet.read tweet.write users.read offline.access media.write"):
+    from app.services.crypto import encrypt
+
+    acct = SocialAccount(workspace_id=ws.id, platform=platform, handle="ada", external_id="p42",
+                         access_token=encrypt("tok"), scopes=scopes, status="active")
+    db.add(acct)
+    db.commit()
+    return acct
+
+
+def _reply(code: int, method: str, url: str, data: dict | None = None, headers: dict | None = None):
+    return httpx.Response(code, json=data, headers=headers, request=httpx.Request(method, url))
+
+
+def _schedule(client, auth, artifact, platform, account=None):
+    r = client.post("/api/calendar", json={
+        "platform": platform, "content": "Look at this", "artifact_id": str(artifact.id),
+        "scheduled_at": (datetime.now(UTC) - timedelta(minutes=1)).isoformat(),
+        **({"social_account_id": str(account.id)} if account else {})}, headers=auth)
+    return r
+
+
+def test_postable_lists_what_can_be_posted(client, auth, db_session):
+    ws = db_session.query(Workspace).first()
+    quote = _made(db_session, ws, "quote_card", key="ws/q/quotecard.png", quote="Ship it", source="Ada")
+    _made(db_session, ws, "audio_overview", key="ws/a/audio.mp3")
+    _made(db_session, ws, "video", status="processing", provider="blog2video")  # not rendered yet
+    done = _made(db_session, ws, "video", status="processing", provider="blog2video", video_url="https://v/x.mp4")
+    unrendered = _made(db_session, ws, "video", status="ready", provider="blog2video", b2v_status="generated")
+    _made(db_session, ws, "summary", summary="Raise prices once a year [1].")
+    got = {a["id"]: a for a in client.get("/api/launchpad/postable", headers=auth).json()}
+    assert {a["type"] for a in got.values()} == {"quote_card", "video", "summary"}  # no audio, no unfinished video
+    assert str(done.id) in got and got[str(quote.id)]["thumb_url"] and got[str(quote.id)]["media"] == "image"
+    # Made but not rendered: listed, flagged; the rendered one is not.
+    assert got[str(unrendered.id)]["needs_render"] is True and got[str(done.id)]["needs_render"] is False
+    assert got[str(quote.id)]["prefill"] == {"x": ['"Ship it" (Ada)'], "linkedin": '"Ship it" (Ada)'}
+    summary = next(a for a in got.values() if a["type"] == "summary")
+    assert summary["prefill"]["linkedin"] == "Raise prices once a year." and summary["media"] == "text"
+
+
+def test_scheduling_refuses_what_cannot_go_out(client, auth, db_session):
+    ws = db_session.query(Workspace).first()
+    audio = _made(db_session, ws, "audio_overview", key="ws/a/audio.mp3")
+    long_video = _made(db_session, ws, "video", key="ws/v/audiogram.mp4", duration_s=200)
+    quote = _made(db_session, ws, "quote_card", key="ws/q/quotecard.png")
+    assert _schedule(client, auth, audio, "x").status_code == 400
+    r = _schedule(client, auth, long_video, "x")
+    assert r.status_code == 400 and "2:20" in r.json()["detail"]
+    linkedin_acct = _account(db_session, ws, "linkedin", scopes="openid profile w_member_social")
+    assert _schedule(client, auth, long_video, "linkedin", linkedin_acct).status_code == 200  # LinkedIn takes it
+    assert _schedule(client, auth, quote, "bluesky").status_code == 400  # images: X and LinkedIn only
+
+
+def test_x_posts_images_and_a_video(client, auth, db_session, monkeypatch, session_factory, run_jobs):
+    from app.services import launchpad
+    from app.services.social import x
+
+    ws = db_session.query(Workspace).first()
+    acct = _account(db_session, ws, "x")
+    calls = []
+
+    def call(method, url, **kw):
+        path = url.split("/2/", 1)[1]
+        calls.append((method, path, kw))
+        if path == "media/upload" and method == "POST":
+            return _reply(200, method, url, {"data": {"id": f"img{len(calls)}"}})
+        if path == "media/upload/initialize":
+            return _reply(200, method, url, {"data": {"id": "vid1"}})
+        if path.endswith("/append"):
+            return _reply(204, method, url)
+        if path.endswith("/finalize"):
+            return _reply(200, method, url, {"data": {"processing_info": {"state": "pending", "check_after_secs": 1}}})
+        if path == "media/upload":  # STATUS
+            return _reply(200, method, url, {"data": {"processing_info": {"state": "succeeded"}}})
+        return _reply(201, method, url, {"data": {"id": "t1"}})  # tweets
+
+    monkeypatch.setattr(x, "_call", call)
+    monkeypatch.setattr(x.time, "sleep", lambda s: None)
+    monkeypatch.setattr(x, "CHUNK", 30000)
+    carousel = _made(db_session, ws, "carousel", key="ws/c/slide-01.png",
+                     slide_keys=[f"ws/c/slide-0{i}.png" for i in range(1, 7)])
+    for i in range(1, 7):
+        from app.services.storage import storage
+        storage.put_bytes(f"ws/c/slide-0{i}.png", b"PNG")
+    assert _schedule(client, auth, carousel, "x", acct).status_code == 200
+    launchpad.publish_due(session_factory)
+    run_jobs()
+    uploads = [c for c in calls if c[1] == "media/upload"]
+    tweet = next(c for c in calls if c[1] == "tweets")
+    assert len(uploads) == 4  # X takes 4 images: the first 4 slides
+    assert tweet[2]["json"]["media"]["media_ids"] == [f"img{i}" for i in range(1, 5)]
+    assert client.get("/api/calendar", headers=auth).json()[0]["status"] == "posted"
+
+    calls.clear()
+    video = _made(db_session, ws, "video", key="ws/v/audiogram.mp4", duration_s=30)
+    _schedule(client, auth, video, "x", acct)
+    launchpad.publish_due(session_factory)
+    run_jobs()
+    paths = [c[1] for c in calls]
+    assert paths[0] == "media/upload/initialize" and paths.count("media/upload/vid1/append") == 4  # 102400 bytes
+    assert paths[-3:] == ["media/upload/vid1/finalize", "media/upload", "tweets"]
+    assert calls[-1][2]["json"]["media"] == {"media_ids": ["vid1"]}
+
+
+def test_x_accounts_from_before_media_must_reconnect(client, auth, db_session, monkeypatch, session_factory,
+                                                     run_jobs):
+    from app.services import launchpad
+    from app.services.social import x
+
+    ws = db_session.query(Workspace).first()
+    acct = _account(db_session, ws, "x", scopes="tweet.read tweet.write users.read offline.access")
+    monkeypatch.setattr(x, "_call", lambda *a, **k: pytest.fail("nothing should be sent"))
+    quote = _made(db_session, ws, "quote_card", key="ws/q/quotecard.png")
+    r = _schedule(client, auth, quote, "x", acct)  # refused up front now
+    assert r.status_code == 409 and "Reconnect X" in r.json()["detail"]["message"]
+    got = client.get("/api/social/accounts", headers=auth).json()["accounts"][0]
+    assert got["needs_reconnect"] is True and got["can_post_media"] is False
+    # Scheduled earlier, the scope gone since: refused at publish time without a call, as a reconnect.
+    with session_factory() as db:
+        db.add(CalendarItem(workspace_id=ws.id, platform="x", content="Hi", artifact_id=quote.id,
+                            social_account_id=acct.id, scheduled_at=datetime.now(UTC) - timedelta(minutes=1)))
+        db.commit()
+    launchpad.publish_due(session_factory)
+    run_jobs()
+    item = client.get("/api/calendar", headers=auth).json()[0]
+    assert item["status"] == "paused" and "Reconnect X" in item["error"]
+
+
+def test_linkedin_posts_images_and_a_video(client, auth, db_session, monkeypatch, session_factory, run_jobs):
+    from app.services import launchpad
+    from app.services.social import linkedin
+
+    ws = db_session.query(Workspace).first()
+    acct = _account(db_session, ws, "linkedin", scopes="openid profile w_member_social")
+    calls = []
+
+    def call(method, url, **kw):
+        calls.append((method, url, kw))
+        if url.endswith("/rest/images"):
+            return _reply(200, method, url, {"value": {"uploadUrl": f"https://up/img{len(calls)}",
+                                                       "image": f"urn:li:image:{len(calls)}"}})
+        if url.endswith("/rest/videos") and kw["params"]["action"] == "initializeUpload":
+            return _reply(200, method, url, {"value": {"video": "urn:li:video:9", "uploadToken": "",
+                                                       "uploadInstructions": [
+                                                           {"uploadUrl": "https://up/v1", "firstByte": 0, "lastByte": 59999},
+                                                           {"uploadUrl": "https://up/v2", "firstByte": 60000,
+                                                            "lastByte": 102399}]}})
+        if url.startswith("https://up/"):
+            return _reply(200, method, url, headers={"etag": f'"e-{url[-2:]}"'})
+        if "/rest/videos/" in url:
+            return _reply(200, method, url, {"status": "AVAILABLE"})
+        if url.endswith("/rest/posts"):
+            return _reply(201, method, url, headers={"x-restli-id": "urn:li:share:1"})
+        return _reply(200, method, url)  # finalize
+
+    monkeypatch.setattr(linkedin, "_call", call)
+    quote = _made(db_session, ws, "quote_card", key="ws/q/quotecard.png")
+    carousel = _made(db_session, ws, "carousel", key="ws/c/slide-01.png",
+                     slide_keys=["ws/q/quotecard.png"] * 3)
+    video = _made(db_session, ws, "video", key="ws/v/audiogram.mp4", duration_s=200)
+    bodies = []
+    for a in (quote, carousel, video):
+        calls.clear()
+        _schedule(client, auth, a, "linkedin", acct)
+        launchpad.publish_due(session_factory)
+        run_jobs()
+        bodies.append(next(c for c in calls if c[1].endswith("/rest/posts"))[2]["json"]["content"])
+        if a is video:
+            puts = [c for c in calls if c[1].startswith("https://up/v")]
+            assert [len(c[2]["content"]) for c in puts] == [60000, 42400]
+            fin = next(c for c in calls if c[1].endswith("/rest/videos") and c[2]["params"]["action"] == "finalizeUpload")
+            assert fin[2]["json"]["finalizeUploadRequest"]["uploadedPartIds"] == ["e-v1", "e-v2"]
+    assert bodies[0] == {"media": {"id": "urn:li:image:1"}}
+    assert len(bodies[1]["multiImage"]["images"]) == 3
+    assert bodies[2] == {"media": {"id": "urn:li:video:9"}}
+    assert {i["status"] for i in client.get("/api/calendar", headers=auth).json()} == {"posted"}
+
+
+def test_publish_now_with_media_goes_through_a_job(client, auth, db_session, monkeypatch, run_jobs):
+    from app.services.social import linkedin
+
+    ws = db_session.query(Workspace).first()
+    acct = _account(db_session, ws, "linkedin", scopes="openid profile w_member_social")
+    monkeypatch.setattr(linkedin, "publish", lambda db, a, posts, media=None: ("urn:li:share:2", "https://li/2"))
+    quote = _made(db_session, ws, "quote_card", key="ws/q/quotecard.png")
+    item = client.post("/api/calendar", json={"platform": "linkedin", "content": "Hi", "artifact_id": str(quote.id),
+                                              "social_account_id": str(acct.id),
+                                              "scheduled_at": (datetime.now(UTC) + timedelta(days=1)).isoformat()},
+                       headers=auth).json()
+    assert item["artifact"]["type"] == "quote_card"
+    r = client.post(f"/api/calendar/{item['id']}/publish", headers=auth).json()
+    assert r["status"] == "publishing"  # the upload runs in a job
+    run_jobs()
+    assert client.get("/api/calendar", headers=auth).json()[0]["status"] == "posted"
+    # The attachment can be changed or removed before it goes out.
+    other = client.post("/api/calendar", json={"platform": "linkedin", "content": "Later", "artifact_id": str(quote.id),
+                                               "social_account_id": str(acct.id),
+                                               "scheduled_at": (datetime.now(UTC) + timedelta(days=1)).isoformat()},
+                        headers=auth).json()
+    r = client.patch(f"/api/calendar/{other['id']}", json={"artifact_id": None}, headers=auth).json()
+    assert r["artifact"] is None
 
 
 # Settings and activity
@@ -1587,7 +1822,6 @@ def test_infographic_is_a_page_at_once_and_can_be_shared_by_link(client, auth, r
 
 
 def test_infographic_needs_a_source_and_enough_text_and_obeys_its_limit(client, auth, run_jobs, feed, llm, monkeypatch):
-    from app.pipeline import infographic
 
     pricing, nb = _notebook_with_pricing(client, auth, run_jobs)
     llm["ExtractIdeas"] = {"ideas": []}

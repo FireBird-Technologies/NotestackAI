@@ -1,5 +1,4 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
 import { authApi } from "../api/auth";
 import { tokens, uploadFile } from "../api/client";
 import { settingsApi, type SettingsPatch } from "../api/endpoints";
@@ -49,9 +48,8 @@ export default function Settings() {
   const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sounds, setSounds] = useState(soundsEnabled);
-  const { logout } = useAuth();
+  const { logout, signingOut } = useAuth();
   const upgrade = useUpgrade();
-  const navigate = useNavigate();
 
   const hydrate = (d: SettingsData) => {
     setS(d);
@@ -76,7 +74,7 @@ export default function Settings() {
     }
   };
 
-  if (!s) return error ? <p className="error-text">{error}</p> : <Loading />;
+  if (!s) return error ? <p className="error-text">{error}</p> : <Loading center="full" />;
   const u = s.usage;
   // Fields save on their own when the writer leaves them, so there are no Save buttons.
   const saveProfile = () => {
@@ -216,13 +214,7 @@ export default function Settings() {
 
           <Section title="Account">
             <div className="row">
-              <button
-                className="btn"
-                onClick={async () => {
-                  await logout();
-                  navigate("/auth");
-                }}
-              >
+              <button className="btn" onClick={logout} disabled={signingOut}>
                 Sign out everywhere
               </button>
               <ConfirmButton

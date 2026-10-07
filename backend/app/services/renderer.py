@@ -17,6 +17,14 @@ class PermanentJobError(RuntimeError):
     """Fail the job now; retrying will not help."""
 
 
+def available() -> bool:
+    """Whether the render service answers right now (a quick health check, not a promise for later)."""
+    try:
+        return httpx.get(f"{settings.renderer_url}/health", timeout=2).status_code == 200
+    except httpx.HTTPError:
+        return False
+
+
 def request_render(job: Job, artifact: Artifact, composition: str, props: dict | None = None,
                    stills: list[dict] | None = None) -> None:
     """Start a render. `stills` renders one PNG per props dict (carousels) instead of a single output."""

@@ -17,6 +17,9 @@ export class ApiError extends Error {
 /** Fired on every 402 plan_limit so the upgrade popup opens wherever the request came from. */
 export const PLAN_LIMIT_EVENT = "ns:plan-limit";
 
+/** Fired when a signed in request gets a 401 that a refresh cannot fix, so the app signs the user out. */
+export const SESSION_EXPIRED_EVENT = "ns:session-expired";
+
 export type PlanLimitDetail = { message: string; kind?: string; plan?: string; upgrade_to?: string | null };
 
 function read(key: string): string | null {
@@ -93,9 +96,14 @@ async function request(path: string, init: RequestInit, retry: boolean): Promise
   if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
-  if (tokens.access) headers.set("Authorization", `Bearer ${tokens.access}`);
+  const signedIn = Boolean(tokens.access);
+  if (signedIn) headers.set("Authorization", `Bearer ${tokens.access}`);
   const res = await fetch(`${BASE}${path}`, { ...init, headers });
   if (res.status === 401 && retry && (await tryRefresh())) return request(path, init, false);
+  // Auth endpoints answer 401 for a wrong password and similar; only a dead session elsewhere signs out.
+  if (res.status === 401 && signedIn && retry && !path.startsWith("/api/auth/")) {
+    window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+  }
   if (!res.ok) throw await parseError(res);
   return res;
 }
@@ -147,7 +155,9 @@ const TYPES_BY_EXT: Record<string, string> = {
   jpg: "image/jpeg",
   jpeg: "image/jpeg",
   webp: "image/webp",
+  gif: "image/gif",
   svg: "image/svg+xml",
+  mp4: "video/mp4",
 };
 
 /** Browsers leave File.type empty for some extensions (.md on Windows) and use vendor names for others. */

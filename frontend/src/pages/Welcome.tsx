@@ -14,7 +14,7 @@ type Goal = "ask" | "audio" | "launch";
 type Mode = "feed" | "url" | "file";
 
 const MODES: { id: Mode; label: string }[] = [
-  { id: "feed", label: "Blog or newsletter" },
+  { id: "feed", label: "Blog or website" },
   { id: "url", label: "One article" },
   { id: "file", label: "Upload files" },
 ];
@@ -177,7 +177,7 @@ export default function Welcome() {
   const finish = async (chosen: Goal | null) => {
     markOnboarded();
     if (!chosen || posts === 0) return navigate("/app", { replace: true });
-    if (chosen === "launch") return navigate("/app/launch-kit", { replace: true });
+    if (chosen === "launch") return navigate("/app/launchpad/kits", { replace: true });
     setBusy(true);
     try {
       const docs = await docsApi.list({ limit: 5000 });
@@ -210,7 +210,10 @@ export default function Welcome() {
           {["Connect", "Index", "Choose", "Launch"].map((label, i) => (
             <li key={label} className={i < stepIndex ? "done" : i === stepIndex ? "current" : ""}>
               <span className="welcome-dot" />
-              {label}
+              <span>
+                <span className="welcome-step-num">{i + 1}</span>
+                {label}
+              </span>
             </li>
           ))}
         </ol>

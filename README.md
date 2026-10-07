@@ -93,9 +93,19 @@ cd renderer && npm install && npm start                    # only needed for vid
 - With no R2 settings, files live on local disk under `backend/.storage` and are served through
   signed `/api/storage/local/...` URLs (range requests supported for audio and video seeking).
 - Audio needs `ELEVENLABS_API_KEY`; everything text based needs `LLM_API_KEY`.
-- Launchpad: Bluesky connects with an app password. X and LinkedIn need developer apps; the
-  redirect URIs are listed in `.env.example` and on the Launchpad page. Substack Notes has no API,
-  so those posts (and any post without a connected account) arrive as an email reminder at send time.
+- Launchpad: posts (text, images, videos from your Library; not audio) go to X and LinkedIn at their
+  scheduled time through a `publish_post` job. Set up the developer apps and keys as described in
+  `backend/.env.example`:
+  - `X_CLIENT_ID` / `X_CLIENT_SECRET`: the X app's **OAuth 2.0 Client ID and Client Secret** (Read and write,
+    Web App, callback `{API_URL}/api/social/x/callback`, scopes incl. `media.write`).
+  - `LINKEDIN_CLIENT_ID` / `LINKEDIN_CLIENT_SECRET`: products "Sign In with LinkedIn using OpenID Connect" and
+    "Share on LinkedIn", redirect `{API_URL}/api/social/linkedin/callback`.
+  - `API_URL` must be reachable from the internet for the callbacks (an https tunnel locally).
+  X and LinkedIn posts need a connected account. X tokens are refreshed automatically; LinkedIn connections
+  last about 60 days. If a connection goes down (expired, revoked on the platform, or disconnected here) its
+  scheduled posts are **paused** and never attempted; reconnecting the same account resumes the ones still
+  ahead, and missed ones wait for a new time. Bluesky connects with an app password; Substack Notes has no API,
+  so those posts arrive as an email reminder at send time.
 
 ## What is in the app
 

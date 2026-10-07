@@ -161,7 +161,7 @@ export default function UpgradeModal() {
               ))}
             </ul>
             <div className="row end">
-              <Link to="/app/launch-kit" className="btn btn-primary" onClick={close}>
+              <Link to="/app/launchpad/kits" className="btn btn-primary" onClick={close}>
                 Launch something
               </Link>
             </div>

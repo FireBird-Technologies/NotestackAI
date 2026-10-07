@@ -66,7 +66,7 @@
 
 @media (min-width: 720px) {
   .grid-cards {
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
   }
 
   .gallery {
@@ -410,6 +410,13 @@ select.input option {
   color: var(--black);
 }
 
+/* Paused / disconnected: needs the user, but nothing broke */
+.pill-warn {
+  border: 1px solid rgba(255, 196, 0, 0.55);
+  background: rgba(255, 196, 0, 0.12);
+  color: #ffd257;
+}
+
 @keyframes pill-pulse {
   50% {
     opacity: 0.5;
@@ -439,11 +446,15 @@ select.input option {
   height: 4px;
 }
 
+/* Every loader: the spinner with its label underneath, both centered */
 .loading {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
+  justify-content: center;
+  gap: 16px;
   padding: 24px 0;
+  text-align: center;
 }
 
 /* A page's first load: the loader in the middle of the space under the header */
@@ -458,15 +469,27 @@ select.input option {
   min-height: 80vh;
 }
 
+/* The Launchpad's calendar while it loads: about the month grid's height, so the card doesn't jump */
+.loading-center.lp-cal-loading {
+  min-height: 560px;
+}
+
 /* Inside a card (a tab still loading): centred, without claiming most of the window */
 .loading-center.inline {
   min-height: 200px;
 }
 
-/* The label sits under the spinner, both centred */
-.loading-center .loading {
-  flex-direction: column;
-  gap: 16px;
+/* "The video service is being updated": a centered status line, not an error */
+.service-notice {
+  display: grid;
+  place-items: center;
+  padding: 24px 0;
+  text-align: center;
+  color: var(--white);
+}
+
+.service-notice.page {
+  min-height: 60vh;
 }
 
 .empty-state h3 {
@@ -1114,30 +1137,6 @@ select.input option {
 }
 
 /* Launch Kit */
-.kit-layout {
-  display: grid;
-  gap: 16px;
-  align-items: start;
-}
-
-@media (min-width: 1100px) {
-  .kit-layout {
-    grid-template-columns: 340px minmax(0, 1fr);
-  }
-}
-
-.kit-list {
-  list-style: none;
-  margin: 12px 0 0;
-  padding: 0;
-  display: grid;
-  gap: 8px;
-  font-size: 0.875rem;
-}
-
-.kit-list .link-btn {
-  text-align: left;
-}
 
 .post-edit,
 .slide-edit {
@@ -1161,6 +1160,71 @@ select.input option {
   display: grid;
   gap: 4px;
   justify-items: start;
+}
+
+/* A Launch Kit's two parts, told apart: the full post, then the hooks as numbered cards */
+.kit-section {
+  display: grid;
+  gap: 14px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.kit-section-head {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+}
+
+/* The section names as plain, large titles */
+.kit-section-head h3 {
+  margin: 0;
+  font-size: 1.6rem;
+  line-height: 1.2;
+}
+
+.kit-hooks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kit-hook {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--blue-35);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.02);
+  overflow-wrap: anywhere;
+}
+
+.kit-hook-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.kit-hook-num {
+  color: var(--blue);
+}
+
+.kit-hook-strength {
+  color: var(--text-2);
+}
+
+.kit-hook-text {
+  margin: 0;
+  font-weight: 500;
+}
+
+.kit-hook p {
+  margin: 0;
 }
 
 .pull {
@@ -1276,9 +1340,10 @@ select.input option {
 }
 
 .cal-item {
-  display: block;
+  display: grid;
+  gap: 1px;
   width: 100%;
-  padding: 3px 6px;
+  padding: 4px 7px;
   border-radius: 6px;
   border: 1px solid var(--blue-35);
   background: var(--blue-10);
@@ -1289,6 +1354,23 @@ select.input option {
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: pointer;
+}
+
+.cal-item-time,
+.cal-item-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cal-item-time {
+  font-size: 0.68rem;
+  opacity: 0.85;
+}
+
+.cal-item-title {
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
 .cal-item:hover {
@@ -1304,6 +1386,14 @@ select.input option {
   background: var(--white);
   color: var(--black);
   border-color: var(--white);
+}
+
+/* Its account's connection is down (or held by hand): never attempted until resumed */
+.cal-paused {
+  border-style: dashed;
+  opacity: 0.55;
+  text-decoration: line-through;
+  text-decoration-color: var(--text-3);
 }
 
 .cal-draft {
@@ -1605,6 +1695,9 @@ select.input option {
   padding: 32px var(--gutter) 64px;
   display: grid;
   gap: 24px;
+  /* Sit the onboarding block in the vertical middle of the screen rather than pinned to the top. */
+  min-height: 100vh;
+  align-content: center;
 }
 
 .welcome-top {
@@ -1627,6 +1720,11 @@ select.input option {
 .welcome-steps li {
   display: grid;
   gap: 8px;
+}
+
+.welcome-step-num {
+  margin-right: 8px;
+  color: var(--blue);
 }
 
 .welcome-dot {
@@ -2756,20 +2854,6 @@ select.input option {
   }
 }
 
-/* Launch Kit: the post picker and kit list share the side column without pushing the page. */
-@media (min-width: 1100px) {
-  .kit-layout > aside {
-    position: sticky;
-    top: 0;
-    max-height: calc(100vh - var(--main-pad-top) - var(--main-pad-bottom));
-    overflow-y: auto;
-  }
-
-  .kit-layout .picker-list {
-    max-height: 220px;
-  }
-}
-
 /* Launchpad: a month fits on one screen. */
 .cal-day {
   min-height: 72px;
@@ -2799,7 +2883,6 @@ select.input option {
 .grid-cards > *,
 .gallery > *,
 .mc-grid > *,
-.kit-layout > *,
 .map-layout > *,
 .nbv > *,
 .stack > *,
@@ -2828,7 +2911,6 @@ select.input option {
 .picker-title,
 .source-title,
 .nbv-doc,
-.kit-list,
 .topic-rank,
 .hooks,
 .claims,
@@ -2952,10 +3034,6 @@ select.input,
   /* Wider screens give the side columns room instead of leaving it empty. */
   .nbv {
     grid-template-columns: minmax(240px, 300px) minmax(0, 1fr) minmax(320px, 400px);
-  }
-
-  .kit-layout {
-    grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
   }
 
   .map-layout {
@@ -3698,103 +3776,6 @@ select.input,
   padding: 0 26px;
 }
 
-/* Launch Kit: post cards to start, a thin rail of kits once one is open */
-@media (min-width: 1100px) {
-  .kit-layout.kit-open {
-    grid-template-columns: minmax(200px, 260px) minmax(0, 1fr);
-  }
-}
-
-.kit-rail {
-  display: grid;
-  gap: 10px;
-  align-content: start;
-}
-
-.post-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 12px;
-}
-
-.post-card {
-  display: grid;
-  align-content: space-between;
-  gap: 10px;
-  min-height: 150px;
-  padding: 18px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--white);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
-}
-
-.post-card strong {
-  font-size: 1.02rem;
-  line-height: 1.35;
-}
-
-.post-card-go {
-  color: var(--blue);
-  font-size: 0.8125rem;
-  font-weight: 600;
-}
-
-.post-card:hover:not(:disabled) {
-  border-color: var(--blue-60);
-  box-shadow: var(--glow-sm);
-  transform: translateY(-2px);
-}
-
-.post-card:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-/* Launchpad: account chips in one line, calendar first, ideas beside it */
-.lp-accounts {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
-.lp-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  border: 1px solid var(--line-strong);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--white);
-  font: inherit;
-  font-size: 0.8125rem;
-}
-
-.lp-chip img {
-  border-radius: 999px;
-}
-
-.lp-chip.warn {
-  border-color: #ff8a3d;
-}
-
-.lp-chip.add {
-  border-style: dashed;
-  color: var(--text-2);
-  cursor: pointer;
-}
-
-.lp-chip.add:hover {
-  border-color: var(--blue);
-  color: var(--white);
-}
-
 .lp-layout {
   display: grid;
   gap: 16px;
@@ -3807,19 +3788,648 @@ select.input,
   }
 }
 
-.lp-ideas {
-  align-content: start;
+/* A page's way back (to the page before it), above its header */
+.page-back {
+  margin-bottom: 4px;
 }
 
-.lp-ideas .idea {
+/* Create a launch kit: posts and earlier kits as rows (date, title, action on the right) */
+.lk-rows {
+  display: grid;
+  align-content: start; /* rows keep their height and stay together, however tall the list is */
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lk-row {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 16px;
+  height: 64px; /* a title and its source line; fixed, so the list shows an exact number of rows */
+  padding: 8px 12px 8px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.03);
+  transition: border-color 0.15s;
+}
+
+.lk-row:hover {
+  border-color: var(--line-strong);
+}
+
+/* Pick a post to launch: the rows take the rest of the screen (at least four and a half), the rest scrolls inside
+   the card */
+.lk-rows-scroll {
+  max-height: max(calc(4.5 * 64px + 4 * 6px), calc(100dvh - 380px));
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
+}
+
+/* While the posts load: the loader in the middle of the list's space */
+.lk-loading {
+  display: grid;
+  place-items: center;
+  min-height: max(calc(4.5 * 64px + 4 * 6px), calc(100dvh - 380px));
+}
+
+.lk-date {
+  flex: none;
+  width: 100px;
+}
+
+.lk-title {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.lk-title strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .lk-date {
+    display: none;
+  }
+}
+
+/* The picker's "Create a launch kit": a text link at the end of the tabs (goes to its own page) */
+.lp-kit-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--white);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.lp-kit-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.lp-kit-link .icon {
+  transition: transform 0.15s;
+}
+
+.lp-kit-link:hover .icon {
+  transform: translateX(3px);
+}
+
+/* Where a post came from (its Launch Kit): a quiet line, apart from the attachment */
+.lp-from-kit {
+  margin: 0;
+}
+
+/* The Launchpad's right column: X and LinkedIn, connected or a Connect button */
+.lp-connections {
+  align-content: start;
+  gap: 14px;
+}
+
+.lp-connections > h2,
+.lp-connections > p {
+  margin: 0;
+}
+
+.lp-conn {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.lp-conn p {
+  margin: 0;
+}
+
+.lp-conn-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.lp-conn-who {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.lp-conn-who img,
+.lp-conn-dot {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--surface-2);
+}
+
+.lp-conn > .btn {
+  justify-self: start;
+}
+
+/* The composer (New post / Post): platforms, the attachment, one text box per platform */
+.lp-compose .lp-platforms .chip {
+  padding: 6px 14px;
+  font-size: 0.875rem;
+}
+
+.lp-platform {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.lp-platform-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+
+.lp-platform-head .btn {
+  margin-left: auto;
+}
+
+.lp-when {
+  align-items: end;
+  gap: 12px 24px;
+}
+
+/* When a post goes out: a button with the picked time, opening a month calendar and the day's half hours */
+.slot-picker {
   display: grid;
   gap: 6px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--line);
+  width: 100%;
 }
 
-.lp-ideas .idea:last-child {
-  border-bottom: 0;
+.slot-trigger {
+  text-align: left;
+  cursor: pointer;
+}
+
+.slot-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px;
+  gap: 16px;
+  padding: 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.slot-cal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.slot-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  text-align: center;
+}
+
+.slot-weekday {
+  padding: 4px 0;
+}
+
+.slot-day,
+.slot-time {
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.slot-day {
+  height: 34px;
+}
+
+.slot-day.out {
+  color: var(--text-2);
+}
+
+.slot-day.today {
+  border-color: var(--line-strong);
+}
+
+.slot-day:hover:not(:disabled),
+.slot-time:hover:not(:disabled) {
+  border-color: var(--blue-35);
+}
+
+.slot-day.on,
+.slot-time.on {
+  border-color: var(--blue);
+  background: var(--blue-10);
+  color: var(--white);
+}
+
+.slot-day:disabled,
+.slot-time:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.slot-times {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
+}
+
+.slot-time {
+  padding: 7px 10px;
+  text-align: left;
+}
+
+@media (max-width: 640px) {
+  .slot-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .slot-times {
+    grid-template-columns: repeat(3, 1fr);
+    max-height: 180px;
+  }
+}
+
+/* What a post carries: a thumbnail (or an icon), its title and what it is */
+.lp-attach {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.lp-attach-text {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+  text-align: left;
+}
+
+.lp-attach-text strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lp-attach-btn {
+  justify-self: start;
+  border-style: dashed;
+}
+
+.lp-thumb {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  object-fit: cover;
+  background: var(--surface-2);
+}
+
+.lp-thumb-icon {
+  display: grid;
+  place-items: center;
+  color: var(--text-2);
+}
+
+/* Paused (connection down): why, Reconnect, and how to resume */
+.lp-paused {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 196, 0, 0.45);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 196, 0, 0.08);
+  color: #ffd257;
+}
+
+.lp-paused .muted {
+  flex-basis: 100%;
+}
+
+.lp-warn {
+  color: #ffd257;
+}
+
+/* The Library as rows to schedule from: thumbnail, title, a Video / Launch Kit tag, the action on the right */
+.lp-pick-rows {
+  max-height: calc(4.5 * 64px + 4 * 6px);
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
+}
+
+/* The picker's empty message ("Nothing uploaded yet."), centered under the search */
+.lp-pick-empty {
+  margin: 8px 0;
+  text-align: center;
+}
+
+/* An uploaded file's row: the row itself, and a Rename (pencil) button beside it */
+/* One card per row: the row (attach / open) and its ⋮ inside the same border */
+.lp-pick-item {
+  display: flex;
+  align-items: center;
+  padding-right: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.03);
+  transition: border-color 0.15s;
+}
+
+.lp-pick-item:hover {
+  border-color: var(--blue-35);
+}
+
+.lp-pick-item > .lp-pick-row,
+.lp-pick-item > .lp-pick-row:hover {
+  flex: 1;
+  min-width: 0;
+  border-color: transparent;
+  background: transparent;
+}
+
+/* A row's ⋮ button, and the menu it opens (drawn over the picker's pop-up) */
+.lp-row-menu-btn,
+.lp-row-menu-btn:hover {
+  flex: none;
+  width: 32px;
+  height: 40px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-2);
+}
+
+.lp-row-menu-btn:hover,
+.lp-row-menu-btn[aria-expanded="true"] {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--white);
+}
+
+.lp-menu {
+  position: fixed;
+  z-index: 60;
+  display: grid;
+  min-width: 160px;
+  padding: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: #0b0d12;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+}
+
+.lp-menu-item {
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lp-menu-item:hover,
+.lp-menu-item:focus-visible {
+  background: var(--blue-10);
+  outline: none;
+}
+
+/* Delete: lit up like the app's other danger buttons */
+.lp-menu-item.danger:hover,
+.lp-menu-item.danger:focus-visible {
+  color: var(--black);
+  background: var(--white);
+}
+
+/* Renaming it: the row turns into a name field with Save / Cancel */
+.lp-rename-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.lp-rename-row .input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Preview of an uploaded image or video, fitted to the screen */
+.lp-preview {
+  display: grid;
+  place-items: center;
+  min-height: 160px;
+  border-radius: var(--radius-sm);
+  background: #000;
+  overflow: hidden;
+}
+
+.lp-preview video,
+.lp-preview img {
+  display: block;
+  max-width: 100%;
+  max-height: 70vh;
+}
+
+/* The attached upload's thumbnail, clickable to preview it */
+.lp-thumb-btn {
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  cursor: zoom-in;
+}
+
+.lp-thumb-btn:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+/* Uploads: the drop area for a file from the computer (click or drag one in) */
+.lp-drop {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 28px 16px;
+  border: 1.5px dashed var(--line-strong);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.02);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.lp-drop:hover,
+.lp-drop:focus-visible,
+.lp-drop.over {
+  border-color: var(--blue);
+  background: var(--blue-10);
+  outline: none;
+}
+
+.lp-drop.busy {
+  cursor: progress;
+}
+
+.lp-drop-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--blue-10);
+  color: var(--blue);
+}
+
+.lp-drop-link {
+  color: var(--blue);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* The render pop-up: the progress bar spans the modal (the editor's is capped at 280px) */
+.vw-render-status.lp-render-status {
+  width: 100%;
+  margin: 12px 0 8px; /* room from the text above and the buttons below */
+}
+
+/* "Rendering MP4  42%" centered over the bar */
+.lp-render-status .vw-render-line {
+  justify-content: center;
+}
+
+.lp-render-status .vw-render-pct {
+  margin-left: 0;
+}
+
+/* While the Library loads: the loader in the middle of the list's space (the screen's height on Schedule a launch) */
+.lp-loading {
+  display: grid;
+  place-items: center;
+  min-height: calc(4.5 * 64px + 4 * 6px);
+}
+
+.lp-loading.fill {
+  min-height: max(calc(4.5 * 64px + 4 * 6px), calc(100dvh - 340px));
+}
+
+/* Schedule a launch: the rows take the rest of the screen (below the header, kind chips and search) */
+.lp-pick-rows-fill {
+  max-height: calc(100dvh - 340px);
+}
+
+.lp-pick-row {
+  width: 100%;
+  padding-left: 10px;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lp-pick-row .lp-thumb {
+  width: 44px;
+  height: 44px;
+}
+
+.lp-pick-row:hover {
+  border-color: var(--blue-35);
+}
+
+.lp-tag {
+  flex: none;
+  min-width: 96px; /* one width for every kind, so the tags line up in a column, label centered */
+  padding: 3px 10px;
+  text-align: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--text-2);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+/* Both in the app's blue: a kit filled, a video outlined */
+.lp-tag.kit {
+  border-color: var(--blue-60);
+  background: var(--blue-10);
+  color: var(--white);
+}
+
+.lp-tag.video {
+  border-color: var(--blue-35);
+  background: transparent;
+  color: var(--white);
+}
+
+.lp-pick-go {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-width: 110px;
+  justify-content: flex-end;
+  color: var(--text-2);
+  font-size: 0.85rem;
+}
+
+.lp-pick-row:hover .lp-pick-go {
+  color: var(--white);
+}
+
+@media (max-width: 640px) {
+  .lp-pick-go {
+    display: none;
+  }
+}
+
+
+/* A calendar item that carries a video or images */
+.cal-media {
+  display: inline-flex;
+  margin-left: 4px;
+  vertical-align: -1px;
+  color: var(--blue);
 }
 
 .lp-empty {

@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import datetime
 
@@ -14,10 +15,11 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    event,
     text,
     true,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
 
 from app.db import Base
 from app.models.base import IdMixin, TimestampMixin
@@ -343,11 +345,46 @@ class Upload(IdMixin, TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending | complete
 
 
+# Deleting an upload record removes its file from storage too, once the delete is committed (never on a rollback).
+# This covers deletes made through the ORM; rows removed straight in the database are caught by the daily orphan
+# sweep (app.services.uploads.sweep_orphan_uploads).
+_PENDING_FILE_DELETES = "upload_files_to_delete"
+
+
+@event.listens_for(Session, "after_flush")
+def _note_deleted_uploads(session: Session, _ctx) -> None:
+    keys = [obj.key for obj in session.deleted if isinstance(obj, Upload) and obj.key]
+    if keys:
+        session.info.setdefault(_PENDING_FILE_DELETES, []).extend(keys)
+
+
+@event.listens_for(Session, "after_commit")
+def _delete_upload_files(session: Session) -> None:
+    keys = session.info.pop(_PENDING_FILE_DELETES, [])
+    if not keys:
+        return
+    from app.services.storage import storage
+
+    for key in keys:
+        try:
+            storage.delete(key)
+        except Exception:  # left for the daily sweep
+            logging.getLogger("notestack.storage").warning("couldn't delete upload file %s", key, exc_info=True)
+
+
+@event.listens_for(Session, "after_rollback")
+def _forget_upload_files(session: Session) -> None:
+    session.info.pop(_PENDING_FILE_DELETES, None)
+
+
 class CalendarItem(IdMixin, TimestampMixin, Base):
     __tablename__ = "calendar_items"
 
     workspace_id: Mapped[uuid.UUID] = _ws_fk()
+    # What the post carries (a video, quote card, carousel...): never a Launch Kit, which is kit_id.
     artifact_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("artifacts.id", ondelete="CASCADE"))
+    # The Launch Kit the post was written from, kept apart from the attachment (nothing of it is uploaded).
+    kit_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("artifacts.id", ondelete="SET NULL"))
     document_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("documents.id", ondelete="SET NULL"))
     platform: Mapped[str] = mapped_column(String(30))  # x | linkedin | bluesky | substack_notes
     scheduled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)

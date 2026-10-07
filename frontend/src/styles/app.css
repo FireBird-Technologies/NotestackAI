@@ -382,6 +382,14 @@
   place-items: center;
 }
 
+/* Covers the app while sign out revokes the session. */
+.signout-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: var(--black);
+}
+
 /* ---------- Pricing ---------- */
 .pricing-note {
   display: flex;
@@ -694,6 +702,22 @@
 
 .auth-form .input {
   border-radius: var(--radius-sm);
+}
+
+.password-field {
+  position: relative;
+}
+
+.password-field .input {
+  width: 100%;
+  padding-right: 48px;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
 }
 
 .code-input {

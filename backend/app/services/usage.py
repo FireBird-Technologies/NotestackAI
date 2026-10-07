@@ -60,8 +60,15 @@ def usage_report(db: Session, workspace: Workspace) -> dict:
         "plan": plan.id,
         "used": used,
         "videos_resets_at": videos["resets_at"],
-        "limits": {"audio_minutes": plan.audio_minutes, "videos": videos["limit"],
-                   "launch_kits": plan.launch_kits, "reports": plan.reports, "infographics": plan.infographics, "sources": plan.sources, "indexed_posts": plan.indexed_posts},
+        "limits": {
+            "audio_minutes": plan.audio_minutes,
+            "videos": videos["limit"],
+            "launch_kits": plan.launch_kits,
+            "reports": plan.reports,
+            "infographics": plan.infographics,
+            "sources": plan.sources,
+            "indexed_posts": plan.indexed_posts,
+        },
     }
 
 

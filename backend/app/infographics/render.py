@@ -5,8 +5,8 @@ import hashlib
 import random
 from pathlib import Path
 
-from markupsafe import Markup
 from jinja2 import Environment, FileSystemLoader, StrictUndefined, select_autoescape
+from markupsafe import Markup
 
 from app.infographics.content import HEIGHT, WIDTH
 from app.infographics.themes import DEFAULT_THEME, THEMES, theme_id

@@ -15,8 +15,8 @@ from app.routers.artifacts import get_artifact_or_404
 from app.routers.videos import FocusIn, _focus_material
 from app.services.artifacts import latest_jobs, serialize_artifact
 from app.services.jobs import create_job
-from app.services.usage import check_limit
 from app.services.report_templates import INTERACTIVE, TEMPLATES
+from app.services.usage import check_limit
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 

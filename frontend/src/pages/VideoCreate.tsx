@@ -16,7 +16,7 @@ import type {
 } from "../api/types";
 import { Dropdown } from "../components/Dropdown";
 import { CheckIcon, SparkleIcon } from "../components/icons/Icons";
-import { errorMessage, Loading, PageHeader } from "../components/ui";
+import { ErrorText, errorMessage, Loading, PageHeader } from "../components/ui";
 import { SourcePicker, type VideoSource } from "../components/video/SourcePicker";
 import { loadArchiveId, sourceCache } from "../components/video/sourceCache";
 import { PlayButton, TemplateThumb, useAudio } from "../components/video/parts";
@@ -248,11 +248,11 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
     return (
       <div className={inModal ? "vw-in-modal" : "page-wrap"}>
         {!inModal && <PageHeader eyebrow="Videos" title="New video" />}
-        <p className="error-text">{loadError}</p>
+        <ErrorText message={loadError} page />
       </div>
     );
   }
-  if (!config) return <Loading label="Loading" />;
+  if (!config) return <Loading label="Loading" center="full" />;
   if (!config.configured) {
     return (
       <div className={inModal ? "vw-in-modal" : "page-wrap"}>
@@ -371,7 +371,7 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
               </div>
             )}
 
-            {error && <p className="error-text">{error}</p>}
+            {error && <ErrorText message={error} />}
             <div className="vw-nav">
               {/* Waits for the focus suggestions (shown, or none to show), so they are never skipped past */}
               <button className="btn btn-primary vw-next" disabled={!sourceReady || shownTopics === null}
@@ -487,7 +487,7 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
               )}
             </div>
 
-            {error && <p className="error-text">{error}</p>}
+            {error && <ErrorText message={error} />}
             {left === 0 && (
               <p className="notice">
                 You have used all your videos{quota?.resets_at ? " this period" : " on your plan"}.{" "}

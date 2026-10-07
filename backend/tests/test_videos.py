@@ -440,7 +440,7 @@ def test_slow_catalog_is_a_clean_error_not_a_500(client, b2v, owner, db_session)
     b2v.queue("GET", "/api/templates", (0, httpx.ReadTimeout("slow")))
     r = client.post("/api/videos", json={"url": "https://ada.example.com/p/a", "template": "geometric"},
                     headers=headers)
-    assert r.status_code == 502 and "not responding" in r.json()["detail"]
+    assert r.status_code == 502 and "being updated" in r.json()["detail"]
     assert not creates(b2v) and used(db_session, ws) == 0
 
 

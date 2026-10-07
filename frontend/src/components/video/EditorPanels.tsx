@@ -7,7 +7,7 @@ import type {
   VideoScene,
 } from "../../api/types";
 import { ChevronIcon, TrashIcon } from "../icons/Icons";
-import { ConfirmButton, errorMessage } from "../ui";
+import { ConfirmButton, ErrorText, errorMessage } from "../ui";
 import { Premium } from "./parts";
 import { DeleteAssetModal, RemoveMediaModal } from "./SceneMedia";
 import { Voiceovers } from "./Voiceovers";
@@ -77,7 +77,7 @@ export function ScriptPanel(p: PanelProps) {
           Try again
         </button>
       </div>
-      {error && <p className="error-text">{error}</p>}
+      {error && <ErrorText message={error} />}
       {preview && <pre className="vw-pre">{JSON.stringify(preview, null, 2)}</pre>}
     </section>
   );
@@ -137,7 +137,7 @@ export function ChatPanel(p: PanelProps) {
         {lines.length === 0 && <p className="muted">Ask for changes, like "make scene 2 shorter" or "use warmer colors".</p>}
         {lines.map((l, i) => <p key={i} className={`vw-chat-line ${l.role}`}>{l.text}</p>)}
       </div>
-      {error && <p className="error-text">{error}</p>}
+      {error && <ErrorText message={error} />}
       <div className="row">
         <input className="input" value={message} maxLength={4000} disabled={busy || p.disabled} placeholder="Ask for a change"
                onChange={(e) => setMessage(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} />
@@ -247,7 +247,7 @@ export function FramesPanel(p: PanelProps) {
         <button className="btn btn-small" disabled={busy} onClick={load}>{busy ? "Rendering..." : "Show frame"}</button>
         {src && <a className="btn btn-small" href={src} download={`frame-${frame}.png`}>Download</a>}
       </div>
-      {error && <p className="error-text">{error}</p>}
+      {error && <ErrorText message={error} />}
       {src && <img className="vw-still" src={src} alt={`Frame ${frame}`} />}
     </section>
   );

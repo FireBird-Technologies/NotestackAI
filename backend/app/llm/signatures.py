@@ -451,8 +451,12 @@ class WriteReport(dspy.Signature):
     "Section 2" or "Details"), and they read in a logical order. Use "### " inside sections, lists, and tables where
     they help. When the material has numbered lines (FILE blocks), put a [n] marker after each
     claim it supports and list each n in citations with the path and lines it came from; when it is a chat transcript,
-    write no markers and no citations. Do not write a quiz, flashcards, practice or review questions into the report unless the reader's instructions
-    ask for one: those are offered to the reader separately as visuals they can add. Never write about visuals, mind maps, flashcards, quizzes, tables or timelines in the text, and never suggest or describe one, even if the reader's instructions mention them: the app offers those to the reader separately, so write only the report itself. Write in the language requested.
+    write no markers and no citations. Do not write a quiz, flashcards, practice or review questions into the report
+    unless the reader's instructions
+    ask for one: those are offered to the reader separately as visuals they can add. Never write about visuals, mind
+    maps, flashcards, quizzes, tables or timelines in the text, and never suggest or describe one, even if the
+    reader's instructions mention them: the app offers those to the reader separately, so write only the report
+    itself. Write in the language requested.
     Never use em dashes."""
 
     title: str = dspy.InputField(desc="The notebook, post or chat the material comes from")
@@ -483,7 +487,8 @@ class PlanInteractiveReport(dspy.Signature):
     section that is itself a quiz, flashcards, practice questions or a mind map, because those are visuals, and are
     suggested through a section's visual instead. Choose 4 to 8 sections in a sensible
     order, starting with an Introduction and ending with a Summary unless the reader asks for something else. Each
-    heading is specific and descriptive of what the section covers, never generic like "Details" or "Section 2". Then decide, section by section, where a visual would help the reader and which one. These are only
+    heading is specific and descriptive of what the section covers, never generic like "Details" or "Section 2".
+    Then decide, section by section, where a visual would help the reader and which one. These are only
     suggestions: nothing is built until the reader clicks Add, so suggest the spots where each really fits: a mind_map to show how
     many linked ideas fit together (at most one, usually near the start or the end), flashcards to learn a set of
     terms or facts, a quiz to check understanding after a dense section, an infographic for a one page picture of the
@@ -502,11 +507,15 @@ class PlanInteractiveReport(dspy.Signature):
 
 class WriteReportSection(dspy.Signature):
     """Write one section of a report, using only the material given. Follow the reader's instructions on style, tone
-    and length; a section is two to five short paragraphs, or a list or table where that reads better. Do not write quiz questions, flashcards or
+    and length; a section is two to five short paragraphs, or a list or table where that reads better. Do not write
+    quiz questions, flashcards or
     review questions in the section (those are offered to the reader separately). Do not repeat
     the heading, and do not use "#" or "##" headings; "###" subheadings are fine. When the material has numbered lines (FILE
     blocks), put a [n] marker after each claim it supports and list each n in citations with the path and lines; when it
-    is a chat transcript, write no markers and no citations. Never write about visuals, mind maps, flashcards, quizzes, tables or timelines in the text, and never suggest or describe one, even if the reader's instructions mention them: the app offers those to the reader separately, so write only the report itself. Write in the language requested. Never use em dashes."""
+    is a chat transcript, write no markers and no citations. Never write about visuals, mind maps, flashcards,
+    quizzes, tables or timelines in the text, and never suggest or describe one, even if the reader's instructions
+    mention them: the app offers those to the reader separately, so write only the report itself. Write in the
+    language requested. Never use em dashes."""
 
     title: str = dspy.InputField()
     report_title: str = dspy.InputField()

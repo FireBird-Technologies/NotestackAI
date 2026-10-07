@@ -10,6 +10,7 @@ import uuid
 
 from sqlalchemy.orm import Session
 
+from app.infographics.themes import theme_id
 from app.llm import run
 from app.llm.provider import fast_lm, report_lm
 from app.llm.signatures import (
@@ -22,10 +23,9 @@ from app.models import Artifact, Job
 from app.pipeline.flashcards import make_cards
 from app.pipeline.generate import NothingToDo, mind_map_content
 from app.pipeline.material import Material, load_material
-from app.pipeline.quiz import make_questions
 from app.pipeline.passages import as_citations
+from app.pipeline.quiz import make_questions
 from app.pipeline.research import verify_citations
-from app.infographics.themes import theme_id
 from app.services.artifacts import start_artifact
 from app.services.jobs import update_job
 from app.services.renderer import PermanentJobError
@@ -319,7 +319,8 @@ def make_block(db: Session, job: Job, report: Artifact, kind: str, brief: str, t
     if kind == "infographic":
         # A picture is drawn by the renderer, so it is its own infographic (listed in the Library, counted in the
         # plan) that the block points at; the report page shows it once it is ready.
-        child, _ = start_artifact(db, report.workspace_id, "infographic", title=f"Infographic: {brief[:60] or report.content_json.get('title', '')}",
+        title = f"Infographic: {brief[:60] or report.content_json.get('title', '')}"
+        child, _ = start_artifact(db, report.workspace_id, "infographic", title=title,
                                   notebook_id=report.notebook_id,
                                   params={**_source_params(source), "theme": theme_id(theme), "instructions": brief[:600]})
         return {"title": f"Infographic: {brief[:60]}", "artifact_id": str(child.id), "theme": theme_id(theme)}

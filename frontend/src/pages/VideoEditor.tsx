@@ -4,28 +4,19 @@ import { ApiError } from "../api/client";
 import { videoEditApi, videosApi, type LayoutInfo, type LayoutSchema } from "../api/endpoints";
 import type { LegacyVideo, ScriptScene, VideoCatalog, VideoConfig, VideoJobState, VideoProject, VideoStatus } from "../api/types";
 import { CheckIcon, DownloadIcon, SparkleIcon } from "../components/icons/Icons";
-import { ConfirmButton, errorMessage, Loading, Modal, PageHeader, StatusPill, Tabs } from "../components/ui";
+import { ConfirmButton, ErrorText, errorMessage, Loading, Modal, PageHeader, StatusPill, Tabs, VIDEO_UPDATING } from "../components/ui";
 import { ImagesPanel, VoicePanel, type PanelProps } from "../components/video/EditorPanels";
 import { LookPanel } from "../components/video/SettingsPanel";
 import { SceneList } from "../components/video/SceneList";
 import { PhoneIcon, Premium, ScreenIcon } from "../components/video/parts";
 import { usePoll } from "../hooks/usePoll";
+import { finished, jobPercent } from "../components/video/jobState";
 import { useUpgrade } from "../hooks/useUpgrade";
 
 const STEPS = ["Reading the source", "Writing the script", "Building scenes", "Finishing"];
 const REVIEW = new Set(["awaiting_stock_footage_review", "awaiting_script_review"]);
 
 type Panel = "scenes" | "images" | "audio" | "settings";
-
-/** blog2video job endpoints report progress in slightly different shapes; any of these means it stopped. */
-function finished(s: VideoJobState | null): boolean {
-  if (!s) return true; // e.g. add-status answers null once nothing is running
-  // Voice change, voiceover delete and language change say it with active / done. Their `status` is the PROJECT's
-  // (e.g. "done" on a video rendered before), so it must not be read as the job's.
-  if (typeof s.active === "boolean") return s.done === true || !s.active;
-  return s.done === true || s.running === false || !!s.video_url ||
-    ["done", "completed", "complete", "ready", "failed", "error", "idle"].includes(String(s.status ?? ""));
-}
 
 function busyMessage(e: unknown): string {
   return e instanceof ApiError && e.status === 409 ? "Another change is still running, try again in a moment." : errorMessage(e);
@@ -49,17 +40,6 @@ function jobDetail(s: VideoJobState | null): string | null {
 }
 
 /** How far a job is, 0-100, from whichever shape its status endpoint uses; null when it does not say. */
-function jobPercent(s: VideoJobState | null): number | null {
-  if (!s) return null;
-  const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
-  const pct = n(s.progress) ?? ratio(n(s.processed_scenes), n(s.total_scenes)) ?? ratio(n(s.processed), n(s.total));
-  return pct === null ? null : Math.max(0, Math.min(100, Math.round(pct)));
-}
-
-function ratio(done: number | null, total: number | null): number | null {
-  return done !== null && total ? (done / total) * 100 : null;
-}
-
 // How a job's progress is drawn: "bar" = the full progress screen in place of the editor; "inline" = the editor stays
 // (rendering: the preview is final, the Rendering pill under it shows progress). A new kind of job adds its own.
 type JobView = "bar" | "inline";
@@ -177,7 +157,7 @@ export default function VideoEditor() {
     () =>
       videosApi.get(id).then((p) => {
         setProject(p);
-        setError((err) => (err?.startsWith("The video service is not responding") ? null : err));
+        setError((err) => (err?.startsWith(VIDEO_UPDATING) ? null : err));
       }).catch((e) => {
         if (e instanceof ApiError && e.status === 404) setNotFound(true);
         else setError(errorMessage(e));
@@ -402,7 +382,7 @@ export default function VideoEditor() {
       {failed && (
         <section className="card stack">
           <h2>This video could not be made</h2>
-          <p className="error-text">{status?.error ?? "Generation failed."}</p>
+          <ErrorText message={status?.error ?? "Generation failed."} />
           <p className="muted">It was not charged against your videos.</p>
           <div className="row">
             <Link to="/app/videos/new" className="btn btn-primary">Try again</Link>
@@ -435,7 +415,7 @@ export default function VideoEditor() {
         </section>
       )}
 
-      {error && <p className="error-text">{error}</p>}
+      {error && <ErrorText message={error} />}
       {/* A background job (not a render, which shows its own progress) takes the editor's place until it ends */}
       {fullScreenJob && running && <JobProgress label={running.label} name={title} state={job.data ?? null} />}
 
@@ -602,7 +582,7 @@ function ScriptReview({ id, premium, locked, onApproved }: { id: string; premium
           </div>
         </div>
       ))}
-      {error && <p className="error-text">{error}</p>}
+      {error && <ErrorText message={error} />}
       <div className="row">
         <button className="btn btn-primary" onClick={approve} disabled={!!busy || !scenes}>
           {busy === "approve" ? "Starting..." : "Generate Video"}

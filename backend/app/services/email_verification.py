@@ -52,6 +52,11 @@ def _latest(db: Session, email: str, purpose: VerificationPurpose) -> EmailVerif
     )
 
 
+def _alive(record: EmailVerificationCode, now: datetime) -> bool:
+    """A code that can still be entered. Dead codes (expired, out of tries) never hold up a resend."""
+    return now <= _aware(record.expires_at) and record.attempts < MAX_ATTEMPTS
+
+
 def issue_code(
     db: Session,
     email: str,
@@ -61,7 +66,7 @@ def issue_code(
 ) -> IssuedCode:
     now = datetime.now(UTC)
     latest = _latest(db, email, purpose)
-    if latest and now - _aware(latest.created_at) < RESEND_COOLDOWN:
+    if latest and _alive(latest, now) and now - _aware(latest.created_at) < RESEND_COOLDOWN:
         raise VerificationError("cooldown", "Please wait a minute before requesting another code.")
     clear_codes(db, email, purpose)
     code = f"{secrets.randbelow(1_000_000):06d}"
@@ -83,14 +88,20 @@ def check_code(db: Session, email: str, purpose: VerificationPurpose, code: str)
     record = _latest(db, email, purpose)
     if not record:
         raise VerificationError("not_found", "No active code. Request a new one.")
+    if record.attempts >= MAX_ATTEMPTS:
+        raise VerificationError("too_many_attempts", "Too many wrong tries. This code has expired. Request a new one.")
     if datetime.now(UTC) > _aware(record.expires_at):
         raise VerificationError("expired", "That code expired. Request a new one.")
-    if record.attempts >= MAX_ATTEMPTS:
-        raise VerificationError("too_many_attempts", "Too many attempts. Request a new code.")
     if not hmac.compare_digest(record.code_hash, _hash(email, code.strip())):
         record.attempts += 1
+        left = MAX_ATTEMPTS - record.attempts
+        if left <= 0:
+            # Expire rather than consume: sign up resend still needs the pending name and password.
+            record.expires_at = datetime.now(UTC)
+            db.commit()
+            raise VerificationError("too_many_attempts", "Too many wrong tries. This code has expired. Request a new one.")
         db.commit()
-        raise VerificationError("invalid", "That code is not right.")
+        raise VerificationError("invalid", f"That code is not right. {left} {'try' if left == 1 else 'tries'} left.")
     return record
 
 

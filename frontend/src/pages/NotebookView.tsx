@@ -19,6 +19,7 @@ import { Reader } from "../components/Reader";
 import { seedDocs } from "../components/video/sourceCache";
 import { ConfirmButton, errorMessage, formatDate, Loading, Modal } from "../components/ui";
 import { VideoCreateForm } from "./VideoCreate";
+import { canPost, PostButton } from "../components/launchpad/PostButton";
 
 type Turn = {
   id?: string; // the saved message, once there is one: what a thumbs up or down is attached to
@@ -279,7 +280,7 @@ function StudioPanel({ notebookId, notebookTitle, docs, chats, currentChatId, di
             artifact={a}
             onCite={cite}
             onRemoved={(id) => setArtifacts((list) => (list ?? []).filter((x) => x.id !== id))}
-            actions={(art) =>
+            actions={(art) => canPost(art) ? <PostButton artifactId={art.id} /> :
               art.type === "audio_overview" && art.status === "ready" ? (
                 <button className="btn btn-small" onClick={() => make({ type: "video", style: "audiogram", audio_artifact_id: art.id })}>
                   Audiogram
@@ -514,7 +515,7 @@ export default function NotebookView() {
   }, [nb]);
 
   if (loadError) return <p className="error-text">{loadError}</p>;
-  if (!nb) return <Loading label="Opening notebook" />;
+  if (!nb) return <Loading label="Opening notebook" center="full" />;
 
   const openReport = () => {
     seedDocs(nb.id, nb.documents);

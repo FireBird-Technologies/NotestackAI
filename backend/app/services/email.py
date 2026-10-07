@@ -55,7 +55,8 @@ class ConsoleEmailProvider(BaseEmailProvider):
 
     def send(self, email: OutgoingEmail) -> str | None:
         ConsoleEmailProvider.sent.append(email)
-        log.info("[email] to=%s subject=%s\n%s", email.to, email.subject, email.text)
+        # Warning, not info: locally this is the only place a sign up or reset code shows up.
+        log.warning("[email] to=%s subject=%s\n%s", email.to, email.subject, email.text)
         return None
 
 
@@ -264,6 +265,13 @@ class EmailService:
 def _build() -> EmailService:
     if settings.email_provider == "resend" and settings.resend_api_key:
         return EmailService(ResendEmailProvider(settings.resend_api_key))
+    if settings.email_provider == "resend":
+        log.warning("EMAIL_PROVIDER=resend but RESEND_API_KEY is empty: emails are only logged, not sent")
+    elif settings.email_provider != "console":
+        log.warning("Unknown EMAIL_PROVIDER=%r (use resend or console): emails are only logged, not sent",
+                    settings.email_provider)
+    else:
+        log.warning("EMAIL_PROVIDER=console: emails are only logged, not sent")
     return EmailService(ConsoleEmailProvider())
 
 

@@ -32,7 +32,8 @@ def chrome() -> str | None:
         if found := shutil.which(name):
             return found
     patterns = ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-                os.path.expanduser("~/.cache/puppeteer/chrome/*/chrome-mac-*/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing")]
+                os.path.expanduser("~/.cache/puppeteer/chrome/*/chrome-mac-*/"
+                                   "Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing")]
     return next((p for pat in patterns for p in glob.glob(pat)), None)
 
 

@@ -8,20 +8,21 @@ from sqlalchemy import func, or_, select
 
 from app.auth import Ctx, get_ctx
 from app.config import settings
+from app.infographics.image import ImageUnavailable, render_png
+from app.infographics.themes import theme_id
 from app.models import Artifact, CalendarItem, Chat, Document, Job, Notebook, UserSavedVoice
 from app.routers.notebooks import ensure_archive_notebook
-from app.infographics.image import ImageUnavailable, render_png
 from app.services.artifacts import latest_jobs, serialize_artifact, start_artifact
 from app.services.jobs import create_job, serialize_job
 from app.services.plans import effective_plan, plan_limit_error
-from app.infographics.themes import theme_id
 from app.services.renderer import COMPOSITIONS
 from app.services.storage import storage
 from app.services.usage import check_limit
 
 router = APIRouter(prefix="/api/artifacts", tags=["artifacts"])
 
-ArtifactType = Literal["summary", "audio_overview", "video", "quote_card", "carousel", "launch_kit", "mind_map", "quiz", "flashcards", "report", "infographic"]
+ArtifactType = Literal["summary", "audio_overview", "video", "quote_card", "carousel", "launch_kit", "mind_map", "quiz",
+                       "flashcards", "report", "infographic"]
 
 
 SOURCE_TYPES = ("quiz", "flashcards", "report", "infographic")  # made from posts or chats picked in the dialog
@@ -33,7 +34,7 @@ class RenderIn(BaseModel):
 
 
 class GenerateIn(BaseModel):
-    type: Literal["summary", "audio_overview", "video", "quote_card", "carousel", "launch_kit", "mind_map", "quiz", "flashcards", "report", "infographic"]
+    type: ArtifactType
     notebook_id: uuid.UUID | None = None
     document_id: uuid.UUID | None = None
     archive: bool = False  # no notebook or post picked: use the "All posts" notebook
@@ -213,6 +214,8 @@ def list_artifacts(
     query = select(Artifact).where(Artifact.workspace_id == ctx.workspace.id)
     if type:
         query = query.where(Artifact.type.in_(type.split(",")))
+    else:  # files uploaded to post live in the Launchpad's picker, not among the things Notestack made
+        query = query.where(Artifact.type != "upload")
     if notebook_id:
         query = query.where(Artifact.notebook_id == notebook_id)
     if document_id:
@@ -260,9 +263,13 @@ def patch_artifact(artifact_id: uuid.UUID, body: PatchIn, ctx: Ctx = Depends(get
     content = dict(a.content_json or {})
     if body.content is not None:
         protected = {"slide_keys", "quote_card_ids", "segments", "voices"}
+        if a.type == "upload":  # what the file is, as posting reads it: only its title can change
+            protected |= {"filename", "content_type", "media", "size_bytes", "duration_s"}
         content.update({k: v for k, v in body.content.items() if k not in protected})
     if body.title is not None:
-        content["title"] = body.title
+        if not body.title.strip():
+            raise HTTPException(400, "Give it a name.")
+        content["title"] = body.title.strip()
     a.content_json = content
     ctx.db.commit()
     return serialize_artifact(a, latest_jobs(ctx.db, [a.id]).get(a.id))
@@ -277,6 +284,10 @@ def delete_artifact(artifact_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
         remove_video(ctx, a)
         return {"ok": True}
     storage.delete_prefix(f"ws/{ctx.workspace.id}/artifacts/{a.id}/")
+    if a.type == "upload":  # a file from the user's computer: its upload record (and file) go too
+        from app.services.uploads import remove_upload_artifact
+
+        remove_upload_artifact(ctx.db, a)
     ctx.db.query(CalendarItem).filter(CalendarItem.artifact_id == a.id, CalendarItem.status == "scheduled").delete()
     ctx.db.delete(a)
     ctx.db.commit()

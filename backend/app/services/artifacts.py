@@ -22,6 +22,7 @@ TYPE_LABELS = {
     "flashcards": "Flashcards",
     "report": "Report",
     "infographic": "Infographic",
+    "upload": "Upload",
 }
 
 

@@ -64,7 +64,9 @@ from app.services.jobs import (
 from app.services.notestack_voices import save_notestack_voice
 from app.services.plans import effective_plan
 from app.services.renderer import PermanentJobError, request_render
+from app.services.social.health import social_health
 from app.services.storage import keys, storage
+from app.services.uploads import sweep_orphan_uploads
 
 log = logging.getLogger("notestack.worker")
 
@@ -267,11 +269,18 @@ def handle_render(db: Session, job: Job):
     return HANDED_OFF
 
 
+def handle_publish_post(db: Session, job: Job):
+    item = launchpad.publish_job(db, job.params["item_id"])
+    return Done({"status": item.status if item else "gone"}, "Published" if item and item.status == "posted"
+                else f"Post {item.status}" if item else "Post deleted")
+
+
 HANDLERS: dict[str, Callable[[Session, Job], object]] = {
     "ingest": handle_ingest,
     "import_url": handle_import_url,
     "import_upload": handle_import_upload,
     "topics": handle_topics,
+    "publish_post": handle_publish_post,
     "ideas": handle_ideas,
     "memory_update": handle_memory,
     "chat_memory": handle_chat_memory,
@@ -424,6 +433,7 @@ def update_email_batch(session_factory: Callable[[], Session] = SessionLocal) ->
 def daily_cleanup(session_factory: Callable[[], Session] = SessionLocal) -> None:
     with session_factory() as db:
         purge_old_codes(db)
+    sweep_orphan_uploads(session_factory)  # upload files whose record was deleted, and unfinished uploads
 
 
 @dataclass
@@ -432,11 +442,27 @@ class Periodic:
     every_seconds: float
     fn: Callable[[], object]
     next_at: float = 0.0
+    # Run on the wall clock's multiples of every_seconds (1800: at :00 and :30 UTC), not every_seconds after the last
+    # run. The first run is still at start-up, to catch up on anything already due.
+    align: bool = False
 
+    def schedule_next(self, now: float, wall: float | None = None) -> None:
+        if not self.align:
+            self.next_at = now + self.every_seconds
+            return
+        wall = time.time() if wall is None else wall
+        # A couple of seconds past the boundary, so a post scheduled exactly on it is already due.
+        self.next_at = now + (self.every_seconds - wall % self.every_seconds) + ALIGN_GRACE_SECONDS
+
+
+ALIGN_GRACE_SECONDS = 2
 
 PERIODIC = [
     Periodic("recover_stale", 60, recover_stale),
-    Periodic("publish_due", 30, launchpad.publish_due),
+    # Posts are scheduled on half hours (in the user's zone), so they go out on the :00 / :30 run. Zones on a :45
+    # offset (Nepal) get slots between runs: those go out at the next run, up to 15 minutes late.
+    Periodic("publish_due", 1800, launchpad.publish_due, align=True),
+    Periodic("social_health", 600, social_health),
     Periodic("sync_engagement", 3600, launchpad.sync_engagement),
     Periodic("update_email_batch", 300, update_email_batch),
     Periodic("topics_backfill", 900, topics_backfill),
@@ -451,7 +477,7 @@ def run_periodic(now: float) -> None:
     for task in PERIODIC:
         if now < task.next_at:
             continue
-        task.next_at = now + task.every_seconds
+        task.schedule_next(now)
         try:
             with single_flight(task.name) as got:
                 if got:

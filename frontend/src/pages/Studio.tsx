@@ -8,6 +8,7 @@ import { Dropdown } from "../components/Dropdown";
 import { LaunchWindowIcon, PlanetIcon, RocketIcon } from "../components/icons/Icons";
 import { Reader } from "../components/Reader";
 import { errorMessage, PageHeader } from "../components/ui";
+import { canPost, PostButton } from "../components/launchpad/PostButton";
 
 type Kind = "audio" | "video" | "quote";
 
@@ -100,7 +101,7 @@ export default function Studio() {
               <strong>{k.label}</strong>
             </button>
           ))}
-          <Link to="/app/launch-kit" className="format-tile">
+          <Link to="/app/launchpad/kits" className="format-tile">
             <span className="mc-more" aria-hidden="true">
               +
             </span>
@@ -173,7 +174,7 @@ export default function Studio() {
                 onCite={(c) => c.document_id && setReading({ id: c.document_id, start: c.line_start, end: c.line_end })}
                 onRemoved={(id) => setRecent((g) => (g ?? []).filter((x) => x.id !== id))}
                 onChanged={(next) => setRecent((g) => (g ?? []).map((x) => (x.id === next.id ? next : x)))}
-                actions={(art) =>
+                actions={(art) => canPost(art) ? <PostButton artifactId={art.id} /> :
                   art.type === "audio_overview" && art.status === "ready" ? (
                     <button
                       className="btn btn-small"

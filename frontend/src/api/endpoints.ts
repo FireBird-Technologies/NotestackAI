@@ -22,6 +22,7 @@ import type {
   WorkspaceChat,
   Page,
   Platform,
+  PostableArtifact,
   Quota,
   ResurfaceItem,
   Settings,
@@ -202,10 +203,16 @@ export const voiceApi = {
 
 export type ItemBody = {
   platform: Platform;
-  scheduled_at: string;
+  /** An exact instant (Post now). Scheduled posts send local_time + timezone instead. */
+  scheduled_at?: string;
+  /** The half hour picked on the user's own clock, "2026-10-07T11:00", read in `timezone` (IANA) by the backend. */
+  local_time?: string;
+  timezone?: string;
   content: string;
   thread?: string[];
   artifact_id?: string | null;
+  /** The Launch Kit the post was written from (tracked, not attached). */
+  kit_id?: string | null;
   document_id?: string | null;
   social_account_id?: string | null;
   remind_by_email?: boolean;
@@ -225,6 +232,13 @@ export const launchpadApi = {
   startOAuth: (platform: "x" | "linkedin") => post<{ url: string }>(`/api/social/${platform}/start`),
   completeOAuth: (ticket: string) => post<SocialAccounts>("/api/social/complete", { ticket }),
   disconnect: (id: string) => del(`/api/social/accounts/${id}`),
+  /** What can be attached to a post (finished videos, quote cards, carousels, summaries, launch kits; not audio). */
+  postable: (q = "") => api<PostableArtifact[]>(`/api/launchpad/postable${qs({ q: q || undefined })}`),
+  /** A file from the user's computer, sent to storage: make it postable (an `upload` in the picker). */
+  uploadToPost: async (file: File, duration_s?: number) => {
+    const { upload_id } = await uploadFile(file);
+    return post<PostableArtifact>("/api/launchpad/uploads", { upload_id, duration_s });
+  },
 };
 
 export const resurfaceApi = {
