@@ -21,6 +21,7 @@ class SettingsIn(BaseModel):
     brand_accent: str | None = None
     logo_upload_id: str | None = None  # "" removes the logo
     training_opt_in: bool | None = None
+    allow_public_links: bool | None = None
     email_unsubscribed: bool | None = None
 
 
@@ -30,7 +31,8 @@ def _serialize(ctx: Ctx) -> dict:
         "user": {"name": ctx.user.name, "email": ctx.user.email, "auth_provider": ctx.user.auth_provider.value,
                  "email_unsubscribed": ctx.user.email_unsubscribed},
         "workspace": {"id": str(ctx.workspace.id), "name": ctx.workspace.name,
-                      "training_opt_in": ctx.workspace.training_opt_in},
+                      "training_opt_in": ctx.workspace.training_opt_in,
+                      "allow_public_links": ctx.workspace.allow_public_links},
         "brand": {"name": brand.get("name"), "accent": brand.get("accent") or "#217cff",
                   "logo_url": storage.presign_get(brand["logo_key"]) if brand.get("logo_key") else None},
         "plan": plan_dict(effective_plan(ctx.db, ctx.workspace)),
@@ -56,6 +58,8 @@ def update_settings(body: SettingsIn, ctx: Ctx = Depends(get_ctx)):
         ctx.workspace.name = body.workspace_name.strip()
     if body.training_opt_in is not None:
         ctx.workspace.training_opt_in = body.training_opt_in
+    if body.allow_public_links is not None:
+        ctx.workspace.allow_public_links = body.allow_public_links
     if body.email_unsubscribed is not None:
         ctx.user.email_unsubscribed = body.email_unsubscribed
     brand = dict(ctx.workspace.brand_json or {})

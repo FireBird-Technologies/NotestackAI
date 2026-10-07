@@ -1,5 +1,6 @@
 from app.models.content import (
     Artifact,
+    ArtifactShare,
     B2VCustomVoice,
     B2VStyle,
     B2VTemplate,
@@ -36,6 +37,7 @@ __all__ = [
     "SupportConversation",
     "SupportMessage",
     "Artifact",
+    "ArtifactShare",
     "AuthProvider",
     "B2VCustomVoice",
     "B2VStyle",

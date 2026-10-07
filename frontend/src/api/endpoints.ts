@@ -7,6 +7,11 @@ import type {
   CalendarItem,
   ChatMessage,
   ChatSummary,
+  PublicInfographicData,
+  PublicReportData,
+  QuizQuestionType,
+  ReportSuggestionKind,
+  ReportTemplate,
   MemoryNote,
   Doc,
   DocDetail,
@@ -20,6 +25,7 @@ import type {
   Quota,
   ResurfaceItem,
   Settings,
+  ShareInfo,
   SocialAccounts,
   Source,
   TopicDetail,
@@ -73,7 +79,7 @@ export const sourcesApi = {
 };
 
 export const docsApi = {
-  list: (p: { q?: string; source_id?: string; limit?: number; offset?: number } = {}) =>
+  list: (p: { q?: string; source_id?: string; indexed_only?: boolean; limit?: number; offset?: number } = {}) =>
     api<Page<Doc>>(`/api/documents${qs(p)}`),
   get: (id: string) => api<DocDetail>(`/api/documents/${id}`),
   remove: (id: string) => del(`/api/documents/${id}`),
@@ -121,6 +127,19 @@ export type GenerateBody = {
   /** mind_map: the posts to chart (none: all in the notebook) and what to centre on. */
   document_ids?: string[];
   focus?: string;
+  /** quiz: made from a notebook's posts (notebook_id, document_ids) or from notebook chats (chat_ids). */
+  chat_ids?: string[];
+  topic?: string;
+  count?: "fewer" | "standard" | "more";
+  difficulty?: "easy" | "medium" | "hard";
+  question_types?: QuizQuestionType[];
+  language?: string;
+  /** report: a written document or an interactive one, its template, and the instructions the writer is given. */
+  report_format?: "document" | "interactive";
+  template_id?: string;
+  instructions?: string;
+  /** infographic: one of the premade themes (see components/Infographic.tsx). */
+  theme?: string;
 };
 
 export const artifactsApi = {
@@ -131,6 +150,8 @@ export const artifactsApi = {
   update: (id: string, body: { title?: string; content?: Record<string, unknown> }) =>
     patch<Artifact>(`/api/artifacts/${id}`, body),
   remove: (id: string) => del(`/api/artifacts/${id}`),
+  /** An infographic drawn as a PNG. */
+  image: (id: string, layout: "landscape" | "portrait" = "landscape") => apiBlob(`/api/artifacts/${id}/image${qs({ layout })}`),
   retry: (id: string) => post<Artifact>(`/api/artifacts/${id}/retry`),
 };
 
@@ -220,6 +241,7 @@ export type SettingsPatch = {
   brand_accent?: string;
   logo_upload_id?: string;
   training_opt_in?: boolean;
+  allow_public_links?: boolean;
   email_unsubscribed?: boolean;
 };
 
@@ -257,6 +279,28 @@ export type ScriptDraft = { title: string; display_text: string; narration_text:
                             draft_scenes: { id: number; title: string; display_text: string | null; narration_text: string }[] };
 
 /** Videos are made by blog2video; the backend proxies every call. Ids here are our artifact ids. */
+export const reportsApi = {
+  templates: () => api<{ templates: ReportTemplate[]; interactive: ReportTemplate }>("/api/reports/templates"),
+  /** Four AI-written templates for these sources (same source fields as a generate request, plus an optional topic). */
+  suggest: (body: Record<string, unknown>) => post<{ templates: ReportTemplate[] }>("/api/reports/suggest", body),
+  /** Add a visual after a section: made new, or copied from an artifact you already made. Runs as a job. */
+  addBlock: (id: string, body: { kind: ReportSuggestionKind; after_block_id?: string; suggestion_id?: string; brief?: string;
+                                 existing_artifact_id?: string; theme?: string }) => post<Artifact>(`/api/reports/${id}/blocks`, body),
+  removeBlock: (id: string, blockId: string) => del<Artifact>(`/api/reports/${id}/blocks/${blockId}`),
+};
+
+export const shareApi = {
+  get: (id: string) => api<ShareInfo>(`/api/artifacts/${id}/share`),
+  create: (id: string) => post<ShareInfo>(`/api/artifacts/${id}/share`),
+  update: (id: string, show_sources: boolean) => patch<ShareInfo>(`/api/artifacts/${id}/share`, { show_sources }),
+  remove: (id: string) => del<ShareInfo>(`/api/artifacts/${id}/share`),
+};
+
+/** No sign in needed: what the public sees at a share link. */
+export const publicApi = {
+  report: (token: string) => api<PublicReportData | PublicInfographicData>(`/api/public/reports/${encodeURIComponent(token)}`),
+};
+
 export const videosApi = {
   config: () => api<VideoConfig>("/api/videos/config"),
   quota: () => api<VideoQuota>("/api/videos/quota"),

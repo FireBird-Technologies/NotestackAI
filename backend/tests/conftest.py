@@ -11,8 +11,10 @@ os.environ["ELEVENLABS_API_KEY"] = ""
 os.environ["FIRECRAWL_API_KEY"] = ""
 os.environ["R2_PREFIX"] = ""
 os.environ["TYPESAFE_API_KEY"] = ""
-os.environ["STRIPE_SECRET_KEY"] = ""
-os.environ["STRIPE_WEBHOOK_SECRET"] = ""
+# Every name the settings accept for these, so a key exported in the shell under another name cannot get through.
+for _name in ("STRIPE_SECRET_KEY", "STRIPE_API_KEY", "STRIPE_SECRET", "STRIPE_WEBHOOK_SECRET",
+              "STRIPE_WEBHOOK_SIGNING_SECRET", "STRIPE_SIGNING_SECRET"):
+    os.environ[_name] = ""
 os.environ["STRIPE_PRICE_WRITER_MONTHLY"] = ""
 os.environ["STRIPE_PRICE_WRITER_ANNUAL"] = ""
 os.environ["STRIPE_PRICE_STUDIO_MONTHLY"] = ""
@@ -69,6 +71,18 @@ def run_jobs(session_factory, db_session):
         return [db_session.get(Job, j) for j in ran]
 
     return drain
+
+
+@pytest.fixture(autouse=True)
+def never_reach_stripe(monkeypatch):
+    """No test can talk to the real Stripe account: building a real client fails loudly. A test that needs Stripe swaps in
+    a fake (`monkeypatch.setattr(stripe_billing, "client", lambda: fake)`), which never builds one."""
+    import stripe
+
+    def blocked(*_args, **_kwargs):
+        raise RuntimeError("A test tried to create a real Stripe client. Use a fake one (see tests/test_stripe_billing.py).")
+
+    monkeypatch.setattr(stripe, "StripeClient", blocked)
 
 
 @pytest.fixture()

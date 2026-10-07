@@ -54,6 +54,8 @@ class Workspace(IdMixin, TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(200))
     owner_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"))
     training_opt_in: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Off: no report of this workspace can be shared by link, and existing links stop working.
+    allow_public_links: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
     brand_json: Mapped[dict] = mapped_column(JSON, default=dict)
 
     members: Mapped[list["WorkspaceMember"]] = relationship(back_populates="workspace")
@@ -108,6 +110,8 @@ class PlanRecord(TimestampMixin, Base):
     audio_minutes: Mapped[int] = mapped_column(Integer, default=0)
     videos: Mapped[int] = mapped_column(Integer, default=0)
     launch_kits: Mapped[int] = mapped_column(Integer, default=0)  # -1 = unlimited
+    reports: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # per month, -1 = unlimited
+    infographics: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # per month, -1 = unlimited
     voice_cloning: Mapped[bool] = mapped_column(Boolean, default=False)
     brand_kit: Mapped[bool] = mapped_column(Boolean, default=False)
     features: Mapped[list] = mapped_column(JSON, default=list)  # bullet points on the pricing page

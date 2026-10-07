@@ -184,6 +184,7 @@ def list_documents(
     ctx: Ctx = Depends(get_ctx),
     q: str = "",
     source_id: uuid.UUID | None = None,
+    indexed_only: bool = False,
     limit: int = 500,
     offset: int = 0,
 ):
@@ -197,6 +198,8 @@ def list_documents(
         query = query.where(or_(Document.title.ilike(like), Document.clean_text.ilike(like)))
     if source_id:
         query = query.where(Document.source_id == source_id)
+    if indexed_only:
+        query = query.where(Document.path.is_not(None))
     total = ctx.db.scalar(select(func.count()).select_from(query.subquery()))
     rows = ctx.db.execute(
         query.order_by(Document.published_at.desc().nulls_last(), Document.created_at.desc())

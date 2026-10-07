@@ -22,13 +22,14 @@ def scrub_path(path: str | None) -> str | None:
 
 # "How do I ..." style questions are product help even when they mention "my notebook".
 _HOWTO = re.compile(
-    r"^\s*(?:hi|hello|hey|please|ok|okay)?[\s,!.]*(?:how\s+(?:do|can|could|should|to|does|would)\b|where\s+(?:do|can|is|are)\b|"
-    r"can\s+(?:i|you|notestack)\b|could\s+(?:i|you)\b|is\s+it\s+possible\b|which\s+plan\b|what\s+(?:does|is\s+a|is\s+the)\b)",
+    r"^\s*(?:hi|hello|hey|please|ok|okay)?[\s,!.]*(?:how\s+(?:do|can|could|should|to|does|would)\b|i(?:\s+(?:really|just))?\s+(?:want|need|wanna|would\s+like|'d\s+like)\s+to\b|make\s+me\b|where\s+(?:do|can|is|are)\b|"
+    r"can\s+(?:i|you|notestack)\b|could\s+(?:i|you)\b|is\s+it\s+possible\b|which\s+plan\b|what\s+(?:does|is\s+a|is\s+the)\b|"
+    r"(?:can|could|will|would|do|does|are|is)\s+(?:people|anyone|anybody|others|someone|they|readers?|visitors?)\b)",
     re.I,
 )
 _MINE = (
     r"(?:notebooks?|posts?|articles?|sources?|archive|documents?|newsletters?|blog|videos?|audio|podcasts?|"
-    r"launch\s*kits?|drafts?|files?|chats?|conversations?|topics?|quotes?|summar(?:y|ies)|writing|content|stuff|data)"
+    r"reports?|quiz(?:zes)?|flashcards?|infographics?|mind\s*(?:map|constellation)s?|launch\s*kits?|drafts?|files?|chats?|conversations?|topics?|quotes?|summar(?:y|ies)|writing|content|stuff|data)"
 )
 _ABOUT_MY_DATA = re.compile(
     rf"""(?ix)
@@ -46,7 +47,7 @@ _ABOUT_MY_DATA = re.compile(
     """
 )
 # Words that mean something went wrong with their work; the reply also offers the human form.
-_BROKEN = re.compile(r"(?i)\b(?:fail\w*|error|broken|stuck|crash\w*|not\s+working|won'?t|doesn'?t\s+work|missing|lost)\b")
+_BROKEN = re.compile(r"(?i)\b(?:fail\w*|slow|forever|too\s+long|taking\s+(?:so\s+|way\s+)?long|hang\w*|never\s+(?:finish|load|appear)\w*|error|broken|stuck|crash\w*|not\s+working|won'?t|doesn'?t\s+work|missing|lost)\b")
 
 OUT_OF_SCOPE_REPLY = (
     "I can help with how Notestack works, but I can't see your notebooks, posts, files or account, so I can't answer "

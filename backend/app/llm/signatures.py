@@ -353,6 +353,208 @@ class ArrangeMindMap(dspy.Signature):
     branches: list[MindArrangedBranch] = dspy.OutputField(desc="3 to 10 branches")
 
 
+class QuizQuestion(BaseModel):
+    type: Literal["multiple_choice", "multiple_select", "fill_blank", "short_answer"]
+    question: str = Field(description="The question. A fill_blank question has exactly one ____ where the answer goes")
+    options: list[str] = Field(default_factory=list, description="3 to 5 choices for multiple_choice and "
+                                                                 "multiple_select, otherwise empty")
+    correct: list[int] = Field(default_factory=list, description="Zero based indexes into options: one for "
+                                                                 "multiple_choice, two or more for multiple_select")
+    answer: str = Field(default="", description="fill_blank: the word or phrase for the blank. short_answer: a model "
+                                                "answer in one or two sentences. Empty for the choice types")
+    accepted: list[str] = Field(default_factory=list, description="fill_blank only: other wordings that are also right")
+    explanation: str = Field(description="One or two sentences on why the answer is right")
+    sources: list[SourceRef] = Field(default_factory=list, description="Lines the answer comes from, when the "
+                                                                       "material has numbered lines")
+
+
+class GenerateQuiz(dspy.Signature):
+    """Write a quiz that tests whether the reader understood the material. Ask only about what the material says;
+    never use outside facts. Every question has one clear answer the material supports. Use only the question types
+    allowed, mixing them when several are allowed, and write exactly the number of questions asked for. Wrong
+    options must be plausible, not silly, and options must not give the answer away by length or wording. When a
+    topic is given, ask only about it, as far as the material covers it. Match the difficulty: easy asks for recall
+    of stated facts, medium asks for understanding, hard asks for applying ideas or telling similar ideas apart.
+    Write in the language requested. Never use em dashes."""
+
+    title: str = dspy.InputField()
+    material: list[str] = dspy.InputField(desc="Posts with path and numbered lines, or chat transcripts")
+    topic: str = dspy.InputField(desc="What the quiz should be about, or (none)")
+    difficulty: str = dspy.InputField(desc="easy, medium or hard")
+    question_types: list[str] = dspy.InputField(desc="The only question types allowed")
+    count: int = dspy.InputField(desc="How many questions to write")
+    language: str = dspy.InputField(desc="The language to write in")
+    questions: list[QuizQuestion] = dspy.OutputField()
+
+
+class Flashcard(BaseModel):
+    front: str = Field(description="A term, a question or a prompt, short")
+    back: str = Field(description="The answer or definition in one to three plain sentences")
+    sources: list[SourceRef] = Field(default_factory=list, description="Lines the card comes from, when the material "
+                                                                       "has numbered lines")
+
+
+class GenerateFlashcards(dspy.Signature):
+    """Write flashcards for studying the material: each card has a short front (a term, a question or a prompt) and a
+    back that answers it from the material. Cover the main ideas, not trivia, and do not repeat a card. Never use
+    outside facts. When a topic is given, make cards only about it, as far as the material covers it. Match the
+    difficulty: easy cards test recall of stated terms and facts, medium cards test understanding, hard cards ask the
+    reader to apply an idea or tell similar ideas apart. Write in the language requested. Never use em dashes."""
+
+    title: str = dspy.InputField()
+    material: list[str] = dspy.InputField(desc="Posts with path and numbered lines, or chat transcripts")
+    topic: str = dspy.InputField(desc="What the cards should be about, or (none)")
+    difficulty: str = dspy.InputField(desc="easy, medium or hard")
+    count: int = dspy.InputField(desc="How many cards to write")
+    language: str = dspy.InputField(desc="The language to write in")
+    cards: list[Flashcard] = dspy.OutputField()
+
+
+class InfographicEntry(BaseModel):
+    name: str = Field(description="1 to 3 words")
+    text: str = Field(description="One short plain sentence")
+
+
+class InfographicOut(BaseModel):
+    title: str = Field(description="At most 8 words")
+    subtitle: str = Field(description="One line, at most 16 words")
+    items_label: str = Field(description="A 2 to 4 word heading for the items, e.g. The five layers")
+    items: list[InfographicEntry] = Field(description="3 to 5 main ideas, text at most 18 words each")
+    steps_label: str = Field(description="A 2 to 5 word heading for the steps, e.g. How a request flows")
+    steps: list[InfographicEntry] = Field(description="4 to 8 steps in order, name 1 or 2 words, text at most 12 words")
+    rule: str = Field(description="The one takeaway, at most 12 words")
+    notes: list[str] = Field(description="Exactly 3 supporting notes, at most 14 words each")
+
+
+class PlanInfographic(dspy.Signature):
+    """Turn the material into the text of a one page infographic: a title, the main ideas, the ordered steps or stages
+    that connect them, one takeaway and three notes. Use only what the material says. When a focus is given, make the
+    infographic about it, as far as the material covers it. The material is a list of ideas from posts, or chat
+    transcripts (then summarise what was discussed and concluded). Keep every line short and plain: it is printed on a
+    poster, so no markdown, no quotes around names, no lists inside a line. Write in the language of the material.
+    Never use em dashes."""
+
+    title: str = dspy.InputField(desc="What the material is from")
+    material: list[str] = dspy.InputField(desc="Ideas from posts, or chat transcripts")
+    focus: str = dspy.InputField(desc="What the infographic should be about, or (none)")
+    infographic: InfographicOut = dspy.OutputField()
+
+
+class WriteReport(dspy.Signature):
+    """Write the report the reader describes, using only the material given: never add facts from outside it. Follow
+    the reader's instructions on structure, style, tone and length. Write in Markdown that starts straight at the
+    first "## " heading (the title goes in report_title, not in the text). Structure it like a well organised
+    article: open with a "## Introduction" that says what the report covers (and, for a study or how-to report, what the
+    reader will be able to do by the end), then 3 to 7 sections, then close with a "## Summary" of the key takeaways,
+    unless the reader's instructions ask for a different structure. Every "## " heading is specific and descriptive of
+    what is in that section (for example "The Context Window Bottleneck: Moving Beyond Basic Summarization", never
+    "Section 2" or "Details"), and they read in a logical order. Use "### " inside sections, lists, and tables where
+    they help. When the material has numbered lines (FILE blocks), put a [n] marker after each
+    claim it supports and list each n in citations with the path and lines it came from; when it is a chat transcript,
+    write no markers and no citations. Do not write a quiz, flashcards, practice or review questions into the report unless the reader's instructions
+    ask for one: those are offered to the reader separately as visuals they can add. Never write about visuals, mind maps, flashcards, quizzes, tables or timelines in the text, and never suggest or describe one, even if the reader's instructions mention them: the app offers those to the reader separately, so write only the report itself. Write in the language requested.
+    Never use em dashes."""
+
+    title: str = dspy.InputField(desc="The notebook, post or chat the material comes from")
+    material: list[str] = dspy.InputField(desc="Posts with path and numbered lines, or chat transcripts")
+    request: str = dspy.InputField(desc="What the reader wants the report to be")
+    language: str = dspy.InputField(desc="The language to write in")
+    report_title: str = dspy.OutputField(desc="A specific title, 3 to 10 words")
+    markdown: str = dspy.OutputField(desc="The report body in Markdown, starting at the first ## heading")
+    citations: list[FileCitation] = dspy.OutputField()
+
+
+class PlannedEmbed(BaseModel):
+    kind: Literal["mind_map", "flashcards", "quiz", "infographic"]
+    title: str = Field(description="A short heading for the visual, 2 to 6 words")
+    brief: str = Field(description="What the visual covers, one sentence, drawn from this section")
+    why: str = Field(description="Why it helps the reader at this point, one short sentence")
+
+
+class PlannedSection(BaseModel):
+    heading: str = Field(description="2 to 8 words")
+    brief: str = Field(description="What this section says and which part of the material it draws on, 1 to 2 sentences")
+    embed: PlannedEmbed | None = Field(None, description="A visual to suggest right after this section, only where it "
+                                                         "really helps")
+
+
+class PlanInteractiveReport(dspy.Signature):
+    """Plan an interactive report the reader describes, from the material given. Every section is written text: never plan a
+    section that is itself a quiz, flashcards, practice questions or a mind map, because those are visuals, and are
+    suggested through a section's visual instead. Choose 4 to 8 sections in a sensible
+    order, starting with an Introduction and ending with a Summary unless the reader asks for something else. Each
+    heading is specific and descriptive of what the section covers, never generic like "Details" or "Section 2". Then decide, section by section, where a visual would help the reader and which one. These are only
+    suggestions: nothing is built until the reader clicks Add, so suggest the spots where each really fits: a mind_map to show how
+    many linked ideas fit together (at most one, usually near the start or the end), flashcards to learn a set of
+    terms or facts, a quiz to check understanding after a dense section, an infographic for a one page picture of the
+    main ideas. Use at most four visuals in all, each kind
+    at most once, and none where plain prose reads better. Only the kinds allowed may be used. Use only what the
+    material covers. Never use em dashes."""
+
+    title: str = dspy.InputField()
+    material: list[str] = dspy.InputField(desc="Posts with path and numbered lines, or chat transcripts")
+    request: str = dspy.InputField(desc="What the reader wants the report to be")
+    allowed_kinds: list[str] = dspy.InputField(desc="The visuals that may be used")
+    language: str = dspy.InputField()
+    report_title: str = dspy.OutputField(desc="A specific title, 3 to 10 words")
+    sections: list[PlannedSection] = dspy.OutputField(desc="4 to 8 sections")
+
+
+class WriteReportSection(dspy.Signature):
+    """Write one section of a report, using only the material given. Follow the reader's instructions on style, tone
+    and length; a section is two to five short paragraphs, or a list or table where that reads better. Do not write quiz questions, flashcards or
+    review questions in the section (those are offered to the reader separately). Do not repeat
+    the heading, and do not use "#" or "##" headings; "###" subheadings are fine. When the material has numbered lines (FILE
+    blocks), put a [n] marker after each claim it supports and list each n in citations with the path and lines; when it
+    is a chat transcript, write no markers and no citations. Never write about visuals, mind maps, flashcards, quizzes, tables or timelines in the text, and never suggest or describe one, even if the reader's instructions mention them: the app offers those to the reader separately, so write only the report itself. Write in the language requested. Never use em dashes."""
+
+    title: str = dspy.InputField()
+    report_title: str = dspy.InputField()
+    heading: str = dspy.InputField()
+    brief: str = dspy.InputField(desc="What this section should say")
+    request: str = dspy.InputField(desc="What the reader wants the report to be")
+    material: list[str] = dspy.InputField(desc="Posts with path and numbered lines, or chat transcripts")
+    language: str = dspy.InputField()
+    markdown: str = dspy.OutputField(desc="The section body in Markdown, without its heading")
+    citations: list[FileCitation] = dspy.OutputField()
+
+
+class ReportTemplateIdea(BaseModel):
+    name: str = Field(description="2 to 4 words, a kind of report, like a field guide or a decision memo")
+    description: str = Field(description="One short sentence on what the reader gets")
+    prompt: str = Field(description="The instructions for the writer, two to four sentences, specific to this material: "
+                                    "what the report covers, how it is organised, and its tone")
+
+
+class SuggestReportTemplates(dspy.Signature):
+    """Suggest four different kinds of report a reader could make from this material. Each is specific to what the
+    material is actually about, not a generic format, and the four are clearly different from each other (for example
+    a practical how-to, a comparison, a beginner primer and an in-depth analysis, when the material supports them).
+    Never use em dashes."""
+
+    items: list[str] = dspy.InputField(desc="The title and the start of each source")
+    topic: str = dspy.InputField(desc="What the reader wants the report to be about, or (none)")
+    templates: list[ReportTemplateIdea] = dspy.OutputField(desc="Exactly 4")
+
+
+class EmbedIdea(BaseModel):
+    after_block_id: str = Field(description="Id of the section the visual goes right after, exactly as listed")
+    kind: Literal["mind_map", "flashcards", "quiz", "infographic"]
+    brief: str = Field(description="What the visual should cover, one sentence, about that section")
+    why: str = Field(description="Why it helps the reader at that point, one short sentence")
+
+
+class SuggestEmbeds(dspy.Signature):
+    """Look at a finished report's sections and suggest up to four places where a visual would help the reader:
+    a mind_map to show how many linked ideas fit together, flashcards to learn a set of terms or facts, a quiz to
+    check understanding after a dense section. Pick the sections where each really fits, use only the kinds allowed,
+    and do not suggest the same kind twice in a row. Never use em dashes."""
+
+    sections: list[str] = dspy.InputField(desc="One per line: id | heading: the start of the section")
+    allowed_kinds: list[str] = dspy.InputField()
+    suggestions: list[EmbedIdea] = dspy.OutputField(desc="0 to 4")
+
+
 class ExtractTopics(dspy.Signature):
     """Name the topics this post is about, the way a reader would search for them."""
 

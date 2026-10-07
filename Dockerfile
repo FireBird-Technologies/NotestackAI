@@ -11,6 +11,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
     CORPUS_CACHE_DIR=/app/.corpus-cache \
     LOCAL_STORAGE_DIR=/app/.storage
 
+# Chromium draws an infographic's PNG for its Download button (and the fonts the pages use)
+RUN apt-get update && apt-get install -y --no-install-recommends chromium fonts-liberation \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY --chown=user backend/ .
