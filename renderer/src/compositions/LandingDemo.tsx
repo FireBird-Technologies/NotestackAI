@@ -296,8 +296,8 @@ function Warp() {
 const SOURCES = ["Substack", "Ghost", "WordPress", "Medium", "RSS", "Markdown"];
 
 const POSTS = [
-  "On Pricing", "Writing Every Day", "The Paid Tier", "Why I Quit Twitter",
-  "Notes on Craft", "Letters to Readers", "The Long Game", "Small Audiences",
+  "Why Things Fall", "Curved Space", "Notes on Orbits", "What Is Entropy?",
+  "The Quantum Leap", "Light as a Wave", "Time Is Strange", "Black Hole Basics",
 ];
 const POST_DATES = ["Mar 12", "Mar 04", "Feb 21", "Feb 09", "Jan 30", "Jan 18", "Jan 03", "Dec 20"];
 
@@ -361,12 +361,12 @@ function Sync() {
 function Ask() {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const q = typed("What have I written about pricing?", frame, 8, 30);
+  const q = typed("What have I written about gravity?", frame, 8, 30);
   const answer = spring({ frame: frame - 66, fps, config: { damping: 18 } });
   const cite = spring({ frame: frame - 92, fps, config: { damping: 16 } });
   const open = spring({ frame: frame - 114, fps, config: { damping: 18 } });
-  const steps = ["Searching for pric(e|ing)|paid tier", "Reading On Pricing, lines 12 to 20", "Reading The Paid Tier, lines 4 to 9"];
-  const context = ["I tried a lot of numbers before this one.", "The paid tier doubled after I", "raised the price to ten dollars.", "Readers took the work seriously.", "Nobody left. That surprised me."];
+  const steps = ["Searching for gravity|spacetime", "Reading Why Things Fall, lines 12 to 20", "Reading Curved Space, lines 4 to 9"];
+  const context = ["Newton called it a force pulling things down.", "Einstein saw something different: gravity is", "the curvature of spacetime itself.", "Mass tells space how to bend.", "Objects follow the straightest path."];
   return (
     <AbsoluteFill>
       <WarpField speed={0.7} count={300} />
@@ -384,19 +384,19 @@ function Ask() {
             ))}
           </div>
           <p style={{ margin: 0, fontFamily: theme.body, fontSize: 32, lineHeight: 1.5, color: theme.white, opacity: answer, transform: `translateY(${(1 - answer) * 16}px)` }}>
-            You raised prices twice and the <b>paid tier doubled</b> <Marker n={1} glow={cite} /> because readers took the work more seriously <Marker n={2} glow={cite} />.
+            You wrote that <b>gravity is the curvature of spacetime</b> <Marker n={1} glow={cite} /> and that orbits are objects falling around that curve <Marker n={2} glow={cite} />.
           </p>
         </div>
         {[
-          { n: 1, label: "On Pricing · L12 to 14" },
-          { n: 2, label: "The Paid Tier · L4 to 9" },
+          { n: 1, label: "Why Things Fall · L12 to 14" },
+          { n: 2, label: "Curved Space · L4 to 9" },
         ].map((c, i) => (
           <Chip key={c.n} on={cite > 0.5 && (i === 0 ? frame >= 112 : false)} press={i === 0 ? pulse(frame, 112) : 0} style={{ position: "absolute", left: 80 + i * 450, top: 460, width: 420, height: 60, fontFamily: theme.mono, fontSize: 21, opacity: cite, gap: 10 }}>
             <span style={{ color: BLUE }}>[{c.n}]</span> {c.label}
           </Chip>
         ))}
         <div style={{ ...panel, position: "absolute", left: 1010, top: 36, width: 560, padding: 30, opacity: open, transform: `translateX(${(1 - open) * 60}px)` }}>
-          <p style={{ margin: 0, fontFamily: theme.mono, fontSize: 20, color: BLUE, letterSpacing: 2 }}>[1] ON PRICING · LINES 12 TO 14</p>
+          <p style={{ margin: 0, fontFamily: theme.mono, fontSize: 20, color: BLUE, letterSpacing: 2 }}>[1] WHY THINGS FALL · L12 TO 14</p>
           {context.map((l, i) => {
             const hit = i >= 1 && i <= 3;
             return (
@@ -426,11 +426,11 @@ function Marker({ n, glow }: { n: number; glow: number }) {
 }
 
 const TOPICS = [
-  "Pricing", "Paid tier", "Audience", "Craft", "Habits", "Newsletters", "Growth", "Writing",
-  "Focus", "Trust", "Launches", "Editing", "Community", "Ideas", "Archive",
+  "Gravity", "Spacetime", "Black holes", "Orbits", "Relativity", "Quantum", "Entropy", "Optics",
+  "Waves", "Energy", "Chaos", "Cosmology", "Fields", "Symmetry", "Time",
 ];
 const MAP_SHAPES = ["Orbit", "Spiral", "Figure", "Cluster"];
-type Shape = "orbit" | "spiral" | "cluster";
+type Shape = "orbit" | "spiral" | "figure" | "cluster";
 
 /** Where topic `i` sits in each shape of the Mind Constellation (window coordinates). */
 function place(shape: Shape, i: number): { x: number; y: number } {
@@ -445,9 +445,13 @@ function place(shape: Shape, i: number): { x: number; y: number } {
   }
   if (shape === "spiral") {
     const t = i / (n - 1);
-    const a = t * Math.PI * 2.6 + 0.4;
-    const r = 30 + t * 340;
+    const a = t * Math.PI * 2.4 + 0.4;
+    const r = 110 + t * 260;
     return { x: cx + Math.cos(a) * r * 1.5, y: cy + Math.sin(a) * r * 0.58 };
+  }
+  if (shape === "figure") {
+    // A constellation figure: one long wave of stars across the sky.
+    return { x: 140 + i * 78, y: cy + (i % 2 ? -1 : 1) * (90 + (i % 3) * 30) };
   }
   const centers = [{ x: 330, y: 250 }, { x: 800, y: 220 }, { x: 640, y: 490 }];
   const c = centers[i % 3];
@@ -457,70 +461,97 @@ function place(shape: Shape, i: number): { x: number; y: number } {
   return { x: c.x + Math.cos(a) * r * 1.3, y: c.y + Math.sin(a) * r };
 }
 
+/** Frame windows in which the layout morphs to the next shape (after each pill click). */
+const MORPHS: [Shape, number, number][] = [["spiral", 58, 82], ["figure", 94, 118], ["cluster", 126, 150]];
+
 function mapPos(i: number, frame: number): { x: number; y: number } {
-  const a = place("orbit", i);
-  const b = place("spiral", i);
-  const c = place("cluster", i);
-  const s1 = ease(clamp01(frame, 64, 96));
-  const s2 = ease(clamp01(frame, 112, 144));
-  return { x: a.x + (b.x - a.x) * s1 + (c.x - (a.x + (b.x - a.x) * s1)) * s2, y: a.y + (b.y - a.y) * s1 + (c.y - (a.y + (b.y - a.y) * s1)) * s2 };
+  let { x, y } = place("orbit", i);
+  for (const [shape, from, to] of MORPHS) {
+    const t = ease(clamp01(frame, from, to));
+    const next = place(shape, i);
+    x += (next.x - x) * t;
+    y += (next.y - y) * t;
+  }
+  return { x, y };
 }
 
 /** 03: the Mind Constellation, switching shapes and diving into a topic. */
 function MindMap() {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const activeShape = frame < 62 ? 0 : frame < 110 ? 1 : 3;
+  const activeShape = frame < 56 ? 0 : frame < 92 ? 1 : frame < 124 ? 2 : 3;
   const panelIn = spring({ frame: frame - 158, fps, config: { damping: 18 } });
-  const hub = at(place("cluster", 0).x, place("cluster", 0).y);
+  const hubWin = place("cluster", 0);
+  const hub = at(hubWin.x, hubWin.y);
+  const selected = frame >= 158;
+  const ring = clamp01(frame, 4, 40);
+  const dive = 1 + 0.14 * ease(clamp01(frame, 158, 195)); // the camera drifts in on the picked star
+  const burst = ease(clamp01(frame, 158, 182));
   return (
     <AbsoluteFill>
       <WarpField speed={0.6} count={260} />
       <Caption eyebrow="03 · Map" title="See your whole archive." />
       <Win>
         <svg width={1640} height={668} style={{ position: "absolute", inset: 0 }}>
-          {TOPICS.map((_, i) => {
-            if (i === 0) return null;
-            const from = mapPos(i, frame);
-            const to = mapPos(i < 4 ? 0 : i - 3, frame);
-            const on = clamp01(frame, 6 + i * 3, 20 + i * 3);
-            return <line key={i} x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke={i % 2 ? BLUE : "#ffffff"} strokeOpacity={0.3 * on} strokeWidth={1.5} />;
-          })}
-          {TOPICS.map((name, i) => {
-            const p = mapPos(i, frame);
-            const born = spring({ frame: frame - 2 - i * 3, fps, config: { damping: 12 } });
-            const r = (i === 0 ? 17 : 7 + ((i * 7) % 5)) * born;
-            const picked = i === 0 && frame >= 158;
-            return (
-              <g key={name}>
-                <circle cx={p.x} cy={p.y} r={r * 2.6} fill={BLUE} opacity={0.18 * born} style={{ filter: "blur(8px)" }} />
-                <circle cx={p.x} cy={p.y} r={r} fill="#ffffff" style={{ filter: `drop-shadow(0 0 10px ${BLUE})` }} />
-                {picked && <circle cx={p.x} cy={p.y} r={r + 14} fill="none" stroke={BLUE} strokeWidth={3} />}
-                <text x={p.x} y={p.y + r + 26} textAnchor="middle" fontFamily={theme.body} fontSize={i === 0 ? 26 : 21} fill="#ffffff" opacity={0.85 * born}>
-                  {name}
-                </text>
-              </g>
-            );
-          })}
+          <g transform={`translate(${hubWin.x} ${hubWin.y}) scale(${dive}) translate(${-hubWin.x} ${-hubWin.y})`}>
+            {/* Orbit rings draw in, then fade as the stars leave them. */}
+            {[170, 270, 360].map((r, i) => (
+              <ellipse key={r} cx={620} cy={350} rx={r * 1.5} ry={r * 0.58} fill="none" stroke={i % 2 ? "#ffffff" : BLUE} strokeOpacity={0.22 * ring * (1 - ease(clamp01(frame, 58, 82)))} strokeWidth={1.5} strokeDasharray="6 10" />
+            ))}
+            {TOPICS.map((_, i) => {
+              if (i === 0) return null;
+              const parent = i < 4 ? 0 : i - 3;
+              const from = mapPos(i, frame);
+              const to = mapPos(parent, frame);
+              const on = clamp01(frame, 6 + i * 3, 24 + i * 3);
+              const lit = !selected || parent === 0;
+              const t = (frame * 0.018 + i * 0.37) % 1; // a pulse of light travelling toward the hub
+              return (
+                <g key={i} opacity={lit ? 1 : 0.25}>
+                  <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} pathLength={1} stroke={i % 2 ? BLUE : "#ffffff"} strokeOpacity={selected && parent === 0 ? 0.8 : 0.3} strokeWidth={selected && parent === 0 ? 2.5 : 1.5} strokeDasharray={1} strokeDashoffset={1 - on} />
+                  {on >= 1 && <circle cx={from.x + (to.x - from.x) * t} cy={from.y + (to.y - from.y) * t} r={3.5} fill="#ffffff" opacity={Math.sin(t * Math.PI)} style={{ filter: `drop-shadow(0 0 6px ${BLUE})` }} />}
+                </g>
+              );
+            })}
+            {TOPICS.map((name, i) => {
+              const base = mapPos(i, frame);
+              const p = { x: base.x + Math.sin(frame * 0.03 + i * 1.9) * 5, y: base.y + Math.cos(frame * 0.025 + i * 1.3) * 5 };
+              const born = spring({ frame: frame - 2 - i * 3, fps, config: { damping: 12 } });
+              const r = (i === 0 ? 17 : 7 + ((i * 7) % 5)) * born;
+              const twinkle = 1 + 0.25 * Math.sin(frame * 0.14 + i * 1.7);
+              const near = i === 0 || (i >= 1 && i <= 3);
+              const dim = selected && !near ? 0.3 : 1;
+              return (
+                <g key={name} opacity={dim}>
+                  <circle cx={p.x} cy={p.y} r={r * 2.6 * twinkle} fill={BLUE} opacity={0.18 * born} style={{ filter: "blur(8px)" }} />
+                  <circle cx={p.x} cy={p.y} r={r} fill="#ffffff" style={{ filter: `drop-shadow(0 0 10px ${BLUE})` }} />
+                  {i === 0 && selected && <circle cx={p.x} cy={p.y} r={r + 14 + 22 * burst} fill="none" stroke={BLUE} strokeWidth={3} opacity={1 - 0.6 * burst} />}
+                  <text x={p.x} y={p.y + r + 26} textAnchor="middle" fontFamily={theme.body} fontSize={i === 0 ? 26 : 21} fill="#ffffff" opacity={0.85 * born}>
+                    {name}
+                  </text>
+                </g>
+              );
+            })}
+          </g>
         </svg>
         <div style={{ position: "absolute", left: 40, top: 26, display: "flex", gap: 10 }}>
           {MAP_SHAPES.map((name, i) => (
-            <Chip key={name} on={i === activeShape} press={i === 1 ? pulse(frame, 62) : i === 3 ? pulse(frame, 110) : 0} style={{ width: 120, height: 48, fontSize: 22 }}>
+            <Chip key={name} on={i === activeShape} press={i === 0 ? 0 : pulse(frame, [0, 56, 92, 124][i])} style={{ width: 120, height: 48, fontSize: 22 }}>
               {name}
             </Chip>
           ))}
         </div>
-        <p style={{ position: "absolute", left: 40, bottom: 20, margin: 0, fontFamily: theme.mono, fontSize: 18, color: "rgba(255,255,255,0.5)" }}>Scroll to dive in. Drag to move. Click a star to fly to it.</p>
+        <p style={{ position: "absolute", left: 40, bottom: 20, margin: 0, fontFamily: theme.mono, fontSize: 18, color: "rgba(255,255,255,0.5)", opacity: 1 - clamp01(frame, 150, 165) }}>Scroll to dive in. Drag to move. Click a star to fly to it.</p>
         <div style={{ ...panel, position: "absolute", right: 40, top: 26, width: 380, padding: 28, opacity: panelIn, transform: `translateX(${(1 - panelIn) * 60}px)` }}>
-          <p style={{ margin: 0, fontFamily: theme.display, fontSize: 40, color: theme.white }}>Pricing</p>
+          <p style={{ margin: 0, fontFamily: theme.display, fontSize: 40, color: theme.white }}>Gravity</p>
           <Label style={{ position: "static", display: "block", marginTop: 22, fontSize: 16 }}>Orbiting here</Label>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
-            {["Paid tier", "Audience", "Trust"].map((t) => (
+            {["Spacetime", "Black holes", "Orbits"].map((t) => (
               <Chip key={t} on style={{ padding: "4px 16px", fontSize: 20 }}>{t}</Chip>
             ))}
           </div>
           <Label style={{ position: "static", display: "block", marginTop: 22, fontSize: 16 }}>From your posts</Label>
-          {["On Pricing", "The Paid Tier", "Small Audiences"].map((t) => (
+          {["Why Things Fall", "Curved Space", "Notes on Orbits"].map((t) => (
             <p key={t} style={{ margin: "10px 0 0", fontFamily: theme.body, fontSize: 24, color: theme.white }}>{t}</p>
           ))}
         </div>
@@ -528,14 +559,16 @@ function MindMap() {
       <Cursor
         keys={[
           { f: 0, x: 1560, y: 880 },
-          { f: 50, ...at(220, 50) },
-          { f: 64, ...at(220, 50) },
-          { f: 98, ...at(470, 50) },
-          { f: 112, ...at(470, 50) },
-          { f: 150, x: hub.x, y: hub.y },
-          { f: 170, x: hub.x + 30, y: hub.y + 120 },
+          { f: 42, ...at(230, 50) },
+          { f: 58, ...at(230, 50) },
+          { f: 84, ...at(360, 50) },
+          { f: 94, ...at(360, 50) },
+          { f: 114, ...at(490, 50) },
+          { f: 126, ...at(490, 50) },
+          { f: 152, x: hub.x, y: hub.y },
+          { f: 172, x: hub.x + 30, y: hub.y + 120 },
         ]}
-        clicks={[62, 110, 156]}
+        clicks={[56, 92, 124, 156]}
       />
     </AbsoluteFill>
   );
@@ -550,9 +583,9 @@ function Audio() {
   const bar = clamp01(frame, 52, 84);
   const playing = clamp01(frame, 84, 96);
   const lines = [
-    { who: "A", text: "So the big idea here is that price is a signal." },
-    { who: "B", text: "Right, and she has the numbers: the paid tier doubled." },
-    { who: "A", text: "Which she wrote about back in March, in On Pricing." },
+    { who: "A", text: "So the big idea here is that gravity is curved spacetime." },
+    { who: "B", text: "Right, and orbits are just objects falling around the curve." },
+    { who: "A", text: "Which she wrote about back in March, in Curved Space." },
   ];
   const active = Math.min(lines.length - 1, Math.floor(Math.max(0, frame - 92) / 24));
   return (
@@ -602,9 +635,9 @@ const TEMPLATE_LOOKS: CSSProperties[] = [
   { background: "linear-gradient(135deg, #000, #0b1730)" },
   { background: `linear-gradient(135deg, ${BLUE}, #0a2a66)` },
   { background: "linear-gradient(135deg, #ffffff, #cfe0ff)" },
-  { background: "rgba(255,255,255,0.04)", border: `2px dashed ${BLUE}88` },
+  { background: "linear-gradient(135deg, #0b1730, #217cff55)" },
 ];
-const TEMPLATE_NAMES = ["Night", "Signal", "Paper", "From your website"];
+const TEMPLATE_NAMES = ["Night", "Signal", "Paper", "Studio"];
 const VOICES = ["Nora Vale", "Your voice (clone)", "+ Create a voice"];
 
 /** 05: wizard: pick a style, a template and a voice, create. */
@@ -669,7 +702,7 @@ function VideoCreate() {
   );
 }
 
-const SCENE_TITLES = ["Price is a signal", "The numbers", "Why it worked", "Try it yourself"];
+const SCENE_TITLES = ["Gravity is geometry", "Inverse square", "Orbits", "Try it yourself"];
 
 /** 06: the scene editor, then render the MP4. */
 function VideoEdit() {
@@ -709,15 +742,15 @@ function VideoEdit() {
           {active === 0 ? (
             <div style={{ position: "absolute", left: 70, top: 160, opacity: pop, transform: `translateY(${(1 - pop) * 30}px)` }}>
               <p style={{ margin: 0, fontFamily: theme.mono, fontSize: 22, letterSpacing: 5, color: BLUE }}>SCENE 1</p>
-              <p style={{ margin: "14px 0 0", fontFamily: theme.display, fontSize: 86, lineHeight: 1.05, color: theme.white, textShadow: `0 0 30px ${BLUE}` }}>Price is<br />a signal.</p>
+              <p style={{ margin: "14px 0 0", fontFamily: theme.display, fontSize: 86, lineHeight: 1.05, color: theme.white, textShadow: `0 0 30px ${BLUE}` }}>Gravity is<br />a curve.</p>
             </div>
           ) : (
             <>
-              <p style={{ position: "absolute", left: 70, top: 56, margin: 0, fontFamily: theme.display, fontSize: 52, color: theme.white, opacity: pop }}>Paid readers, doubled</p>
-              {[0.28, 0.5, 1].map((h, i) => (
-                <div key={i} style={{ position: "absolute", left: 90 + i * 250, bottom: 90, width: 170, height: 340 * h * ease(clamp01(since, 8 + i * 7, 34 + i * 7)), borderRadius: "12px 12px 0 0", background: i === 2 ? "#ffffff" : BLUE, boxShadow: `0 0 30px ${BLUE}` }} />
+              <p style={{ position: "absolute", left: 70, top: 56, margin: 0, fontFamily: theme.display, fontSize: 52, color: theme.white, opacity: pop }}>Gravity fades with distance</p>
+              {[1, 0.25, 0.11].map((h, i) => (
+                <div key={i} style={{ position: "absolute", left: 90 + i * 250, bottom: 90, width: 170, height: 340 * h * ease(clamp01(since, 8 + i * 7, 34 + i * 7)), borderRadius: "12px 12px 0 0", background: i === 0 ? "#ffffff" : BLUE, boxShadow: `0 0 30px ${BLUE}` }} />
               ))}
-              <p style={{ position: "absolute", left: 70, bottom: 30, margin: 0, fontFamily: theme.body, fontSize: 26, color: "rgba(255,255,255,0.85)", opacity: pop }}>You raised prices twice and the paid tier doubled.</p>
+              <p style={{ position: "absolute", left: 70, bottom: 30, margin: 0, fontFamily: theme.body, fontSize: 26, color: "rgba(255,255,255,0.85)", opacity: pop }}>Double the distance and gravity drops to a quarter.</p>
             </>
           )}
           {render > 0 && (
@@ -750,10 +783,10 @@ function LaunchKit() {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const cards = [
-    { label: "X THREAD", body: "I doubled my price. My paid tier doubled too. Here is what I learned." },
-    { label: "LINKEDIN", body: "Most writers underprice. I did for two years. Then I ran an experiment." },
-    { label: "SUBSTACK NOTES", body: "Price is a signal. Readers told me so, with their wallets." },
-    { label: "BLUESKY", body: "Raised my price to $10. Paid readers went up, not down." },
+    { label: "X THREAD", body: "Gravity is not a force. It is geometry. A thread on how Einstein changed everything." },
+    { label: "LINKEDIN", body: "Most of us learned gravity wrong. Here is the picture physicists actually use." },
+    { label: "SUBSTACK NOTES", body: "Mass tells space how to bend. Space tells mass how to move." },
+    { label: "BLUESKY", body: "Orbits are just falling, forever, around a curve." },
   ];
   const days = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
   const slots: Record<number, string> = { 0: "X", 1: "LinkedIn", 2: "Notes", 3: "Bluesky", 4: "X", 5: "LinkedIn", 6: "Notes" };
