@@ -1,0 +1,152 @@
+"""The drawing behind a slide's text: stars, glows, planets, orbit rings and constellations. Each layout variant puts
+its drawing where its text is not, and the deck's seed moves it a little, so two decks never look alike while one deck
+always looks the same. The same list is drawn as SVG for the page and as a picture for the PowerPoint."""
+
+import hashlib
+import math
+import random
+from dataclasses import dataclass, field
+
+from app.slides.themes import H, W
+
+
+@dataclass
+class Shape:
+    kind: str  # glow | planet | ring | const | stars
+    cx: float = 0
+    cy: float = 0
+    r: float = 0
+    rx: float = 0
+    ry: float = 0
+    rot: float = 0
+    color: str = "accent"  # palette key
+    opacity: float = 1.0
+    width: float = 2.0
+    points: list[tuple[float, float, float, float]] = field(default_factory=list)  # stars: x, y, r, opacity
+    edges: list[tuple[int, int]] = field(default_factory=list)
+
+
+@dataclass
+class Decor:
+    hot: tuple[float, float]  # where the sky is brightest
+    shapes: list[Shape]
+
+
+# Where a variant has room for a drawing: (x0, y0, x1, y1). None: only stars and a soft glow.
+FREE = {
+    "dark-space": {
+        ("points", "a"): (1520, 140, 1900, 940), ("points", "c"): None, ("points", "b"): None, ("points", "d"): None,
+        ("agenda", "a"): (120, 660, 820, 1000), ("agenda", "b"): None,
+        ("two_column", "a"): None, ("two_column", "b"): None,
+        ("stat", "a"): None, ("stat", "b"): None, ("quote", "a"): None, ("quote", "b"): (140, 60, 760, 140),
+        ("section", "b"): (1500, 60, 1900, 560), ("closing", "b"): None, ("closing", "c"): (140, 860, 960, 1060),
+    },
+    "light-space": {
+        ("points", "a"): None, ("points", "b"): None, ("points", "c"): None, ("points", "d"): None,
+        ("agenda", "a"): None, ("agenda", "b"): (120, 760, 820, 1000),
+        ("two_column", "a"): None, ("two_column", "b"): None,
+        ("stat", "a"): None, ("stat", "b"): None, ("quote", "a"): None, ("quote", "b"): (100, 360, 400, 760),
+        ("closing", "a"): None, ("closing", "b"): None, ("closing", "c"): None,
+    },
+}
+
+
+def _stars(rnd: random.Random, dark: bool) -> Shape:
+    n = 120 if dark else 70
+    pts = []
+    for _ in range(n):
+        if dark:
+            r, op = rnd.choice((0.8, 1.0, 1.2, 1.2, 1.6, 2.2)), round(rnd.uniform(0.18, 0.85), 2)
+        else:
+            r, op = rnd.choice((0.9, 1.2, 1.5, 2.0)), round(rnd.uniform(0.08, 0.26), 2)
+        pts.append((rnd.uniform(0, W), rnd.uniform(0, H), r, op))
+    return Shape("stars", points=pts, color="star")
+
+
+def _constellation(rnd: random.Random, box: tuple[float, float, float, float], n: int = 7) -> Shape:
+    x0, y0, x1, y1 = box
+    pts = [(rnd.uniform(x0, x1), rnd.uniform(y0, y1), rnd.choice((4.0, 5.0, 6.0, 8.0)), 1.0) for _ in range(n)]
+    pts.sort(key=lambda p: p[0])
+    edges = [(i, i + 1) for i in range(n - 1)]
+    if n > 4:
+        edges.append((rnd.randrange(0, n - 3), rnd.randrange(n - 2, n)))
+    return Shape("const", points=pts, edges=edges, color="accent", opacity=0.85)
+
+
+def build(theme: str, layout: str, variant: str, seed: int, index: int) -> Decor:
+    """The drawing for one slide."""
+    dark = theme == "dark-space"
+    rnd = random.Random(int(hashlib.sha1(f"{seed}:{index}:{layout}:{variant}".encode()).hexdigest()[:12], 16))
+    j = lambda span: rnd.uniform(-span, span)  # noqa: E731  (a small, seeded nudge)
+    shapes = [_stars(rnd, dark)]
+    hot = (W * rnd.uniform(0.25, 0.75), H * rnd.uniform(0.15, 0.5))
+    key = (layout, variant)
+
+    if dark:
+        if key == ("title", "a"):
+            hot = (960, 760)
+            shapes += [Shape("glow", 960, 900, 900, color="accent2", opacity=0.55),
+                       Shape("planet", 960 + j(60), 1080 + 560 + j(40), 820),
+                       Shape("ring", 960, 860 + j(20), rx=1150, ry=150, rot=-4 + j(3), color="accent", opacity=0.45, width=2.5)]
+        elif key == ("title", "b"):
+            cx, cy = 1520 + j(60), 300 + j(50)
+            hot = (cx, cy)
+            shapes += [Shape("glow", cx, cy, 520, color="accent2", opacity=0.5), Shape("planet", cx, cy, 230 + j(25)),
+                       Shape("ring", cx, cy, rx=400, ry=78, rot=-18 + j(6), color="accent", opacity=0.55, width=2.5)]
+        elif key == ("title", "c"):
+            hot = (1450, 540)
+            shapes += [Shape("glow", 1450, 540, 620, color="accent2", opacity=0.35),
+                       _constellation(rnd, (1120, 170, 1800, 910), 8)]
+        elif layout == "section" and variant == "a":
+            hot = (960, 540)
+            shapes += [Shape("glow", 960, 540, 760, color="accent2", opacity=0.35),
+                       Shape("ring", 960, 540 + j(20), rx=980, ry=260, rot=-8 + j(5), color="accent", opacity=0.3, width=2)]
+        elif layout == "closing" and variant == "a":
+            hot = (960, 980)
+            shapes += [Shape("glow", 960, 1120, 760, color="accent2", opacity=0.5),
+                       Shape("ring", 960, 1210, rx=1080, ry=880, rot=0, color="accent", opacity=0.35, width=2.5)]
+        else:
+            corner = rnd.choice(((0, 0), (W, 0), (0, H), (W, H)))
+            shapes.append(Shape("glow", corner[0], corner[1], 700, color="accent2", opacity=0.32))
+            hot = (corner[0] * 0.8 + W * 0.1, corner[1] * 0.8 + H * 0.1)
+            free = FREE["dark-space"].get(key)
+            if free:
+                x0, y0, x1, y1 = free
+                r = min(x1 - x0, y1 - y0) * rnd.uniform(0.26, 0.34)
+                cx, cy = rnd.uniform(x0 + r, x1 - r), rnd.uniform(y0 + r, y1 - r)
+                shapes += [Shape("glow", cx, cy, r * 2.2, color="accent2", opacity=0.35), Shape("planet", cx, cy, r),
+                           Shape("ring", cx, cy, rx=r * 1.7, ry=r * 0.34, rot=-16 + j(10), color="accent", opacity=0.5, width=2)]
+    else:
+        ring = lambda cx, cy, r, op=0.3: Shape("ring", cx, cy, rx=r, ry=r, color="accent2", opacity=op, width=2)  # noqa: E731
+        if key == ("title", "a"):
+            cx, cy = 2010 + j(40), 540 + j(60)
+            hot = (1500, 540)
+            shapes += [ring(cx, cy, 360), ring(cx, cy, 540, 0.24), ring(cx, cy, 740, 0.18)]
+            a = math.radians(200 + j(20))
+            shapes.append(Shape("planet", cx + 540 * math.cos(a), cy + 540 * math.sin(a), 34))
+        elif key == ("title", "b"):
+            hot = (1500, 820)
+            shapes += [Shape("glow", 1560, 840, 520, color="accent", opacity=0.12),
+                       _constellation(rnd, (1360, 660, 1800, 980), 7)]
+        elif key == ("title", "c"):
+            hot = (960, 540)
+            shapes += [Shape("ring", 960, 520, rx=900, ry=330, rot=-10 + j(4), color="accent2", opacity=0.28, width=2.5),
+                       Shape("ring", 960, 520, rx=1040, ry=400, rot=-10 + j(4), color="accent2", opacity=0.14, width=2)]
+            a = math.radians(rnd.choice((20, 160, 200, 340)) + j(10))
+            shapes.append(Shape("planet", 960 + 900 * math.cos(a), 520 + 330 * math.sin(a), 30))
+        elif key == ("section", "a"):
+            shapes += [ring(1960, 560, 300), ring(1960, 560, 460, 0.22), ring(1960, 560, 640, 0.15),
+                       Shape("planet", 1960 - 460 + 6, 560 + j(80), 26)]
+        elif key == ("section", "b"):
+            shapes += [ring(-40, 560, 300), ring(-40, 560, 460, 0.22), ring(-40, 560, 640, 0.15),
+                       Shape("planet", -40 + 460 - 6, 560 + j(80), 26)]
+        elif key == ("closing", "c"):
+            hot = (960, 860)
+            shapes += [Shape("ring", 960, 540, rx=1000, ry=470, rot=6 + j(4), color="accent2", opacity=0.2, width=2.5)]
+        else:
+            corner = rnd.choice(((W + 60, -60), (W + 60, H + 60), (-60, H + 60)))
+            shapes += [ring(corner[0], corner[1], 260, 0.22), ring(corner[0], corner[1], 400, 0.15)]
+            free = FREE["light-space"].get(key)
+            if free:
+                shapes.append(_constellation(rnd, free, 5))
+    return Decor(hot, shapes)

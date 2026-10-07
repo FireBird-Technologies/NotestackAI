@@ -68,7 +68,7 @@ export function CitationList({
   );
 }
 
-function Transcript({ segments, onSeek }: { segments: Segment[]; onSeek: (t: number) => void }) {
+export function Transcript({ segments, onSeek }: { segments: Segment[]; onSeek: (t: number) => void }) {
   return (
     <ol className="transcript">
       {segments.map((s, i) => (

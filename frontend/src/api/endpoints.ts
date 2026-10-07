@@ -116,7 +116,9 @@ export type GenerateBody = {
   document_id?: string;
   /** No notebook or post: use the "All posts" notebook. */
   archive?: boolean;
-  format?: "deep_dive" | "brief" | "debate";
+  format?: "deep_dive" | "brief" | "critique" | "debate";
+  /** audio_overview: a single narrator or a two host conversation. */
+  hosts?: 1 | 2;
   minutes?: number;
   style?: "audiogram";
   audio_artifact_id?: string;
@@ -139,8 +141,11 @@ export type GenerateBody = {
   report_format?: "document" | "interactive";
   template_id?: string;
   instructions?: string;
-  /** infographic: one of the premade themes (see components/Infographic.tsx). */
+  /** infographic: one of the premade themes (see components/Infographic.tsx); slide_deck: dark-space or light-space. */
   theme?: string;
+  /** slide_deck: read on its own ("detailed") or shown behind a speaker ("presenter"), and how many slides. */
+  deck_format?: "detailed" | "presenter";
+  deck_length?: "short" | "default" | "long";
 };
 
 export const artifactsApi = {
@@ -154,6 +159,8 @@ export const artifactsApi = {
   /** An infographic drawn as a PNG. */
   image: (id: string, layout: "landscape" | "portrait" = "landscape") => apiBlob(`/api/artifacts/${id}/image${qs({ layout })}`),
   retry: (id: string) => post<Artifact>(`/api/artifacts/${id}/retry`),
+  /** A slide deck as a PDF (exactly as shown) or an editable PowerPoint. */
+  slidesFile: (id: string, ext: "pdf" | "pptx") => apiBlob(`/api/artifacts/${id}/slides.${ext}`),
 };
 
 export const jobsApi = {

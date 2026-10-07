@@ -171,6 +171,44 @@ export function CopyButton({ text, label = "Copy" }: { text: string; label?: str
 }
 
 /** Two step destructive button: first click arms it, second confirms. No browser dialogs. */
+/** "Delete this?": deletes only on confirm, shows what went wrong if it fails, and closes once it is gone. */
+export function ConfirmDeleteModal({ heading, name, onCancel, onConfirm }: {
+  heading: string;
+  name: string;
+  onCancel: () => void;
+  onConfirm: () => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const confirm = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await onConfirm();
+      onCancel(); // gone: close the warning
+    } catch (e) {
+      setError(errorMessage(e));
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal title={heading} onClose={busy ? () => undefined : onCancel}>
+      <div className="stack sd-confirm">
+        <p>
+          <strong>{name}</strong> will be deleted for good. This cannot be undone.
+        </p>
+        {error && <p className="error-text" role="alert">{error}</p>}
+        <div className="row sd-confirm-actions">
+          <button type="button" className="btn" onClick={onCancel} disabled={busy}>Cancel</button>
+          <button type="button" className="btn btn-danger" onClick={confirm} disabled={busy} autoFocus>
+            {busy ? (<><span className="nbv-send-spinner" aria-hidden="true" /> Deleting...</>) : "Delete"}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 export function ConfirmButton({
   onConfirm,
   children,

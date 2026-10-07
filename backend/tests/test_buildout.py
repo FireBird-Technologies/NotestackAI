@@ -447,7 +447,7 @@ def test_audio_overview_and_limits(client, auth, run_jobs, feed, llm, monkeypatc
     client.put("/api/voice", json={"host_voices": {"host_a": "voiceA", "host_b": "voiceB"},
                                    "delivery": {"host_b": {"stability": 0.9, "similarity_boost": 0.7,
                                                            "style": 0.1, "speed": 1.1}}}, headers=auth)
-    llm["PodcastScript"] = {"lines": [
+    llm["WriteAudioScript"] = {"turns": [
         {"speaker": "host_a", "text": "Welcome in.", "sources": []},
         {"speaker": "host_b", "text": "Prices went up.", "sources": [{"path": doc["path"], "line_start": 12,
                                                                       "line_end": 13}]},
@@ -1094,8 +1094,8 @@ def test_audio_overview_hosts_are_picked_from_the_voices(client, auth, run_jobs,
     used = []
     monkeypatch.setattr(tts, "synthesize", lambda ws, text, voice, vs=None, *a: used.append((text, voice)) or
                         b"\x00" * 16000)
-    llm["PodcastScript"] = {"lines": [{"speaker": "host_a", "text": "Welcome in.", "sources": []},
-                                      {"speaker": "host_b", "text": "Thanks.", "sources": []}]}
+    llm["WriteAudioScript"] = {"turns": [{"speaker": "host_a", "text": "Welcome in.", "sources": []},
+                                         {"speaker": "host_b", "text": "Thanks.", "sources": []}]}
     ws_id = db_session.get(Document, uuid.UUID(doc["id"])).workspace_id
     db_session.add_all([UserSavedVoice(workspace_id=ws_id, voice_id=v, name=v) for v in ("mine-1", "mine-2")])
     db_session.commit()
@@ -1114,6 +1114,59 @@ def test_audio_overview_hosts_are_picked_from_the_voices(client, auth, run_jobs,
     run_jobs()
     voices = client.get(f"/api/artifacts/{art['id']}", headers=auth).json()["content"]["voices"]
     assert voices == {"host_a": settings.elevenlabs_voice_a, "host_b": settings.elevenlabs_voice_b}
+
+
+def test_audio_overview_alternates_two_hosts_or_uses_one(client, auth, run_jobs, feed, llm, monkeypatch, db_session):
+    from app.config import settings
+    from app.services import tts
+
+    connect(client, auth, run_jobs)
+    pricing = next(d for d in docs(client, auth) if d["title"] == "On Pricing")
+    nb = client.post("/api/notebooks", json={"title": "Money", "document_ids": [pricing["id"]]}, headers=auth).json()
+    monkeypatch.setattr(settings, "elevenlabs_api_key", "test")
+    used = []
+    monkeypatch.setattr(tts, "synthesize", lambda ws, text, voice, vs=None, *a: used.append((text, voice)) or
+                        b"\x00" * 16000)
+    seen = {}
+
+    def script(**kw):
+        seen.update(kw)
+        return {"turns": [  # host A twice in a row, **markup**, an empty turn: cleaned and made to alternate
+            {"speaker": "host_a", "text": "Welcome in.", "sources": []},
+            {"speaker": "host_a", "text": "Today, **pricing**.", "sources": []},
+            {"speaker": "host_b", "text": "", "sources": []},
+            {"speaker": "host_b", "text": "Prices went up.", "sources": []},
+            {"speaker": "host_b", "text": "And readers stayed.", "sources": []},
+            {"speaker": "host_a", "text": "Exactly.", "sources": []},
+        ]}
+
+    llm["WriteAudioScript"] = script
+    body = {"type": "audio_overview", "notebook_id": nb["id"], "document_ids": [pricing["id"]], "minutes": 3,
+            "format": "critique", "language": "Spanish", "instructions": "- Focus on raising prices"}
+    art = client.post("/api/artifacts/generate", json=body, headers=auth).json()
+    run_jobs()
+    done = client.get(f"/api/artifacts/{art['id']}", headers=auth).json()
+    assert done["status"] == "ready", done["content"]
+    segs = done["content"]["segments"]
+    assert [(s["speaker"], s["text"]) for s in segs] == [
+        ("host_a", "Welcome in. Today, pricing."), ("host_b", "Prices went up. And readers stayed."), ("host_a", "Exactly.")]
+    assert seen["hosts"] == 2 and seen["target_words"] == 450 and seen["language"] == "Spanish"
+    assert seen["focus"] == "- Focus on raising prices" and seen["style"].startswith("Critique")
+    assert any(pricing["path"] in m for m in seen["material"])  # the picked post is what the script reads
+    voices = done["content"]["voices"]
+    assert used[1][1] == voices["host_b"] != voices["host_a"] == used[0][1]
+
+    used.clear()
+    one = client.post("/api/artifacts/generate", json={**body, "hosts": 1, "format": "brief"}, headers=auth).json()
+    run_jobs()
+    done = client.get(f"/api/artifacts/{one['id']}", headers=auth).json()
+    assert {s["speaker"] for s in done["content"]["segments"]} == {"host_a"} and seen["hosts"] == 1
+    assert list(done["content"]["voices"]) == ["host_a"] and {v for _, v in used} == {done["content"]["voices"]["host_a"]}
+    assert done["content"]["hosts"] == 1 and done["content"]["focus"] == "- Focus on raising prices"
+
+    r = client.post("/api/artifacts/generate", json={**body, "hosts": 1, "format": "debate"}, headers=auth)
+    assert r.status_code == 400 and "two hosts" in r.json()["detail"]
+    assert client.post("/api/artifacts/generate", json={**body, "document_ids": []}, headers=auth).status_code == 400
 
 
 def test_tts_retries_rate_limits(monkeypatch):

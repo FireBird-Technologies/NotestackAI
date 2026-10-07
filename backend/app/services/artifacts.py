@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, object_session
 from app.models import Artifact, Job
 from app.services.jobs import create_job, serialize_job
 from app.services.storage import storage
+from app.slides.build import view as slide_pages
 
 TYPE_LABELS = {
     "summary": "Summary",
@@ -22,6 +23,7 @@ TYPE_LABELS = {
     "flashcards": "Flashcards",
     "report": "Report",
     "infographic": "Infographic",
+    "slide_deck": "Slide deck",
     "upload": "Upload",
 }
 
@@ -84,6 +86,8 @@ def serialize_artifact(a: Artifact, job: Job | None = None) -> dict:
         from app.pipeline.infographic import infographic_html  # not at import: pipeline imports this module
 
         content = {**content, "html": infographic_html(content), "html_landscape": infographic_html(content, "landscape")}
+    if a.type == "slide_deck" and a.status == "ready":
+        content = {**content, "slides_html": slide_pages(content)}
     if a.type == "report" and any(b.get("type") == "infographic" for b in content.get("blocks") or []):
         content = {**content, "blocks": report_blocks(a)}
     slides = content.get("slide_keys") or []

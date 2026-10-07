@@ -239,6 +239,62 @@ export const InfographicIcon = (p: P) => (
   </Icon>
 );
 
+/** A slide on a stand, a second one behind it: a slide deck. */
+export const SlidesIcon = (p: P) => (
+  <Icon {...p}>
+    <rect x="3" y="4" width="15" height="10.5" rx="1.8" />
+    <path d="M6.5 1.9h12.7A1.8 1.8 0 0 1 21 3.7v8.6" />
+    <path d="M10.5 14.5V19M7 21h7M6.5 8h5M6.5 11h8" />
+  </Icon>
+);
+
+/** A play triangle: present a deck. */
+export const PlayIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M7.5 5.2v13.6a.8.8 0 0 0 1.2.7l10.6-6.8a.8.8 0 0 0 0-1.4L8.7 4.5a.8.8 0 0 0-1.2.7z" />
+  </Icon>
+);
+
+/** Four corners pointing out: show larger. */
+export const ExpandIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+  </Icon>
+);
+
+/** Four corners pointing in: back to the normal size. */
+export const CollapseIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />
+  </Icon>
+);
+
+/** Three dots, stacked: more actions. */
+export const MoreIcon = (p: P) => (
+  <Icon {...p}>
+    <circle cx="12" cy="5.5" r="1.1" fill="currentColor" />
+    <circle cx="12" cy="12" r="1.1" fill="currentColor" />
+    <circle cx="12" cy="18.5" r="1.1" fill="currentColor" />
+  </Icon>
+);
+
+/** A framed PDF mark: a PDF file. */
+export const PdfIcon = (p: P) => (
+  <Icon {...p}>
+    <rect x="3" y="4" width="18" height="16" rx="2.5" />
+    <text x="12" y="15" textAnchor="middle" fontSize="6.4" fontWeight="700" fill="currentColor" stroke="none"
+          fontFamily="Inter, sans-serif">PDF</text>
+  </Icon>
+);
+
+/** A framed P: a PowerPoint file. */
+export const PptxIcon = (p: P) => (
+  <Icon {...p}>
+    <rect x="3" y="4" width="18" height="16" rx="2.5" />
+    <path d="M10 16V8h2.8a2.3 2.3 0 0 1 0 4.6H10" />
+  </Icon>
+);
+
 /** A question mark in a circle: the quiz. */
 export const QuizIcon = (p: P) => (
   <Icon {...p}>

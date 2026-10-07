@@ -260,14 +260,25 @@ class ExtractClaims(dspy.Signature):
     claims: list[Claim] = dspy.OutputField()
 
 
-class PodcastScript(dspy.Signature):
-    """Write a two host conversation about the material. Hosts stay grounded in the passages and cite
-    them. Natural, warm, curious. No em dashes."""
+class WriteAudioScript(dspy.Signature):
+    """Write the script of an audio overview of the material, to be read aloud. Use only what the material says:
+    never add facts, numbers or names from outside it, and cite the lines each turn draws on. Follow the focus when
+    one is given: it says what to cover, what to emphasize and what to skip, as far as the material supports it. Write
+    in the style given. With two hosts, write a real back and forth: host_a and host_b take turns, every turn is one
+    to three sentences, and they react to each other (a question, a surprise, an example, a disagreement in a
+    debate). With one host, write a single narrator speaking straight to the listener, every turn host_a. Make it
+    sound spoken: plain sentences, no markdown, no lists, no stage directions, no sound effects, no reading out of
+    file names or line numbers. Aim for the target number of words. Write in the language requested. Never use em
+    dashes."""
 
-    passages: list[str] = dspy.InputField()
-    format: Literal["deep_dive", "brief", "debate"] = dspy.InputField()
-    target_minutes: int = dspy.InputField()
-    lines: list[ScriptLine] = dspy.OutputField()
+    title: str = dspy.InputField(desc="What the material is from")
+    material: list[str] = dspy.InputField(desc="Posts with path and numbered lines, or chat transcripts")
+    style: str = dspy.InputField(desc="The style's name and what it should sound like")
+    hosts: int = dspy.InputField(desc="1 (a single narrator) or 2 (a conversation)")
+    target_words: int = dspy.InputField(desc="About how many words the whole script should be")
+    focus: str = dspy.InputField(desc="What the person wants the episode to focus on, or (none)")
+    language: str = dspy.InputField(desc="The language to write in")
+    turns: list[ScriptLine] = dspy.OutputField()
 
 
 class HookGenerator(dspy.Signature):
@@ -680,3 +691,168 @@ class VideoFocusAngles(dspy.Signature):
         desc="Topics this material is about: 'Name (in how many items): what it covers'. May be empty")
     avoid_titles: list[str] = dspy.InputField(desc="Titles already suggested. Do not repeat or reword them")
     topics: list[FocusAngle] = dspy.OutputField(desc="Exactly 3 focus topics")
+
+
+# Slide decks: an outline, each slide written from the lines it cites, every claim checked against those lines,
+# then a conclusion written from the slides themselves. The model writes words only; code lays them out.
+
+
+class DeckSlidePlan(BaseModel):
+    layout: Literal["section", "points", "two_column", "stat", "quote"] = Field(
+        description="points: an idea explained in 2 to 5 parts; two_column: a comparison of two sides; stat: one "
+                    "number the material states; quote: one line the material says word for word; section: a short "
+                    "turning point between parts")
+    heading: str = Field(description="The slide's headline: a claim or a clear topic, at most 9 words")
+    purpose: str = Field(description="What this slide must get across, in one sentence")
+    sources: list[SourceRef] = Field(default_factory=list, description="The lines this slide draws on")
+
+
+class DeckOutline(BaseModel):
+    title: str = Field(description="The deck's title, at most 8 words")
+    subtitle: str = Field(description="One line that makes the audience want to listen, at most 18 words")
+    opening_kicker: str = Field(description="1 to 3 words above the title naming the field or the occasion")
+    agenda_heading: str = Field(description="Heading for the agenda slide, e.g. What we will cover")
+    slides: list[DeckSlidePlan]
+
+
+class OutlineDeck(dspy.Signature):
+    """Plan a slide deck from the material: the story it tells, in order, as content slides (an opening slide, an agenda
+    and a conclusion are added separately, so do not plan them). Use only what the material says. Each slide makes
+    one point and builds on the one before, so the deck reads as an argument from start to finish, not a list of
+    facts, and no two slides cover the same facts. When the posts are about unrelated subjects, give each its own
+    part of the deck and never connect them: a fact from one post is never said of another post's subject, in a
+    slide, the title or the subtitle (and the deck does not remark on keeping them apart). Vary the layouts: never
+    put two slides of the same layout in a row when another layout fits, use a stat slide only for a number the
+    material states, a quote slide only for a line the material says word for word, and a two_column slide only when
+    the material compares two things. The request, when given, decides the deck's focus, audience, angle, structure
+    and what to include or leave out: plan the deck it describes, as far as the material supports it, and leave out
+    what the material does not cover rather than invent it. The number of slides and the format are fixed by
+    slide_count and deck_format, whatever the request says. Cite the lines each slide draws on. Follow the request
+    when one is given. Write the headings in the language requested. Never use em dashes."""
+
+    title: str = dspy.InputField(desc="What the material is from")
+    material: list[str] = dspy.InputField(desc="Posts with path and numbered lines, or chat transcripts")
+    request: str = dspy.InputField(desc="What the person wants the deck to be about or how it should feel, or (none)")
+    deck_format: str = dspy.InputField(desc="detailed (read on its own) or presenter (shown while someone speaks)")
+    slide_count: str = dspy.InputField(desc="How many content slides to plan, e.g. 3 to 5")
+    language: str = dspy.InputField(desc="The language to write in")
+    outline: DeckOutline = dspy.OutputField()
+
+
+class SlidePoint(BaseModel):
+    term: str = Field(default="", description="Detailed: the idea's name in 1 to 4 words. Presenter: leave empty")
+    text: str = Field(description="Detailed: one or two sentences that explain the idea, at most 30 words. "
+                                  "Presenter: a highlight of at most 8 words")
+
+
+class SlideColumn(BaseModel):
+    label: str = Field(description="The side's name, 1 to 3 words")
+    items: list[str] = Field(description="2 to 4 short items, at most 14 words each (presenter: 8)")
+
+
+class SlideStat(BaseModel):
+    value: str = Field(description="The number as the material gives it, with its sign or unit, e.g. #1, 3x, 42%, $9")
+    label: str = Field(description="What the number measures, at most 16 words")
+
+
+class SlideQuote(BaseModel):
+    text: str = Field(description="Copied word for word from the source lines, at most 40 words")
+    by: str = Field(default="", description="Who said it, when the material says, else empty")
+
+
+class SlideOut(BaseModel):
+    kicker: str = Field(description="1 to 3 words above the heading: the slide's topic")
+    heading: str = Field(description="The headline, at most 9 words (presenter: 7)")
+    lead: str = Field(default="", description="Detailed: 1 or 2 sentences framing the slide, at most 35 words. "
+                                              "Presenter: one short line or empty")
+    points: list[SlidePoint] = Field(default_factory=list, description="For points slides: detailed 3 to 5, presenter 2 to 4")
+    left: SlideColumn | None = Field(default=None, description="For two_column slides: the first side")
+    right: SlideColumn | None = Field(default=None, description="For two_column slides: the second side")
+    stat: SlideStat | None = Field(default=None, description="For stat slides")
+    quote: SlideQuote | None = Field(default=None, description="For quote slides")
+    notes: str = Field(description="Speaker notes: what to say over this slide, 60 to 150 words, explaining it fully")
+    sources: list[SourceRef] = Field(default_factory=list, description="The lines this slide's words come from")
+
+
+class WriteSlide(dspy.Signature):
+    """Write one slide of a deck, using only the source lines given: never add facts, numbers or names from outside them.
+    The slide must make the point its plan describes and fit the deck's flow. Detailed format: the slide is read on
+    its own, so explain each idea: a clear heading, a lead that frames it, and points that each name an idea and
+    explain it in a full sentence (why it matters or how it works, not just what it is). Presenter format: the slide
+    supports a speaker, so keep it sparse: a short heading and a few highlights of a handful of words, and put the
+    full explanation in the speaker notes. Say only what this slide is for: the other slides in the outline cover
+    the rest, so do not repeat them. Apply the request's audience, tone and style to this slide, and anything it
+    asks of this part of the deck, as far as the source lines support it. Fill only the fields the layout uses. Keep
+    every line plain text: no markdown, no bullets characters, no numbering. Write in the language requested. Never
+    use em dashes."""
+
+    deck_title: str = dspy.InputField()
+    outline: list[str] = dspy.InputField(desc="Every slide in the deck, in order, so this one fits the flow")
+    position: str = dspy.InputField(desc="Which slide this is, e.g. Slide 3 of 8")
+    layout: str = dspy.InputField(desc="points, two_column, stat, quote or section")
+    heading: str = dspy.InputField(desc="The planned headline (improve it if the sources suggest a sharper one)")
+    purpose: str = dspy.InputField(desc="What the slide must get across")
+    deck_format: str = dspy.InputField(desc="detailed or presenter")
+    request: str = dspy.InputField(desc="What the person asked of the deck, or (none)")
+    source_lines: list[str] = dspy.InputField(desc="The lines to write from, with path and line numbers")
+    language: str = dspy.InputField(desc="The language to write in")
+    slide: SlideOut = dspy.OutputField()
+
+
+class ClaimCheck(BaseModel):
+    n: int = Field(description="The claim's number")
+    supported: bool = Field(description="True when the source lines say this (paraphrase is fine)")
+    fix: str = Field(default="", description="When not supported: the claim rewritten so the sources support it, in "
+                                             "the same style and length, or empty when they say nothing close")
+
+
+class CheckSlide(dspy.Signature):
+    """Check each numbered claim from a slide against the source lines. A claim is supported when the lines say it, in
+    other words or in fewer words. It is not supported when it adds a fact, number, name, cause or certainty the
+    lines do not give, or changes what they mean. For each unsupported claim, give a fixed version the lines do
+    support, or leave the fix empty. A fix is only the sentence itself, in the slide's own voice: no name or label
+    before it, and never a mention of the sources, the post, the resume or the material. Keep the claim's language.
+    Never use em dashes."""
+
+    claims: list[str] = dspy.InputField(desc="Numbered claims from one slide (a name before a colon is context only: "
+                                             "check and fix only what follows it)")
+    source_lines: list[str] = dspy.InputField(desc="What the slide was written from")
+    checks: list[ClaimCheck] = dspy.OutputField(desc="One check per claim")
+
+
+class DeckClosing(BaseModel):
+    kicker: str = Field(description="1 to 2 words above the heading, e.g. Conclusion")
+    heading: str = Field(description="Heading for the closing slide, e.g. Key takeaways")
+    takeaways: list[str] = Field(description="Exactly 3 takeaways, each a full sentence of at most 20 words "
+                                             "(presenter: 10)")
+    closing: str = Field(description="The one idea to remember, at most 12 words: a strong last line, not a thank you")
+    notes: str = Field(description="Speaker notes for the close, 50 to 120 words")
+
+
+class WriteClosing(dspy.Signature):
+    """Write the closing slide of a deck from its slides: three takeaways that sum up what the deck showed, in the order it
+    showed them, and one closing line that leaves the audience with the single idea to remember. Follow the request
+    when it asks something of the ending (for example next steps, a call to action or who it is for), as far as the
+    slides support it. Use only what the slides say. Write in the language requested. Never use em dashes."""
+
+    deck_title: str = dspy.InputField()
+    slides: list[str] = dspy.InputField(desc="Each content slide's heading and main text, in order")
+    deck_format: str = dspy.InputField(desc="detailed or presenter")
+    request: str = dspy.InputField(desc="What the person asked of the deck, or (none)")
+    language: str = dspy.InputField(desc="The language to write in")
+    closing: DeckClosing = dspy.OutputField()
+
+
+class RequestAsk(BaseModel):
+    ask: str = Field(description="One concrete thing the person asked of the deck, in a few words")
+    covered: bool = Field(description="True when the planned slides already do it")
+
+
+class CheckRequest(dspy.Signature):
+    """Read what the person asked of a slide deck and list each concrete ask in it: a topic or part to cover, an
+    audience or angle, a structure, something to include, to leave out, or to end with. For each, say whether the
+    planned slides already do it. Ignore asks about the number of slides or the visual style. Never use em dashes."""
+
+    request: str = dspy.InputField(desc="What the person asked of the deck")
+    slides: list[str] = dspy.InputField(desc="The planned slides: heading, then what each must get across")
+    asks: list[RequestAsk] = dspy.OutputField()

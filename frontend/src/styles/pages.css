@@ -3415,7 +3415,8 @@ select.input,
   }
 
   .nbv {
-    grid-template-columns: clamp(16rem, 20vw, 20rem) minmax(0, 1fr);
+    position: relative; /* the resize handles are placed over the boundaries */
+    grid-template-columns: var(--nbv-left, clamp(16rem, 20vw, 20rem)) minmax(0, 1fr);
     grid-template-areas:
       "history chat"
       "history side";
@@ -3483,12 +3484,12 @@ select.input,
   }
 
   .nbv {
-    grid-template-columns: clamp(16rem, 20vw, 20rem) minmax(0, 1fr) clamp(18rem, 24vw, 24rem);
+    grid-template-columns: var(--nbv-left, clamp(16rem, 20vw, 20rem)) minmax(0, 1fr) var(--nbv-right, clamp(18rem, 24vw, 24rem));
     grid-template-areas: "history chat side";
   }
 
   .nbv.nbv-history-closed {
-    grid-template-columns: minmax(0, 1fr) clamp(18rem, 24vw, 24rem);
+    grid-template-columns: minmax(0, 1fr) var(--nbv-right, clamp(18rem, 24vw, 24rem));
     grid-template-areas: "chat side";
   }
 
@@ -4610,52 +4611,6 @@ details.map-legend[open] summary {
 /* Audio overview opened: a blue edge, its options panel just below */
 .nbv-make .nbv-make-main.open {
   border-color: var(--blue);
-}
-
-.nbv-audio-opts {
-  display: grid;
-  gap: 12px;
-  padding: 14px;
-  border: 1px solid var(--blue-35);
-  border-radius: var(--radius-sm);
-  background: var(--blue-05);
-}
-
-.nbv-audio-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); /* Format needs a little more room than Length */
-  gap: 10px;
-}
-
-/* Each dropdown fills its column and can shrink, instead of spilling into its neighbour */
-.nbv-audio-row > .field {
-  min-width: 0;
-}
-
-.nbv-audio-row > .field > * {
-  width: 100%;
-  min-width: 0;
-}
-
-.nbv-audio-opts .dropdown-btn {
-  padding: 0 12px;
-  font-size: 0.9rem;
-}
-
-.nbv-audio-opts .dropdown-btn {
-  height: 40px;
-  border-radius: 12px;
-}
-
-.nbv-audio-opts > .btn {
-  justify-self: end;
-}
-
-.nbv-audio-opts .dropdown-value {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* ---------- Mind map: the right-rail tile and list, the dialog, and the galaxy explorer ---------- */
@@ -7559,13 +7514,12 @@ details.map-legend[open] summary {
   border-top-color: var(--black);
 }
 
-/* Create buttons: two to a row. Audio overview (with its options) and Mind Constellation take a whole row. */
+/* Create buttons: two to a row. Audio overview shares its row with Slide deck; its options and Mind Constellation take
+   a whole row. */
 .nbv-make {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.nbv-make .nbv-make-main,
-.nbv-make .nbv-audio-opts,
 .nbv-make .nbv-make-stars {
   grid-column: 1 / -1;
 }
@@ -8220,4 +8174,955 @@ details.map-legend[open] summary {
 
 .nbv-starting-text strong {
   font: 500 0.92rem var(--font-body);
+}
+
+
+/* ---- Slide decks ------------------------------------------------------------------------------------------------ */
+
+.sd-dialog {
+  gap: 22px;
+}
+
+/* The settings: the two styles across one row, then format, length and language side by side */
+.sd-themes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 220px));
+  justify-content: center;
+  gap: 16px;
+}
+
+.sd-theme {
+  display: grid;
+  gap: 6px;
+  padding: 5px 5px 8px;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.sd-theme:hover {
+  border-color: var(--line-strong);
+}
+
+.sd-theme.on {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 1px var(--blue), var(--glow-sm);
+}
+
+.sd-theme-img {
+  position: relative;
+  display: block;
+}
+
+.sd-theme-img img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9; /* the whole slide, small */
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.sd-check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--black);
+  color: var(--white);
+  box-shadow: 0 0 0 2px var(--blue);
+}
+
+.sd-theme-name {
+  padding: 0 4px;
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.sd-opts {
+  display: grid;
+  grid-template-columns: auto minmax(210px, 1fr) minmax(140px, 0.7fr); /* format as wide as its pills */
+  column-gap: 28px;
+  row-gap: 14px;
+  align-items: start;
+}
+
+.sd-opts .field {
+  gap: 8px;
+  min-width: 0;
+}
+
+/* The dropdowns stay inside their column: a long value shortens with an ellipsis */
+.sd-opts .dropdown,
+.sd-opts .dropdown-btn {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.sd-opts .dropdown-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The length's slide range, inside its dropdown: the same small grey text as the hints under the other fields */
+.sd-opts .dropdown-value .muted {
+  font-size: 0.83em;
+}
+
+.sd-opts .dropdown-btn {
+  padding-left: 16px;
+  padding-right: 14px;
+}
+
+/* Format pills look exactly like the dropdowns beside them: same height, text, border and fill */
+.sd-opts .vw-chips {
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+
+.sd-opts .vw-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 48px;
+  padding: 0 18px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.6);
+  color: var(--text);
+  font: 500 1rem var(--font-body);
+  white-space: nowrap;
+}
+
+.sd-opts .vw-chip.on {
+  border-color: var(--blue);
+  background: var(--blue);
+  color: var(--white);
+}
+
+.sd-opts .vw-chip:hover:not(.on) {
+  border-color: var(--blue-60);
+}
+
+/* The format's description wraps under the pills instead of widening their column */
+.sd-opts > .field:first-child > small {
+  display: block;
+  width: 0;
+  min-width: 100%;
+}
+
+/* A little more room than other dialogs, for the three settings side by side */
+.modal.modal-wide:has(.sd-dialog) {
+  width: min(840px, calc(100vw - 32px));
+}
+
+.sd-prompt {
+  width: 100%;
+  min-height: 92px;
+  padding: 14px 18px;
+  border-radius: 14px;
+  line-height: 1.55;
+  resize: vertical;
+}
+
+/* One 1920 x 1080 slide, scaled into whatever box it is given. */
+.sd-frame {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  background: #000;
+}
+
+.sd-frame-width {
+  aspect-ratio: 16 / 9;
+}
+
+.sd-frame-contain {
+  position: absolute;
+  inset: 0;
+  background: transparent;
+}
+
+.sd-frame iframe {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  border: 0;
+  transform-origin: center center;
+  pointer-events: none;
+}
+
+/* A deck in the notebook's list: a quiet row (icon, title, "2 sources · 5d ago", menu), highlighted on hover */
+.sd-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 4px;
+  padding: 4px 4px 4px 0;
+  border-radius: 16px;
+  transition: background 0.15s;
+}
+
+.sd-item.is-ready:hover,
+.sd-item:focus-within {
+  background: var(--surface-2);
+}
+
+.sd-item-main {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 4px 8px 10px;
+  border-radius: 16px;
+  outline: none;
+}
+
+.sd-item.is-ready .sd-item-main {
+  cursor: pointer;
+}
+
+.sd-item-main:focus-visible {
+  box-shadow: 0 0 0 2px var(--blue);
+}
+
+.sd-item-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  color: var(--blue);
+}
+
+.sd-item-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sd-item-text strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
+.sd-item-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.82rem;
+  color: var(--text-3);
+}
+
+.sd-item .sd-menu-wrap .sd-icon-btn {
+  color: var(--text-2);
+}
+
+.sd-item-progress {
+  grid-column: 1 / -1;
+  padding: 0 12px 8px 60px;
+}
+
+.sd-item-failed {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.sd-item-failed p {
+  flex: 1;
+  margin: 0;
+}
+
+.sd-rename {
+  width: 100%;
+  padding: 4px 10px;
+  font-size: 0.95rem;
+}
+
+/* The deck's popup: actions along the top, every slide below it */
+.modal.modal-wide:has(.sd-view) {
+  width: min(980px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+  transition: width 0.2s ease;
+}
+
+.modal.modal-wide:has(.sd-view.big) {
+  width: calc(100vw - 32px);
+  height: calc(100vh - 32px);
+}
+
+.modal:has(.sd-view) .modal-head {
+  gap: 12px;
+}
+
+.modal:has(.sd-view) .modal-head h2 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sd-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+
+.sd-icon-btn {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.sd-icon-btn:hover:not(:disabled),
+.sd-icon-btn[aria-expanded="true"],
+.sd-icon-btn[aria-pressed="true"] {
+  background: var(--surface-2);
+  color: var(--white);
+}
+
+.sd-icon-btn:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+}
+
+.sd-icon-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.sd-menu-wrap {
+  position: relative;
+}
+
+/* In <body>, above popups (z-index over the modal's backdrop) */
+.sd-menu.sd-menu-floating {
+  position: fixed;
+  top: auto;
+  right: auto;
+  z-index: 2100;
+}
+
+.sd-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  display: grid;
+  min-width: 270px;
+  padding: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--black);
+  box-shadow: var(--glow-lg);
+}
+
+.sd-menu button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--white);
+  font: 500 0.92rem var(--font-body);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.sd-menu button:hover,
+.sd-menu button:focus-visible {
+  background: var(--surface-2);
+}
+
+.sd-menu button.danger {
+  color: #ff8a8a;
+}
+
+.sd-confirm p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.sd-confirm-actions {
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.sd-menu .error-text {
+  margin: 4px 8px;
+}
+
+.sd-menu-error {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 240px;
+  text-align: right;
+}
+
+.sd-view {
+  display: grid;
+  gap: 12px;
+  min-height: 0;
+  flex: 1;
+}
+
+.sd-meta {
+  margin: 0;
+}
+
+.sd-stack {
+  display: grid;
+  gap: 16px;
+  max-height: calc(100vh - 190px);
+  margin: 0;
+  padding: 0 6px 6px 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.sd-view.big .sd-stack {
+  max-height: calc(100vh - 160px);
+  justify-items: center;
+}
+
+.sd-view.big .sd-stack > li {
+  width: min(100%, calc((100vh - 190px) * 16 / 9));
+}
+
+.sd-slide {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+  background: none;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.sd-slide:hover,
+.sd-slide:focus-visible {
+  border-color: var(--blue-60);
+  box-shadow: var(--glow-sm);
+}
+
+.sd-notes {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 14px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  line-height: 1.6;
+}
+
+.sd-notes p {
+  margin: 0;
+}
+
+/* Presenting: the slide fills the screen, letterboxed in its own sky colour; the controls fade when the mouse rests. */
+.sd-present {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: #000;
+  cursor: pointer;
+}
+
+.sd-present.light {
+  background: #e9eef9;
+}
+
+.sd-present-stage {
+  position: absolute;
+  inset: 0;
+}
+
+.sd-present-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 22px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  transform: translateX(-50%);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.72);
+  color: var(--white);
+  cursor: default;
+  transition: opacity 0.3s;
+}
+
+.sd-present.idle {
+  cursor: none;
+}
+
+.sd-present.idle .sd-present-bar {
+  opacity: 0;
+}
+
+.sd-count {
+  min-width: 64px;
+  text-align: center;
+  font: 500 0.85rem var(--font-mono, monospace);
+}
+
+@media (max-width: 760px) {
+  .sd-opts {
+    grid-template-columns: 1fr;
+  }
+
+  .sd-opts .vw-chips {
+    flex-wrap: wrap;
+  }
+
+  .modal:has(.sd-view) .modal-head {
+    flex-wrap: wrap;
+  }
+
+  .sd-icon-btn {
+    width: 34px;
+    height: 34px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sd-present-bar,
+  .sd-item,
+  .sd-slide,
+  .sd-icon-btn,
+  .modal.modal-wide:has(.sd-view),
+  .sd-theme {
+    transition: none;
+  }
+}
+
+
+/* ---- Notebook: side panels resized by dragging the line between a panel and the chat (components/PaneResizer) ---- */
+
+.nbv-resizer {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .nbv-resizer {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 6;
+    display: block;
+    width: 12px;
+    margin-left: -6px;
+    cursor: col-resize;
+    touch-action: none;
+  }
+
+  .nbv-resizer::after {
+    content: "";
+    position: absolute;
+    top: 14px;
+    bottom: 14px;
+    left: 5px;
+    width: 2px;
+    border-radius: 2px;
+    background: transparent;
+    transition: background 0.15s, box-shadow 0.15s;
+  }
+
+  .nbv-resizer:hover::after,
+  .nbv-resizer.dragging::after,
+  .nbv-resizer:focus-visible::after {
+    background: var(--blue);
+    box-shadow: 0 0 10px var(--blue-60);
+  }
+
+  .nbv-resizer:focus-visible {
+    outline: none;
+  }
+}
+
+/* While dragging: no text selection, the resize cursor everywhere, and frames (slides, infographics) let the pointer
+   through so the drag is never lost over them. */
+body.nbv-resizing,
+body.nbv-resizing * {
+  cursor: col-resize !important;
+  user-select: none;
+}
+
+body.nbv-resizing iframe {
+  pointer-events: none;
+}
+
+/* The panels' contents follow the panels' own widths, not the window's. */
+.nbv-side,
+.nbv-history,
+.nbv-chat {
+  container-type: inline-size;
+}
+
+/* Create tiles never wrap a word: the label shortens with an ellipsis, the icon stays. */
+.nbv-make > button,
+.nbv-make .nbv-make-label {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.nbv-make .nbv-make-label {
+  flex: 1;
+}
+
+.nbv-make-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Tiles per row by the panel's width: one when narrow, two by default, three or four when the panel is wide. */
+@container (max-width: 299px) {
+  .nbv-make {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@container (min-width: 560px) {
+  .nbv-make {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .nbv-make .nbv-make-wide {
+    grid-column: auto;
+  }
+}
+
+@container (min-width: 760px) {
+  .nbv-make {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nbv-resizer::after {
+    transition: none;
+  }
+}
+
+
+/* ---- Audio overview settings (components/AudioOverview) ---- */
+
+.ao-dialog {
+  gap: 20px;
+}
+
+.ao-styles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ao-style {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-height: 132px;
+  padding: 14px 14px 16px;
+  text-align: left;
+  border: 1px solid var(--line-strong);
+  border-radius: 18px;
+  background: rgba(0, 0, 0, 0.6);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.ao-style:hover:not(:disabled):not(.on) {
+  border-color: var(--blue-60);
+}
+
+.ao-style.on {
+  border-color: var(--blue);
+  background: var(--blue-20);
+}
+
+.ao-style:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ao-style-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ao-style-head strong {
+  font-weight: 600;
+}
+
+.ao-radio {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+}
+
+.ao-style.on .ao-radio {
+  border-color: var(--blue);
+  background: var(--black);
+}
+
+.ao-style-blurb {
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
+/* Hosts pills share the slide deck's pill look (.sd-opts); the two voice pickers sit side by side */
+.ao-voices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.ao-voices > p {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+@media (max-width: 760px) {
+  .ao-styles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ao-voices {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ao-style {
+    transition: none;
+  }
+}
+
+.modal.modal-wide:has(.ao-dialog) {
+  width: min(880px, calc(100vw - 32px));
+}
+
+/* ---- Audio overview in the notebook's list (components/AudioOverview: AudioOverviewCard) ---- */
+
+.ao-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  transition: border-color 0.15s;
+}
+
+.ao-card.open {
+  border-color: var(--line-strong);
+}
+
+.ao-card-head {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px 10px 8px;
+  border-radius: var(--radius);
+  outline: none;
+}
+
+.ao-card-head[role="button"] {
+  cursor: pointer;
+}
+
+.ao-card-head[role="button"]:hover {
+  background: var(--surface-2);
+}
+
+.ao-card-head:focus-visible {
+  box-shadow: 0 0 0 2px var(--blue);
+}
+
+.ao-card-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  color: var(--blue);
+}
+
+.ao-card-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ao-card-text strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+.ao-card-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.82rem;
+  color: var(--text-3);
+}
+
+.ao-chevron {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  color: var(--text-2);
+}
+
+.ao-card-progress {
+  padding: 0 12px 10px 58px;
+}
+
+.ao-card-body {
+  display: grid;
+  gap: 12px;
+  padding: 4px 14px 14px;
+}
+
+/* The player: play, time, a seek bar and the speed, in one pill */
+.ao-player {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 8px 6px 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+
+.ao-play {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--blue);
+  color: var(--white);
+  cursor: pointer;
+}
+
+.ao-play:focus-visible,
+.ao-speed:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.ao-time {
+  font-size: 0.8rem;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.ao-seek {
+  width: 100%;
+  height: 4px;
+  margin: 0;
+  border-radius: 2px;
+  background: linear-gradient(to right, var(--blue) var(--ao-fill, 0%), var(--line-strong) var(--ao-fill, 0%));
+  appearance: none;
+  cursor: pointer;
+}
+
+.ao-seek::-webkit-slider-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--white);
+  appearance: none;
+}
+
+.ao-seek::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--white);
+}
+
+.ao-speed {
+  min-width: 52px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.ao-speed:hover {
+  border-color: var(--blue-60);
+}
+
+.ao-transcript-toggle {
+  justify-self: start;
+}
+
+.ao-card-actions {
+  gap: 8px;
+}
+
+/* Delete reads as a normal button (not dimmed), red when pointed at */
+.ao-delete:hover,
+.ao-delete:focus-visible {
+  border-color: #ef4444;
+  color: #ff8a8a;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ao-card {
+    transition: none;
+  }
 }

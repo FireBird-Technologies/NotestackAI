@@ -89,7 +89,7 @@ export type AnswerFeedback = { rating: "up" | "down"; reasons: string[]; comment
 export type WorkspaceChat = ChatSummary & { notebook_id: string; notebook_title: string };
 export type ChatMessage = { id: string; role: "user" | "assistant"; text: string; citations: Citation[]; feedback?: AnswerFeedback | null };
 
-export type ArtifactType = "summary" | "audio_overview" | "video" | "quote_card" | "carousel" | "launch_kit" | "mind_map" | "quiz" | "flashcards" | "report" | "infographic"| "upload";
+export type ArtifactType = "summary" | "audio_overview" | "video" | "quote_card" | "carousel" | "launch_kit" | "mind_map" | "quiz" | "flashcards" | "report" | "infographic" | "slide_deck" | "upload";
 
 export type QuizQuestionType = "multiple_choice" | "multiple_select" | "fill_blank" | "short_answer";
 export type QuizQuestion = {

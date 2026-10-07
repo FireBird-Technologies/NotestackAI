@@ -1,20 +1,22 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { artifactsApi, notebooksApi, videoVoicesApi, type GenerateBody } from "../api/endpoints";
+import { artifactsApi, notebooksApi } from "../api/endpoints";
 import { streamSSE } from "../api/stream";
-import type { AnswerFeedback as Feedback, Artifact, ChatSummary, Citation, MemoryChange, Notebook, VideoSavedVoice } from "../api/types";
+import type { AnswerFeedback as Feedback, Artifact, ChatSummary, Citation, MemoryChange, Notebook } from "../api/types";
 import { AnswerFeedback } from "../components/AnswerFeedback";
 import { ArtifactCard, CitationList } from "../components/ArtifactCard";
 import { Markdown } from "../components/Markdown";
 import { DocPicker } from "../components/DocPicker";
-import { Dropdown } from "../components/Dropdown";
-import { ChevronIcon, FlashcardsIcon, HeadphonesIcon, InfographicIcon, QuizIcon, ReportIcon, TelescopeIcon, VideoIcon } from "../components/icons/Icons";
+import { FlashcardsIcon, HeadphonesIcon, InfographicIcon, QuizIcon, ReportIcon, SlidesIcon, TelescopeIcon, VideoIcon } from "../components/icons/Icons";
 import { MindMapDialog, MindMapExplorer, MindMapRow } from "../components/MindMap";
 import { FlashcardsDialog, type FlashcardsRequest } from "../components/Flashcards";
 import { InfographicDialog, type InfographicRequest } from "../components/Infographic";
+import { SlideDeckDialog, SlideDeckRow, type SlideDeckRequest } from "../components/SlideDeck";
+import { AudioOverviewCard, AudioOverviewDialog, prefetchVoices, type AudioOverviewRequest } from "../components/AudioOverview";
 import { QuizDialog, type QuizRequest } from "../components/Quiz";
 import { MAX_STUDY_POSTS, prefetchFocus } from "../components/SourceFocusFields";
 import { ReportDialog, type ReportRequest } from "../components/ReportDialog";
+import { PaneResizer, usePaneWidths } from "../components/PaneResizer";
 import { Reader } from "../components/Reader";
 import { seedDocs } from "../components/video/sourceCache";
 import { ConfirmButton, errorMessage, formatDate, Loading, Modal } from "../components/ui";
@@ -45,7 +47,7 @@ function readChatRailOpen(): boolean {
 }
 
 /** Create: one click per format with sensible defaults, options folded away; then what was made from this notebook. */
-function StudioPanel({ notebookId, notebookTitle, docs, chats, currentChatId, disabled, quizOpen, onQuizClose, onCreateQuiz, cardsOpen, onCardsClose, onCreateCards, infographicOpen, onInfographicClose, onCreateInfographic, reportOpen, onReportClose, onCreateReport, onCreateVideo }: {
+function StudioPanel({ notebookId, notebookTitle, docs, chats, currentChatId, disabled, quizOpen, onQuizClose, onCreateQuiz, cardsOpen, onCardsClose, onCreateCards, infographicOpen, onInfographicClose, onCreateInfographic, audioOpen, onAudioClose, onCreateAudio, slidesOpen, onSlidesClose, onCreateSlides, reportOpen, onReportClose, onCreateReport, onCreateVideo }: {
   notebookId: string;
   notebookTitle: string;
   docs: { id: string; title: string; locked?: boolean }[];
@@ -61,21 +63,20 @@ function StudioPanel({ notebookId, notebookTitle, docs, chats, currentChatId, di
   infographicOpen: boolean;
   onInfographicClose: () => void;
   onCreateInfographic: () => void;
+  audioOpen: boolean;
+  onAudioClose: () => void;
+  onCreateAudio: () => void;
+  slidesOpen: boolean;
+  onSlidesClose: () => void;
+  onCreateSlides: () => void;
   reportOpen: boolean;
   onReportClose: () => void;
   onCreateReport: () => void;
   onCreateVideo: () => void;
 }) {
   const [artifacts, setArtifacts] = useState<Artifact[] | null>(null);
-  const [format, setFormat] = useState<"deep_dive" | "brief" | "debate">("deep_dive");
-  const [minutes, setMinutes] = useState(6);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
   const [reading, setReading] = useState<{ id: string; start: number; end: number } | null>(null);
-  const [audioOpen, setAudioOpen] = useState(false); // the Audio overview tile is opened to its options
-  // The two hosts' voices, picked from the workspace's voices (loaded when the options first open).
-  const [hostVoices, setHostVoices] = useState<VideoSavedVoice[] | null>(null);
-  const [hosts, setHosts] = useState<[string, string]>(["", ""]);
   const [mapDialog, setMapDialog] = useState(false);
   const [waitingMap, setWaitingMap] = useState<string | null>(null); // a map the user just asked for: open it when ready
   const [exploring, setExploring] = useState<Artifact | null>(null);
@@ -83,26 +84,13 @@ function StudioPanel({ notebookId, notebookTitle, docs, chats, currentChatId, di
   const load = useCallback(() => notebooksApi.artifacts(notebookId).then(setArtifacts), [notebookId]);
 
   useEffect(() => {
-    if (!audioOpen || hostVoices) return;
-    videoVoicesApi.list().then((r) => {
-      setHostVoices(r.saved);
-      // The first two voices by default; with just one, it reads both parts.
-      setHosts([r.saved[0]?.voice_id ?? "", (r.saved[1] ?? r.saved[0])?.voice_id ?? ""]);
-    }).catch(() => setHostVoices([])); // none to pick: the server's default voices
-  }, [audioOpen, hostVoices]);
-
-  /** Pick a host's voice; the other host moves off it, so the two never share one (when there are two to pick). */
-  const pickHost = (i: 0 | 1, voiceId: string) =>
-    setHosts((cur) => {
-      const next: [string, string] = [...cur];
-      next[i] = voiceId;
-      const other = i === 0 ? 1 : 0;
-      if (next[other] === voiceId) next[other] = hostVoices?.find((v) => v.voice_id !== voiceId)?.voice_id ?? voiceId;
-      return next;
-    });
-  useEffect(() => {
     load();
   }, [load]);
+
+  // The voices for the audio overview settings take a few seconds to list: ask now so they are ready when it opens.
+  useEffect(() => {
+    prefetchVoices().catch(() => undefined);
+  }, []);
 
   // The focus suggestions the study dialogs show, made now so they are waiting when a dialog opens.
   const startIds = docs.filter((d) => !d.locked).slice(0, MAX_STUDY_POSTS).map((d) => d.id).join(",");
@@ -110,18 +98,6 @@ function StudioPanel({ notebookId, notebookTitle, docs, chats, currentChatId, di
     if (startIds) prefetchFocus(notebookId, startIds.split(","));
   }, [notebookId, startIds]);
 
-  const make = async (body: Omit<GenerateBody, "notebook_id">) => {
-    setBusy(true);
-    setError(null);
-    try {
-      const a = await artifactsApi.generate({ ...body, notebook_id: notebookId });
-      setArtifacts((list) => [a, ...(list ?? [])]);
-    } catch (e) {
-      setError(errorMessage(e));
-    } finally {
-      setBusy(false);
-    }
-  };
 
   // Every "make" from a dialog works the same way: the dialog closes at once, a card in the panel says it is starting, the
   // artifact replaces it as soon as the server has it (and shows its own progress), and a failure is shown in the panel.
@@ -156,6 +132,10 @@ function StudioPanel({ notebookId, notebookTitle, docs, chats, currentChatId, di
     launch("report", onReportClose, () => artifactsApi.generate({ notebook_id: notebookId, ...body, type: "report" }));
   const makeInfographic = (body: InfographicRequest) =>
     launch("infographic", onInfographicClose, () => artifactsApi.generate({ notebook_id: notebookId, ...body, type: "infographic" }));
+  const makeAudio = (body: AudioOverviewRequest) =>
+    launch("audio overview", onAudioClose, () => artifactsApi.generate({ notebook_id: notebookId, ...body, type: "audio_overview" }));
+  const makeSlides = (body: SlideDeckRequest) =>
+    launch("slide deck", onSlidesClose, () => artifactsApi.generate({ notebook_id: notebookId, ...body, type: "slide_deck" }));
   const makeCards = (body: FlashcardsRequest) =>
     launch("flashcards", onCardsClose, () => artifactsApi.generate({ notebook_id: notebookId, ...body, type: "flashcards" }));
 
@@ -163,7 +143,7 @@ function StudioPanel({ notebookId, notebookTitle, docs, chats, currentChatId, di
   const others = artifacts?.filter((a) => a.type !== "mind_map");
 
   const cite = (c: Citation) => c.document_id && setReading({ id: c.document_id, start: c.line_start, end: c.line_end });
-  const off = disabled || busy;
+  const off = disabled;
 
   return (
     <div className="stack">
@@ -183,61 +163,26 @@ function StudioPanel({ notebookId, notebookTitle, docs, chats, currentChatId, di
             <circle cx="58" cy="18" r="2" fill="currentColor" />
           </svg>
         </button>
-        {/* Opens its options (format, length) right under it; the audio is made from there */}
-        <button className={`nbv-make-main${audioOpen ? " open" : ""}`} disabled={off} aria-expanded={audioOpen}
-                onClick={() => setAudioOpen(!audioOpen)}>
-          <span className="nbv-make-label"><HeadphonesIcon size={18} /> Audio overview</span>
-          <span className="nbv-make-meta">
-            <ChevronIcon size={16} className={`chevron${audioOpen ? " open" : ""}`} />
-          </span>
+        <button className="nbv-make-audio" disabled={off} onClick={onCreateAudio}>
+          <HeadphonesIcon size={18} /> <span className="nbv-make-text">Audio overview</span>
         </button>
-        {audioOpen && (
-          <div className="nbv-audio-opts">
-            <div className="nbv-audio-row">
-              <div className="field">
-                <span className="small muted">Format</span>
-                <Dropdown<typeof format> label="Audio format" value={format} onChange={setFormat}
-                  options={[
-                    { value: "deep_dive", label: "Deep dive" },
-                    { value: "brief", label: "Brief" },
-                    { value: "debate", label: "Debate" },
-                  ]} />
-              </div>
-              <div className="field">
-                <span className="small muted">Length</span>
-                <Dropdown<string> label="Length" value={String(minutes)} onChange={(v) => setMinutes(Number(v))}
-                  options={[3, 6, 10, 15].map((m) => ({ value: String(m), label: `${m} min` }))} />
-              </div>
-              {hostVoices && hostVoices.length > 0 && ([0, 1] as const).map((i) => (
-                <div key={i} className="field">
-                  <span className="small muted">Host {i + 1}</span>
-                  <Dropdown<string> label={`Host ${i + 1} voice`} value={hosts[i]} onChange={(v) => pickHost(i, v)}
-                    options={hostVoices.map((v) => ({ value: v.voice_id, label: v.name }))} />
-                </div>
-              ))}
-            </div>
-            <button className="btn btn-primary btn-small" disabled={off || (audioOpen && hostVoices === null)}
-                    onClick={() => make({ type: "audio_overview", format, minutes,
-                                          ...(hosts[0] ? { host_a: hosts[0], host_b: hosts[1] || hosts[0] } : {}) })
-                      .then(() => setAudioOpen(false))}>
-              {busy ? "Starting..." : "Create audio overview"}
-            </button>
-          </div>
-        )}
+        <button className="nbv-make-slides" disabled={off} onClick={onCreateSlides}>
+          <SlidesIcon size={18} /> <span className="nbv-make-text">Slide deck</span>
+        </button>
         <button disabled={off} onClick={onCreateVideo}>
-          <VideoIcon size={18} /> Video
+          <VideoIcon size={18} /> <span className="nbv-make-text">Video</span>
         </button>
         <button disabled={off} onClick={onCreateReport}>
-          <ReportIcon size={18} /> Report
+          <ReportIcon size={18} /> <span className="nbv-make-text">Report</span>
         </button>
         <button disabled={off} onClick={onCreateInfographic}>
-          <InfographicIcon size={18} /> Infographic
+          <InfographicIcon size={18} /> <span className="nbv-make-text">Infographic</span>
         </button>
         <button disabled={off} onClick={onCreateQuiz}>
-          <QuizIcon size={18} /> Quiz
+          <QuizIcon size={18} /> <span className="nbv-make-text">Quiz</span>
         </button>
         <button className="nbv-make-wide" disabled={off} onClick={onCreateCards}>
-          <FlashcardsIcon size={18} /> Flashcards
+          <FlashcardsIcon size={18} /> <span className="nbv-make-text">Flashcards</span>
         </button>
       </div>
       {disabled && <p className="muted small">Add posts to this notebook to start creating.</p>}
@@ -274,19 +219,17 @@ function StudioPanel({ notebookId, notebookTitle, docs, chats, currentChatId, di
             </span>
           </div>
         ))}
-        {others?.map((a) => (
+        {others?.map((a) => a.type === "slide_deck" ? (
+          <SlideDeckRow key={a.id} artifact={a} onRemoved={(id) => setArtifacts((list) => (list ?? []).filter((x) => x.id !== id))} />
+        ) : a.type === "audio_overview" ? (
+          <AudioOverviewCard key={a.id} artifact={a} onRemoved={(id) => setArtifacts((list) => (list ?? []).filter((x) => x.id !== id))} />
+        ) : (
           <ArtifactCard
             key={a.id}
             artifact={a}
             onCite={cite}
             onRemoved={(id) => setArtifacts((list) => (list ?? []).filter((x) => x.id !== id))}
-            actions={(art) => canPost(art) ? <PostButton artifactId={art.id} /> :
-              art.type === "audio_overview" && art.status === "ready" ? (
-                <button className="btn btn-small" onClick={() => make({ type: "video", style: "audiogram", audio_artifact_id: art.id })}>
-                  Audiogram
-                </button>
-              ) : null
-            }
+            actions={(art) => canPost(art) ? <PostButton artifactId={art.id} /> : null}
           />
         ))}
       </div>}
@@ -297,6 +240,10 @@ function StudioPanel({ notebookId, notebookTitle, docs, chats, currentChatId, di
                                    error={null} onClose={onReportClose} onCreate={makeReport} />}
       {infographicOpen && <InfographicDialog notebookId={notebookId} notebookTitle={notebookTitle} chats={chats} currentChatId={currentChatId}
                                              busy={false} error={null} onClose={onInfographicClose} onCreate={makeInfographic} />}
+      {audioOpen && <AudioOverviewDialog notebookId={notebookId} notebookTitle={notebookTitle} chats={chats} currentChatId={currentChatId}
+                                         onClose={onAudioClose} onCreate={makeAudio} />}
+      {slidesOpen && <SlideDeckDialog notebookId={notebookId} notebookTitle={notebookTitle} chats={chats} currentChatId={currentChatId}
+                                      onClose={onSlidesClose} onCreate={makeSlides} />}
       {cardsOpen && <FlashcardsDialog notebookId={notebookId} notebookTitle={notebookTitle} chats={chats} currentChatId={currentChatId} busy={false}
                                       error={null} onClose={onCardsClose} onCreate={makeCards} />}
       {mapDialog && <MindMapDialog docs={docs} busy={false} error={null} onClose={() => setMapDialog(false)} onCreate={makeMap} />}
@@ -319,6 +266,8 @@ export default function NotebookView() {
   const [makingQuiz, setMakingQuiz] = useState(false); // the quiz settings are open in a modal
   const [makingInfographic, setMakingInfographic] = useState(false); // the infographic settings are open in a modal
   const [makingCards, setMakingCards] = useState(false); // the flashcard settings are open in a modal
+  const [makingSlides, setMakingSlides] = useState(false); // the slide deck settings are open in a modal
+  const [makingAudio, setMakingAudio] = useState(false); // the audio overview settings are open in a modal
   const [makingReport, setMakingReport] = useState(false); // the report dialog is open in a modal
   const [toAdd, setToAdd] = useState<string[]>([]);
   const [addError, setAddError] = useState<string | null>(null);
@@ -335,6 +284,8 @@ export default function NotebookView() {
   const chatLoad = useRef(0);
   const asked = useRef(false);
   const bottom = useRef<HTMLDivElement>(null);
+  const layout = useRef<HTMLDivElement>(null);
+  const panes = usePaneWidths(layout, { leftOpen: historyOpen }); // the side panels' dragged widths
 
   // Auto-save the title shortly after the user stops typing.
   useEffect(() => {
@@ -527,6 +478,16 @@ export default function NotebookView() {
     setMakingInfographic(true);
   };
 
+  const openAudio = () => {
+    seedDocs(nb.id, nb.documents);
+    setMakingAudio(true);
+  };
+
+  const openSlides = () => {
+    seedDocs(nb.id, nb.documents);
+    setMakingSlides(true);
+  };
+
   const openCards = () => {
     seedDocs(nb.id, nb.documents);
     setMakingCards(true);
@@ -544,7 +505,9 @@ export default function NotebookView() {
   };
 
   return (
-    <div className={`nbv${historyOpen ? "" : " nbv-history-closed"}`}>
+    <div ref={layout} className={`nbv${historyOpen ? "" : " nbv-history-closed"}`} style={panes.style}>
+      <PaneResizer side="left" panes={panes} container={layout} label="Resize the chats panel" />
+      <PaneResizer side="right" panes={panes} container={layout} label="Resize the create panel" />
       {historyOpen && <aside className="nbv-pane nbv-history" aria-label="Notebook chats">
         <Link to="/app/notebooks" className="nbv-history-back">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -753,6 +716,8 @@ export default function NotebookView() {
                      onQuizClose={() => setMakingQuiz(false)} onCreateQuiz={openQuiz}
                      reportOpen={makingReport} onReportClose={() => setMakingReport(false)} onCreateReport={openReport}
                      infographicOpen={makingInfographic} onInfographicClose={() => setMakingInfographic(false)} onCreateInfographic={openInfographic}
+                     audioOpen={makingAudio} onAudioClose={() => setMakingAudio(false)} onCreateAudio={openAudio}
+                     slidesOpen={makingSlides} onSlidesClose={() => setMakingSlides(false)} onCreateSlides={openSlides}
                      cardsOpen={makingCards} onCardsClose={() => setMakingCards(false)} onCreateCards={openCards}
                      disabled={nb.documents.length === 0}
                      onCreateVideo={() => {

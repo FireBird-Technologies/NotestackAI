@@ -18,14 +18,18 @@ from app.services.plans import effective_plan, plan_limit_error
 from app.services.renderer import COMPOSITIONS
 from app.services.storage import storage
 from app.services.usage import check_limit
+from app.slides import export as slide_export
+from app.slides.build import stored as stored_deck
+from app.slides.themes import theme_id as slide_theme_id
 
 router = APIRouter(prefix="/api/artifacts", tags=["artifacts"])
 
 ArtifactType = Literal["summary", "audio_overview", "video", "quote_card", "carousel", "launch_kit", "mind_map", "quiz",
-                       "flashcards", "report", "infographic"]
+                       "flashcards", "report", "infographic", "slide_deck"]
 
 
-SOURCE_TYPES = ("quiz", "flashcards", "report", "infographic")  # made from posts or chats picked in the dialog
+# Made from posts or chats picked in the dialog
+SOURCE_TYPES = ("quiz", "flashcards", "report", "infographic", "slide_deck", "audio_overview")
 
 
 class RenderIn(BaseModel):
@@ -39,7 +43,8 @@ class GenerateIn(BaseModel):
     document_id: uuid.UUID | None = None
     archive: bool = False  # no notebook or post picked: use the "All posts" notebook
     # audio_overview
-    format: Literal["deep_dive", "brief", "debate"] = "deep_dive"
+    format: Literal["deep_dive", "brief", "critique", "debate"] = "deep_dive"
+    hosts: Literal[1, 2] = 2  # audio_overview: a single narrator or a two host conversation
     minutes: int = Field(6, ge=1, le=30)
     # the two hosts' voices, from the workspace's voices (none: the defaults)
     host_a: str | None = Field(None, max_length=100)
@@ -61,7 +66,10 @@ class GenerateIn(BaseModel):
     question_types: list[Literal["multiple_choice", "multiple_select", "fill_blank", "short_answer"]] = Field(
         default_factory=lambda: ["multiple_choice", "multiple_select"], min_length=1)
     language: str | None = Field(None, max_length=40)
-    theme: str | None = Field(None, max_length=30)  # infographic: one of app.infographics.themes
+    theme: str | None = Field(None, max_length=30)  # infographic: app.infographics.themes; slide_deck: app.slides.themes
+    # slide_deck: read on its own ("detailed") or shown behind a speaker ("presenter"), and how many slides
+    deck_format: Literal["detailed", "presenter"] = "detailed"
+    deck_length: Literal["short", "default", "long"] = "default"
     # report: a written "document" or an "interactive" one, the template it started from, and the instructions the
     # writer is given (the dialog's editable text; empty means the template's own)
     report_format: Literal["document", "interactive"] = "document"
@@ -152,8 +160,16 @@ def generate(body: GenerateIn, ctx: Ctx = Depends(get_ctx)):
             raise HTTPException(400, "Pick at least one post or chat to make this from")
         target = _target_title(ctx, body.notebook_id, body.document_id)
     if body.type == "audio_overview":
+        if body.format == "debate" and body.hosts == 1:
+            raise HTTPException(400, "A debate needs two hosts")
         check_limit(ctx.db, ctx.workspace, "audio_minutes", body.minutes)
-        params = {"format": body.format, "minutes": body.minutes, **_hosts(ctx, body)}
+        ids = body.document_ids or ([body.document_id] if body.document_id else [])
+        hosts = _hosts(ctx, body)
+        if body.hosts == 1:
+            hosts.pop("host_b", None)
+        params = {"document_ids": [str(i) for i in ids], "chat_ids": [str(i) for i in body.chat_ids or []],
+                  "format": body.format, "minutes": body.minutes, "hosts": body.hosts, "language": body.language,
+                  "instructions": (body.instructions or "").strip(), **hosts}
         title = f"Audio overview: {target}"
     elif body.type == "mind_map":
         if not body.notebook_id:
@@ -180,6 +196,12 @@ def generate(body: GenerateIn, ctx: Ctx = Depends(get_ctx)):
         params = {"document_ids": [str(i) for i in ids], "chat_ids": [str(i) for i in body.chat_ids or []],
                   "theme": theme_id(body.theme), "instructions": (body.instructions or "").strip()[:600]}
         title = f"Infographic: {params['instructions'][:60] or target}"
+    elif body.type == "slide_deck":
+        ids = body.document_ids or ([body.document_id] if body.document_id else [])
+        params = {"document_ids": [str(i) for i in ids], "chat_ids": [str(i) for i in body.chat_ids or []],
+                  "theme": slide_theme_id(body.theme), "deck_format": body.deck_format, "deck_length": body.deck_length,
+                  "language": body.language, "instructions": (body.instructions or "").strip()}
+        title = f"Slide deck: {target}"
     elif body.type == "quiz":
         ids = body.document_ids or ([body.document_id] if body.document_id else [])
         params = {"document_ids": [str(i) for i in ids],
@@ -255,6 +277,24 @@ def infographic_image(artifact_id: uuid.UUID, layout: Literal["landscape", "port
         raise HTTPException(503, str(exc)) from exc
     name = re.sub(r"[^\w\- ]+", "", shown.get("title") or "infographic").strip()[:80] or "infographic"
     return Response(png, media_type="image/png", headers={"Content-Disposition": f'attachment; filename="{name} ({layout}).png"'})
+
+
+@router.get("/{artifact_id}/slides.{ext}")
+def slide_deck_file(artifact_id: uuid.UUID, ext: Literal["pdf", "pptx"], ctx: Ctx = Depends(get_ctx)):
+    """A finished slide deck as a PDF (exactly as shown) or an editable PowerPoint."""
+    a = get_artifact_or_404(ctx, artifact_id)
+    got = stored_deck(a.content_json or {}) if a.type == "slide_deck" and a.status == "ready" else None
+    if not got:
+        raise HTTPException(404, "This slide deck has nothing to download yet.")
+    deck, theme, fmt, seed = got
+    try:
+        data = (slide_export.render_pdf if ext == "pdf" else slide_export.build_pptx)(deck, theme, fmt, seed)
+    except ImageUnavailable as exc:
+        raise HTTPException(503, str(exc)) from exc
+    name = re.sub(r"[^\w\- ]+", "", deck.get("title") or "Slide deck").strip()[:80] or "Slide deck"
+    media = "application/pdf" if ext == "pdf" else \
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    return Response(data, media_type=media, headers={"Content-Disposition": f'attachment; filename="{name}.{ext}"'})
 
 
 @router.patch("/{artifact_id}")
