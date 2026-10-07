@@ -25,8 +25,7 @@ from app.services.artifacts import TYPE_LABELS
 from app.services.crypto import decrypt, encrypt
 from app.services.social import AUTO_POST, LIMITS, PLATFORM_LABELS, SocialError, bluesky, linkedin, x
 from app.services.social.health import pause_account_posts, resume_account_posts
-from app.services.social.media import (MB, SIZE_LIMITS, UPLOAD_TYPES, check_postable, duration, is_blog2video,
-                                       media_count, upload_kind)
+from app.services.social.media import MB, SIZE_LIMITS, UPLOAD_TYPES, check_postable, duration, is_blog2video, media_count, upload_kind
 from app.services.storage import storage
 
 router = APIRouter(prefix="/api", tags=["launchpad"])

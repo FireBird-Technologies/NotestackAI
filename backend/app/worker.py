@@ -65,8 +65,8 @@ from app.services.notestack_voices import save_notestack_voice
 from app.services.plans import effective_plan
 from app.services.renderer import PermanentJobError, request_render
 from app.services.social.health import social_health
-from app.services.uploads import sweep_orphan_uploads
 from app.services.storage import keys, storage
+from app.services.uploads import sweep_orphan_uploads
 
 log = logging.getLogger("notestack.worker")
 
