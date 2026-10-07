@@ -74,7 +74,7 @@ export default function Settings() {
     }
   };
 
-  if (!s) return error ? <p className="error-text">{error}</p> : <Loading />;
+  if (!s) return error ? <p className="error-text">{error}</p> : <Loading center="full" />;
   const u = s.usage;
   // Fields save on their own when the writer leaves them, so there are no Save buttons.
   const saveProfile = () => {

@@ -488,7 +488,7 @@ export default function VoiceProfile() {
     loadVoices(); // a finished clone is saved to Your voices as "My voice"
   });
 
-  if (!state) return <div className="loading-center stacked"><Loading label="Loading your voice" /></div>;
+  if (!state) return <div className="loading-center"><Loading label="Loading your voice" /></div>;
   const building = build && (build.status === "queued" || build.status === "running");
   const cloneRunning = clone && (clone.status === "queued" || clone.status === "running");
   const showClone = state.clone.status !== "none" || Boolean(clone);

@@ -8,6 +8,24 @@ export function errorMessage(e: unknown, fallback = "Something went wrong. Try a
   return e instanceof ApiError ? e.message : e instanceof Error && e.message ? e.message : fallback;
 }
 
+/** Matches blog2video.NOT_RESPONDING on the backend: the video service is down or redeploying. */
+export const VIDEO_UPDATING = "The video service is being updated";
+
+/**
+ * An inline error. The "video service is being updated" message is a status, not a mistake: it is shown centered
+ * and in bold instead, and with `page` it fills the page under the header.
+ */
+export function ErrorText({ message, page = false }: { message: string; page?: boolean }) {
+  if (message.startsWith(VIDEO_UPDATING)) {
+    return (
+      <div className={`service-notice${page ? " page" : ""}`} role="status">
+        <strong>{message}</strong>
+      </div>
+    );
+  }
+  return <p className="error-text">{message}</p>;
+}
+
 /** Launch progress bar for a job. */
 export function JobProgress({ job, compact = false }: { job: Job; compact?: boolean }) {
   const pct = Math.round((job.status === "done" ? 1 : job.progress) * 100);
@@ -216,8 +234,12 @@ export function EmptyState({ title, body, action }: { title: string; body?: stri
   );
 }
 
-export function Loading({ label = "Loading" }: { label?: string }) {
-  return (
+/**
+ * Spinner with its label underneath, centered. `center="page"` puts it in the middle of the space under a page
+ * header; `center="full"` in the middle of the window, for a page that has no header yet.
+ */
+export function Loading({ label = "Loading", center }: { label?: string; center?: "page" | "full" }) {
+  const loader = (
     <div className="loading mono muted" role="status">
       <div className="orbit-loader">
         <span />
@@ -225,6 +247,7 @@ export function Loading({ label = "Loading" }: { label?: string }) {
       {label}...
     </div>
   );
+  return center ? <div className={`loading-center${center === "full" ? " full" : ""}`}>{loader}</div> : loader;
 }
 
 export function StatusPill({ status }: { status: string }) {

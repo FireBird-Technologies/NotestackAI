@@ -253,7 +253,7 @@ function ConnectionsPanel({ accounts, onConnect, onChanged }: {
     <aside className="card stack lp-connections" aria-label="Connected accounts">
       <h2>Connections</h2>
       <p className="muted small">Posts go out through these accounts at their scheduled time.</p>
-      {!accounts && <div className="loading-center inline stacked"><Loading label="Loading your connections" /></div>}
+      {!accounts && <div className="loading-center inline"><Loading label="Loading your connections" /></div>}
       {accounts && CONNECT.map((c) => {
         const a = accounts.accounts.find((x) => x.platform === c.id);
         const days = a?.expires_at ? Math.max(0, Math.ceil((new Date(a.expires_at).getTime() - Date.now()) / 864e5)) : null;
@@ -426,7 +426,7 @@ export default function Launchpad() {
           </div>
           <Tabs tabs={[{ id: "month", label: "Month" }, { id: "agenda", label: "Agenda" }]} value={view} onChange={setView} />
         </div>
-        {!items && <div className="loading-center stacked lp-cal-loading"><Loading label="Loading your calendar" /></div>}
+        {!items && <div className="loading-center lp-cal-loading"><Loading label="Loading your calendar" /></div>}
         {items && items.length === 0 && (
           <div className="lp-empty">
             <p className="muted">Nothing scheduled this month.</p>

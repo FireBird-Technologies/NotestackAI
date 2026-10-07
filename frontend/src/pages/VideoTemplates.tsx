@@ -25,7 +25,7 @@ export default function VideoTemplates() {
         </p>
       )}
       {error && <p className="error-text">{error}</p>}
-      {!data && !error && <Loading label="Loading templates" />}
+      {!data && !error && <Loading label="Loading templates" center="page" />}
       {data?.templates.length === 0 && (
         <EmptyState title="No templates yet"
                     body="Make a template from your website, a brand document or a description. Your videos then match your brand."

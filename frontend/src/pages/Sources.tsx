@@ -227,8 +227,9 @@ export default function Sources() {
       <AddSource onAdded={added} />
       {error && <p className="error-text">{error}</p>}
 
+      {/* Outside the card grid, so the loader is centered across the page rather than in the first column */}
+      {!sources && <Loading center="page" />}
       <section className="grid-cards">
-        {!sources && <Loading />}
         {sources?.map((s) => {
           const job = jobs[s.id];
           const active = job && (job.status === "queued" || job.status === "running");

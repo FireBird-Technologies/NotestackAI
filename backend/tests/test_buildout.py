@@ -542,7 +542,10 @@ def test_launch_kit(client, auth, run_jobs, feed, llm, monkeypatch, db_session):
         "PickQuotes": {"quotes": [{"quote": "Charging more made my readers take the work seriously.",
                                    "source": ref}]},
     })
+    from app.services import renderer
+
     monkeypatch.setattr(media, "request_render", lambda *a, **k: None)
+    monkeypatch.setattr(renderer, "available", lambda: True)
     art = client.post("/api/artifacts/generate", json={"type": "launch_kit", "document_id": doc["id"]},
                       headers=auth).json()
     run_jobs()
@@ -563,6 +566,15 @@ def test_launch_kit(client, auth, run_jobs, feed, llm, monkeypatch, db_session):
 
     listing = client.get("/api/artifacts", params={"type": "launch_kit"}, headers=auth).json()
     assert listing["total"] == 1
+
+    # Renderer down: the kit keeps its quotes as text and makes no quote cards that could only fail.
+    monkeypatch.setattr(renderer, "available", lambda: False)
+    art = client.post("/api/artifacts/generate", json={"type": "launch_kit", "document_id": doc["id"]},
+                      headers=auth).json()
+    run_jobs()
+    kit = client.get(f"/api/artifacts/{art['id']}", headers=auth).json()
+    assert kit["status"] == "ready"
+    assert kit["content"]["quotes"] and kit["content"]["quote_card_ids"] == []
     assert client.delete(f"/api/artifacts/{art['id']}", headers=auth).status_code == 200
 
 

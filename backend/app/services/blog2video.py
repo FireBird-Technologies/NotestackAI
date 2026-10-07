@@ -85,7 +85,7 @@ class Denied(B2VError):
 
 
 UNAVAILABLE = "Video creation is temporarily unavailable. Try again later."
-NOT_RESPONDING = "The video service is not responding. Try again in a minute."
+NOT_RESPONDING = "The video service is being updated. Please try again in a while."
 
 
 def configured() -> bool:

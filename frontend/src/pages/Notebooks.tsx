@@ -136,7 +136,7 @@ export default function Notebooks() {
           New notebook
         </button>
       </PageHeader>
-      {!notebooks && <Loading />}
+      {!notebooks && <Loading center="page" />}
       <section className="nb-grid">
         {notebooks?.map((n) => (
           <article key={n.id} className={`card nb-card${n.is_archive ? " nb-archive" : ""}`}>

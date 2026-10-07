@@ -504,7 +504,7 @@ export default function TopicMap() {
       </PageHeader>
       {live && (running || live.status === "failed") && <JobProgress job={live} />}
       {error && <p className="error-text">{error}</p>}
-      {!data && <Loading />}
+      {!data && <Loading center="page" />}
       {data && data.nodes.length === 0 && !running && (
         <EmptyState
           title="No constellations yet"

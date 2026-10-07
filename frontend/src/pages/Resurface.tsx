@@ -56,7 +56,7 @@ export function ResurfaceIdeas({ onScheduled }: { onScheduled?: () => void }) {
   const live = useJob(job, () => load());
   const running = live && (live.status === "queued" || live.status === "running");
 
-  if (!data) return <Loading />;
+  if (!data) return <Loading center="full" />;
   const items = [...data.on_this_day, ...data.evergreen.filter((e) => !data.on_this_day.some((o) => o.id === e.id))];
 
   return (

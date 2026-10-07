@@ -4,7 +4,7 @@ import { ApiError } from "../api/client";
 import { videoEditApi, videosApi, type LayoutInfo, type LayoutSchema } from "../api/endpoints";
 import type { LegacyVideo, ScriptScene, VideoCatalog, VideoConfig, VideoJobState, VideoProject, VideoStatus } from "../api/types";
 import { CheckIcon, DownloadIcon, SparkleIcon } from "../components/icons/Icons";
-import { ConfirmButton, errorMessage, Loading, Modal, PageHeader, StatusPill, Tabs } from "../components/ui";
+import { ConfirmButton, ErrorText, errorMessage, Loading, Modal, PageHeader, StatusPill, Tabs, VIDEO_UPDATING } from "../components/ui";
 import { ImagesPanel, VoicePanel, type PanelProps } from "../components/video/EditorPanels";
 import { LookPanel } from "../components/video/SettingsPanel";
 import { SceneList } from "../components/video/SceneList";
@@ -157,7 +157,7 @@ export default function VideoEditor() {
     () =>
       videosApi.get(id).then((p) => {
         setProject(p);
-        setError((err) => (err?.startsWith("The video service is not responding") ? null : err));
+        setError((err) => (err?.startsWith(VIDEO_UPDATING) ? null : err));
       }).catch((e) => {
         if (e instanceof ApiError && e.status === 404) setNotFound(true);
         else setError(errorMessage(e));
@@ -382,7 +382,7 @@ export default function VideoEditor() {
       {failed && (
         <section className="card stack">
           <h2>This video could not be made</h2>
-          <p className="error-text">{status?.error ?? "Generation failed."}</p>
+          <ErrorText message={status?.error ?? "Generation failed."} />
           <p className="muted">It was not charged against your videos.</p>
           <div className="row">
             <Link to="/app/videos/new" className="btn btn-primary">Try again</Link>
@@ -415,7 +415,7 @@ export default function VideoEditor() {
         </section>
       )}
 
-      {error && <p className="error-text">{error}</p>}
+      {error && <ErrorText message={error} />}
       {/* A background job (not a render, which shows its own progress) takes the editor's place until it ends */}
       {fullScreenJob && running && <JobProgress label={running.label} name={title} state={job.data ?? null} />}
 
@@ -582,7 +582,7 @@ function ScriptReview({ id, premium, locked, onApproved }: { id: string; premium
           </div>
         </div>
       ))}
-      {error && <p className="error-text">{error}</p>}
+      {error && <ErrorText message={error} />}
       <div className="row">
         <button className="btn btn-primary" onClick={approve} disabled={!!busy || !scenes}>
           {busy === "approve" ? "Starting..." : "Generate Video"}

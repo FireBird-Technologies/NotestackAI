@@ -440,7 +440,7 @@ export default function NotebookView() {
   }, [nb]);
 
   if (loadError) return <p className="error-text">{loadError}</p>;
-  if (!nb) return <Loading label="Opening notebook" />;
+  if (!nb) return <Loading label="Opening notebook" center="full" />;
 
   const cite = (c: Citation) => {
     if (c.kind === "chat") setQuoted(c);

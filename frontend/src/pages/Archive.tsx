@@ -63,7 +63,7 @@ function MadeList({ filter }: { filter: Filter }) {
       <div className="row end wrap">
         <input className="input input-sm search" placeholder={`Search ${total} items by post or notebook`} value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search" />
       </div>
-      {!items && <div className="loading-center stacked"><Loading label="Loading your Library" /></div>}
+      {!items && <div className="loading-center"><Loading label="Loading your Library" /></div>}
       {items?.length === 0 && <EmptyState title="Nothing here yet" body="Summaries, audio, videos and launch kits you create show up here."
           action={
             <Link className="btn btn-primary" to="/app/studio">

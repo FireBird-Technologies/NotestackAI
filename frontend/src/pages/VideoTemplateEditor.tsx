@@ -97,7 +97,7 @@ export default function VideoTemplateEditor() {
       </div>
     );
   }
-  if (!tpl) return error ? <p className="error-text">{error}</p> : <Loading label="Loading template" />;
+  if (!tpl) return error ? <p className="error-text">{error}</p> : <Loading label="Loading template" center="full" />;
 
   const premium = !!config?.premium;
   const sceneKeys = ["intro", ...(tpl.content_codes ?? []).map((_, i) => `content_${i}`), "outro"];

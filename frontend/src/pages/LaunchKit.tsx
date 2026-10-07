@@ -252,7 +252,7 @@ export function LaunchKitPage() {
     <div className="page-wrap">
       <BackArrow fallback="/app/launchpad/kits" />
       {error && <p className="error-text">{error}</p>}
-      {!kit && !error && <div className="loading-center full stacked"><Loading label="Opening the kit" /></div>}
+      {!kit && !error && <div className="loading-center full"><Loading label="Opening the kit" /></div>}
       {kit && <KitView key={kit.id} kit={kit} onDeleted={() => navigate("/app/launchpad/kits", { replace: true })} />}
     </div>
   );

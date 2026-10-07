@@ -94,7 +94,7 @@ export default function Videos() {
       </div>
       {notice && <p className="notice">{notice}</p>}
       {error && <p className="error-text">{error}</p>}
-      {!videos && !error && <div className="loading-center stacked"><Loading label="Loading videos" /></div>}
+      {!videos && !error && <div className="loading-center"><Loading label="Loading videos" /></div>}
       {videos?.length === 0 && (
         <EmptyState
           title="No videos yet"

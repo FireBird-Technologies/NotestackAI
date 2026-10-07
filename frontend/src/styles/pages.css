@@ -446,11 +446,15 @@ select.input option {
   height: 4px;
 }
 
+/* Every loader: the spinner with its label underneath, both centered */
 .loading {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
+  justify-content: center;
+  gap: 16px;
   padding: 24px 0;
+  text-align: center;
 }
 
 /* A page's first load: the loader in the middle of the space under the header */
@@ -475,10 +479,17 @@ select.input option {
   min-height: 200px;
 }
 
-/* The label sits under the spinner, both centred */
-.loading-center .loading {
-  flex-direction: column;
-  gap: 16px;
+/* "The video service is being updated": a centered status line, not an error */
+.service-notice {
+  display: grid;
+  place-items: center;
+  padding: 24px 0;
+  text-align: center;
+  color: var(--white);
+}
+
+.service-notice.page {
+  min-height: 60vh;
 }
 
 .empty-state h3 {
@@ -4337,14 +4348,6 @@ select.input,
   display: grid;
   place-items: center;
   min-height: calc(4.5 * 64px + 4 * 6px);
-}
-
-/* These loaders (Library, Create a launch kit, opening a kit): the text under the spinner, centered */
-.lp-loading .loading,
-.lk-loading .loading,
-.loading-center.stacked .loading {
-  flex-direction: column;
-  text-align: center;
 }
 
 .lp-loading.fill {
