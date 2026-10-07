@@ -161,7 +161,7 @@ export function Body({ artifact, onCite }: { artifact: Artifact; onCite?: (c: Ci
           <p className="muted">
             {c.claims?.length ?? 0} claims, {c.hooks?.length ?? 0} hooks, posts for 4 platforms, SEO pack and carousel.
           </p>
-          <Link className="btn btn-small" to={`/app/launch-kit?kit=${artifact.id}`}>
+          <Link className="btn btn-small" to={`/app/launchpad/kits/${artifact.id}`}>
             Open Launch Kit
           </Link>
         </div>

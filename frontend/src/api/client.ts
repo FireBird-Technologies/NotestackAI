@@ -146,7 +146,9 @@ const TYPES_BY_EXT: Record<string, string> = {
   jpg: "image/jpeg",
   jpeg: "image/jpeg",
   webp: "image/webp",
+  gif: "image/gif",
   svg: "image/svg+xml",
+  mp4: "video/mp4",
 };
 
 /** Browsers leave File.type empty for some extensions (.md on Windows) and use vendor names for others. */

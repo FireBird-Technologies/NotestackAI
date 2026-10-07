@@ -34,7 +34,9 @@ def link_facets(text: str) -> list[dict]:
     return facets
 
 
-def publish(db: Session, account: SocialAccount, posts: list[str]) -> tuple[str, str]:
+def publish(db: Session, account: SocialAccount, posts: list[str], media: list | None = None) -> tuple[str, str]:
+    if media:
+        raise SocialError("Images and videos can only be posted to X and LinkedIn.", permanent=True)
     session = create_session(account.handle, token(account))
     headers = {"Authorization": f"Bearer {session['accessJwt']}"}
     root = parent = None

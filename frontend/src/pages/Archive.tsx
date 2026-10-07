@@ -7,6 +7,7 @@ import { Reader } from "../components/Reader";
 import { EmptyState, Loading, PageHeader, Tabs } from "../components/ui";
 import Videos from "./Videos";
 import VoiceProfile from "./VoiceProfile";
+import { canPost, PostButton } from "../components/launchpad/PostButton";
 
 type Filter = "all" | "summary" | "audio_overview" | "launch_kit" | "quote_card,carousel";
 /** The Library's tabs: kinds of things made (a filter on one list), plus your videos and your voices (their own pages). */
@@ -62,7 +63,7 @@ function MadeList({ filter }: { filter: Filter }) {
       <div className="row end wrap">
         <input className="input input-sm search" placeholder={`Search ${total} items by post or notebook`} value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search" />
       </div>
-      {!items && <Loading />}
+      {!items && <div className="loading-center stacked"><Loading label="Loading your Library" /></div>}
       {items?.length === 0 && <EmptyState title="Nothing here yet" body="Summaries, audio, videos and launch kits you create show up here."
           action={
             <Link className="btn btn-primary" to="/app/studio">
@@ -75,6 +76,7 @@ function MadeList({ filter }: { filter: Filter }) {
           <ArtifactRow
             key={a.id}
             artifact={a}
+            actions={(art) => (canPost(art) ? <PostButton artifactId={art.id} /> : null)}
             onCite={(c) => c.document_id && setReading({ id: c.document_id, start: c.line_start, end: c.line_end })}
             onRemoved={(id) => {
               setItems((list) => (list ?? []).filter((x) => x.id !== id));

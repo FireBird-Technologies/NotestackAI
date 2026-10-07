@@ -19,7 +19,7 @@ const NAV: { to: string; label: string; icon: typeof PlanetIcon; end?: boolean; 
   { to: "/app/notebooks", label: "Notebooks", icon: PlanetIcon },
   { to: "/app/sources", label: "Sources", icon: SatelliteDishIcon, also: ["/app/map"] },
   { to: "/app/archive", label: "Library", icon: LibraryIcon, also: ["/app/videos"] },
-  { to: "/app/launchpad", label: "Launchpad", icon: LaunchpadIcon, also: ["/app/resurface"] },
+  { to: "/app/launchpad", label: "Launchpad", icon: LaunchpadIcon, also: ["/app/resurface", "/app/launch-kit"] },
 ];
 
 const COLLAPSED_KEY = "ns_sidebar_collapsed";

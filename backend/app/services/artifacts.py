@@ -18,6 +18,7 @@ TYPE_LABELS = {
     "carousel": "Carousel",
     "launch_kit": "Launch Kit",
     "mind_map": "Mind Constellation",
+    "upload": "Upload",
 }
 
 

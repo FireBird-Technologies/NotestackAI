@@ -5,6 +5,7 @@ import type { VideoListItem, VideoQuota } from "../api/types";
 import { TrashIcon } from "../components/icons/Icons";
 import { EmptyState, errorMessage, formatDate, Loading, Modal } from "../components/ui";
 import { useUpgrade } from "../hooks/useUpgrade";
+import { PostButton } from "../components/launchpad/PostButton";
 
 const JOB_LABELS: Record<string, string> = {
   regenerating: "Changing template",
@@ -93,7 +94,7 @@ export default function Videos() {
       </div>
       {notice && <p className="notice">{notice}</p>}
       {error && <p className="error-text">{error}</p>}
-      {!videos && !error && <div className="loading-center"><Loading label="Loading videos" /></div>}
+      {!videos && !error && <div className="loading-center stacked"><Loading label="Loading videos" /></div>}
       {videos?.length === 0 && (
         <EmptyState
           title="No videos yet"
@@ -120,6 +121,7 @@ export default function Videos() {
                     {v.created_at && <span>{formatDate(v.created_at)}</span>}
                   </span>
                 </Link>
+                {st.tone === "done" && <PostButton artifactId={v.id} />}
                 <button type="button" className="icon-btn vw-list-delete" aria-label={`Delete ${v.title}`} title="Delete"
                         onClick={() => askDelete(v)}>
                   <TrashIcon size={18} />

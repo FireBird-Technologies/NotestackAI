@@ -899,7 +899,7 @@ export default function TopicMap() {
                     {acting === "audio" ? "Starting..." : "Audio about this"}
                   </button>
                   {selected.posts[0] && (
-                    <button className="btn btn-small" disabled={acting !== null} onClick={() => navigate(`/app/launch-kit?post=${selected.posts[0].id}`)}>
+                    <button className="btn btn-small" disabled={acting !== null} onClick={() => navigate(`/app/launchpad/kits?post=${selected.posts[0].id}`)}>
                       Launch Kit for the latest post
                     </button>
                   )}

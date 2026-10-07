@@ -69,7 +69,7 @@ export function YourVoices({ reloadKey = 0, onAdd }: {
         <button className="btn btn-primary" onClick={onAdd}>Add voices</button>
       </div>
       {error && <p className="error-text">{error}</p>}
-      {!voices && !error && <div className="loading-center inline"><Loading label="Loading voices" /></div>}
+      {!voices && !error && <div className="loading-center inline stacked"><Loading label="Loading voices" /></div>}
 
       {voices && (
         <>

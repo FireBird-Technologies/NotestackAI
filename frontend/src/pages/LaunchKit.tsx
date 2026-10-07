@@ -1,15 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { artifactsApi, docsApi } from "../api/endpoints";
 import type { Artifact, Doc, LaunchKitContent, Platform } from "../api/types";
-import { ArtifactCard } from "../components/ArtifactCard";
-import { DocPicker } from "../components/DocPicker";
 import { ScheduleModal } from "../components/ScheduleModal";
-import { ConfirmButton, CopyButton, errorMessage, formatDate, JobProgress, Loading, PageHeader, StatusPill, Tabs } from "../components/ui";
+import { BackArrow, ConfirmButton, CopyButton, errorMessage, formatDate, JobProgress, Loading, PageHeader, StatusPill } from "../components/ui";
 import { useJob } from "../hooks/useJob";
 
 type PostKey = keyof LaunchKitContent["posts"];
-type Tab = "posts" | "hooks" | "visuals" | "seo";
 
 const PLATFORM_OF: Record<PostKey, { platform: Platform; label: string; limit: number; thread: boolean }> = {
   x_thread: { platform: "x", label: "X thread", limit: 280, thread: true },
@@ -38,7 +35,7 @@ function PostsEditor({ kit, keyName, onSave }: { kit: Artifact; keyName: PostKey
     <div className="stack">
       <div className="row between">
         <p className="muted">
-          {meta.thread ? `${posts.length} posts in the thread.` : keyName === "substack_notes" ? "Each note stands alone. Schedule them on different days." : "One post."}
+          {meta.thread ? `${posts.length} posts in the thread.` : keyName === "substack_notes" ? "Each note stands alone. Schedule them on different days." : "The full post, written from the article. Edit it here, then schedule it."}
         </p>
         <div className="row">
           {dirty && (
@@ -52,12 +49,6 @@ function PostsEditor({ kit, keyName, onSave }: { kit: Artifact; keyName: PostKey
               Save edits
             </button>
           )}
-          <CopyButton text={posts.join(meta.thread ? "\n\n---\n\n" : "\n\n")} label="Copy all" />
-          {keyName !== "substack_notes" && (
-            <button className="btn btn-small" onClick={() => setSchedule(meta.thread ? posts : [posts.join("\n\n")])}>
-              Schedule
-            </button>
-          )}
         </div>
       </div>
       {posts.map((p, i) => (
@@ -68,14 +59,13 @@ function PostsEditor({ kit, keyName, onSave }: { kit: Artifact; keyName: PostKey
               {p.length} / {meta.limit}
             </span>
           </div>
-          <textarea className="textarea" rows={Math.min(14, Math.max(3, Math.ceil(p.length / 70)))} value={p} onChange={(e) => edit(i, e.target.value)} />
+          <textarea className="textarea" rows={Math.min(10, Math.max(3, Math.ceil(p.length / 70)))} value={p} onChange={(e) => edit(i, e.target.value)} />
           <div className="row">
             <CopyButton text={p} />
-            {keyName === "substack_notes" && (
-              <button className="btn btn-small" onClick={() => setSchedule([p])}>
-                Schedule
-              </button>
-            )}
+            {/* Just this post (as it reads on screen, saved or not) */}
+            <button className="btn btn-small" onClick={() => setSchedule([p])}>
+              Schedule
+            </button>
           </div>
         </div>
       ))}
@@ -83,7 +73,7 @@ function PostsEditor({ kit, keyName, onSave }: { kit: Artifact; keyName: PostKey
         <ScheduleModal
           platform={meta.platform}
           posts={schedule}
-          artifactId={kit.id}
+          kitId={kit.id} kitTitle={c.post_title ?? kit.title}
           documentId={kit.document_id}
           onClose={() => setSchedule(null)}
         />
@@ -92,91 +82,11 @@ function PostsEditor({ kit, keyName, onSave }: { kit: Artifact; keyName: PostKey
   );
 }
 
-function CarouselTab({ kit }: { kit: Artifact }) {
-  const c = kit.content as LaunchKitContent;
-  const [slides, setSlides] = useState(c.carousel ?? []);
-  const [renders, setRenders] = useState<Artifact[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    setSlides(c.carousel ?? []);
-    if (kit.document_id) artifactsApi.list({ type: "carousel", document_id: kit.document_id }).then((p) => setRenders(p.items));
-  }, [kit.id, kit.document_id, c.carousel]);
-
-  return (
-    <div className="stack">
-      {slides.map((s, i) => (
-        <div key={i} className="slide-edit">
-          <span className="mono muted">
-            Slide {i + 1} / {slides.length}
-          </span>
-          <input className="input input-sm" value={s.heading} onChange={(e) => setSlides(slides.map((x, j) => (j === i ? { ...x, heading: e.target.value } : x)))} aria-label={`Slide ${i + 1} heading`} />
-          <textarea className="textarea" rows={2} value={s.body} onChange={(e) => setSlides(slides.map((x, j) => (j === i ? { ...x, body: e.target.value } : x)))} aria-label={`Slide ${i + 1} body`} />
-        </div>
-      ))}
-      {error && <p className="error-text">{error}</p>}
-      <div className="row">
-        <button
-          className="btn btn-small"
-          onClick={() => artifactsApi.update(kit.id, { content: { carousel: slides } })}
-        >
-          Save slides
-        </button>
-        <button
-          className="btn btn-small btn-primary"
-          disabled={!slides.length || !kit.document_id}
-          onClick={async () => {
-            setError(null);
-            try {
-              const a = await artifactsApi.generate({ type: "carousel", document_id: kit.document_id!, slides, parent_id: kit.id });
-              setRenders((r) => [a, ...r]);
-            } catch (e) {
-              setError(errorMessage(e));
-            }
-          }}
-        >
-          Render slides as images
-        </button>
-      </div>
-      <div className="gallery">
-        {renders.map((a) => (
-          <ArtifactCard key={a.id} artifact={a} onRemoved={(id) => setRenders((r) => r.filter((x) => x.id !== id))} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function QuotesTab({ kit }: { kit: Artifact }) {
-  const c = kit.content as LaunchKitContent;
-  const [cards, setCards] = useState<Artifact[]>([]);
-  useEffect(() => {
-    Promise.all((c.quote_card_ids ?? []).map((id) => artifactsApi.get(id).catch(() => null))).then((list) =>
-      setCards(list.filter(Boolean) as Artifact[]),
-    );
-  }, [c.quote_card_ids]);
-  return (
-    <div className="stack">
-      {(c.quotes ?? []).map((q, i) => (
-        <blockquote key={i} className="pull">
-          {q.quote}
-          <footer className="mono muted">
-            {q.source.title ?? q.source.path}, lines {q.source.line_start} to {q.source.line_end} <CopyButton text={q.quote} />
-          </footer>
-        </blockquote>
-      ))}
-      <div className="gallery">
-        {cards.map((a) => (
-          <ArtifactCard key={a.id} artifact={a} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function KitView({ kit: initial, onDeleted }: { kit: Artifact; onDeleted: () => void }) {
   const [kit, setKit] = useState(initial);
-  const [tab, setTab] = useState<Tab>("posts");
-  const [platform, setPlatform] = useState<PostKey>("x_thread");
+  // Kits are worked for LinkedIn only for now (X posting is switched off).
+  const platform = "linkedin" as const;
+  const [scheduleHook, setScheduleHook] = useState<string | null>(null);
   const job = useJob(initial.job, () => artifactsApi.get(initial.id).then(setKit));
   useEffect(() => setKit(initial), [initial]);
   const c = kit.content as LaunchKitContent;
@@ -192,17 +102,7 @@ function KitView({ kit: initial, onDeleted }: { kit: Artifact; onDeleted: () => 
         <div>
           <p className="eyebrow">Launch Kit</p>
           <h2>{c.post_title ?? kit.title}</h2>
-          <p className="mono muted">
-            {formatDate(kit.created_at, true)}
-            {c.post_url?.startsWith("http") && (
-              <>
-                {" · "}
-                <a href={c.post_url} target="_blank" rel="noreferrer">
-                  View post
-                </a>
-              </>
-            )}
-          </p>
+          <p className="mono muted">{formatDate(kit.created_at, true)}</p>
         </div>
         <div className="row">
           <StatusPill status={running ? "working" : kit.status} />
@@ -219,109 +119,41 @@ function KitView({ kit: initial, onDeleted }: { kit: Artifact; onDeleted: () => 
       {job && (running || job.status === "failed") && <JobProgress job={job} />}
       {kit.status === "ready" && (
         <>
-          <Tabs<Tab>
-            tabs={[
-              { id: "posts", label: "Posts" },
-              { id: "hooks", label: "Hooks", count: c.hooks?.length },
-              { id: "visuals", label: "Visuals", count: (c.carousel?.length ?? 0) + (c.quotes?.length ?? 0) },
-              { id: "seo", label: "SEO" },
-            ]}
-            value={tab}
-            onChange={setTab}
-          />
-          {tab === "posts" && (
-            <div className="gen-chips" role="tablist" aria-label="Platform">
-              {(Object.keys(PLATFORM_OF) as PostKey[]).map((k) => (
-                <button key={k} type="button" role="tab" aria-selected={platform === k} className={`chip${platform === k ? " on" : ""}`} onClick={() => setPlatform(k)}>
-                  {PLATFORM_OF[k].label}
-                </button>
-              ))}
-            </div>
+          <section className="kit-section" aria-labelledby="kit-post-head">
+            <header className="kit-section-head">
+              <h3 id="kit-post-head">LinkedIn post</h3>
+            </header>
+            <PostsEditor kit={kit} keyName={platform} onSave={(p) => savePosts(platform, p)} />
+          </section>
+          {(c.hooks?.length ?? 0) > 0 && (
+            <section className="kit-section" aria-labelledby="kit-hooks-head">
+              <header className="kit-section-head">
+                <h3 id="kit-hooks-head">Hooks</h3>
+                <span className="muted small">{c.hooks?.length} short lines to lead with, strongest first. Each can go out on its own.</span>
+              </header>
+              <ol className="kit-hooks">
+                {(c.hooks ?? []).map((h, i) => (
+                  <li key={i} className="kit-hook">
+                    <div className="kit-hook-top">
+                      <span className="mono small kit-hook-num">Hook {i + 1}</span>
+                      <span className="mono small kit-hook-strength" title={h.rationale}>
+                        strength {Math.round(h.strength * 100)}
+                      </span>
+                    </div>
+                    <p className="kit-hook-text">{h.text}</p>
+                    <p className="muted small">{h.rationale}</p>
+                    <div className="row">
+                      <CopyButton text={h.text} />
+                      <button className="btn btn-small" onClick={() => setScheduleHook(h.text)}>Schedule</button>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </section>
           )}
-          {tab === "hooks" && (
-            <ol className="hooks">
-              {(c.hooks ?? []).map((h, i) => (
-                <li key={i}>
-                  <p>{h.text}</p>
-                  <p className="mono muted small">
-                    strength {Math.round(h.strength * 100)} · {h.rationale}
-                  </p>
-                  <CopyButton text={h.text} />
-                </li>
-              ))}
-            </ol>
-          )}
-          {tab === "posts" && <PostsEditor kit={kit} keyName={platform} onSave={(p) => savePosts(platform, p)} />}
-          {tab === "seo" && (
-            <dl className="seo">
-              <dt>Title options</dt>
-              <dd>
-                <ul>
-                  {(c.seo?.title_options ?? []).map((t) => (
-                    <li key={t}>
-                      {t} <CopyButton text={t} />
-                    </li>
-                  ))}
-                </ul>
-              </dd>
-              <dt>Meta description</dt>
-              <dd>
-                {c.seo?.meta_description} <span className="mono muted">({c.seo?.meta_description?.length ?? 0} chars)</span>{" "}
-                <CopyButton text={c.seo?.meta_description ?? ""} />
-              </dd>
-              <dt>Slug</dt>
-              <dd className="mono">{c.seo?.slug}</dd>
-              <dt>Keywords</dt>
-              <dd>
-                <div className="chips">
-                  {(c.seo?.keywords ?? []).map((k) => (
-                    <span key={k} className="chip">
-                      {k}
-                    </span>
-                  ))}
-                </div>
-              </dd>
-              <dt>Internal links</dt>
-              <dd>
-                <ul>
-                  {(c.seo?.internal_links ?? []).map((l, i) => (
-                    <li key={i}>
-                      Link <strong>{l.anchor_text}</strong> to <span className="mono">{l.path}</span>
-                      <span className="muted"> {l.reason}</span>
-                    </li>
-                  ))}
-                  {!c.seo?.internal_links?.length && <li className="muted">No internal link suggestions.</li>}
-                </ul>
-              </dd>
-            </dl>
-          )}
-          {tab === "visuals" && (
-            <>
-              <h3>Carousel</h3>
-              <CarouselTab kit={kit} />
-              <h3>Quotes</h3>
-              <QuotesTab kit={kit} />
-            </>
-          )}
-          {tab === "posts" && (c.claims?.length ?? 0) > 0 && (
-            <details className="delivery">
-              <summary className="mono muted small">Fact check: {c.claims?.length} claims traced to the post</summary>
-            <ol className="claims">
-              {(c.claims ?? []).map((cl, i) => (
-                <li key={i}>
-                  <p>{cl.claim}</p>
-                  {cl.sources.map((s, j) => (
-                    <p key={j} className="muted cite-span">
-                      <span className="mono">
-                        lines {s.line_start} to {s.line_end}:
-                      </span>{" "}
-                      {s.quote}
-                    </p>
-                  ))}
-                </li>
-              ))}
-            </ol>
-            </details>
+          {scheduleHook !== null && (
+            <ScheduleModal platform={PLATFORM_OF[platform].platform} posts={[scheduleHook]} kitId={kit.id} kitTitle={c.post_title ?? kit.title}
+                           documentId={kit.document_id} onClose={() => setScheduleHook(null)} />
           )}
         </>
       )}
@@ -330,143 +162,107 @@ function KitView({ kit: initial, onDeleted }: { kit: Artifact; onDeleted: () => 
 }
 
 /** Pick a post card (one click generates), or reopen an earlier kit from the rail. */
-export default function LaunchKit() {
-  const [params, setParams] = useSearchParams();
-  const [kits, setKits] = useState<Artifact[] | null>(null);
-  const [newest, setNewest] = useState<Doc[] | null>(null);
-  const [post, setPost] = useState<string[]>([]);
-  const [searching, setSearching] = useState(false);
-  const [active, setActive] = useState<Artifact | null>(null);
+/** /app/launchpad/kits: create a Launch Kit from one of your posts (rows, searchable). Earlier kits are listed on
+ * the Schedule a launch page. ?post=<id> starts that post's kit straight away. */
+export function LaunchKits() {
+  const [params] = useSearchParams();
+  const navigate = useNavigate();
+  const [posts, setPosts] = useState<Doc[] | null>(null);
+  const [q, setQ] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const autoStarted = useRef(false);
 
-  const load = useCallback(() => artifactsApi.list({ type: "launch_kit", limit: 100 }).then((p) => setKits(p.items)), []);
   useEffect(() => {
-    load();
-    docsApi.list({ limit: 24 }).then((p) => setNewest(p.items.filter((d) => !d.locked).slice(0, 6)));
-  }, [load]);
-  useEffect(() => {
-    const id = params.get("kit");
-    if (id && active?.id !== id) artifactsApi.get(id).then(setActive, () => setActive(null));
-    if (!id && active) setActive(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params]);
+    const t = setTimeout(() => {
+      docsApi.list({ q: q || undefined, limit: 30 }).then((p) => setPosts(p.items.filter((d) => !d.locked)),
+                                                            (e) => setError(errorMessage(e)));
+    }, 200);
+    return () => clearTimeout(t);
+  }, [q]);
 
-  const generate = async (documentId: string) => {
+  const generate = useCallback(async (documentId: string) => {
     setBusy(documentId);
     setError(null);
     try {
       const kit = await artifactsApi.generate({ type: "launch_kit", document_id: documentId });
-      setKits((k) => [kit, ...(k ?? [])]);
-      setActive(kit);
-      setParams({ kit: kit.id });
+      navigate(`/app/launchpad/kits/${kit.id}`); // its page shows the progress, then the kit
     } catch (e) {
       setError(errorMessage(e));
-    } finally {
       setBusy(null);
     }
-  };
+  }, [navigate]);
 
-  // ?post=<id> (from Resurfacing or a post page) starts the kit straight away.
   useEffect(() => {
     const id = params.get("post");
     if (id && !autoStarted.current) {
       autoStarted.current = true;
       void generate(id);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const open = (k: Artifact) => {
-    setActive(k);
-    setParams({ kit: k.id });
-  };
+  }, [params, generate]);
 
   return (
     <div className="page-wrap">
-      <PageHeader eyebrow="Launch Kit" title="Everything you need to launch a post">
-        {active && (
-          <button className="btn btn-primary" onClick={() => setParams({})}>
-            New kit
-          </button>
-        )}
-      </PageHeader>
+      <BackArrow fallback="/app/launchpad" />
+      <PageHeader eyebrow="Launch Kit" title="Create a launch kit" />
       {error && <p className="error-text">{error}</p>}
-      {active ? (
-        <div className="kit-layout kit-open">
-          <aside className="card kit-rail">
-            <p className="eyebrow">Your kits</p>
-            <ul className="kit-list">
-              {kits?.map((k) => (
-                <li key={k.id}>
-                  <button className={`link-btn${active.id === k.id ? " active" : ""}`} onClick={() => open(k)}>
-                    {(k.content.post_title as string | undefined) ?? k.title}
-                  </button>
-                  <span className="mono muted"> {k.status === "ready" ? formatDate(k.created_at) : k.status}</span>
-                </li>
-              ))}
-            </ul>
-          </aside>
-          <KitView
-            key={active.id}
-            kit={active}
-            onDeleted={() => {
-              setParams({});
-              load();
-            }}
-          />
+      <section className="card stack">
+        <div className="row between wrap">
+          <div>
+            <h2>Pick a post to launch</h2>
+            <p className="muted">A LinkedIn post and hooks, in your voice and grounded in the post.</p>
+          </div>
+          <input className="input input-sm search" placeholder="Search your posts" value={q}
+                 onChange={(e) => setQ(e.target.value)} aria-label="Search your posts" />
         </div>
-      ) : (
-        <>
-          <section className="card stack">
-            <div className="row between">
-              <h2>Pick a post to launch</h2>
-              <button className="link-btn small" onClick={() => setSearching(!searching)}>
-                {searching ? "Show newest posts" : "Search all posts"}
+        {!posts && !error && <div className="lk-loading"><Loading label="Loading your posts" /></div>}
+        {posts?.length === 0 && <p className="muted">{q ? "No posts match." : "No indexed posts yet. Connect a source first."}</p>}
+        <ul className="lk-rows lk-rows-scroll">
+          {posts?.map((d) => (
+            <li key={d.id} className="lk-row">
+              <span className="mono muted small lk-date">{formatDate(d.published_at)}</span>
+              <span className="lk-title">
+                <strong>{d.title}</strong>
+                {d.source_title && <span className="muted small">{d.source_title}</span>}
+              </span>
+              <button className="btn btn-small btn-primary" disabled={busy !== null} onClick={() => generate(d.id)}>
+                {busy === d.id ? "Launching..." : "Launch"}
               </button>
-            </div>
-            <p className="muted">Hooks, a thread, LinkedIn, Notes, Bluesky, SEO, a carousel and quote cards, in your voice and grounded in the post.</p>
-            {searching ? (
-              <>
-                <DocPicker selected={post} onChange={setPost} single />
-                <div className="row end">
-                  <button className="btn btn-primary" disabled={!post.length || busy !== null} onClick={() => generate(post[0])}>
-                    {busy ? "Launching..." : "Generate Launch Kit"}
-                  </button>
-                </div>
-              </>
-            ) : (
-              <div className="post-cards">
-                {!newest && <Loading />}
-                {newest?.length === 0 && <p className="muted">No indexed posts yet. Connect a source first.</p>}
-                {newest?.map((d) => (
-                  <button key={d.id} type="button" className="post-card" disabled={busy !== null} onClick={() => generate(d.id)}>
-                    <span className="mono muted small">{formatDate(d.published_at)}</span>
-                    <strong className="clamp-3">{d.title}</strong>
-                    <span className="post-card-go">{busy === d.id ? "Launching..." : "Launch this post"}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </section>
-          {kits && kits.length > 0 && (
-            <section className="card">
-              <h2>Earlier kits</h2>
-              <ul className="kit-list">
-                {kits.map((k) => (
-                  <li key={k.id}>
-                    <button className="link-btn" onClick={() => open(k)}>
-                      {(k.content.post_title as string | undefined) ?? k.title}
-                    </button>
-                    <span className="mono muted"> {k.status === "ready" ? formatDate(k.created_at) : k.status}</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-        </>
-      )}
+            </li>
+          ))}
+        </ul>
+      </section>
     </div>
   );
+}
+
+/** /app/launchpad/kits/:id: one Launch Kit (LinkedIn post and hooks), scheduled from here. */
+export function LaunchKitPage() {
+  const { id = "" } = useParams();
+  const navigate = useNavigate();
+  const [kit, setKit] = useState<Artifact | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setKit(null);
+    artifactsApi.get(id).then(setKit, (e) => setError(errorMessage(e)));
+  }, [id]);
+
+  return (
+    <div className="page-wrap">
+      <BackArrow fallback="/app/launchpad/kits" />
+      {error && <p className="error-text">{error}</p>}
+      {!kit && !error && <div className="loading-center full stacked"><Loading label="Opening the kit" /></div>}
+      {kit && <KitView key={kit.id} kit={kit} onDeleted={() => navigate("/app/launchpad/kits", { replace: true })} />}
+    </div>
+  );
+}
+
+/** The old /app/launch-kit address (?kit=, ?post=) lands on the Launchpad's kit pages. */
+export default function LaunchKitRedirect() {
+  const [params] = useSearchParams();
+  const kit = params.get("kit");
+  const post = params.get("post");
+  const to = kit ? `/app/launchpad/kits/${kit}` : post ? `/app/launchpad/kits?post=${post}` : "/app/launchpad/kits";
+  return <Navigate to={to} replace />;
 }

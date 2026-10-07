@@ -152,6 +152,8 @@ def list_artifacts(
     query = select(Artifact).where(Artifact.workspace_id == ctx.workspace.id)
     if type:
         query = query.where(Artifact.type.in_(type.split(",")))
+    else:  # files uploaded to post live in the Launchpad's picker, not among the things Notestack made
+        query = query.where(Artifact.type != "upload")
     if notebook_id:
         query = query.where(Artifact.notebook_id == notebook_id)
     if document_id:
@@ -183,9 +185,13 @@ def patch_artifact(artifact_id: uuid.UUID, body: PatchIn, ctx: Ctx = Depends(get
     content = dict(a.content_json or {})
     if body.content is not None:
         protected = {"slide_keys", "quote_card_ids", "segments", "voices"}
+        if a.type == "upload":  # what the file is, as posting reads it: only its title can change
+            protected |= {"filename", "content_type", "media", "size_bytes", "duration_s"}
         content.update({k: v for k, v in body.content.items() if k not in protected})
     if body.title is not None:
-        content["title"] = body.title
+        if not body.title.strip():
+            raise HTTPException(400, "Give it a name.")
+        content["title"] = body.title.strip()
     a.content_json = content
     ctx.db.commit()
     return serialize_artifact(a, latest_jobs(ctx.db, [a.id]).get(a.id))
@@ -200,6 +206,10 @@ def delete_artifact(artifact_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
         remove_video(ctx, a)
         return {"ok": True}
     storage.delete_prefix(f"ws/{ctx.workspace.id}/artifacts/{a.id}/")
+    if a.type == "upload":  # a file from the user's computer: its upload record (and file) go too
+        from app.services.uploads import remove_upload_artifact
+
+        remove_upload_artifact(ctx.db, a)
     ctx.db.query(CalendarItem).filter(CalendarItem.artifact_id == a.id, CalendarItem.status == "scheduled").delete()
     ctx.db.delete(a)
     ctx.db.commit()

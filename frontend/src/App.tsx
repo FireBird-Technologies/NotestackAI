@@ -8,8 +8,8 @@ import AuthPage from "./pages/AuthPage";
 import { Blog, BlogPostPage } from "./pages/Blog";
 import Landing from "./pages/Landing";
 import Archive from "./pages/Archive";
-import Launchpad from "./pages/Launchpad";
-import LaunchKit from "./pages/LaunchKit";
+import Launchpad, { ScheduleLaunch } from "./pages/Launchpad";
+import LaunchKitRedirect, { LaunchKitPage, LaunchKits } from "./pages/LaunchKit";
 import MissionControl from "./pages/MissionControl";
 import Notebooks from "./pages/Notebooks";
 import NotebookLMAlternative from "./pages/NotebookLMAlternative";
@@ -66,8 +66,11 @@ export default function App() {
         <Route path="map" element={<TopicMap />} />
         <Route path="voice" element={<VoiceRedirect />} />
         <Route path="studio" element={<Studio />} />
-        <Route path="launch-kit" element={<LaunchKit />} />
+        <Route path="launch-kit" element={<LaunchKitRedirect />} />
         <Route path="launchpad" element={<Launchpad />} />
+        <Route path="launchpad/new" element={<ScheduleLaunch />} />
+        <Route path="launchpad/kits" element={<LaunchKits />} />
+        <Route path="launchpad/kits/:id" element={<LaunchKitPage />} />
         <Route path="archive" element={<Archive />} />
         <Route path="resurface" element={<Resurface />} />
         <Route path="settings" element={<Settings />} />

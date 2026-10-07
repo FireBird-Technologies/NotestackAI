@@ -62,7 +62,7 @@ class Settings(BaseSettings):
     # Folder inside the bucket, so Notestack can share a bucket with other apps. Empty = bucket root.
     r2_prefix: str = ""
     r2_presign_ttl_seconds: int = 3600
-    max_upload_bytes: int = 200 * 1024 * 1024
+    max_upload_bytes: int = 300 * 1024 * 1024
 
     # LLM (LiteLLM model strings; Z.ai GLM by default)
     llm_model: str = "openai/glm-5.3"
@@ -116,6 +116,7 @@ class Settings(BaseSettings):
 
     # Social publishing (Launchpad). Redirect URIs: {API_URL}/api/social/{x,linkedin}/callback
     social_token_key: str = ""  # Fernet key; derived from JWT_SECRET when empty
+    x_enabled: bool = False  # X posting is switched off for now (LinkedIn only); set X_ENABLED=true to bring it back
     x_client_id: str = ""
     x_client_secret: str = ""
     linkedin_client_id: str = ""

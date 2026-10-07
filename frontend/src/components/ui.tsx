@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { ApiError } from "../api/client";
 import type { Job } from "../api/types";
 
@@ -51,7 +52,12 @@ export function Modal({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      // A modal opened from a modal (a picker over the composer): Escape closes only the top one.
+      const open = document.querySelectorAll(".modal-backdrop");
+      if (open[open.length - 1] === ref.current?.parentElement) onClose();
+    };
     document.addEventListener("keydown", onKey);
     ref.current?.focus();
     return () => document.removeEventListener("keydown", onKey);
@@ -222,12 +228,30 @@ export function Loading({ label = "Loading" }: { label?: string }) {
 }
 
 export function StatusPill({ status }: { status: string }) {
-  const tone = ["ready", "ok", "done", "posted", "reminded"].includes(status)
+  const tone = ["ready", "ok", "done", "posted", "reminded", "connected"].includes(status)
     ? "ok"
     : ["failed", "error"].includes(status)
       ? "bad"
-      : "busy";
+      : ["paused", "expired", "revoked", "disconnected"].includes(status)
+        ? "warn"
+        : "busy";
   return <span className={`pill pill-${tone} mono`}>{status}</span>;
+}
+
+/** An arrow back to exactly the page before (browser history); `fallback` when the page was opened directly. */
+export function BackArrow({ fallback, label = "Back" }: { fallback: string; label?: string }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  return (
+    <button type="button" className="back-link page-back"
+            onClick={() => (location.key !== "default" ? navigate(-1) : navigate(fallback))}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+           strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M19 12H5m6-6-6 6 6 6" />
+      </svg>
+      {label}
+    </button>
+  );
 }
 
 export function PageHeader({ eyebrow, title, children }: { eyebrow: string; title: string; children?: ReactNode }) {

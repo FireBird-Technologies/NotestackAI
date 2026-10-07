@@ -18,6 +18,7 @@ router = APIRouter(prefix="/api/storage", tags=["storage"])
 ALLOWED_TYPES = {
     "image/png",
     "image/jpeg",
+    "image/gif",
     "image/webp",
     "image/svg+xml",
     "audio/mpeg",

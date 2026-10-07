@@ -89,7 +89,8 @@ export type AnswerFeedback = { rating: "up" | "down"; reasons: string[]; comment
 export type WorkspaceChat = ChatSummary & { notebook_id: string; notebook_title: string };
 export type ChatMessage = { id: string; role: "user" | "assistant"; text: string; citations: Citation[]; feedback?: AnswerFeedback | null };
 
-export type ArtifactType = "summary" | "audio_overview" | "video" | "quote_card" | "carousel" | "launch_kit" | "mind_map";
+export type ArtifactType = "summary" | "audio_overview" | "video" | "quote_card" | "carousel" | "launch_kit" | "mind_map"
+  | "upload"; // a file the user brought from their computer, to post
 
 export type SourceRef = { path: string; line_start: number; line_end: number; title?: string | null; quote?: string };
 
@@ -257,15 +258,44 @@ export type Quota = {
 
 export type Platform = "x" | "linkedin" | "bluesky" | "substack_notes";
 
+/** Something made that a post can carry: images (quote card, carousel slides), a video, or text only. */
+export type PostableArtifact = {
+  id: string;
+  type: ArtifactType;
+  type_label: string;
+  title: string;
+  media: "image" | "video" | "text";
+  media_count: number;
+  duration_s: number | null;
+  thumb_url: string | null;
+  /** A video made but not rendered to an MP4 yet: it can be posted once rendered (in the video editor). */
+  needs_render: boolean;
+  /** Its MP4 is being rendered: it can be scheduled once that's done. */
+  rendering: boolean;
+  /** A Notestack (blog2video) video: it opens in the video editor. */
+  editable_video: boolean;
+  /** An uploaded file's link, to preview it (null for anything else). */
+  view_url: string | null;
+  created_at: string | null;
+  /** A starting text: X as a thread (list of posts), LinkedIn as one post. */
+  prefill: { x: string[]; linkedin: string };
+};
+
 export type CalendarItem = {
   id: string;
   platform: Platform;
   platform_label: string;
   scheduled_at: string;
-  status: "scheduled" | "publishing" | "posted" | "reminded" | "failed" | "draft";
+  /** paused: its account's connection is down (or held by hand); never attempted until resumed. */
+  status: "scheduled" | "publishing" | "posted" | "reminded" | "failed" | "draft" | "paused";
   content: string;
   thread: string[];
   artifact_id: string | null;
+  /** What the post carries (its images or video go out with it). */
+  artifact: PostableArtifact | null;
+  /** The Launch Kit the post was written from (tracked apart; never an attachment). */
+  kit_id: string | null;
+  kit_title: string | null;
   document_id: string | null;
   social_account_id: string | null;
   account_handle: string | null;
@@ -286,6 +316,12 @@ export type SocialAccount = {
   status: string;
   avatar_url: string | null;
   connected_at: string | null;
+  /** Down (expired, revoked, disconnected), or not allowed to post images and videos. */
+  needs_reconnect: boolean;
+  can_post_media: boolean;
+  /** No refresh token and the connection ends within a week (LinkedIn's 60 day tokens). */
+  expires_soon: boolean;
+  expires_at: string | null;
 };
 
 export type SocialAccounts = {

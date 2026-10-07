@@ -131,7 +131,7 @@ export default function MissionControl() {
   const launch = (doc: Doc) =>
     run(`kit-${doc.id}`, async () => {
       const kit = await artifactsApi.generate({ type: "launch_kit", document_id: doc.id });
-      navigate(`/app/launch-kit?kit=${kit.id}`);
+      navigate(`/app/launchpad/kits/${kit.id}`);
     });
 
   const totalDocs = (sources ?? []).reduce((n, s) => n + s.document_count, 0);
@@ -153,7 +153,7 @@ export default function MissionControl() {
         ? {
             text: `Your Launch Kit for "${lastKit.title}" is ready. Put it on the calendar.`,
             action: (
-              <Link className="btn btn-primary" to={`/app/launch-kit?kit=${lastKit.id}`}>
+              <Link className="btn btn-primary" to={`/app/launchpad/kits/${lastKit.id}`}>
                 Schedule it
               </Link>
             ),
@@ -281,7 +281,7 @@ export default function MissionControl() {
               <ul className="recent-list">
                 {recent.map((a) => (
                   <li key={a.id}>
-                    <Link to={a.type === "launch_kit" ? `/app/launch-kit?kit=${a.id}` : a.notebook_id ? `/app/notebooks/${a.notebook_id}` : "/app/archive"}>{a.title}</Link>
+                    <Link to={a.type === "launch_kit" ? `/app/launchpad/kits/${a.id}` : a.notebook_id ? `/app/notebooks/${a.notebook_id}` : "/app/archive"}>{a.title}</Link>
                     <span className="row">
                       <span className="mono muted">{formatDate(a.created_at)}</span>
                       <StatusPill status={a.status} />

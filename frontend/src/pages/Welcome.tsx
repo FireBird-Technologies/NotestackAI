@@ -177,7 +177,7 @@ export default function Welcome() {
   const finish = async (chosen: Goal | null) => {
     markOnboarded();
     if (!chosen || posts === 0) return navigate("/app", { replace: true });
-    if (chosen === "launch") return navigate("/app/launch-kit", { replace: true });
+    if (chosen === "launch") return navigate("/app/launchpad/kits", { replace: true });
     setBusy(true);
     try {
       const docs = await docsApi.list({ limit: 5000 });
