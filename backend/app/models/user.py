@@ -2,7 +2,19 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, Integer, String, UniqueConstraint, Uuid
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+    Uuid,
+    true,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -41,7 +53,8 @@ class Workspace(IdMixin, TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(200))
     owner_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"))
     training_opt_in: Mapped[bool] = mapped_column(Boolean, default=False)
-    brand_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    # Off: no report of this workspace can be shared by link, and existing links stop working.
+    allow_public_links: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
 
     members: Mapped[list["WorkspaceMember"]] = relationship(back_populates="workspace")
 
@@ -64,12 +77,46 @@ class Subscription(IdMixin, TimestampMixin, Base):
     workspace_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("workspaces.id", ondelete="CASCADE"), unique=True
     )
-    plan: Mapped[str] = mapped_column(String(20), default="free")  # free | writer | studio
+    # A row of the plans table. Only kept while status is active/trialing/past_due (see plans.effective_plan).
+    plan: Mapped[str] = mapped_column(String(20), ForeignKey("plans.id", onupdate="CASCADE"), default="free")
     status: Mapped[str] = mapped_column(String(20), default="active")
     provider: Mapped[str | None] = mapped_column(String(20))
     provider_customer_id: Mapped[str | None] = mapped_column(String(100))
     provider_subscription_id: Mapped[str | None] = mapped_column(String(100))
     current_period_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Video allowance, enforced by us (see app/services/video_quota.py): +1 per video before we call blog2video,
+    # -1 when it fails; video_plan/video_limit follow the effective plan and videos_used resets each period.
+    video_plan: Mapped[str] = mapped_column(String(20), default="free", server_default="free")
+    videos_used: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    video_limit: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    videos_period_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class PlanRecord(TimestampMixin, Base):
+    """One row per plan: limits, price and pricing-page copy. Edit a row to change a plan without a deploy
+    (app/services/plans.py reloads within a minute). Ids are fixed: Stripe prices and subscriptions use them."""
+
+    __tablename__ = "plans"
+
+    id: Mapped[str] = mapped_column(String(20), primary_key=True)  # free | writer | studio
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)  # cheapest first; upgrades go up this order
+    name: Mapped[str] = mapped_column(String(50))
+    tagline: Mapped[str] = mapped_column(String(200), default="")
+    price_monthly_usd: Mapped[float] = mapped_column(Float, default=0)
+    sources: Mapped[int] = mapped_column(Integer, default=1)
+    indexed_posts: Mapped[int] = mapped_column(Integer, default=5)
+    audio_minutes: Mapped[int] = mapped_column(Integer, default=0)
+    videos: Mapped[int] = mapped_column(Integer, default=0)
+    launch_kits: Mapped[int] = mapped_column(Integer, default=0)  # -1 = unlimited
+    reports: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # per month, -1 = unlimited
+    infographics: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # per month, -1 = unlimited
+    audio_overviews: Mapped[int] = mapped_column(Integer, default=-1, server_default="-1")  # allowed (in total on Free); -1 = no cap
+    voice_cloning: Mapped[bool] = mapped_column(Boolean, default=False)
+    features: Mapped[list] = mapped_column(JSON, default=list)  # bullet points on the pricing page
+    # Server defaults: 0006 seeds this table without these columns on a database 0001 built from the models.
+    # False: `videos` is a lifetime total that never refills (Free). True: per month.
+    videos_monthly: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
+    video_limits: Mapped[dict | None] = mapped_column(JSON, default=dict)  # see plans.VIDEO_LIMITS
 
 
 class BillingEvent(Base):

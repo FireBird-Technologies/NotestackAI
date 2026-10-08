@@ -1,0 +1,58 @@
+{% extends "base.html.j2" %}
+{% set eyebrow = "Mission briefing" %}
+{% set pal = {"bg1":"#1d2a34","bg2":"#34495a","ink":"#efe7d8","mute":"#c3ccd1","a":"#cfa24d","b":"#c8745f","card":"rgba(239,231,216,.07)","line":"rgba(239,231,216,.18)","paper":"#efe7d8","paperink":"#1d2a34","r":18} %}
+{% set fonts = {"h":"Jost","b":"Outfit","m":"Space Mono","hw":700,"ht":"uppercase","bt":"uppercase"} %}
+{% set cycle = ["#cfa24d","#c8745f","#8fb0a0","#8fa6c4","#cfa24d"] %}
+{% block bg %}
+<circle cx="1440" cy="150" r="88" fill="#e9dfc6" opacity=".9"/><circle cx="1408" cy="122" r="15" fill="#b9ad90" opacity=".7"/><circle cx="1470" cy="178" r="21" fill="#b9ad90" opacity=".7"/>
+<g fill="#efe7d8" opacity=".07"><circle cx="300" cy="2200" r="150"/><circle cx="520" cy="2230" r="120"/><circle cx="1200" cy="2210" r="170"/></g>
+{% endblock %}
+{% block hero %}
+<g fill="none" stroke="#cfa24d" stroke-width="3" stroke-dasharray="3 10" stroke-linecap="round"><ellipse cx="250" cy="215" rx="205" ry="92" transform="rotate(-16 250 215)"/><ellipse cx="250" cy="215" rx="140" ry="58" transform="rotate(-16 250 215)"/></g>
+<circle cx="250" cy="215" r="64" fill="#e9dfc6"/><circle cx="228" cy="195" r="12" fill="#b9ad90" opacity=".7"/><circle cx="276" cy="238" r="16" fill="#b9ad90" opacity=".7"/><circle cx="262" cy="180" r="7" fill="#b9ad90" opacity=".7"/>
+<g transform="translate(404 122) rotate(-16)"><rect x="-17" y="-13" width="34" height="26" rx="5" fill="#cfa24d"/><rect x="-66" y="-9" width="42" height="18" fill="#8fa6c4"/><rect x="24" y="-9" width="42" height="18" fill="#8fa6c4"/><path d="M-66 -9V9M-52 -9V9M-38 -9V9M38 -9V9M52 -9V9" stroke="#1d2a34" stroke-width="2"/></g>
+<g fill="#efe7d8"><path d="M70 90l5 -14 5 14 14 5 -14 5 -5 14 -5 -14 -14 -5z" opacity=".8"/><path d="M60 320l4 -10 4 10 10 4 -10 4 -4 10 -4 -10 -10 -4z" opacity=".6"/></g>
+{% endblock %}
+{% block css %}
+.ig{--hh:380px}.ig h1{font-size:68px}
+.lr{position:relative;flex:none}.lr svg{position:absolute;left:0;top:0}
+.lr .co{position:absolute;width:470px;padding:16px 22px 18px;border-radius:18px;background:rgba(239,231,216,.07);border:1px solid rgba(239,231,216,.2)}
+.lr .co b{display:flex;align-items:center;gap:12px;font-family:var(--fh);font-size:29px;letter-spacing:.04em;text-transform:uppercase;margin-bottom:6px}
+.lr .co b i{font-style:normal;flex:none;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-size:21px;color:#1d2a34;background:var(--c)}
+.lr .co p{font-size:23px;line-height:1.34;color:var(--mute)}
+.cd{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;flex:none}
+.cd .t{position:relative;padding:16px 20px 18px;border-radius:16px;background:var(--card);border-top:6px solid var(--c)}
+.cd .t:after{content:"";position:absolute;right:18px;top:18px;width:13px;height:13px;border-radius:50%;background:var(--c);box-shadow:0 0 0 4px rgba(239,231,216,.1),0 0 14px var(--c)}
+.cd small{display:block;font-family:var(--fm);font-size:19px;letter-spacing:.1em;color:var(--c)}
+.cd b{display:block;font-family:var(--fh);font-size:30px;text-transform:uppercase;letter-spacing:.04em;margin:2px 0 6px}
+.cd p{font-size:21px;line-height:1.32;color:var(--mute)}
+{% endblock %}
+{% block body %}
+{% set S = 110 %}{% set n = c["items"]|length %}{% set H = 120 + n * S + 90 %}
+<section><div class="lab">{{ c.items_label }}</div>
+<div class="lr" style="height:{{ H }}px">
+  <svg width="1380" height="{{ H }}" viewBox="0 0 1380 {{ H }}">
+    <defs><linearGradient id="gr" x1="0" x2="1"><stop offset="0" stop-color="#e8dfcf"/><stop offset="1" stop-color="#b9b3a6"/></linearGradient></defs>
+    <path d="M690 0C738 36 760 76 760 120H620C620 76 642 36 690 0Z" fill="#c8745f"/>
+    {% for e in c["items"] %}{% set y = 120 + loop.index0 * S %}{% set cc = cycle[loop.index0 % cycle|length] %}
+    <rect x="620" y="{{ y }}" width="140" height="{{ S }}" fill="url(#gr)" stroke="#1d2a34" stroke-width="3"/>
+    <circle cx="690" cy="{{ y + S // 2 }}" r="30" fill="{{ cc }}" stroke="#1d2a34" stroke-width="3"/>
+    <text x="690" y="{{ y + S // 2 + 11 }}" text-anchor="middle" font-family="Jost" font-weight="700" font-size="32" fill="#1d2a34">{{ loop.index }}</text>
+    {% if loop.index0 % 2 == 0 %}<path d="M620 {{ y + S // 2 }}H480" stroke="{{ cc }}" stroke-width="3" stroke-dasharray="2 9" stroke-linecap="round"/>
+    {% else %}<path d="M760 {{ y + S // 2 }}H900" stroke="{{ cc }}" stroke-width="3" stroke-dasharray="2 9" stroke-linecap="round"/>{% endif %}
+    {% endfor %}
+    {% set yb = 120 + n * S %}
+    <path d="M620 {{ yb - S }}L552 {{ yb }}H620ZM760 {{ yb - S }}L828 {{ yb }}H760Z" fill="#c8745f"/>
+    <path d="M644 {{ yb }}h92l-10 26h-72Z" fill="#8a8578"/>
+    <path d="M656 {{ yb + 26 }}C664 {{ yb + 56 }} 690 {{ yb + 84 }} 690 {{ yb + 84 }}C690 {{ yb + 84 }} 716 {{ yb + 56 }} 724 {{ yb + 26 }}Z" fill="#cfa24d"/>
+    <path d="M672 {{ yb + 26 }}C678 {{ yb + 46 }} 690 {{ yb + 62 }} 690 {{ yb + 62 }}C690 {{ yb + 62 }} 702 {{ yb + 46 }} 708 {{ yb + 26 }}Z" fill="#f4ead3"/>
+  </svg>
+  {% for e in c["items"] %}{% set cc = cycle[loop.index0 % cycle|length] %}
+  <div class="co" style="--c:{{ cc }};top:{{ 120 + loop.index0 * S + S // 2 - 46 }}px;{{ 'left:0' if loop.index0 % 2 == 0 else 'right:0' }}"><b><i>{{ loop.index }}</i>{{ e.name }}</b><p>{{ e.text }}</p></div>
+  {% endfor %}
+</div></section>
+<section><div class="lab">{{ c.steps_label }}</div>
+<div class="cd">
+  {% for e in c.steps %}<div class="t" style="--c:{{ cycle[loop.index0 % cycle|length] }}"><small>T-{{ c.steps|length - loop.index0 }}</small><b>{{ e.name }}</b><p>{{ e.text }}</p></div>{% endfor %}
+</div></section>
+{% endblock %}

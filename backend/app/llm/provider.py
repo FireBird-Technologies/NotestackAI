@@ -49,7 +49,38 @@ def main_lm(effort: str | None = None) -> dspy.LM:
 
 @lru_cache
 def fast_lm() -> dspy.LM:
-    return _build(settings.llm_fast_model, effort="low", temperature=None, max_tokens=8000)
+    return _build(settings.llm_fast_model, effort="low", temperature=None, max_tokens=settings.llm_fast_max_tokens)
+
+
+REPORT_MAX_TOKENS = 16000  # a few pages of prose plus GLM's low-effort reasoning
+
+
+@lru_cache
+def report_lm() -> dspy.LM:
+    """Writes reports: the fast model unless LLM_REPORT_MODEL names another, with room for a long answer."""
+    return _build(settings.llm_report_model or settings.llm_fast_model, effort="low", temperature=None,
+                  max_tokens=REPORT_MAX_TOKENS)
+
+
+REPORT_PLAN_MAX_TOKENS = 6000  # the blueprint: a storyline and up to eight short section plans plus reasoning
+REPORT_SECTION_MAX_TOKENS = 4000  # one section (two to five paragraphs) plus reasoning, a quarter of a whole report's cap
+
+
+def _report_model() -> str:
+    return settings.llm_report_model or settings.llm_fast_model
+
+
+@lru_cache
+def report_plan_lm() -> dspy.LM:
+    """Plans a themed report (the blueprint). The report model, with a small cap: the answer is a plan, not prose."""
+    return _build(_report_model(), effort="low", temperature=None, max_tokens=REPORT_PLAN_MAX_TOKENS)
+
+
+@lru_cache
+def report_section_lm(retry: bool = False) -> dspy.LM:
+    """Writes one section of a themed report. retry=True is the second try after a failed one: a different temperature,
+    so it is a fresh call and not the failed one again from the cache."""
+    return _build(_report_model(), effort="low", temperature=0.7 if retry else None, max_tokens=REPORT_SECTION_MAX_TOKENS)
 
 
 @lru_cache
@@ -58,6 +89,28 @@ def triage_lm() -> dspy.LM:
     if not settings.llm_triage_model:
         return fast_lm()
     return _build(settings.llm_triage_model, effort="low", temperature=0.2, max_tokens=2000)
+
+
+FOCUS_MAX_TOKENS = 2000  # three titles and two-line descriptions plus GLM's low-effort reasoning
+
+
+@lru_cache
+def focus_lm(retry: bool = False) -> dspy.LM:
+    """The video wizard's focus suggestions: a little material in, three short topics out, so a small cap keeps it
+    quick. Only for a source with no topics to show. retry=True is the second try after an unusable answer: a
+    different temperature, so it is a fresh call and not that answer again from the cache."""
+    return _build(settings.llm_fast_model, effort="low", temperature=0.8 if retry else 0.4,
+                  max_tokens=FOCUS_MAX_TOKENS)
+
+
+SUGGEST_TEMPLATES_MAX_TOKENS = 2000  # four short template ideas plus GLM's low-effort reasoning
+
+
+@lru_cache
+def suggest_templates_lm() -> dspy.LM:
+    """The Create report dialog's suggested templates: four short template ideas out, so a tighter cap than the
+    general fast_lm keeps this quick without cutting into GLM's reasoning headroom."""
+    return _build(settings.llm_fast_model, effort="low", temperature=None, max_tokens=SUGGEST_TEMPLATES_MAX_TOKENS)
 
 
 def configure_default() -> None:

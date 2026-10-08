@@ -23,7 +23,30 @@ export function SourcesNav() {
   );
 }
 
-export const FILE_ACCEPT = ".md,.markdown,.txt,.html,.htm,.pdf,text/markdown,text/plain,text/html,application/pdf";
+/** Live counts from a running sync: posts found, fetched and indexed so far. */
+function SyncStats({ job }: { job: Job }) {
+  const r = job.result as { found?: number; fetched?: number; fetch_total?: number; indexed?: number; index_total?: number };
+  if (job.kind !== "ingest" || !r || r.found === undefined) return null;
+  const of = (done?: number, total?: number) => (total ? `${done ?? 0} / ${total}` : `${done ?? 0}`);
+  return (
+    <dl className="sync-stats mono" aria-label="Sync progress">
+      <div>
+        <dt>Found</dt>
+        <dd>{r.found ?? 0}</dd>
+      </div>
+      <div>
+        <dt>Fetched</dt>
+        <dd>{of(r.fetched, r.fetch_total)}</dd>
+      </div>
+      <div>
+        <dt>Indexed</dt>
+        <dd>{of(r.indexed, r.index_total)}</dd>
+      </div>
+    </dl>
+  );
+}
+
+export const FILE_ACCEPT = ".md,.markdown,.txt,.vtt,.html,.htm,.pdf,text/vtt,text/markdown,text/plain,text/html,application/pdf";
 
 /** A bare domain, a Substack or a feed URL is a whole archive; a deep link is one article. */
 export function looksLikeArticle(raw: string): boolean {
@@ -105,7 +128,7 @@ export function AddSource({ onAdded }: { onAdded: (source: Source, job: Job) => 
           aria-label="Blog, newsletter or article link"
         />
         <button className="btn btn-primary" type="submit" disabled={busy || !value.trim()}>
-          {busy ? "Working..." : mode === "feed" ? "Connect" : "Import article"}
+          {busy ? (mode === "feed" ? "Finding posts..." : "Working...") : mode === "feed" ? "Connect" : "Import article"}
         </button>
         <span className="muted small">or</span>
         <button type="button" className="btn" disabled={busy} onClick={() => fileRef.current?.click()}>
@@ -114,7 +137,7 @@ export function AddSource({ onAdded }: { onAdded: (source: Source, job: Job) => 
         <input ref={fileRef} type="file" multiple accept={FILE_ACCEPT} hidden onChange={(e) => upload(e.target.files)} aria-label="Files to upload" />
       </form>
       <p className="muted small">
-        {!value.trim() && "Substack, Ghost, WordPress, Medium or any site with a feed. Markdown, text, HTML and PDF files work too; drop them anywhere on this page."}
+        {!value.trim() && "Substack, Ghost, WordPress, Medium or any site with a feed. Markdown, text, VTT transcripts, HTML and PDF files work too; drop them anywhere on this page."}
         {value.trim() && mode === "feed" && (
           <>
             We will pull in the whole archive and keep it in sync.{" "}
@@ -148,6 +171,7 @@ export default function Sources() {
   const [total, setTotal] = useState(0);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<string>("");
+  const [removing, setRemoving] = useState<Set<string>>(new Set()); // sources being deleted: dimmed at once, gone when done
   const [offset, setOffset] = useState(0);
   const [reading, setReading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -156,7 +180,7 @@ export default function Sources() {
   const loadDocs = useCallback(
     (reset = true) => {
       const start = reset ? 0 : offset + PAGE;
-      return docsApi.list({ q, source_id: filter || undefined, limit: PAGE, offset: start }).then((p) => {
+      return docsApi.list({ q, source_id: filter || undefined, indexed_only: true, limit: PAGE, offset: start }).then((p) => {
         setTotal(p.total);
         setOffset(start);
         setDocs((d) => (reset ? p.items : [...d, ...p.items]));
@@ -169,6 +193,22 @@ export default function Sources() {
     loadSources();
     loadDocs();
   });
+
+  // The post counts on the cards come from the server, so refresh them, and the posts list under them, while a sync is running:
+  // posts show up as they arrive. (Not while a search is being typed or a "Load more" page is open: that would reset them.)
+  const syncing = Object.values(jobs).some((j) => j.status === "queued" || j.status === "running");
+  const loadDocsRef = useRef(loadDocs);
+  loadDocsRef.current = loadDocs;
+  const paged = useRef(false);
+  paged.current = docs.length > PAGE;
+  useEffect(() => {
+    if (!syncing) return;
+    const t = setInterval(() => {
+      loadSources().catch(() => {});
+      if (!paged.current) loadDocsRef.current(true).catch(() => {});
+    }, 3000);
+    return () => clearInterval(t);
+  }, [syncing, loadSources]);
 
   useEffect(() => {
     loadSources().catch(() => setError("Could not load your sources. Refresh to try again."));
@@ -227,19 +267,19 @@ export default function Sources() {
       <AddSource onAdded={added} />
       {error && <p className="error-text">{error}</p>}
 
+      {/* Outside the card grid, so the loader is centered across the page rather than in the first column */}
+      {!sources && <Loading center="page" />}
       <section className="grid-cards">
-        {!sources && <Loading />}
         {sources?.map((s) => {
           const job = jobs[s.id];
           const active = job && (job.status === "queued" || job.status === "running");
           return (
-            <article key={s.id} className="card source-card">
+            <article key={s.id} className={`card source-card${removing.has(s.id) ? " removing" : ""}`}>
               <header className="row between">
                 <div className="source-title">
                   <strong>{s.title ?? s.feed_url}</strong>
                   <span className="mono muted">
-                    {s.is_imports ? "imports" : s.platform} · {s.document_count} posts
-                    {s.locked_count > 0 ? ` found, ${s.document_count - s.locked_count} indexed` : ""}
+                    {s.is_imports ? "imports" : s.platform} · {s.document_count - s.locked_count} posts
                     {s.last_synced_at ? ` · synced ${formatDate(s.last_synced_at, true)}` : ""}
                   </span>
                 </div>
@@ -251,6 +291,7 @@ export default function Sources() {
                 </a>
               )}
               {job && (active || job.status === "failed") && <JobProgress job={job} compact />}
+              {job && active && <SyncStats job={job} />}
               {s.locked_count > 0 && !active && (
                 <div className="welcome-cap locked-cap">
                   <div>
@@ -266,7 +307,7 @@ export default function Sources() {
                 </div>
               )}
               {s.sync_status === "error" && s.sync_error && !active && <p className="error-text">{s.sync_error}</p>}
-              <footer className="row">
+              <footer className="row source-actions">
                 {!s.is_imports && (
                   <button
                     className="btn btn-small"
@@ -279,19 +320,35 @@ export default function Sources() {
                     Sync now
                   </button>
                 )}
-                <button className="btn btn-small" onClick={() => setFilter(filter === s.id ? "" : s.id)}>
-                  {filter === s.id ? "Show all posts" : "Show posts"}
-                </button>
+                {sources.length > 1 && (
+                  <button className="btn btn-small" aria-pressed={filter === s.id} onClick={() => setFilter(filter === s.id ? "" : s.id)}>
+                    {filter === s.id ? "Show all posts" : "Only these posts"}
+                  </button>
+                )}
                 <ConfirmButton
-                  confirmLabel={`Delete ${s.document_count} posts?`}
+                  confirmLabel="Click again to delete"
+                  busyLabel="Deleting..."
                   onConfirm={async () => {
-                    await sourcesApi.remove(s.id);
+                    setRemoving((r) => new Set(r).add(s.id));
+                    try {
+                      await sourcesApi.remove(s.id);
+                    } catch (e) {
+                      setRemoving((r) => {
+                        const next = new Set(r);
+                        next.delete(s.id);
+                        return next;
+                      });
+                      throw e;
+                    }
+                    // Gone from the page now; the lists refresh behind it.
+                    setSources((list) => (list ?? []).filter((x) => x.id !== s.id));
+                    setDocs((list) => list.filter((d) => d.source_id !== s.id));
                     if (filter === s.id) setFilter("");
                     loadSources();
                     loadDocs();
                   }}
                 >
-                  Remove
+                  Delete
                 </ConfirmButton>
               </footer>
             </article>
@@ -302,7 +359,8 @@ export default function Sources() {
         <EmptyState title="No sources yet" body="A lone satellite, waiting for signal. Connect a blog or site above, or upload your markdown files." />
       )}
 
-      {sources && sources.length > 0 && (
+      {/* The posts are here as soon as there are any: every source's posts together, or one source's when its button is on */}
+      {sources && sources.length > 0 && (filter || total > 0) && (
         <section className="card posts-table">
           <div className="row between">
             <h2>

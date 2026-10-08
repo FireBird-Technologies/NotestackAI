@@ -20,6 +20,7 @@ class Settings(BaseSettings):
 
     # Local default is a SQLite file (relative to the working directory, normally backend/).
     # Prod and docker-compose use Postgres: postgresql+psycopg://user:pass@host:5432/db
+    # (plain postgres:// and postgresql:// URLs are rewritten to use psycopg, see below)
     database_url: str = "sqlite:///./notestack.db"
 
     # Worker (Postgres backed queue, see app/worker.py)
@@ -61,11 +62,31 @@ class Settings(BaseSettings):
     # Folder inside the bucket, so Notestack can share a bucket with other apps. Empty = bucket root.
     r2_prefix: str = ""
     r2_presign_ttl_seconds: int = 3600
-    max_upload_bytes: int = 200 * 1024 * 1024
+    max_upload_bytes: int = 300 * 1024 * 1024
+
+    # Posts an infographic reads, and a report that is not built from themes (REPORT_PLANNER below). A quiz or flashcard set reads up to that many straight from the posts; with more (no limit
+    # on how many are picked) it reads a small sample of the ideas already extracted from them, so its size does not grow.
+    artifact_max_posts: int = 20
+    # Characters of post text a report, quiz or flashcard set may read in all (split evenly between the posts, 1,500 at least each).
+    artifact_passage_budget: int = 120_000
+    # The same for a quiz: it needs less text than a report to ask good questions.
+    artifact_quiz_passage_budget: int = 60_000
+    # Ideas (already extracted from each post) in the evidence of a flashcard set, or of a quiz above ARTIFACT_MAX_POSTS posts.
+    artifact_idea_sample: int = 30
+
+    # Reports. "themes": the posts' stored ideas are grouped into weighted themes, a blueprint plans the report, and each section is
+    # written from its own evidence (pipeline/report_themes.py). "legacy": the posts' text goes straight to the writer, at most
+    # ARTIFACT_MAX_POSTS of them. Chats, small selections and posts without stored ideas always use the legacy way.
+    report_planner: str = "themes"
+    # Posts a themed report reads: 0 = every post picked (the plan's indexed_posts still applies).
+    report_max_posts: int = 0
+    # Posts whose ideas are extracted while the report is made (in parallel); the rest are represented by their opening.
+    report_inline_ideas: int = 25
 
     # LLM (LiteLLM model strings; Z.ai GLM by default)
     llm_model: str = "openai/glm-5.3"
     llm_fast_model: str = "openai/glm-5.3-flash"
+    llm_report_model: str = ""  # optional: writes report prose (default: the fast model, with a bigger output cap)
     # Chat triage (small talk, off topic, follow up rewriting). Empty = LLM_FAST_MODEL.
     llm_triage_model: str = ""
     # TypeSafe Jev classifier for chat triage. When set, triage uses Jev instead of an LLM call.
@@ -75,17 +96,40 @@ class Settings(BaseSettings):
     # Firecrawl: crawls sites without an RSS feed and renders JavaScript pages. Empty = plain HTTP only.
     firecrawl_api_key: str = ""
     firecrawl_url: str = "https://api.firecrawl.dev"
+    # Help bot (bottom right widget). Empty = LLM_FAST_MODEL.
+    support_llm_model: str = ""
+    support_enabled: bool = True
+    support_messages_per_minute: int = 20
     llm_api_base: str = "https://api.z.ai/api/paas/v4"
     llm_api_key: str = ""
     llm_temperature: float = 1.0  # Z.ai recommends 1.0 for GLM-5.x
     # Reasoning output counts against max_tokens, so leave headroom for the structured answer.
-    llm_max_tokens: int = 16000
+    llm_max_tokens: int = 10000
+    # The output cap of the fast model: quizzes, flashcards, infographics, idea extraction, template suggestions. A cap, not a target:
+    # only the tokens written are charged, and the thinking counts too, so keep room for it. Measured answers are under 3,000.
+    llm_fast_max_tokens: int = 6000
     # GLM-5.x always reasons (it cannot be disabled); this sets how hard. low | high | max
     llm_reasoning_effort: str = "low"
 
     # Corpus: posts as markdown files. R2 is the source of truth; each process keeps a disk cache.
     corpus_cache_dir: str = ".corpus-cache"
     research_max_steps: int = 10
+    # After an answer, how long the chat stream waits for the memory update so it can say what was saved.
+    memory_notice_wait_seconds: float = 25.0
+
+    # Chat memory: topic files built from a notebook's chats (docs/CHAT_RECALL_IMPLEMENTATION.md).
+    # CHAT_MEMORY_ENABLED writes the files after each answer. CHAT_MEMORY_READ lets answers use them.
+    chat_memory_enabled: bool = True
+    chat_memory_read: bool = False
+    chat_memory_delay_seconds: float = 10.0
+    chat_memory_max_rounds_per_job: int = 12
+    chat_memory_summary_chars: int = 1400
+    chat_memory_recent_rounds: int = 4
+    chat_memory_context_chars: int = 3000
+    chat_memory_topics_shown: int = 12
+    # Log what the research agent is given on every chat message (conversation, writer notes, chat memory). The logs
+    # then hold writers' text, so it is on only in development unless CHAT_CONTEXT_LOG=true. None follows ENV.
+    chat_context_log: bool | None = None
 
     # ElevenLabs (premade voices by default; a consented clone can replace host A)
     elevenlabs_api_key: str = ""
@@ -95,10 +139,20 @@ class Settings(BaseSettings):
 
     # Social publishing (Launchpad). Redirect URIs: {API_URL}/api/social/{x,linkedin}/callback
     social_token_key: str = ""  # Fernet key; derived from JWT_SECRET when empty
+    x_enabled: bool = False  # X posting is switched off for now (LinkedIn only); set X_ENABLED=true to bring it back
     x_client_id: str = ""
     x_client_secret: str = ""
     linkedin_client_id: str = ""
     linkedin_client_secret: str = ""
+
+    # blog2video: makes the videos. We call its public API with our own account's key (b2v_live_...), so every
+    # video is charged to that account. Backend only: the key must never reach the browser or the logs.
+    b2v_api_base_url: str = Field("", validation_alias=AliasChoices("B2V_API_BASE_URL", "B2V_API_URL"))
+    b2v_api_key: str = ""
+    # blog2video's web app: serves the template poster images (<app>/template-posters/<id>.webp).
+    b2v_app_url: str = "https://blog2video.app"
+    b2v_timeout_seconds: float = 30  # creates, uploads and full-project reads; other calls also wait 30s (STATUS_TIMEOUT)
+    b2v_capacity_alert_below: int = 20  # log an error when our blog2video account has fewer videos left
 
     # Renderer
     renderer_url: str = "http://localhost:3100"
@@ -127,6 +181,18 @@ class Settings(BaseSettings):
     def _blank_is_default(cls, value):
         """RUN_WORKER_IN_API= (blank, as in .env.example) means "decide from ENV", not a parse error."""
         return None if isinstance(value, str) and not value.strip() else value
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def _use_psycopg_driver(cls, value):
+        """Accept plain postgres:// or postgresql:// URLs (as Neon, Heroku etc. hand out) and
+        point them at psycopg 3, the only Postgres driver installed. Query params pass through."""
+        if isinstance(value, str):
+            value = value.strip()
+            for prefix in ("postgres://", "postgresql://"):
+                if value.startswith(prefix):
+                    return "postgresql+psycopg://" + value[len(prefix):]
+        return value
 
     @property
     def worker_in_api(self) -> bool:

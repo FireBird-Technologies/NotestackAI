@@ -131,7 +131,7 @@ export default function MissionControl() {
   const launch = (doc: Doc) =>
     run(`kit-${doc.id}`, async () => {
       const kit = await artifactsApi.generate({ type: "launch_kit", document_id: doc.id });
-      navigate(`/app/launch-kit?kit=${kit.id}`);
+      navigate(`/app/launchpad/kits/${kit.id}`);
     });
 
   const totalDocs = (sources ?? []).reduce((n, s) => n + s.document_count, 0);
@@ -153,7 +153,7 @@ export default function MissionControl() {
         ? {
             text: `Your Launch Kit for "${lastKit.title}" is ready. Put it on the calendar.`,
             action: (
-              <Link className="btn btn-primary" to={`/app/launch-kit?kit=${lastKit.id}`}>
+              <Link className="btn btn-primary" to={`/app/launchpad/kits/${lastKit.id}`}>
                 Schedule it
               </Link>
             ),
@@ -206,11 +206,11 @@ export default function MissionControl() {
                 <strong>{busy === "audio" ? "Starting..." : "Audio overview"}</strong>
                 <span className="muted small">Two hosts, 6 minutes, your whole archive</span>
               </button>
-              <button className="mc-action" disabled={busy !== null || !hasPosts} onClick={() => create("video", { type: "video", style: "short", archive: true })}>
+              <Link className="mc-action" to="/app/videos/new">
                 <LaunchWindowIcon size={28} />
-                <strong>{busy === "video" ? "Starting..." : "Short video"}</strong>
-                <span className="muted small">Vertical 9:16 with captions</span>
-              </button>
+                <strong>Video</strong>
+                <span className="muted small">Turn a post or link into a narrated video</span>
+              </Link>
               <button className="mc-action" disabled={busy !== null || !newest} onClick={() => newest && launch(newest)}>
                 <RocketIcon size={28} />
                 <strong>{newest && busy === `kit-${newest.id}` ? "Launching..." : "Launch newest post"}</strong>
@@ -281,7 +281,7 @@ export default function MissionControl() {
               <ul className="recent-list">
                 {recent.map((a) => (
                   <li key={a.id}>
-                    <Link to={a.type === "launch_kit" ? `/app/launch-kit?kit=${a.id}` : a.notebook_id ? `/app/notebooks/${a.notebook_id}` : "/app/archive"}>{a.title}</Link>
+                    <Link to={a.type === "launch_kit" ? `/app/launchpad/kits/${a.id}` : a.notebook_id ? `/app/notebooks/${a.notebook_id}` : "/app/archive"}>{a.title}</Link>
                     <span className="row">
                       <span className="mono muted">{formatDate(a.created_at)}</span>
                       <StatusPill status={a.status} />

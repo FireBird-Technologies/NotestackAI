@@ -30,7 +30,7 @@ function Row({ item, onRead, onSchedule }: { item: ResurfaceItem; onRead: () => 
       </p>
       {item.angle && <p className="angle">{item.angle}</p>}
       <div className="row">
-        <button className="btn btn-small btn-primary" onClick={() => navigate(`/app/launch-kit?post=${item.id}`)}>
+        <button className="btn btn-small btn-primary" onClick={() => navigate(`/app/launchpad/kits?post=${item.id}`)}>
           Launch Kit
         </button>
         <button className="btn btn-small" onClick={onSchedule}>
@@ -56,7 +56,7 @@ export function ResurfaceIdeas({ onScheduled }: { onScheduled?: () => void }) {
   const live = useJob(job, () => load());
   const running = live && (live.status === "queued" || live.status === "running");
 
-  if (!data) return <Loading />;
+  if (!data) return <Loading center="full" />;
   const items = [...data.on_this_day, ...data.evergreen.filter((e) => !data.on_this_day.some((o) => o.id === e.id))];
 
   return (
@@ -91,7 +91,7 @@ export function ResurfaceIdeas({ onScheduled }: { onScheduled?: () => void }) {
       {reading && <Reader documentId={reading} onClose={() => setReading(null)} />}
       {scheduling && (
         <ScheduleModal
-          platform="x"
+          platform="linkedin"
           posts={[`${scheduling.angle ?? scheduling.title}\n\n${scheduling.url.startsWith("http") ? scheduling.url : ""}`.trim()]}
           documentId={scheduling.id}
           onClose={() => setScheduling(null)}

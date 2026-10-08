@@ -1,27 +1,35 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { artifactsApi, notebooksApi, type GenerateBody } from "../api/endpoints";
 import type { Artifact, NotebookSummary } from "../api/types";
-import { ArtifactCard } from "../components/ArtifactCard";
+import { ArtifactRow } from "../components/ArtifactRow";
 import { DocPicker } from "../components/DocPicker";
-import { LaunchWindowIcon, PlanetIcon, RocketIcon, SparkleIcon } from "../components/icons/Icons";
+import { Dropdown } from "../components/Dropdown";
+import { LaunchWindowIcon, PlanetIcon, RocketIcon } from "../components/icons/Icons";
 import { Reader } from "../components/Reader";
 import { errorMessage, PageHeader } from "../components/ui";
+import { canPost, PostButton } from "../components/launchpad/PostButton";
 
-type Kind = "audio" | "short" | "explainer" | "quote";
+type Kind = "audio" | "video" | "quote";
 
 const KINDS: { id: Kind; label: string; blurb: string; icon: typeof PlanetIcon }[] = [
   { id: "audio", label: "Audio overview", blurb: "Two hosts talk through your posts, every line grounded in what you wrote.", icon: PlanetIcon },
-  { id: "short", label: "Short video", blurb: "Vertical 9:16 with a hook in the first two seconds, narration and captions.", icon: LaunchWindowIcon },
-  { id: "explainer", label: "Explainer", blurb: "16:9 title card and narrated scenes for YouTube or your post.", icon: SparkleIcon },
+  { id: "video", label: "Video", blurb: "Turn a notebook or a post into a narrated video you can edit scene by scene, landscape or vertical.", icon: LaunchWindowIcon },
   { id: "quote", label: "Quote card", blurb: "Your most quotable line, verified against the post, as a 1080 square.", icon: RocketIcon },
 ];
+
+const SINGLE_POST: Record<Kind, string> = {
+  audio: "Create an audio overview of a single post",
+  video: "Create a video on a single post",
+  quote: "Make a quote card from a single post",
+};
 
 const ARCHIVE = "archive";
 const ONE_POST = "post";
 
 /** Create: pick a format, say what it is about (the whole archive by default), press Create. */
 export default function Studio() {
+  const navigate = useNavigate();
   const [kind, setKind] = useState<Kind>("audio");
   const [about, setAbout] = useState(ARCHIVE);
   const [notebooks, setNotebooks] = useState<NotebookSummary[]>([]);
@@ -45,6 +53,20 @@ export default function Studio() {
 
   const create = async () => {
     setError(null);
+    if (kind === "video") {
+      // Videos have their own three step editor (blog2video); the picked notebook or post comes along.
+      if (about === ONE_POST) {
+        if (!postIds[0]) return setError("Pick a post.");
+        return navigate(`/app/videos/new?document_id=${postIds[0]}`);
+      }
+      try {
+        const id = about === ARCHIVE ? (await notebooksApi.archive()).id : about;
+        navigate(`/app/videos/new?notebook_id=${id}`);
+      } catch (e) {
+        setError(errorMessage(e));
+      }
+      return;
+    }
     const where: Partial<GenerateBody> =
       about === ARCHIVE ? { archive: true } : about === ONE_POST ? { document_id: postIds[0] } : { notebook_id: about };
     if (about === ONE_POST && !postIds[0]) {
@@ -54,9 +76,7 @@ export default function Studio() {
     const body: GenerateBody =
       kind === "audio"
         ? { type: "audio_overview", format, minutes, ...where }
-        : kind === "quote"
-          ? { type: "quote_card", ...where }
-          : { type: "video", style: kind, ...where };
+        : { type: "quote_card", ...where };
     setBusy(true);
     try {
       const a = await artifactsApi.generate(body);
@@ -81,7 +101,7 @@ export default function Studio() {
               <strong>{k.label}</strong>
             </button>
           ))}
-          <Link to="/app/launch-kit" className="format-tile">
+          <Link to="/app/launchpad/kits" className="format-tile">
             <span className="mc-more" aria-hidden="true">
               +
             </span>
@@ -91,46 +111,47 @@ export default function Studio() {
         <p className="muted">{meta.blurb}</p>
 
         <div className="studio-row">
-          <label className="field">
+          <div className="field">
             <span>What is it about?</span>
-            <select className="input" value={about} onChange={(e) => setAbout(e.target.value)}>
-              <option value={ARCHIVE}>My whole archive</option>
-              {notebooks.length > 0 && (
-                <optgroup label="A notebook">
-                  {notebooks.map((n) => (
-                    <option key={n.id} value={n.id}>
-                      {n.title} ({n.document_count} posts)
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-              <option value={ONE_POST}>One post...</option>
-            </select>
-          </label>
+            <Dropdown
+              label="What is it about?"
+              value={about}
+              onChange={setAbout}
+              options={[
+                { value: ARCHIVE, label: "My whole archive", hint: "All posts", group: "Archive" },
+                ...notebooks.map((n) => ({ value: n.id, label: n.title, hint: `${n.document_count} posts`, group: "Notebooks" })),
+                { value: ONE_POST, label: SINGLE_POST[kind], group: "Single post" },
+              ]}
+            />
+          </div>
           {kind === "audio" && (
             <>
-              <label className="field">
+              <div className="field">
                 <span>Format</span>
-                <select className="input" value={format} onChange={(e) => setFormat(e.target.value as typeof format)}>
-                  <option value="deep_dive">Deep dive</option>
-                  <option value="brief">Brief</option>
-                  <option value="debate">Debate</option>
-                </select>
-              </label>
-              <label className="field">
+                <Dropdown
+                  label="Format"
+                  value={format}
+                  onChange={setFormat}
+                  options={[
+                    { value: "deep_dive", label: "Deep dive" },
+                    { value: "brief", label: "Brief" },
+                    { value: "debate", label: "Debate" },
+                  ]}
+                />
+              </div>
+              <div className="field">
                 <span>Length</span>
-                <select className="input" value={minutes} onChange={(e) => setMinutes(Number(e.target.value))}>
-                  {[3, 6, 10, 15, 20].map((m) => (
-                    <option key={m} value={m}>
-                      {m} minutes
-                    </option>
-                  ))}
-                </select>
-              </label>
+                <Dropdown
+                  label="Length"
+                  value={String(minutes)}
+                  onChange={(v) => setMinutes(Number(v))}
+                  options={[3, 6, 10, 15, 20].map((m) => ({ value: String(m), label: `${m} minutes` }))}
+                />
+              </div>
             </>
           )}
           <button className="btn btn-primary studio-go" onClick={create} disabled={busy}>
-            {busy ? "Launching..." : `Create ${meta.label.toLowerCase()}`}
+            {busy ? "Launching..." : kind === "video" ? "Set up video" : `Create ${meta.label.toLowerCase()}`}
           </button>
         </div>
         {about === ONE_POST && <DocPicker selected={postIds} onChange={setPostIds} single />}
@@ -145,15 +166,15 @@ export default function Studio() {
               Everything in Library
             </Link>
           </div>
-          <div className="gallery">
+          <ul className="vw-list">
             {recent.map((a) => (
-              <ArtifactCard
+              <ArtifactRow
                 key={a.id}
                 artifact={a}
                 onCite={(c) => c.document_id && setReading({ id: c.document_id, start: c.line_start, end: c.line_end })}
                 onRemoved={(id) => setRecent((g) => (g ?? []).filter((x) => x.id !== id))}
                 onChanged={(next) => setRecent((g) => (g ?? []).map((x) => (x.id === next.id ? next : x)))}
-                actions={(art) =>
+                actions={(art) => canPost(art) ? <PostButton artifactId={art.id} /> :
                   art.type === "audio_overview" && art.status === "ready" ? (
                     <button
                       className="btn btn-small"
@@ -172,7 +193,7 @@ export default function Studio() {
                 }
               />
             ))}
-          </div>
+          </ul>
         </section>
       )}
       {reading && <Reader documentId={reading.id} highlight={{ start: reading.start, end: reading.end }} onClose={() => setReading(null)} />}

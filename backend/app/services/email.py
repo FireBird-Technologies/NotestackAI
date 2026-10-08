@@ -55,7 +55,8 @@ class ConsoleEmailProvider(BaseEmailProvider):
 
     def send(self, email: OutgoingEmail) -> str | None:
         ConsoleEmailProvider.sent.append(email)
-        log.info("[email] to=%s subject=%s\n%s", email.to, email.subject, email.text)
+        # Warning, not info: locally this is the only place a sign up or reset code shows up.
+        log.warning("[email] to=%s subject=%s\n%s", email.to, email.subject, email.text)
         return None
 
 
@@ -216,6 +217,23 @@ class EmailService:
             )
         )
 
+    def send_support_escalation(self, *, from_email: str, name: str | None, plan: str | None, reason: str,
+                                concern: str, page: str | None, transcript: list[tuple[str, str]]) -> bool:
+        lines = [f"From: {name or 'unknown'} <{from_email}>", f"Plan: {plan or 'unknown'}", f"Reason: {reason}",
+                 f"Page: {page or 'unknown'}", "", "Concern:", concern]
+        if transcript:
+            lines += ["", "Recent chat:"] + [f"{role}: {text}" for role, text in transcript]
+        text = "\n".join(lines)
+        return self._send(
+            OutgoingEmail(
+                to=settings.alerts_email,
+                subject=f"[Notestack help] {reason}: {concern[:60]}",
+                html=_layout("Help request", f"<pre style='white-space:pre-wrap'>{html.escape(text)}</pre>"),
+                text=text,
+                headers={"Reply-To": from_email},
+            )
+        )
+
     # Broadcast
 
     def send_blast_email(self, user_id: str, user_email: str, user_name: str | None, subject: str, body: str) -> bool:
@@ -247,6 +265,13 @@ class EmailService:
 def _build() -> EmailService:
     if settings.email_provider == "resend" and settings.resend_api_key:
         return EmailService(ResendEmailProvider(settings.resend_api_key))
+    if settings.email_provider == "resend":
+        log.warning("EMAIL_PROVIDER=resend but RESEND_API_KEY is empty: emails are only logged, not sent")
+    elif settings.email_provider != "console":
+        log.warning("Unknown EMAIL_PROVIDER=%r (use resend or console): emails are only logged, not sent",
+                    settings.email_provider)
+    else:
+        log.warning("EMAIL_PROVIDER=console: emails are only logged, not sent")
     return EmailService(ConsoleEmailProvider())
 
 

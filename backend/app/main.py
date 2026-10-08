@@ -15,18 +15,38 @@ from app.routers import (
     billing,
     jobs,
     launchpad,
+    memory,
     notebooks,
+    reports,
     resurface,
+    share,
     sources,
     storage,
+    support,
     topics,
     unsubscribe,
+    video_edit,
+    video_styles,
+    video_voices,
+    videos,
     voice,
 )
 from app.routers import settings as settings_router
 from app.services.storage import storage as store
 
 log = logging.getLogger("notestack")
+
+
+def _drop_color_message(record: logging.LogRecord) -> bool:
+    """litellm (via dspy) adds a secret redaction filter to uvicorn.error that formats the message
+    and clears record.args. uvicorn's colored formatter then swaps in its color_message template
+    and prints it with no args ("Uvicorn running on %s://%s:%d"). Without the template it prints
+    the already formatted, redacted message."""
+    record.__dict__.pop("color_message", None)
+    return True
+
+
+logging.getLogger("uvicorn.error").addFilter(_drop_color_message)
 
 
 @asynccontextmanager
@@ -74,8 +94,9 @@ def health():
     return {"ok": True, "llm": settings.llm_model, "billing_enabled": settings.billing_enabled}
 
 
+# video_templates (custom templates) is switched off: users pick only from the built-in templates.
 for r in (auth, billing, storage, sources, notebooks, artifacts, jobs, unsubscribe, topics, voice, resurface,
-          launchpad, settings_router):
+          launchpad, videos, video_edit, video_voices, video_styles, settings_router, memory, support, reports, share):
     app.include_router(r.router)
 app.include_router(sources.documents_router)
 app.include_router(launchpad.links_router)

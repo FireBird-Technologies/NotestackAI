@@ -148,3 +148,166 @@ export const SparkleIcon = (p: P) => (
     <path d="M12 3l1.8 7.2L21 12l-7.2 1.8L12 21l-1.8-7.2L3 12l7.2-1.8z" />
   </Icon>
 );
+
+export const UploadIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M12 15V4M7.5 8.5L12 4l4.5 4.5M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4" />
+  </Icon>
+);
+
+export const DownloadIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4" />
+  </Icon>
+);
+
+/** A stack of media with a play mark on the front: the Library (what you made, your videos and your voices). */
+export const LibraryIcon = (p: P) => (
+  <Icon {...p}>
+    <rect x="3" y="8" width="18" height="12.5" rx="2.5" />
+    <path d="M5.5 5h13M8 2.5h8" />
+    <path d="M10.25 11.6v5.3l4.4-2.65z" />
+  </Icon>
+);
+
+/** A video camera: the Videos section. */
+export const VideoIcon = (p: P) => (
+  <Icon {...p}>
+    <rect x="3" y="6.5" width="12.5" height="11" rx="2.5" />
+    <path d="M15.5 10.5l4.6-2.7a.6.6 0 0 1 .9.5v7.4a.6.6 0 0 1-.9.5l-4.6-2.7" />
+  </Icon>
+);
+
+/** A microphone with sound waves: the Voices section. */
+export const MicIcon = (p: P) => (
+  <Icon {...p}>
+    <rect x="9" y="3" width="6" height="11" rx="3" />
+    <path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M9 21h6" />
+    <path d="M2.5 9v3M21.5 9v3" />
+  </Icon>
+);
+
+export const FilmIcon = (p: P) => (
+  <Icon {...p}>
+    <rect x="3" y="5" width="18" height="14" rx="2" />
+    <path d="M7 5v14M17 5v14M3 9.5h4M3 14.5h4M17 9.5h4M17 14.5h4" />
+  </Icon>
+);
+
+/** Points down; rotate it (e.g. .chevron.open) to point up. Mitred, not rounded, for a sharp tip. */
+export const ChevronIcon = (p: P) => (
+  <Icon strokeWidth={2} strokeLinecap="square" strokeLinejoin="miter" {...p}>
+    <path d="M6 9l6 6 6-6" />
+  </Icon>
+);
+
+export const TrashIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6" />
+  </Icon>
+);
+
+/** Headphones: the audio overview. */
+export const HeadphonesIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M4 15v-3a8 8 0 0 1 16 0v3" />
+    <rect x="3" y="14" width="4.5" height="6.5" rx="1.8" />
+    <rect x="16.5" y="14" width="4.5" height="6.5" rx="1.8" />
+  </Icon>
+);
+
+/** A page with a heading and lines: the report. */
+export const ReportIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M6 3h8.5L19 7.5V19a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" />
+    <path d="M14 3v5h5M8 12h8M8 15.5h8M8 8.5h3" />
+  </Icon>
+);
+
+/** Short lines of text, the last one shorter: a summary. */
+export const SummaryIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M4 6h16M4 10.5h16M4 15h16M4 19.5h9" />
+  </Icon>
+);
+
+/** Bars on a baseline inside a frame: an infographic. */
+export const InfographicIcon = (p: P) => (
+  <Icon {...p}>
+    <rect x="3" y="3" width="18" height="18" rx="2.5" />
+    <path d="M8 17v-5M12 17V8M16 17v-3" />
+  </Icon>
+);
+
+/** A slide on a stand, a second one behind it: a slide deck. */
+export const SlidesIcon = (p: P) => (
+  <Icon {...p}>
+    <rect x="3" y="4" width="15" height="10.5" rx="1.8" />
+    <path d="M6.5 1.9h12.7A1.8 1.8 0 0 1 21 3.7v8.6" />
+    <path d="M10.5 14.5V19M7 21h7M6.5 8h5M6.5 11h8" />
+  </Icon>
+);
+
+/** A play triangle: present a deck. */
+export const PlayIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M7.5 5.2v13.6a.8.8 0 0 0 1.2.7l10.6-6.8a.8.8 0 0 0 0-1.4L8.7 4.5a.8.8 0 0 0-1.2.7z" />
+  </Icon>
+);
+
+/** Four corners pointing out: show larger. */
+export const ExpandIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+  </Icon>
+);
+
+/** Four corners pointing in: back to the normal size. */
+export const CollapseIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />
+  </Icon>
+);
+
+/** Three dots, stacked: more actions. */
+export const MoreIcon = (p: P) => (
+  <Icon {...p}>
+    <circle cx="12" cy="5.5" r="1.1" fill="currentColor" />
+    <circle cx="12" cy="12" r="1.1" fill="currentColor" />
+    <circle cx="12" cy="18.5" r="1.1" fill="currentColor" />
+  </Icon>
+);
+
+/** A framed PDF mark: a PDF file. */
+export const PdfIcon = (p: P) => (
+  <Icon {...p}>
+    <rect x="3" y="4" width="18" height="16" rx="2.5" />
+    <text x="12" y="15" textAnchor="middle" fontSize="6.4" fontWeight="700" fill="currentColor" stroke="none"
+          fontFamily="Inter, sans-serif">PDF</text>
+  </Icon>
+);
+
+/** A framed P: a PowerPoint file. */
+export const PptxIcon = (p: P) => (
+  <Icon {...p}>
+    <rect x="3" y="4" width="18" height="16" rx="2.5" />
+    <path d="M10 16V8h2.8a2.3 2.3 0 0 1 0 4.6H10" />
+  </Icon>
+);
+
+/** A question mark in a circle: the quiz. */
+export const QuizIcon = (p: P) => (
+  <Icon {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M9.5 9.5a2.6 2.6 0 0 1 5 .9c0 1.7-2.5 2.2-2.5 3.8M12 17.2v.01" />
+  </Icon>
+);
+
+/** Two cards, one behind the other: flashcards. */
+export const FlashcardsIcon = (p: P) => (
+  <Icon {...p}>
+    <rect x="3" y="7" width="14" height="11" rx="2" />
+    <path d="M7 7V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2" />
+    <path d="M7 12.5h6" />
+  </Icon>
+);

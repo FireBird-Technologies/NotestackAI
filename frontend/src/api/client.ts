@@ -17,6 +17,9 @@ export class ApiError extends Error {
 /** Fired on every 402 plan_limit so the upgrade popup opens wherever the request came from. */
 export const PLAN_LIMIT_EVENT = "ns:plan-limit";
 
+/** Fired when a signed in request gets a 401 that a refresh cannot fix, so the app signs the user out. */
+export const SESSION_EXPIRED_EVENT = "ns:session-expired";
+
 export type PlanLimitDetail = { message: string; kind?: string; plan?: string; upgrade_to?: string | null };
 
 function read(key: string): string | null {
@@ -60,7 +63,12 @@ async function parseError(res: Response): Promise<ApiError> {
     const body = await res.json();
     const detail = body.detail;
     if (typeof detail === "string") message = detail;
-    else if (detail?.message) {
+    else if (Array.isArray(detail) && detail.length) {
+      // A request the server's field checks refused (FastAPI's 422 list): say which field and why, not "Unprocessable Entity".
+      const first = detail[0] as { loc?: (string | number)[]; msg?: string };
+      const field = (first.loc ?? []).filter((p) => p !== "body").join(" ");
+      if (first.msg) message = field ? `${field}: ${first.msg}` : first.msg;
+    } else if (detail?.message) {
       message = detail.message;
       code = detail.code;
       extra = detail;
@@ -87,15 +95,35 @@ async function tryRefresh(): Promise<boolean> {
   return true;
 }
 
-export async function api<T>(path: string, init: RequestInit = {}, retry = true): Promise<T> {
+async function request(path: string, init: RequestInit, retry: boolean): Promise<Response> {
   const headers = new Headers(init.headers);
-  if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
-  if (tokens.access) headers.set("Authorization", `Bearer ${tokens.access}`);
+  // FormData sets its own multipart Content-Type (with the boundary); everything else is JSON.
+  if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+  const signedIn = Boolean(tokens.access);
+  if (signedIn) headers.set("Authorization", `Bearer ${tokens.access}`);
   const res = await fetch(`${BASE}${path}`, { ...init, headers });
-  if (res.status === 401 && retry && (await tryRefresh())) return api<T>(path, init, false);
+  if (res.status === 401 && retry && (await tryRefresh())) return request(path, init, false);
+  // Auth endpoints answer 401 for a wrong password and similar; only a dead session elsewhere signs out.
+  if (res.status === 401 && signedIn && retry && !path.startsWith("/api/auth/")) {
+    window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+  }
   if (!res.ok) throw await parseError(res);
-  return (await res.json()) as T;
+  return res;
 }
+
+export async function api<T>(path: string, init: RequestInit = {}, retry = true): Promise<T> {
+  return (await (await request(path, init, retry)).json()) as T;
+}
+
+/** A binary answer (audio, a download) as a Blob. */
+export async function apiBlob(path: string, init: RequestInit = {}): Promise<Blob> {
+  return (await request(path, init, true)).blob();
+}
+
+/** Multipart upload to our API (files plus form fields). */
+export const postForm = <T>(path: string, form: FormData) => api<T>(path, { method: "POST", body: form });
 
 export const post = <T>(path: string, body?: unknown) =>
   api<T>(path, { method: "POST", body: body === undefined ? undefined : JSON.stringify(body) });
@@ -120,6 +148,7 @@ const TYPES_BY_EXT: Record<string, string> = {
   markdown: "text/markdown",
   txt: "text/plain",
   html: "text/html",
+  vtt: "text/vtt",
   htm: "text/html",
   pdf: "application/pdf",
   mp3: "audio/mpeg",
@@ -131,7 +160,9 @@ const TYPES_BY_EXT: Record<string, string> = {
   jpg: "image/jpeg",
   jpeg: "image/jpeg",
   webp: "image/webp",
+  gif: "image/gif",
   svg: "image/svg+xml",
+  mp4: "video/mp4",
 };
 
 /** Browsers leave File.type empty for some extensions (.md on Windows) and use vendor names for others. */

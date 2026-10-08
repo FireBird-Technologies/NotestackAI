@@ -30,6 +30,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models import BillingEvent, Subscription, User, Workspace
+from app.services import video_quota
 from app.services.plans import PLANS, Plan, annual_prices
 
 log = logging.getLogger(__name__)
@@ -150,6 +151,9 @@ def sync_subscription(db: Session, workspace_id: uuid.UUID, stripe_sub) -> Subsc
     sub.plan = plan_id if (plan_id in PLANS and status in LIVE) else "free"
     sub.current_period_end = _ts(period_end)
     db.commit()
+    workspace = db.get(Workspace, workspace_id)
+    if workspace:
+        video_quota.sync_video_quota(db, workspace)
     return sub
 
 
@@ -336,6 +340,11 @@ def handle_event(db: Session, event) -> str:
         ws = _workspace_for(db, stripe_sub, customer_id=_get(obj, "customer"))
         if ws and stripe_sub is not None:
             sync_subscription(db, ws, stripe_sub)
+        # A new billing period (or a new paid plan) starts a fresh video allowance. `first` keeps a retried
+        # delivery of the same event from wiping videos made since.
+        if first and ws and kind == "invoice.paid" and \
+                _get(obj, "billing_reason") in {"subscription_cycle", "subscription_create"}:
+            video_quota.reset_videos(db, ws)
         if first and kind in {"invoice.payment_action_required", "invoice.payment_failed"}:
             # The first invoice of a Checkout is handled on the Checkout page itself.
             if _get(obj, "billing_reason") != "subscription_create":
