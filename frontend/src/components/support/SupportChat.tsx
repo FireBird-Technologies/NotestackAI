@@ -215,9 +215,9 @@ export function SupportChat({ onClose }: { onClose: () => void }) {
                   )}
                   {m.role === "assistant" && !m.streaming && (
                     <>
-                      {m.escalate && m.reason && (
+                      {m.escalate && (
                         <EscalationForm
-                          reason={m.reason}
+                          reason={m.reason ?? "human"}
                           concern={escalationConcern(messages, i)}
                           page={pathname}
                           conversationId={conversationId}
