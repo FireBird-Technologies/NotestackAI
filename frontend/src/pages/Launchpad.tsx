@@ -52,8 +52,10 @@ function ItemModal({
   const locked = item.status === "posted" || item.status === "publishing";
   const options = (accounts?.accounts ?? []).filter((a) => a.platform === item.platform);
 
+  // Not on the calendar to go out (a draft, failed, reminded or paused post): Save puts it back, at the time shown.
+  const reschedules = item.status !== "scheduled";
   const save = async () => {
-    if (moved && wallToDate(when) <= new Date()) return setError("Pick a time that is still ahead.");
+    if ((moved || reschedules) && wallToDate(when) <= new Date()) return setError("Pick a time that is still ahead.");
     setBusy(true);
     setError(null);
     try {
@@ -62,7 +64,8 @@ function ItemModal({
         await launchpadApi.update(item.id, {
           content: clean[0],
           thread: clean.slice(1),
-          ...(moved ? { local_time: when, timezone: userTimeZone() } : {}),
+          ...(moved || reschedules ? { local_time: when, timezone: userTimeZone() } : {}),
+          ...(reschedules ? { status: "scheduled" as const } : {}),
           social_account_id: accountId || null,
           ...((attached?.id ?? null) !== item.artifact_id ? { artifact_id: attached?.id ?? null } : {}),
         }),
@@ -143,7 +146,7 @@ function ItemModal({
           </label>
         ))}
         {!locked && (
-          <div className="row">
+          <div className="lp-edit-when">
             <div className="field">
               <span>When</span>
               <SlotPicker value={when} onChange={setWhen} />
@@ -164,7 +167,7 @@ function ItemModal({
           </div>
         )}
         {error && <p className="error-text">{error}</p>}
-        <div className="row between">
+        <div className="row between lp-edit-actions">
           <div className="row">
             <CopyButton text={posts.join("\n\n")} />
             <ConfirmButton
@@ -201,8 +204,9 @@ function ItemModal({
               >
                 {item.auto_post ? "Publish now" : "Send reminder now"}
               </button>
-              <button className="btn btn-primary" disabled={busy} onClick={save}>
-                Save
+              <button className="btn btn-primary" disabled={busy} onClick={save}
+                      title={reschedules ? "Save it and put it back on the calendar at this time" : undefined}>
+                {reschedules ? "Reschedule" : "Save"}
               </button>
             </div>
           )}
@@ -408,7 +412,6 @@ export default function Launchpad() {
         </button>
       </PageHeader>
       {notice && <p className="notice">{notice}</p>}
-      {publishing && <p className="notice">Publishing... uploading a video can take a few minutes.</p>}
       {error && <p className="error-text">{error}</p>}
 
 
@@ -478,7 +481,14 @@ export default function Launchpad() {
             {items.length === 0 && <li className="muted">Nothing scheduled. Quiet moon tonight.</li>}
           </ul>
         )}
-        {items && <p className="mono muted small">{upcoming.length} upcoming in view</p>}
+        {items && (
+          <div className="lp-cal-foot">
+            <p className="mono muted small">{upcoming.length} upcoming in view</p>
+            <p className="muted small lp-cal-hint">
+              Click a post on the calendar to edit it: change its words or time, reschedule it, or publish it now.
+            </p>
+          </div>
+        )}
       </section>
 
         <ConnectionsPanel accounts={accounts} onConnect={connect} onChanged={async () => {
@@ -495,21 +505,74 @@ export default function Launchpad() {
 
 /** /app/launchpad/new: what to launch. Something from the Library opens the composer with it attached; Create a
  * launch kit goes to the kit pages (and is scheduled from the kit). */
+/** Schedule a launch: pick something from the Library to post. Something already scheduled says Reschedule and opens
+ * that post (the calendar's editor), and its menu can schedule it once more, starting from a copy of that post. */
 export function ScheduleLaunch() {
   const navigate = useNavigate();
   const [picked, setPicked] = useState<PostableArtifact | null>(null);
+  // A post already on the calendar: opened to edit (rescheduled), or copied into a new one (a duplicate schedule).
+  const [editing, setEditing] = useState<CalendarItem | null>(null);
+  const [copying, setCopying] = useState<{ a: PostableArtifact; item: CalendarItem } | null>(null);
+  const [accounts, setAccounts] = useState<SocialAccounts | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [openingId, setOpeningId] = useState<string | null>(null); // the row whose post is loading
+  // The accounts the editor needs, loaded once with the page rather than on every click.
+  useEffect(() => {
+    launchpadApi.accounts().then(setAccounts, () => undefined);
+  }, []);
+  const scheduledItem = async (artifactId: string, id: string) => {
+    setError(null);
+    setOpeningId(artifactId);
+    try {
+      const [all, acc] = await Promise.all([launchpadApi.items({ status: "scheduled" }),
+                                            accounts ? Promise.resolve(accounts) : launchpadApi.accounts()]);
+      setAccounts(acc);
+      const found = all.find((i) => i.id === id);
+      if (!found) {
+        setError("That post isn't scheduled anymore.");
+        setRefreshKey((k) => k + 1);
+      }
+      return found ?? null;
+    } catch (e) {
+      setError(errorMessage(e));
+      return null;
+    } finally {
+      setOpeningId(null);
+    }
+  };
   return (
     <div className="page-wrap">
       <BackArrow fallback="/app/launchpad" />
       <PageHeader eyebrow="Launchpad" title="Schedule a launch" />
+      {error && <p className="error-text">{error}</p>}
       <section className="card">
         <LibraryPicker fill onPick={setPicked} onPickKit={(k) => navigate(`/app/launchpad/kits/${k.id}`)}
-                       onCreateKit={() => navigate("/app/launchpad/kits")} />
+                       onCreateKit={() => navigate("/app/launchpad/kits")} refreshKey={refreshKey} openingId={openingId}
+                       onReschedule={async (a, id) => setEditing(await scheduledItem(a.id, id))}
+                       onDuplicate={async (a, id) => {
+                         const item = await scheduledItem(a.id, id);
+                         if (item) setCopying({ a, item });
+                       }} />
       </section>
       {picked && (
         <ScheduleModal platform="linkedin" posts={[]} artifact={picked} artifactId={picked.id}
                        onClose={() => setPicked(null)}
                        onScheduled={() => navigate("/app/launchpad")} />
+      )}
+      {copying && (
+        <ScheduleModal platform={copying.item.platform} posts={[copying.item.content, ...copying.item.thread]}
+                       artifact={copying.a} artifactId={copying.a.id}
+                       onClose={() => setCopying(null)}
+                       onScheduled={() => {
+                         setCopying(null);
+                         setRefreshKey((k) => k + 1);
+                       }} />
+      )}
+      {editing && (
+        <ItemModal item={editing} accounts={accounts} onClose={() => setEditing(null)}
+                   onChanged={() => setRefreshKey((k) => k + 1)}
+                   onReconnect={() => navigate("/app/launchpad")} />
       )}
     </div>
   );

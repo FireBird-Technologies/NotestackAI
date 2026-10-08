@@ -79,7 +79,8 @@ export function ScheduleModal({
     if (artifactId && !artifact) {
       launchpadApi.postable().then((list) => {
         const found = list.find((a) => a.id === artifactId);
-        if (found && found.type !== "launch_kit") attach(found); // a kit is never an attachment
+        // a kit is never an attachment, and audio can't be posted (X and LinkedIn take no audio files)
+        if (found && found.type !== "launch_kit" && found.media !== "audio") attach(found);
       }, () => undefined);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -151,8 +152,9 @@ export function ScheduleModal({
         const account = meta.auto ? accountFor(p) : null;
         const item = await launchpadApi.create({
           platform: p,
-          // Post now: this instant. Scheduled: the half hour picked, in the user's zone (the backend makes it UTC).
-          ...(now ? { scheduled_at: new Date().toISOString() } : { local_time: when, timezone: userTimeZone() }),
+          // Post now: published by this very request (the server takes the time). Scheduled: the half hour picked, in
+          // the user's zone (the backend makes it UTC).
+          ...(now ? { publish_now: true } : { local_time: when, timezone: userTimeZone() }),
           content: merged[0] ?? "",
           thread: merged.slice(1),
           // Images and videos only go to X and LinkedIn; text attachments go anywhere.
@@ -162,8 +164,7 @@ export function ScheduleModal({
           social_account_id: account?.id ?? null,
           remind_by_email: CONNECTED_ONLY.includes(p) ? false : remind || !account,
         });
-        const out = now && item.auto_post ? await launchpadApi.publishNow(item.id) : item;
-        onScheduled?.(out);
+        onScheduled?.(item);
         done.push(meta.label);
       }
       onClose();

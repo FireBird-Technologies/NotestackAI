@@ -89,7 +89,7 @@ export type AnswerFeedback = { rating: "up" | "down"; reasons: string[]; comment
 export type WorkspaceChat = ChatSummary & { notebook_id: string; notebook_title: string };
 export type ChatMessage = { id: string; role: "user" | "assistant"; text: string; citations: Citation[]; feedback?: AnswerFeedback | null };
 
-export type ArtifactType = "summary" | "audio_overview" | "video" | "quote_card" | "carousel" | "launch_kit" | "mind_map" | "quiz" | "flashcards" | "report" | "infographic"| "upload";
+export type ArtifactType = "summary" | "audio_overview" | "video" | "quote_card" | "carousel" | "launch_kit" | "mind_map" | "quiz" | "flashcards" | "report" | "infographic" | "slide_deck" | "upload";
 
 export type QuizQuestionType = "multiple_choice" | "multiple_select" | "fill_blank" | "short_answer";
 export type QuizQuestion = {
@@ -320,7 +320,8 @@ export type PostableArtifact = {
   type: ArtifactType;
   type_label: string;
   title: string;
-  media: "image" | "video" | "text";
+  /** "audio": an audio overview, listed to download only (X and LinkedIn take no audio files). */
+  media: "image" | "video" | "audio" | "text";
   media_count: number;
   duration_s: number | null;
   thumb_url: string | null;
@@ -332,6 +333,10 @@ export type PostableArtifact = {
   editable_video: boolean;
   /** An uploaded file's link, to preview it (null for anything else). */
   view_url: string | null;
+  /** An audio overview's file, saved as a download (null for anything else). */
+  download_url?: string | null;
+  /** Its posts still to go out (scheduled, ahead), soonest first: the Schedule a launch list offers to reschedule them. */
+  scheduled?: { id: string; scheduled_at: string; platform_label: string }[];
   created_at: string | null;
   /** A starting text: X as a thread (list of posts), LinkedIn as one post. */
   prefill: { x: string[]; linkedin: string };

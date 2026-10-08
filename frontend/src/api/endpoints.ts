@@ -116,7 +116,9 @@ export type GenerateBody = {
   document_id?: string;
   /** No notebook or post: use the "All posts" notebook. */
   archive?: boolean;
-  format?: "deep_dive" | "brief" | "debate";
+  format?: "deep_dive" | "brief" | "critique" | "debate";
+  /** audio_overview: a single narrator or a two host conversation. */
+  hosts?: 1 | 2;
   minutes?: number;
   style?: "audiogram";
   audio_artifact_id?: string;
@@ -139,8 +141,11 @@ export type GenerateBody = {
   report_format?: "document" | "interactive";
   template_id?: string;
   instructions?: string;
-  /** infographic: one of the premade themes (see components/Infographic.tsx). */
+  /** infographic: one of the premade themes (see components/Infographic.tsx); slide_deck: dark-space or light-space. */
   theme?: string;
+  /** slide_deck: read on its own ("detailed") or shown behind a speaker ("presenter"), and how many slides. */
+  deck_format?: "detailed" | "presenter";
+  deck_length?: "short" | "default" | "long";
 };
 
 export const artifactsApi = {
@@ -154,6 +159,33 @@ export const artifactsApi = {
   /** An infographic drawn as a PNG. */
   image: (id: string, layout: "landscape" | "portrait" = "landscape") => apiBlob(`/api/artifacts/${id}/image${qs({ layout })}`),
   retry: (id: string) => post<Artifact>(`/api/artifacts/${id}/retry`),
+  /** A slide deck as a PDF (exactly as shown) or an editable PowerPoint. */
+  slidesFile: (id: string, ext: "pdf" | "pptx") => apiBlob(`/api/artifacts/${id}/slides.${ext}`),
+  /** A slide deck's slides as the editor has them, drawn without saving (after a slide or a text box is added,
+   * removed, moved or changed to another layout). Returns them as they will be kept. */
+  previewDeck: (id: string, slides: EditSlide[]) =>
+    post<{ slides: EditSlide[]; slides_html: string[]; slide_slots: string[][] }>(`/api/artifacts/${id}/deck-preview`, { slides }),
+  /** The editor's slides kept: the server fits the deck again and returns it. */
+  saveDeck: (id: string, slides: EditSlide[]) => put<Artifact>(`/api/artifacts/${id}/deck`, { slides }),
+};
+
+/** One slide in the stored shape (backend app/slides/content.py, empty_slide). */
+export type EditSlide = {
+  layout: string;
+  variant: string;
+  kicker: string;
+  heading: string;
+  lead: string;
+  points: { term: string; text: string }[];
+  left: { label: string; items: string[] };
+  right: { label: string; items: string[] };
+  stat: { value: string; label: string };
+  quote: { text: string; by: string };
+  takeaways: string[];
+  closing: string;
+  notes: string;
+  sources: { title?: string; path: string; line_start: number; line_end: number }[];
+  shrink?: number;
 };
 
 export const jobsApi = {
@@ -217,6 +249,8 @@ export type ItemBody = {
   social_account_id?: string | null;
   remind_by_email?: boolean;
   draft?: boolean;
+  /** Post now: published (or reminded) in the same request, never left scheduled. */
+  publish_now?: boolean;
 };
 
 export const launchpadApi = {

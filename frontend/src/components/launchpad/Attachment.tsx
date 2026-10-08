@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { ApiError } from "../../api/client";
 import { artifactsApi, launchpadApi, videoEditApi, videosApi } from "../../api/endpoints";
 import type { PostableArtifact } from "../../api/types";
-import { ArrowRightIcon, FilmIcon, SparkleIcon, UploadIcon } from "../icons/Icons";
+import { ArrowRightIcon, DownloadIcon, FilmIcon, HeadphonesIcon, SlidesIcon, SparkleIcon, UploadIcon } from "../icons/Icons";
 import { errorMessage, formatDate, Loading, Modal } from "../ui";
 import { finished, jobPercent } from "../video/jobState";
 
@@ -18,9 +18,16 @@ export function mediaLabel(a: PostableArtifact): string {
   if (a.type === "upload") {
     return a.media === "video" ? `Your video${a.duration_s ? ` ${fmtDuration(a.duration_s)}` : ""}` : "Your image";
   }
+  if (a.media === "audio") return `Audio${a.duration_s ? ` ${fmtDuration(a.duration_s)}` : ""} · download only`;
   if (a.media === "video" && a.rendering) return "Rendering: wait for it to finish";
   if (a.media === "video" && a.needs_render) return "Not rendered yet: render it first";
   if (a.media === "video") return a.duration_s ? `Video ${fmtDuration(a.duration_s)}` : "Video";
+  if (a.type === "slide_deck") {
+    // X takes 4 images and LinkedIn 20 (backend app/services/social/media.py MAX_IMAGES): longer decks are cut there.
+    const n = a.media_count;
+    const cut = n > 20 ? " · X posts the first 4, LinkedIn the first 20" : n > 4 ? " · X posts the first 4" : "";
+    return `${n} slide${n === 1 ? "" : "s"} as images${cut}`;
+  }
   if (a.media === "image") return a.media_count === 1 ? "Image" : `${a.media_count} images`;
   return "Text";
 }
@@ -29,7 +36,8 @@ function Thumb({ a }: { a: PostableArtifact }) {
   if (a.thumb_url) return <img className="lp-thumb" src={a.thumb_url} alt="" />;
   return (
     <span className="lp-thumb lp-thumb-icon" aria-hidden="true">
-      {a.media === "video" ? <FilmIcon size={20} /> : <SparkleIcon size={20} />}
+      {a.media === "video" ? <FilmIcon size={20} /> : a.media === "audio" ? <HeadphonesIcon size={20} />
+        : a.type === "slide_deck" ? <SlidesIcon size={20} /> : <SparkleIcon size={20} />}
     </span>
   );
 }
@@ -50,6 +58,32 @@ export function MediaPreviewModal({ a, onClose }: { a: PostableArtifact; onClose
           )}
         </div>
         <p className="muted small">{mediaLabel(a)}</p>
+      </div>
+    </Modal>
+  );
+}
+
+/** An audio overview someone tried to schedule: X and LinkedIn take no audio files, so it is offered to download
+ * instead. Used by the Launchpad's list and the Library. */
+export function AudioOnlyModal({ title, downloadUrl, onClose }: { title: string; downloadUrl: string | null | undefined; onClose: () => void }) {
+  return (
+    <Modal title="Audio can't be posted" onClose={onClose}>
+      <div className="stack lp-audio-only">
+        <span className="lp-audio-only-icon" aria-hidden="true"><HeadphonesIcon size={28} /></span>
+        <p>
+          LinkedIn does not support posting audio files, so <strong>{title}</strong> can't be scheduled. Download it now
+          to use it elsewhere, like a podcast app, your newsletter or a website.
+        </p>
+        <div className="row lp-audio-only-actions">
+          <button type="button" className="btn" onClick={onClose}>Close</button>
+          {downloadUrl ? (
+            <a className="btn btn-primary" href={downloadUrl} download onClick={onClose} autoFocus>
+              <DownloadIcon size={18} /> Download
+            </a>
+          ) : (
+            <span className="muted small">The file isn't available right now. Try again later.</span>
+          )}
+        </div>
       </div>
     </Modal>
   );
@@ -307,16 +341,29 @@ function deleteWording(a: PostableArtifact): { title: string; body: string } {
   return { title: "Delete this item?", body: "It's deleted for good. Posts on your calendar that carry it are removed too." };
 }
 
-type Kind = "all" | "kits" | "video" | "uploads";
+type Kind = "all" | "kits" | "video" | "decks" | "audio" | "uploads";
 const KINDS: { id: Kind; label: string }[] = [
   { id: "all", label: "All" },
   { id: "kits", label: "Launch kits" },
   { id: "video", label: "Videos" },
+  { id: "decks", label: "Slide decks" },
+  { id: "audio", label: "Audio" },
   { id: "uploads", label: "Uploads" },
 ];
 /** Which rows a tab shows: Videos is only the ones the video service made (uploaded videos are under Uploads). */
 const matches = (a: PostableArtifact, kind: Kind) =>
-  kind === "all" || (kind === "kits" ? a.type === "launch_kit" : kind === "uploads" ? a.type === "upload" : a.editable_video);
+  kind === "all" || (kind === "kits" ? a.type === "launch_kit" : kind === "uploads" ? a.type === "upload"
+    : kind === "decks" ? a.type === "slide_deck" : kind === "audio" ? a.type === "audio_overview" : a.editable_video);
+
+/** Saves a file from its (presigned, attachment) link. */
+function download(url: string) {
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
 
 /** What can be uploaded to post, and LinkedIn's size limits for it (checked again by the backend). */
 const UPLOAD_ACCEPT = "image/png,image/jpeg,image/gif,video/mp4";
@@ -366,11 +413,20 @@ export function AttachPicker({ onPick, onCreateKit, onClose }: {
  * searchable; with a link to create a new launch kit when onCreateKit is given. onPickKit, when given, takes the
  * Launch Kits instead of onPick (the Schedule a launch page opens the kit, to schedule its posts from there). A video
  * with no MP4 yet (or one rendering) opens the render pop-up instead. fill: the rows take the screen's height. */
-export function LibraryPicker({ onPick, onPickKit, onCreateKit, fill = false }: {
+export function LibraryPicker({ onPick, onPickKit, onCreateKit, fill = false, onReschedule, onDuplicate, refreshKey = 0, openingId }: {
   onPick: (a: PostableArtifact) => void;
   onPickKit?: (a: PostableArtifact) => void;
   onCreateKit?: () => void;
   fill?: boolean;
+  /** With these (the Schedule a launch page), an item already scheduled says Reschedule and opens that post
+   * (`itemId`), and its menu can schedule it again (a copy of that post). Without them (the composer's picker), every
+   * item is simply picked. */
+  onReschedule?: (a: PostableArtifact, itemId: string) => void;
+  onDuplicate?: (a: PostableArtifact, itemId: string) => void;
+  /** Changed by the page to load the list again (a post was rescheduled, moved or deleted). */
+  refreshKey?: number;
+  /** The item whose scheduled post is being opened: its row shows a spinner and takes no clicks meanwhile. */
+  openingId?: string | null;
 }) {
   const [items, setItems] = useState<PostableArtifact[] | null>(null);
   const [kind, setKind] = useState<Kind>("all");
@@ -382,6 +438,7 @@ export function LibraryPicker({ onPick, onPickKit, onCreateKit, fill = false }: 
   const [dragging, setDragging] = useState(false); // a file is held over the drop area
   const [renaming, setRenaming] = useState<{ id: string; title: string; busy?: boolean } | null>(null);
   const [previewing, setPreviewing] = useState<PostableArtifact | null>(null); // the upload being looked at
+  const [audio, setAudio] = useState<PostableArtifact | null>(null); // an audio overview: offered to download, not posted
   const [deleting, setDeleting] = useState<PostableArtifact | null>(null); // the item in the delete pop-up
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -441,7 +498,7 @@ export function LibraryPicker({ onPick, onPickKit, onCreateKit, fill = false }: 
   const load = useCallback(() => launchpadApi.postable(q).then((list) => {
     setItems(list);
     return list;
-  }), [q]);
+  }), [q, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -540,12 +597,18 @@ export function LibraryPicker({ onPick, onPickKit, onCreateKit, fill = false }: 
         )}
         {items && shown.length === 0 && (
           <p className="muted lp-pick-empty">{kind === "kits" ? "No launch kits yet: create a new one."
-            : kind === "uploads" ? "Nothing uploaded yet." : "Nothing to attach here yet."}</p>
+            : kind === "uploads" ? "Nothing uploaded yet." : kind === "decks" ? "No slide decks yet: make one from a notebook."
+            : kind === "audio" ? "No audio overviews yet: make one from a notebook."
+            : "Nothing to attach here yet."}</p>
         )}
         <ul className={`lk-rows lp-pick-rows${fill ? " lp-pick-rows-fill" : ""}`}>
           {shown.map((a) => {
             const kit = a.type === "launch_kit";
-            const go = () => (a.needs_render || a.rendering ? setRendering(a) : kit && onPickKit ? onPickKit(a) : onPick(a));
+            // Already on the calendar (and this list offers it): open that post rather than start another one.
+            const next = onReschedule && !kit && a.media !== "audio" ? a.scheduled?.[0] : undefined;
+            const opening = openingId === a.id;
+            const go = () => opening ? undefined : (a.media === "audio" ? setAudio(a) : a.needs_render || a.rendering ? setRendering(a)
+              : next ? onReschedule!(a, next.id) : kit && onPickKit ? onPickKit(a) : onPick(a));
             if (renaming?.id === a.id) {
               return (
                 <li key={a.id}>
@@ -570,7 +633,7 @@ export function LibraryPicker({ onPick, onPickKit, onCreateKit, fill = false }: 
             }
             return (
               <li key={a.id} className="lp-pick-item">
-                <button type="button" className="lk-row lp-pick-row" onClick={go}
+                <button type="button" className="lk-row lp-pick-row" onClick={go} aria-busy={opening}
                         title={a.rendering ? "Rendering: it can be scheduled once the MP4 is made"
                           : a.needs_render ? "Render it, then post it" : undefined}>
                   <Thumb a={a} />
@@ -578,22 +641,33 @@ export function LibraryPicker({ onPick, onPickKit, onCreateKit, fill = false }: 
                     <strong>{a.title}</strong>
                     <span className="muted small">
                       {kit ? "LinkedIn post and hooks ready to schedule" : mediaLabel(a)}
-                      {a.created_at ? ` · ${formatDate(a.created_at)}` : ""}
+                      {next ? ` · Scheduled ${formatDate(next.scheduled_at, true)}${a.scheduled!.length > 1
+                        ? ` +${a.scheduled!.length - 1} more` : ""}` : a.created_at ? ` · ${formatDate(a.created_at)}` : ""}
                     </span>
                   </span>
-                  <span className={`lp-tag${a.media === "video" ? " video" : kit ? " kit" : ""}`}>
-                    {a.type === "upload" ? "Upload" : a.media === "video" ? "Video" : kit ? "Launch Kit" : a.type_label}
+                  <span className={`lp-tag${a.media === "video" ? " video" : kit ? " kit" : a.type === "slide_deck" ? " deck" : ""}`}>
+                    {a.type === "upload" ? "Upload" : a.media === "video" ? "Video" : a.media === "audio" ? "Audio" : kit ? "Launch Kit"
+                      : a.type_label}
                   </span>
                   <span className="lp-pick-go">
-                    {a.rendering ? (
+                    {opening ? (
+                      <><span className="vw-spin small" aria-hidden="true" /> Opening...</>
+                    ) : a.rendering ? (
                       <><span className="vw-spin small" aria-hidden="true" /> Rendering</>
                     ) : (
-                      <>{a.needs_render ? "Render it" : kit && onPickKit ? "Open kit" : "Schedule"} <ArrowRightIcon size={14} /></>
+                      <>{a.needs_render ? "Render it" : kit && onPickKit ? "Open kit" : next ? "Reschedule" : "Schedule"}
+                        {" "}<ArrowRightIcon size={14} /></>
                     )}
                   </span>
                 </button>
                 <RowMenu label={a.title} items={[
                   ...(a.view_url ? [{ label: "Preview", onSelect: () => setPreviewing(a) }] : []),
+                  ...(a.download_url ? [{ label: "Download", onSelect: () => download(a.download_url!) }] : []),
+                  ...(next && onDuplicate ? [{ label: "Duplicate schedule", onSelect: () => onDuplicate(a, next.id) }] : []),
+                  // Several posts of it coming up: each can be opened.
+                  ...(next && a.scheduled!.length > 1 ? a.scheduled!.map((sc) => ({
+                    label: `Edit schedule: ${formatDate(sc.scheduled_at, true)}`, onSelect: () => onReschedule!(a, sc.id),
+                  })) : []),
                   ...(a.type === "upload" ? [{ label: "Rename", onSelect: () => setRenaming({ id: a.id, title: a.title }) }] : []),
                   ...(kit ? [{ label: "Open kit", onSelect: () => (onPickKit ? onPickKit(a) : navigate(`/app/launchpad/kits/${a.id}`)) }]
                     : a.editable_video ? [{ label: "Open", onSelect: () => navigate(`/app/videos/${a.id}`) }] : []),
@@ -608,6 +682,7 @@ export function LibraryPicker({ onPick, onPickKit, onCreateKit, fill = false }: 
         </ul>
         {rendering && <RenderVideoModal video={rendering} onClose={() => setRendering(null)} onRendered={rendered} />}
         {previewing && <MediaPreviewModal a={previewing} onClose={() => setPreviewing(null)} />}
+        {audio && <AudioOnlyModal title={audio.title} downloadUrl={audio.download_url} onClose={() => setAudio(null)} />}
         {deleting && (
           <Modal title={deleteWording(deleting).title} onClose={() => !deleteBusy && setDeleting(null)}>
             <div className="stack">

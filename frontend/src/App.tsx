@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes, useSearchParams } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import AppShell from "./components/AppShell";
 import { PublicFooter, PublicNav } from "./components/PublicChrome";
 import PricingTiers from "./components/PricingTiers";
@@ -8,6 +8,7 @@ import AuthPage from "./pages/AuthPage";
 import { Blog, BlogPostPage } from "./pages/Blog";
 import Landing from "./pages/Landing";
 import Archive from "./pages/Archive";
+import Voices from "./pages/Voices";
 import Launchpad, { ScheduleLaunch } from "./pages/Launchpad";
 import LaunchKitRedirect, { LaunchKitPage, LaunchKits } from "./pages/LaunchKit";
 import MissionControl from "./pages/MissionControl";
@@ -64,7 +65,7 @@ export default function App() {
         <Route path="reports/:id" element={<ReportPage />} />
         <Route path="videos" element={<Navigate to="/app/archive?tab=videos" replace />} />
         <Route path="videos/new" element={<VideoCreate />} />
-        <Route path="videos/voices" element={<Navigate to="/app/archive?tab=voices" replace />} />
+        <Route path="videos/voices" element={<Navigate to="/app/voices" replace />} />
         <Route path="videos/:id" element={<VideoEditor />} />
         <Route path="sources" element={<Sources />} />
         <Route path="map" element={<TopicMap />} />
@@ -76,6 +77,7 @@ export default function App() {
         <Route path="launchpad/kits" element={<LaunchKits />} />
         <Route path="launchpad/kits/:id" element={<LaunchKitPage />} />
         <Route path="archive" element={<Archive />} />
+        <Route path="voices" element={<Voices />} />
         <Route path="resurface" element={<Resurface />} />
         <Route path="settings" element={<Settings />} />
         <Route path="*" element={<MissionControl />} />
@@ -87,9 +89,7 @@ export default function App() {
   );
 }
 
-/** The old Voice page (/app/voice, ?step=writing for the writing voice) is the Library's Voices tab now. */
+/** The old Voice page (/app/voice) is Manage voices (/app/voices) now. */
 function VoiceRedirect() {
-  const [params] = useSearchParams();
-  const writing = params.get("step") === "writing";
-  return <Navigate to={`/app/archive?tab=voices${writing ? "&step=writing" : ""}`} replace />;
+  return <Navigate to="/app/voices" replace />;
 }

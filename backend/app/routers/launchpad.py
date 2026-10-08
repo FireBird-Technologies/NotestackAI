@@ -21,11 +21,21 @@ from app.config import settings
 from app.db import get_db
 from app.models import Artifact, CalendarItem, Document, EngagementEvent, SocialAccount, TrackedLink, Upload
 from app.services import launchpad as lp
-from app.services.artifacts import TYPE_LABELS
+from app.services.artifacts import TYPE_LABELS, download_name
 from app.services.crypto import decrypt, encrypt
 from app.services.social import AUTO_POST, LIMITS, PLATFORM_LABELS, SocialError, bluesky, linkedin, x
 from app.services.social.health import pause_account_posts, resume_account_posts
-from app.services.social.media import MB, SIZE_LIMITS, UPLOAD_TYPES, check_postable, duration, is_blog2video, media_count, upload_kind
+from app.services.social.media import (
+    MB,
+    SIZE_LIMITS,
+    UPLOAD_TYPES,
+    carries_media,
+    check_postable,
+    duration,
+    is_blog2video,
+    media_count,
+    upload_kind,
+)
 from app.services.storage import storage
 
 router = APIRouter(prefix="/api", tags=["launchpad"])
@@ -61,7 +71,7 @@ class When(BaseModel):
 
 class ItemIn(When):
     platform: Platform
-    content: str = Field(min_length=1, max_length=10000)
+    content: str = Field("", max_length=10000)  # may be empty when the post carries images or a video
     thread: list[str] = Field(default_factory=list, max_length=25)
     artifact_id: uuid.UUID | None = None  # the attachment (a video, quote card, carousel...), never a Launch Kit
     kit_id: uuid.UUID | None = None  # the Launch Kit the post was written from (tracked, not attached)
@@ -69,11 +79,13 @@ class ItemIn(When):
     social_account_id: uuid.UUID | None = None
     remind_by_email: bool = False
     draft: bool = False
+    # Post now: published (or, by email, reminded) in this request, never left scheduled; no time needed
+    publish_now: bool = False
 
 
 class ItemPatch(When):
     artifact_id: uuid.UUID | None = None  # set or (null) clear what the post carries
-    content: str | None = Field(None, min_length=1, max_length=10000)
+    content: str | None = Field(None, max_length=10000)
     thread: list[str] | None = None
     social_account_id: uuid.UUID | None = None
     remind_by_email: bool | None = None
@@ -85,7 +97,9 @@ def _aware(dt: datetime) -> datetime:
 
 
 # audio can't be posted; "upload" is a file the user brought from their computer
-POSTABLE = ("video", "quote_card", "carousel", "summary", "launch_kit", "mind_map", "upload")
+POSTABLE = ("video", "quote_card", "carousel", "summary", "launch_kit", "mind_map", "upload", "slide_deck")
+# Listed on the Launchpad too, but only to download: X and LinkedIn take no audio files (check_postable refuses it)
+LISTED = (*POSTABLE, "audio_overview")
 
 
 def _cite_free(text: str) -> str:
@@ -107,8 +121,19 @@ def _prefill(a: Artifact) -> dict:
         "quote_card": f'"{c.get("quote")}"' + (f" ({c['source']})" if c.get("source") else "") if c.get("quote")
                       else title,
         "carousel": ((c.get("slides") or [{}])[0].get("heading") or title),
+        "slide_deck": _deck_prefill(c) or title,
     }.get(a.type, title)
     return {"x": [text], "linkedin": text}
+
+
+def _deck_prefill(c: dict) -> str:
+    """A slide deck's post: its title, its subtitle, and the takeaways of its closing slide."""
+    deck = c.get("deck") or {}
+    slides = deck.get("slides") or []
+    closing = next((s for s in reversed(slides) if s.get("layout") == "closing"), {})
+    head = "\n\n".join(x for x in (deck.get("title"), deck.get("subtitle")) if x)
+    takeaways = "\n".join(f"- {t}" for t in closing.get("takeaways") or [])
+    return "\n\n".join(x for x in (head, takeaways) if x)
 
 
 def artifact_brief(a: Artifact) -> dict:
@@ -117,12 +142,17 @@ def artifact_brief(a: Artifact) -> dict:
     thumb = (a.storage_key if a.type == "quote_card" or upload_kind(a) == "image"
              else (c.get("slide_keys") or [a.storage_key])[0] if a.type == "carousel" else None)
     return {"id": str(a.id), "type": a.type, "type_label": TYPE_LABELS.get(a.type, a.type),
-            "title": c.get("title") or TYPE_LABELS.get(a.type, a.type),
-            "media": upload_kind(a) or ("video" if a.type == "video" else "image" if media_count(a) else "text"),
+            # A deck's title starts "Slide deck: ", which its tag already says
+            "title": (c.get("title") or TYPE_LABELS.get(a.type, a.type)).removeprefix("Slide deck: " if a.type == "slide_deck" else ""),
+            "media": upload_kind(a) or ("video" if a.type == "video" else "audio" if a.type == "audio_overview"
+                                        else "image" if media_count(a) else "text"),
             "media_count": media_count(a), "duration_s": duration(a),
             "thumb_url": storage.presign_get(thumb) if thumb else None,
             # The user's own file, to preview before posting it.
             "view_url": storage.presign_get(a.storage_key) if a.type == "upload" and a.storage_key else None,
+            # An audio overview can't be posted: it is offered to download instead.
+            "download_url": (storage.presign_get(a.storage_key, download_name=download_name(a))
+                             if a.type == "audio_overview" and a.storage_key else None),
             # A blog2video video with scenes but no MP4 yet: listed, but it has to be rendered before it can go out.
             # Made by the video service (blog2video): it opens in the video editor.
             "editable_video": is_blog2video(a),
@@ -197,6 +227,12 @@ def _require_connected(platform: str, account: SocialAccount | None, artifact: A
         raise HTTPException(409, {"code": "reconnect", "message": f"Reconnect {label} to post images and videos."})
 
 
+def _require_words(posts: list[str], artifact: Artifact | None) -> None:
+    """A post needs words, unless it carries images or a video (those can go out without a caption)."""
+    if not any(p.strip() for p in posts) and not carries_media(artifact):
+        raise HTTPException(422, {"code": "no_text", "message": "Write something to post, or attach an image or video."})
+
+
 def _validate_lengths(platform: str, posts: list[str]) -> None:
     limit = LIMITS.get(platform)
     if platform in ("x", "bluesky") and limit:
@@ -251,12 +287,13 @@ def list_items(ctx: Ctx = Depends(get_ctx), start: datetime | None = None, end: 
 
 @router.post("/calendar")
 def create_item(body: ItemIn, ctx: Ctx = Depends(get_ctx)):
-    when = body.utc()
+    when = datetime.now(UTC) if body.publish_now else body.utc()
     if when is None:
         raise HTTPException(422, {"code": "no_time", "message": "Pick when it goes out."})
     account = _account(ctx, body.social_account_id, body.platform)
     _validate_lengths(body.platform, [body.content, *body.thread])
     artifact = _postable(ctx, body.artifact_id, body.platform) if body.artifact_id else None
+    _require_words([body.content, *body.thread], artifact)
     kit = _kit(ctx, body.kit_id) if body.kit_id else None
     _require_connected(body.platform, account, artifact)
     if body.document_id and not ctx.db.scalar(select(Document.id).where(Document.id == body.document_id,
@@ -268,11 +305,22 @@ def create_item(body: ItemIn, ctx: Ctx = Depends(get_ctx)):
         kit_id=kit.id if kit else None,
         document_id=body.document_id, social_account_id=account.id if account else None,
         remind_by_email=body.remind_by_email or body.platform not in AUTO_POST or not account,
-        status="draft" if body.draft else "scheduled",
+        status="draft" if body.draft else "publishing" if body.publish_now else "scheduled",
     )
     ctx.db.add(item)
     ctx.db.commit()
+    if body.publish_now:
+        _go_now(ctx, item)
     return _enrich(ctx, [item])[0]
+
+
+def _go_now(ctx: Ctx, item: CalendarItem) -> None:
+    """Publish an item claimed for it ("publishing") now: with images or a video through a job (uploading takes a
+    while; the page follows its status), anything else right here."""
+    if lp.has_media(ctx.db, item):
+        lp.queue_publish(ctx.db, item)
+    else:
+        lp.publish_item(ctx.db, item)
 
 
 @router.patch("/calendar/{item_id}")
@@ -301,15 +349,17 @@ def update_item(item_id: uuid.UUID, body: ItemPatch, ctx: Ctx = Depends(get_ctx)
     if body.status == "paused":
         item.status = "paused"  # held by hand: never attempted until resumed
     elif body.status is not None or item.status in ("failed", "reminded", "paused"):
-        # Going out (again): only through a live connection, and only at a time still ahead.
+        # Going out (again), rescheduled: only through a live connection, and only at a time still ahead (a failed or
+        # reminded post's old time has passed, and it would otherwise go out at the very next run).
         _require_connected(item.platform, account, artifact)
-        if item.status == "paused" and _aware(item.scheduled_at) <= datetime.now(UTC):
+        if (body.status or "scheduled") == "scheduled" and _aware(item.scheduled_at) <= datetime.now(UTC):
             raise HTTPException(409, {"code": "missed", "message": "Pick a time that is still ahead."})
         item.status = body.status or "scheduled"
     elif item.platform in CONNECTED_ONLY and body.model_fields_set & {"social_account_id", "artifact_id"}:
         _require_connected(item.platform, account, artifact)
     item.error = None
     item.attempts = 0
+    _require_words([item.content or "", *(item.thread or [])], artifact)  # e.g. the caption emptied, or the video removed
     _validate_lengths(item.platform, [item.content, *(item.thread or [])])
     ctx.db.commit()
     return _enrich(ctx, [item])[0]
@@ -324,17 +374,16 @@ def delete_item(item_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
 
 
 @router.post("/calendar/{item_id}/publish")
-async def publish_now(item_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
+def publish_now(item_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
+    """Publish a scheduled post now. A plain (threadpool) endpoint: its database calls and an inline publish must
+    never hold up the event loop, and with it every other request."""
     item = _item(ctx, item_id)
     if item.status in ("posted", "publishing"):
         raise HTTPException(409, "This post already went out.")
     item.status = "publishing"
     item.attempts = 0
     ctx.db.commit()
-    if lp.has_media(ctx.db, item):
-        lp.queue_publish(ctx.db, item)  # uploading takes a while: a job does it, the page follows the status
-    else:
-        await run_in_threadpool(lp.publish_item, ctx.db, item)
+    _go_now(ctx, item)
     return _enrich(ctx, [item])[0]
 
 
@@ -373,11 +422,12 @@ def register_upload(body: UploadIn, ctx: Ctx = Depends(get_ctx)):
 
 @router.get("/launchpad/postable")
 def postable(ctx: Ctx = Depends(get_ctx), q: str = "", limit: int = 60):
-    """What can be attached to a post: finished videos, quote cards, carousels, summaries, launch kits, mind maps
-    (not audio), newest first. Videos made but not rendered yet are listed too, flagged needs_render (they can only be
-    posted once rendered), and so are videos being rendered, flagged rendering."""
+    """What can be attached to a post: finished videos, quote cards, carousels, summaries, launch kits, mind maps,
+    slide decks, newest first, and audio overviews (listed to download: they can't be posted). Videos made but not
+    rendered yet are listed too, flagged needs_render (they can only be posted once rendered), and so are videos being
+    rendered, flagged rendering."""
     rows = ctx.db.scalars(select(Artifact).where(Artifact.workspace_id == ctx.workspace.id,
-                                                 Artifact.type.in_(POSTABLE))
+                                                 Artifact.type.in_(LISTED))
                           .order_by(Artifact.created_at.desc()).limit(400))
     needle = q.strip().lower()
     out = []
@@ -391,6 +441,18 @@ def postable(ctx: Ctx = Depends(get_ctx), q: str = "", limit: int = 60):
             out.append(artifact_brief(a))
         if len(out) >= min(limit, 200):
             break
+    # What each one already has coming up (scheduled, still ahead), soonest first: the list offers to reschedule it
+    upcoming = ctx.db.scalars(select(CalendarItem).where(
+        CalendarItem.workspace_id == ctx.workspace.id, CalendarItem.status == "scheduled",
+        CalendarItem.scheduled_at > datetime.now(UTC),
+        CalendarItem.artifact_id.in_([uuid.UUID(b["id"]) for b in out])).order_by(CalendarItem.scheduled_at))
+    by_artifact: dict[str, list[dict]] = {}
+    for it in upcoming:
+        by_artifact.setdefault(str(it.artifact_id), []).append(
+            {"id": str(it.id), "scheduled_at": _aware(it.scheduled_at).isoformat(),
+             "platform_label": PLATFORM_LABELS.get(it.platform, it.platform)})
+    for b in out:
+        b["scheduled"] = by_artifact.get(b["id"], [])
     return out
 
 

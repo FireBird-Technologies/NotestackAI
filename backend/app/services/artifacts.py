@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session, object_session
 from app.models import Artifact, Job
 from app.services.jobs import create_job, serialize_job
 from app.services.storage import storage
+from app.slides.build import slots as slide_slots
+from app.slides.build import view as slide_pages
 
 TYPE_LABELS = {
     "summary": "Summary",
@@ -22,6 +24,7 @@ TYPE_LABELS = {
     "flashcards": "Flashcards",
     "report": "Report",
     "infographic": "Infographic",
+    "slide_deck": "Slide deck",
     "upload": "Upload",
 }
 
@@ -84,6 +87,8 @@ def serialize_artifact(a: Artifact, job: Job | None = None) -> dict:
         from app.pipeline.infographic import infographic_html  # not at import: pipeline imports this module
 
         content = {**content, "html": infographic_html(content), "html_landscape": infographic_html(content, "landscape")}
+    if a.type == "slide_deck" and a.status == "ready":
+        content = {**content, "slides_html": slide_pages(content), "slide_slots": slide_slots(content)}
     if a.type == "report" and any(b.get("type") == "infographic" for b in content.get("blocks") or []):
         content = {**content, "blocks": report_blocks(a)}
     slides = content.get("slide_keys") or []
@@ -99,7 +104,7 @@ def serialize_artifact(a: Artifact, job: Job | None = None) -> dict:
         "storage_key": a.storage_key,
         # blog2video videos live on blog2video's storage (video_url once rendered)
         "url": storage.presign_get(a.storage_key) if a.storage_key else content.get("video_url"),
-        "download_url": (storage.presign_get(a.storage_key, download_name=_download_name(a)) if a.storage_key
+        "download_url": (storage.presign_get(a.storage_key, download_name=download_name(a)) if a.storage_key
                          else content.get("video_url")),
         "provider": content.get("provider"),
         "slide_urls": [storage.presign_get(k) for k in slides],
@@ -108,7 +113,8 @@ def serialize_artifact(a: Artifact, job: Job | None = None) -> dict:
     }
 
 
-def _download_name(a: Artifact) -> str:
+def download_name(a: Artifact) -> str:
+    """The file name a download is saved under: the artifact's title and its file's extension."""
     title = (a.content_json or {}).get("title") or a.type
     ext = (a.storage_key or "").rsplit(".", 1)[-1]
     return f"{title[:60]}.{ext}"

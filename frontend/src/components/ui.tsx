@@ -69,17 +69,21 @@ export function Modal({
   actions?: ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  // The latest onClose, so a parent passing a new function each render neither re-binds Escape nor (worse) pulls focus
+  // back to the dialog, away from whatever is being typed in.
+  const close = useRef(onClose);
+  close.current = onClose;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       // A modal opened from a modal (a picker over the composer): Escape closes only the top one.
       const open = document.querySelectorAll(".modal-backdrop");
-      if (open[open.length - 1] === ref.current?.parentElement) onClose();
+      if (open[open.length - 1] === ref.current?.parentElement) close.current();
     };
     document.addEventListener("keydown", onKey);
-    ref.current?.focus();
+    ref.current?.focus(); // once, on opening
     return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, []);
   // Rendered into <body>: a parent with backdrop-filter or transform (cards have one) would otherwise become the
   // containing block of this fixed backdrop and trap the modal inside that card.
   return createPortal(
@@ -171,6 +175,44 @@ export function CopyButton({ text, label = "Copy" }: { text: string; label?: str
 }
 
 /** Two step destructive button: first click arms it, second confirms. No browser dialogs. */
+/** "Delete this?": deletes only on confirm, shows what went wrong if it fails, and closes once it is gone. */
+export function ConfirmDeleteModal({ heading, name, onCancel, onConfirm }: {
+  heading: string;
+  name: string;
+  onCancel: () => void;
+  onConfirm: () => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const confirm = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await onConfirm();
+      onCancel(); // gone: close the warning
+    } catch (e) {
+      setError(errorMessage(e));
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal title={heading} onClose={busy ? () => undefined : onCancel}>
+      <div className="stack sd-confirm">
+        <p>
+          <strong>{name}</strong> will be deleted for good. This cannot be undone.
+        </p>
+        {error && <p className="error-text" role="alert">{error}</p>}
+        <div className="row sd-confirm-actions">
+          <button type="button" className="btn" onClick={onCancel} disabled={busy}>Cancel</button>
+          <button type="button" className="btn btn-danger" onClick={confirm} disabled={busy} autoFocus>
+            {busy ? (<><span className="nbv-send-spinner" aria-hidden="true" /> Deleting...</>) : "Delete"}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 export function ConfirmButton({
   onConfirm,
   children,

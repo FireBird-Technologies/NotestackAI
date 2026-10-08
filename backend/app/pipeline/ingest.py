@@ -551,6 +551,9 @@ def store_entries(
         if not sections:
             skipped += 1
             continue
+        # Postgres text cannot hold NUL bytes, and some PDFs (icon glyphs) extract with them.
+        sections = [(h and h.replace("\x00", ""), t.replace("\x00", "")) for h, t in sections]
+        entry.title = entry.title.replace("\x00", "")
         if not doc:
             doc = Document(id=uuid.uuid4(), workspace_id=source.workspace_id, source_id=source.id, url=entry.url)
             db.add(doc)

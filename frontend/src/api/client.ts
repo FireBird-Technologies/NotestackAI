@@ -63,7 +63,12 @@ async function parseError(res: Response): Promise<ApiError> {
     const body = await res.json();
     const detail = body.detail;
     if (typeof detail === "string") message = detail;
-    else if (detail?.message) {
+    else if (Array.isArray(detail) && detail.length) {
+      // A request the server's field checks refused (FastAPI's 422 list): say which field and why, not "Unprocessable Entity".
+      const first = detail[0] as { loc?: (string | number)[]; msg?: string };
+      const field = (first.loc ?? []).filter((p) => p !== "body").join(" ");
+      if (first.msg) message = field ? `${field}: ${first.msg}` : first.msg;
+    } else if (detail?.message) {
       message = detail.message;
       code = detail.code;
       extra = detail;

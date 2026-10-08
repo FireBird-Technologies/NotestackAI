@@ -4,6 +4,7 @@ import { artifactsApi, videosApi } from "../api/endpoints";
 import type { Artifact, Citation } from "../api/types";
 import { useJob } from "../hooks/useJob";
 import { Body } from "./ArtifactCard";
+import { SlideDeckViewer } from "./SlideDeck";
 import { TrashIcon } from "./icons/Icons";
 import { errorMessage, formatDate, formatDuration, JobProgress } from "./ui";
 
@@ -14,7 +15,8 @@ function statusOf(a: Artifact, running: boolean): { label: string; tone: "done" 
 }
 
 /** One generated item as a full-width row (like the Videos list): its type, title, status and date. A video opens its
- * editor; anything else expands in place to its player or image. */
+ * editor, a finished slide deck its viewer (to read, edit, present or download it); anything else expands in place
+ * to its player or image. */
 export function ArtifactRow({
   artifact: initial,
   onCite,
@@ -41,6 +43,8 @@ export function ArtifactRow({
   const running = !!job && (job.status === "queued" || job.status === "running");
   const st = statusOf(artifact, running);
   const isEditorVideo = artifact.provider === "blog2video";
+  const isDeck = artifact.type === "slide_deck" && artifact.status === "ready";
+  const [viewing, setViewing] = useState(false);
 
   useEffect(() => {
     if (!armed) return;
@@ -73,7 +77,8 @@ export function ArtifactRow({
     <>
       <span className="vw-list-title">
         <span className={`type-chip ${artifact.type}`}>{artifact.type_label}</span>
-        <strong>{artifact.title}</strong>
+        {/* A deck's title starts "Slide deck: ", which its chip already says */}
+        <strong>{artifact.type === "slide_deck" ? artifact.title.replace(/^Slide deck: /, "") : artifact.title}</strong>
         <span className={`vw-dot ${st.tone}`} aria-hidden="true" />
         <span className="muted">{st.label}</span>
       </span>
@@ -90,12 +95,17 @@ export function ArtifactRow({
       <div className="artifact-row-head">
         {isEditorVideo ? (
           <Link to={`/app/videos/${artifact.id}`} className="vw-list-main">{main}</Link>
+        ) : isDeck ? (
+          <button type="button" className="vw-list-main artifact-row-toggle" onClick={() => setViewing(true)}>
+            {main}
+          </button>
         ) : (
           <button type="button" className="vw-list-main artifact-row-toggle" aria-expanded={openRow}
                   onClick={() => setOpenRow((o) => !o)}>
             {main}
           </button>
         )}
+        {isDeck && actions?.(artifact)}
         {artifact.status === "failed" && (
           <button type="button" className="btn btn-small" onClick={retry}>Retry</button>
         )}
@@ -109,7 +119,17 @@ export function ArtifactRow({
       </div>
       {running && job && <JobProgress job={job} compact />}
       {error && <p className="error-text">{error}</p>}
-      {openRow && !isEditorVideo && (
+      {viewing && (
+        <SlideDeckViewer artifact={artifact} onClose={() => setViewing(false)} onSaved={(a) => {
+          setArtifact(a);
+          onChanged?.(a);
+        }} onDelete={async () => {
+          await artifactsApi.remove(artifact.id);
+          setViewing(false);
+          onRemoved?.(artifact.id);
+        }} />
+      )}
+      {openRow && !isEditorVideo && !isDeck && (
         <div className="artifact-row-body">
           {artifact.status === "failed" && artifact.content.error && <p className="error-text">{artifact.content.error}</p>}
           <Body artifact={artifact} onCite={onCite} />

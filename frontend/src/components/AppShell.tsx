@@ -9,6 +9,7 @@ import UpgradeModal from "./UpgradeModal";
 import {
   LaunchpadIcon,
   LibraryIcon,
+  MicIcon,
   OrbitIcon,
   PlanetIcon,
   SatelliteDishIcon,
@@ -20,6 +21,7 @@ const NAV: { to: string; label: string; icon: typeof PlanetIcon; end?: boolean; 
   { to: "/app/sources", label: "Sources", icon: SatelliteDishIcon, also: ["/app/map"] },
   { to: "/app/archive", label: "Library", icon: LibraryIcon, also: ["/app/videos"] },
   { to: "/app/launchpad", label: "Launchpad", icon: LaunchpadIcon, also: ["/app/resurface", "/app/launch-kit"] },
+  { to: "/app/voices", label: "Manage voices", icon: MicIcon },
 ];
 
 const COLLAPSED_KEY = "ns_sidebar_collapsed";

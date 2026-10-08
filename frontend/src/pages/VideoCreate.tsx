@@ -465,7 +465,7 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
               {voices === null ? (
                 <Loading label="Loading voices" />
               ) : saved.length === 0 ? (
-                <p className="muted">No voices yet. Add some on the <Link to="/app/archive?tab=voices">Voices</Link> tab of your Library.</p>
+                <p className="muted">No voices yet. Add some in <Link to="/app/voices">Manage voices</Link>.</p>
               ) : (
                 <div className="vw-voice-list vw-voice-list-compact" role="radiogroup" aria-label="Narration voice">
                   {saved.map((v) => {

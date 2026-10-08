@@ -1,20 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
 import { voiceApi } from "../api/endpoints";
-import type { Job, VoiceDesignInput, VoiceDesignPreview, VoiceProfileData, VoiceState } from "../api/types";
-import { DocPicker } from "../components/DocPicker";
+import type { Job, VoiceDesignInput, VoiceDesignPreview, VoiceState } from "../api/types";
 import { YourVoices } from "../components/voice/YourVoices";
-import { ConfirmButton, errorMessage, formatDate, JobProgress, Loading, Modal, Tabs } from "../components/ui";
+import { ConfirmButton, errorMessage, JobProgress, Loading, Modal, Tabs } from "../components/ui";
 import { useJob } from "../hooks/useJob";
 import { useUpgrade } from "../hooks/useUpgrade";
-
-const LIST_FIELDS: { key: keyof VoiceProfileData; label: string; hint: string }[] = [
-  { key: "tone", label: "Tone", hint: "warm, wry, direct" },
-  { key: "vocabulary", label: "Signature words and phrases", hint: "readers, the long game" },
-  { key: "structure_habits", label: "Structure habits", hint: "short paragraphs, one idea each" },
-  { key: "openings", label: "How pieces open", hint: "a number, a small scene" },
-  { key: "avoid", label: "Never does", hint: "jargon, hashtags" },
-];
 
 /** Plays one URL at a time across the page. */
 function usePlayer() {
@@ -416,216 +406,79 @@ function CloneModal({ state, onClose, onDone }: { state: VoiceState; onClose: ()
   );
 }
 
-// The page: two steps. The writing voice builds itself, then the writer picks the two hosts.
-// Cloning lives in the "+ Add a voice" menu; a clone's status shows under the voice cards.
-
-type Step = "writing" | "hosts";
-
-/** The underlined link between the two views (Speaking voices <-> Writing voice), its arrow pointing the way. */
-function ViewLink({ to, label, onGo }: { to: Step; label: string; onGo: (s: Step) => void }) {
-  const back = to === "hosts";
-  return (
-    <button type="button" className={`vp-switch${back ? " back" : ""}`} onClick={() => onGo(to)}>
-      {back && <span aria-hidden="true">←</span>}
-      <span className="vp-switch-text">{label}</span>
-      {!back && <span aria-hidden="true">→</span>}
-    </button>
-  );
-}
+// The page: the speaking voices (who reads audio and video aloud). Cloning lives in the "+ Add a voice" menu; a
+// clone's status shows under the voice cards. The writing voice is built by the server on import and not shown here.
 
 export default function VoiceProfile() {
   const [state, setState] = useState<VoiceState | null>(null);
-  const [draft, setDraft] = useState<VoiceProfileData | null>(null);
-  const [params] = useSearchParams();
-  // Opens on Speaking voices; ?step=writing opens the writing voice (links between the two switch views).
-  const [step, setStep] = useState<Step>(params.get("step") === "writing" ? "writing" : "hosts");
-  const [picking, setPicking] = useState(false);
-  const [samples, setSamples] = useState<string[]>([]);
-  const [buildJob, setBuildJob] = useState<Job | null>(null);
   const [cloneJob, setCloneJob] = useState<Job | null>(null);
   const [cloning, setCloning] = useState(false);
   const [adding, setAdding] = useState(false); // the Add voices modal
   const [voicesKey, setVoicesKey] = useState(0); // bumped when a voice was made, so Your voices reloads
   const { openUpgrade } = useUpgrade();
-  const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const autoBuilt = useRef(false);
   const { play, playing } = usePlayer();
 
-  const load = () =>
-    voiceApi.get().then((s) => {
-      setState(s);
-      setDraft(s.profile);
-      setSamples(s.sample_doc_ids);
-      return s;
-    });
+  const load = () => voiceApi.get().then(setState, (e) => setError(errorMessage(e)));
   const loadVoices = () => setVoicesKey((k) => k + 1);
 
-  const startBuild = async (ids: string[]) => {
-    setPicking(false);
-    setError(null);
-    try {
-      setBuildJob(await voiceApi.build(ids));
-    } catch (e) {
-      setError(errorMessage(e));
-    }
-  };
-
   useEffect(() => {
-    // No writing voice yet: build one from the longest posts straight away instead of asking.
-    load().then((s) => {
-      if (!s.profile && !autoBuilt.current) {
-        autoBuilt.current = true;
-        void startBuild([]);
-      }
-    });
+    void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const build = useJob(buildJob, () => load());
   const clone = useJob(cloneJob, () => {
     load();
     loadVoices(); // a finished clone is saved to Your voices as "My voice"
   });
 
   if (!state) return <div className="loading-center"><Loading label="Loading your voice" /></div>;
-  const building = build && (build.status === "queued" || build.status === "running");
   const cloneRunning = clone && (clone.status === "queued" || clone.status === "running");
   const showClone = state.clone.status !== "none" || Boolean(clone);
 
-  const saveProfile = async () => {
-    setError(null);
-    try {
-      setState(await voiceApi.update({ profile: draft! }));
-      setSaved(true);
-      setTimeout(() => setSaved(false), 1500);
-    } catch (e) {
-      setError(errorMessage(e));
-    }
-  };
-
   return (
-    // The Library's Voices tab: speaking voices, and the writing voice behind a link.
+    // Manage voices (/app/voices): the speaking voices.
     <div className="stack vp">
-
-      <div className="vp-switch-row">
-        {step === "hosts"
-          ? <ViewLink to="writing" label="Writing voice" onGo={setStep} />
-          : <ViewLink to="hosts" label="Speaking voices" onGo={setStep} />}
-      </div>
       {error && <p className="error-text">{error}</p>}
 
-      {step === "writing" && (
-        <section className="card stack vp-card">
-          <h2>How you write</h2>
-          <p className="muted">Launch Kits, carousels, hooks and scripts are all written in this voice, so they read like you wrote them.</p>
-          {build && (building || build.status === "failed") && <JobProgress job={build} />}
-          {!draft && !building && (
+      <section className="card stack vp-card">
+        <h2>Who reads your work aloud</h2>
+        {!state.tts_configured && <p className="muted">Voice previews are unavailable right now.</p>}
+        <YourVoices reloadKey={voicesKey} onAdd={() => setAdding(true)} />
+
+        {showClone && (
+          <div className="vp-clone">
+            <strong>Your cloned voice</strong>
+            {clone && (cloneRunning || clone.status === "failed") && <JobProgress job={clone} compact />}
+            {state.clone.status === "processing" && !clone && <p className="muted small">Your voice is being created. It joins your voices when ready.</p>}
+            {state.clone.status === "failed" && state.clone.error && !cloneRunning && <p className="error-text">{state.clone.error}</p>}
             <div className="row">
-              <button className="btn btn-primary" onClick={() => startBuild([])}>
-                Build my writing voice
-              </button>
-              <button className="link-btn small" onClick={() => setPicking(true)}>
-                or pick the posts yourself
-              </button>
-            </div>
-          )}
-
-          {draft && (
-            <>
-              <label className="field">
-                <span>In a sentence, you sound like this</span>
-                <textarea className="textarea" rows={7} value={draft.summary} onChange={(e) => setDraft({ ...draft, summary: e.target.value })} />
-              </label>
-              <details className="delivery">
-                <summary className="mono muted small">Fine-tune tone, phrases and habits</summary>
-                <label className="field">
-                  <span>Sentence length</span>
-                  <select className="input input-sm" value={draft.sentence_length} onChange={(e) => setDraft({ ...draft, sentence_length: e.target.value as VoiceProfileData["sentence_length"] })}>
-                    {["short", "medium", "long", "varied"].map((v) => (
-                      <option key={v}>{v}</option>
-                    ))}
-                  </select>
-                </label>
-                {LIST_FIELDS.map((f) => (
-                  <label key={f.key} className="field">
-                    <span>{f.label}</span>
-                    <input
-                      className="input input-sm"
-                      placeholder={f.hint}
-                      value={(draft[f.key] as string[]).join(", ")}
-                      onChange={(e) => setDraft({ ...draft, [f.key]: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) })}
-                    />
-                  </label>
-                ))}
-              </details>
-              <p className="mono muted small">
-                Built {formatDate(state.updated_at, true)} from {state.sample_doc_ids.length} posts ·{" "}
-                <button className="link-btn small" disabled={Boolean(building)} onClick={() => setPicking(true)}>
-                  Rebuild from other posts
+              {state.clone.status === "ready" && state.clone.preview_url && (
+                <button className="btn btn-small" onClick={() => play(state.clone.preview_url!, "clone")}>
+                  {playing === "clone" ? "Stop" : "Hear my voice"}
                 </button>
-              </p>
-              <div className="row end">
-                <button className="btn btn-small" onClick={saveProfile}>
-                  {saved ? "Saved" : "Save changes"}
+              )}
+              {!cloneRunning && state.clone.allowed && (
+                <button className="btn btn-small" onClick={() => setCloning(true)}>
+                  {state.clone.status === "failed" ? "Try again" : "Record again"}
                 </button>
-              </div>
-            </>
-          )}
-        </section>
-      )}
-
-      {step === "hosts" && (
-        <section className="card stack vp-card">
-          <h2>Who reads your work aloud</h2>
-          {!state.tts_configured && <p className="muted">Voice previews are unavailable right now.</p>}
-          <YourVoices reloadKey={voicesKey} onAdd={() => setAdding(true)} />
-
-          {showClone && (
-            <div className="vp-clone">
-              <strong>Your cloned voice</strong>
-              {clone && (cloneRunning || clone.status === "failed") && <JobProgress job={clone} compact />}
-              {state.clone.status === "processing" && !clone && <p className="muted small">Your voice is being created. It joins your voices when ready.</p>}
-              {state.clone.status === "failed" && state.clone.error && !cloneRunning && <p className="error-text">{state.clone.error}</p>}
-              <div className="row">
-                {state.clone.status === "ready" && state.clone.preview_url && (
-                  <button className="btn btn-small" onClick={() => play(state.clone.preview_url!, "clone")}>
-                    {playing === "clone" ? "Stop" : "Hear my voice"}
-                  </button>
-                )}
-                {!cloneRunning && state.clone.allowed && (
-                  <button className="btn btn-small" onClick={() => setCloning(true)}>
-                    {state.clone.status === "failed" ? "Try again" : "Record again"}
-                  </button>
-                )}
-                {state.clone.status !== "none" && (
-                  <ConfirmButton
-                    confirmLabel="Revoke and delete my voice?"
-                    onConfirm={async () => {
-                      setState(await voiceApi.revoke());
-                      loadVoices();
-                    }}
-                  >
-                    Revoke consent
-                  </ConfirmButton>
-                )}
-              </div>
+              )}
+              {state.clone.status !== "none" && (
+                <ConfirmButton
+                  confirmLabel="Revoke and delete my voice?"
+                  onConfirm={async () => {
+                    setState(await voiceApi.revoke());
+                    loadVoices();
+                  }}
+                >
+                  Revoke consent
+                </ConfirmButton>
+              )}
             </div>
-          )}
-        </section>
-      )}
-
-      {picking && (
-        <Modal title="Pick 5 to 10 posts that sound most like you" onClose={() => setPicking(false)} wide>
-          <DocPicker selected={samples} onChange={setSamples} max={10} />
-          <p className="muted small">Leave empty to let Notestack pick your longest posts.</p>
-          <div className="row end">
-            <button className="btn btn-primary" onClick={() => startBuild(samples)}>
-              Build profile
-            </button>
           </div>
-        </Modal>
-      )}
+        )}
+      </section>
+
       {cloning && <CloneModal state={state} onClose={() => setCloning(false)} onDone={setCloneJob} />}
       {adding && (
         <Modal title="Add voices" onClose={() => setAdding(false)} wide>

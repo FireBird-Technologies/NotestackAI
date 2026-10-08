@@ -45,7 +45,7 @@ from app.models import (
     Workspace,
     WorkspaceMember,
 )
-from app.pipeline import flashcards, generate, infographic, launchkit, media, quiz, report
+from app.pipeline import flashcards, generate, infographic, launchkit, media, quiz, report, slides
 from app.pipeline.generate import NothingToDo
 from app.pipeline.ingest import FeedNotFound, entry_from_upload, extract_article, ingest_source, store_entries
 from app.pipeline.memory import learn_from_message
@@ -295,6 +295,7 @@ HANDLERS: dict[str, Callable[[Session, Job], object]] = {
     "flashcards": _artifact_handler(flashcards.build_flashcards, "Flashcards ready"),
     "report": _artifact_handler(report.build_report, "Report ready"),
     "infographic": _artifact_handler(infographic.build_infographic, "Infographic ready"),
+    "slide_deck": _artifact_handler(slides.build_slide_deck, "Slide deck ready"),
     "report_block": report.handle_report_block,
     "audio_overview": _artifact_handler(media.audio_overview, "Audio overview ready"),
     "video": _artifact_handler(media.make_video, "Audiogram ready"),  # audiograms; videos come from blog2video
@@ -338,9 +339,10 @@ def run_job(
             mark_artifact_failed(db, job, str(exc))
             return
         except Exception as exc:
-            log.exception("job %s (%s) attempt %s failed", job.id, job.kind, job.attempts)
+            # Roll back first: after a failed flush, touching `job` raises PendingRollbackError.
             db.rollback()
             job = db.get(Job, job_id)
+            log.exception("job %s (%s) attempt %s failed", job_id, job.kind, job.attempts)
             if not retry_or_fail(db, job, f"{type(exc).__name__}: {exc}"):
                 mark_artifact_failed(db, job, f"{type(exc).__name__}: {exc}")
             return
@@ -489,6 +491,15 @@ def run_periodic(now: float) -> None:
 # Main loop
 
 
+def _log_crash(job_id: uuid.UUID) -> Callable[[Future], None]:
+    """run_job handles job errors itself; anything escaping it would otherwise vanish inside the Future and leave
+    the job 'running' until recover_stale."""
+    def callback(future: Future) -> None:
+        if exc := future.exception():
+            log.error("job %s crashed outside its error handling", job_id, exc_info=exc)
+    return callback
+
+
 def run_loop(stop: threading.Event, worker_id: str | None = None) -> None:
     """Claim and run jobs until `stop` is set. Used by the CLI and, in development, by the API."""
     worker_id = worker_id or f"{socket.gethostname()}:{os.getpid()}"
@@ -509,7 +520,9 @@ def run_loop(stop: threading.Event, worker_id: str | None = None) -> None:
                 break
             if not job_id:
                 break
-            running.add(pool.submit(run_job, job_id))
+            future = pool.submit(run_job, job_id)
+            future.add_done_callback(_log_crash(job_id))
+            running.add(future)
             claimed = True
         if not claimed:
             stop.wait(settings.worker_poll_seconds)

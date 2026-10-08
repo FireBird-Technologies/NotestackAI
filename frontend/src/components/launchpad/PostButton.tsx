@@ -2,8 +2,9 @@ import { useState } from "react";
 import type { Artifact } from "../../api/types";
 import { ScheduleModal } from "../ScheduleModal";
 
-/** What can go out on X / LinkedIn: images, videos and text. Not audio (neither platform takes audio files). */
-const POSTABLE = new Set(["video", "quote_card", "carousel", "summary", "launch_kit", "mind_map"]);
+/** What can go out on X / LinkedIn: images (a slide deck's slides too), videos and text. Not audio (neither platform
+ * takes audio files). */
+const POSTABLE = new Set(["video", "quote_card", "carousel", "summary", "launch_kit", "mind_map", "slide_deck"]);
 
 export function canPost(a: Artifact): boolean {
   if (!POSTABLE.has(a.type)) return false;

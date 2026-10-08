@@ -157,7 +157,7 @@ def publish(db: Session, account: SocialAccount, posts: list[str], media: list |
         media_ids = [(_upload_video if m.kind == "video" else _upload_image)(headers, m) for m in media]
     first_id, reply_to = None, None
     for text in posts:
-        body: dict = {"text": text}
+        body: dict = {"text": text} if text else {}  # X takes a post with media and no text, but not an empty text
         if reply_to:
             body["reply"] = {"in_reply_to_tweet_id": reply_to}
         elif media_ids:

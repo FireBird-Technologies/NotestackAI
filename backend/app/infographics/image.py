@@ -1,6 +1,7 @@
 """An infographic's PNG: its stored HTML page drawn by a headless Chrome at the page's own size. No Remotion, no
 browser library: one `chrome --headless --screenshot` run per download (the result is kept for the next one)."""
 
+import functools
 import glob
 import hashlib
 import os
@@ -24,17 +25,29 @@ class ImageUnavailable(Exception):
     """No Chrome to draw with, or it failed."""
 
 
+@functools.cache
+def _runs(path: str) -> bool:
+    """Whether the binary actually starts (a package manager's wrapper can outlive the browser it points at)."""
+    try:
+        return subprocess.run([path, "--version"], capture_output=True, timeout=20).returncode == 0
+    except (subprocess.SubprocessError, OSError):
+        return False
+
+
 def chrome() -> str | None:
-    """CHROME, or a Chrome / Chromium found on the machine."""
+    """CHROME, or a working Chrome / Chromium found on the machine."""
     if env := os.environ.get("CHROME"):
         return env if Path(env).exists() else None
-    for name in ("chromium", "chromium-browser", "google-chrome", "google-chrome-stable", "chrome"):
-        if found := shutil.which(name):
-            return found
-    patterns = ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    found = [p for name in ("chromium", "chromium-browser", "google-chrome", "google-chrome-stable", "chrome")
+             if (p := shutil.which(name))]
+    # Playwright's headless shell first: desktop Chrome on macOS can hang taking a headless screenshot.
+    shell = "chromium_headless_shell-*/chrome-headless-shell-*/chrome-headless-shell"
+    patterns = [os.path.expanduser(f"~/Library/Caches/ms-playwright/{shell}"), os.path.expanduser(f"~/.cache/ms-playwright/{shell}"),
+                "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
                 os.path.expanduser("~/.cache/puppeteer/chrome/*/chrome-mac-*/"
                                    "Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing")]
-    return next((p for pat in patterns for p in glob.glob(pat)), None)
+    found += [p for pat in patterns for p in glob.glob(pat)]
+    return next((p for p in found if _runs(p)), None)
 
 
 def render_png(html: str, layout: str = "portrait") -> bytes:

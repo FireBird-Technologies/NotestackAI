@@ -1,5 +1,6 @@
-"""Audio overviews (two hosts, ElevenLabs), audiograms and stills (Remotion renderer)."""
+"""Audio overviews (one or two hosts, ElevenLabs), audiograms and stills (Remotion renderer)."""
 
+import re
 import uuid
 
 from sqlalchemy import select
@@ -8,10 +9,12 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.corpus import Corpus
 from app.llm import run
-from app.llm.signatures import PickQuotes, PodcastScript
+from app.llm.signatures import PickQuotes, WriteAudioScript
 from app.models import Artifact, Document, Job, Source, User, VoiceProfile, Workspace
 from app.pipeline.generate import NothingToDo
+from app.pipeline.material import load_material
 from app.pipeline.passages import notebook_docs, passages_for, tools_for, verify_refs
+from app.pipeline.report import SAME_LANGUAGE
 from app.services import tts
 from app.services.jobs import record_usage, update_job
 from app.services.renderer import PermanentJobError, brand_props, request_render
@@ -48,28 +51,61 @@ def _require_tts() -> None:
 # Audio overview
 
 
+STYLES = {
+    "deep_dive": "Deep Dive: a lively, curious conversation that unpacks the ideas and connects them to each other",
+    "brief": "Brief: a short, bite sized overview that gets the core ideas across quickly",
+    "critique": "Critique: an expert review of the material, with honest, constructive feedback on how to improve it",
+    "debate": "Debate: two hosts take different sides on the material's main questions and argue them respectfully",
+}
+WORDS_PER_MINUTE = 150
+_MARKUP = re.compile(r"(\*\*|__|`|#{1,6}\s|^\s*[-*•]\s+|\[\d+\])", re.M)
+
+
+def script_turns(turns: list[dict], hosts: int) -> list[dict]:
+    """The model's turns ready to voice: empty ones dropped and markup removed. With two hosts, consecutive turns by
+    one host are joined and the speakers then strictly alternate, host A first, so the conversation always goes A, B,
+    A, B. With one host, every turn is host A's."""
+    clean = []
+    for t in turns or []:
+        text = re.sub(r"\s+", " ", _MARKUP.sub("", str((t or {}).get("text") or ""))).replace("\u2014", ", ").strip()
+        if text:
+            clean.append({"speaker": (t or {}).get("speaker") or "host_a", "text": text,
+                          "sources": list((t or {}).get("sources") or [])})
+    if hosts == 1:
+        return [{**t, "speaker": "host_a"} for t in clean]
+    merged: list[dict] = []
+    for t in clean:
+        if merged and merged[-1]["speaker"] == t["speaker"]:
+            merged[-1]["text"] += " " + t["text"]
+            merged[-1]["sources"] += t["sources"]
+        else:
+            merged.append(dict(t))
+    return [{**t, "speaker": "host_a" if i % 2 == 0 else "host_b"} for i, t in enumerate(merged)]
+
+
 def audio_overview(db: Session, job: Job, artifact: Artifact) -> dict:
     _require_tts()
-    params = job.params
-    docs = artifact_docs(db, artifact)
-    if not docs:
-        raise NothingToDo("Add posts before making an audio overview.")
-    corpus = Corpus(artifact.workspace_id)
-    update_job(db, job, progress=0.05, message=f"Reading {len(docs)} posts")
-    passages = passages_for(corpus, docs, budget_chars=90_000)
-    update_job(db, job, progress=0.15, message="Writing the conversation")
-    out = run.predict(PodcastScript, db=db, workspace_id=artifact.workspace_id, job=job, passages=passages,
-                      format=params.get("format", "deep_dive"), target_minutes=int(params.get("minutes", 6)))
-    lines = [ln for ln in (out.get("lines") or []) if (ln.get("text") or "").strip()]
+    params = dict(job.params)
+    if artifact.document_id and not params.get("document_ids") and not params.get("chat_ids"):
+        params["document_ids"] = [str(artifact.document_id)]  # made from one post
+    fmt = params.get("format") if params.get("format") in STYLES else "deep_dive"
+    hosts = 1 if params.get("hosts") == 1 else 2  # older jobs had no choice: two hosts
+    minutes = int(params.get("minutes", 6))
+    focus = (params.get("instructions") or "").strip()
+    material = load_material(db, artifact.workspace_id, artifact.notebook_id, params, job=job, what="audio overview")
+    update_job(db, job, progress=0.15, message="Writing the conversation" if hosts == 2 else "Writing the narration")
+    out = run.predict(WriteAudioScript, db=db, workspace_id=artifact.workspace_id, job=job, title=material.title,
+                      material=material.text, style=STYLES[fmt], hosts=hosts, target_words=minutes * WORDS_PER_MINUTE,
+                      focus=focus or "(none)", language=(params.get("language") or "").strip() or SAME_LANGUAGE)
+    lines = script_turns(out.get("turns") or [], hosts)
     if not lines:
         raise RuntimeError("The script came back empty")
-    tools = tools_for(corpus, docs)
     default_a, default_b = host_voices(db, artifact.workspace_id)
     voice_a, voice_b = params.get("host_a") or default_a, params.get("host_b") or default_b  # picked when made
     delivery = host_settings(db, artifact.workspace_id)
     script = [
-        tts.Line(text=ln["text"], voice_id=voice_b if ln.get("speaker") == "host_b" else voice_a,
-                 settings=delivery["host_b" if ln.get("speaker") == "host_b" else "host_a"])
+        tts.Line(text=ln["text"], voice_id=voice_b if ln["speaker"] == "host_b" else voice_a,
+                 settings=delivery[ln["speaker"]])
         for ln in lines
     ]
     update_job(db, job, progress=0.2, message=f"Recording {len(script)} lines")
@@ -80,14 +116,14 @@ def audio_overview(db: Session, job: Job, artifact: Artifact) -> dict:
                        message=f"Recorded {done} of {len(script)} lines")
 
     clips = tts.synthesize_many(artifact.workspace_id, script, on_done=progress)
+    # Every clip is the same MP3 format (mp3_44100_128), so the clips join into one file in order.
     audio = bytearray()
     segments = []
     t = 0.0
     for line, clip in zip(lines, clips, strict=True):
         seconds = tts.mp3_seconds(clip)
-        segments.append({"speaker": line.get("speaker", "host_a"), "text": line["text"],
-                         "start": round(t, 2), "end": round(t + seconds, 2),
-                         "sources": verify_refs(tools, line.get("sources") or [])})
+        segments.append({"speaker": line["speaker"], "text": line["text"],
+                         "start": round(t, 2), "end": round(t + seconds, 2), "sources": material.refs(line["sources"])})
         audio += clip
         t += seconds
     key = keys.artifact(artifact.workspace_id, artifact.id, "audio", "mp3")
@@ -96,10 +132,14 @@ def audio_overview(db: Session, job: Job, artifact: Artifact) -> dict:
     artifact.status = "ready"
     artifact.content_json = {
         **(artifact.content_json or {}),
-        "format": params.get("format", "deep_dive"),
+        "format": fmt,
+        "hosts": hosts,
+        "focus": focus,
+        "language": params.get("language") or "",
+        "source": material.source,
         "duration_s": round(t, 1),
         "segments": segments,
-        "voices": {"host_a": voice_a, "host_b": voice_b},
+        "voices": {"host_a": voice_a, **({"host_b": voice_b} if hosts == 2 else {})},
     }
     db.commit()
     record_usage(db, workspace_id=artifact.workspace_id, kind="tts", provider="elevenlabs",

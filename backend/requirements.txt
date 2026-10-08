@@ -19,6 +19,7 @@ rank-bm25==0.2.*
 feedparser==6.*
 beautifulsoup4==4.*
 pypdf==5.*
+python-pptx==1.*
 stripe==13.*
 jinja2==3.*
 
