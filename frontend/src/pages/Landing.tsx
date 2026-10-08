@@ -9,9 +9,11 @@ import { blogPosts } from "../content/blogPosts";
 import { useAuth } from "../hooks/useAuth";
 import {
   ArrowRightIcon,
+  ConstellationIcon,
   HelmetIcon,
   LaunchWindowIcon,
   LaunchpadIcon,
+  OrbitIcon,
   RocketIcon,
   SignalIcon,
   TelescopeIcon,
@@ -19,7 +21,7 @@ import {
 
 export const PENDING_SOURCE_KEY = "ns_pending_source";
 // Bump after re-rendering public/demo.mp4 so browsers and the CDN fetch the new file.
-const DEMO_VERSION = 4;
+const DEMO_VERSION = 5;
 
 const FEATURES = [
   {
@@ -27,6 +29,12 @@ const FEATURES = [
     label: "Research chat",
     title: "Ask your archive anything",
     body: "Every answer cites the exact passage it came from. If you never wrote it, Notestack says so.",
+  },
+  {
+    icon: ConstellationIcon,
+    label: "Mind Constellation",
+    title: "Fly through your ideas",
+    body: "Open a notebook as a galaxy of topics. Switch the shape, dive in and see the posts behind every star.",
   },
   {
     icon: SignalIcon,
@@ -48,9 +56,15 @@ const FEATURES = [
   },
   {
     icon: HelmetIcon,
-    label: "Voice profile",
+    label: "Voices",
     title: "Sounds like you",
-    body: "Notestack learns your tone from your own posts and scores every draft against it.",
+    body: "Notestack learns your tone from your posts, and you can describe, pick or clone a voice for narration.",
+  },
+  {
+    icon: OrbitIcon,
+    label: "Memory",
+    title: "Remembers who you write for",
+    body: "Short notes about your audience and style, learned from your chats and yours to edit anytime.",
   },
   {
     icon: LaunchpadIcon,
