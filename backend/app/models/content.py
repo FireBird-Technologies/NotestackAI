@@ -173,21 +173,6 @@ class ArtifactFeedback(IdMixin, TimestampMixin, Base):
     snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
-class QuizAttempt(IdMixin, TimestampMixin, Base):
-    """A person's last finished run of a quiz: what they answered and the score, so opening the quiz again shows the result.
-    One row per quiz and person; finishing it again replaces it."""
-
-    __tablename__ = "quiz_attempts"
-    __table_args__ = (UniqueConstraint("artifact_id", "user_id"),)
-
-    workspace_id: Mapped[uuid.UUID] = _ws_fk()
-    artifact_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("artifacts.id", ondelete="CASCADE"), index=True)
-    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"))
-    score: Mapped[int] = mapped_column(Integer)
-    total: Mapped[int] = mapped_column(Integer)
-    answers: Mapped[list] = mapped_column(JSON, default=list)  # per question: choice (indexes), text, correct
-
-
 class ReportTemplateCache(IdMixin, TimestampMixin, Base):
     """The suggested report templates already written for some sources, found again by a hash of exactly what the AI read (each
     post's stored ideas and topics, and the topic). The same input gives the same templates at once, so the Create report dialog

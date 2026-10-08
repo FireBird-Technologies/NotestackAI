@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { artifactsApi, type GenerateBody } from "../api/endpoints";
-import type { Artifact, ChatSummary, QuizAttempt, QuizQuestion, QuizQuestionType } from "../api/types";
+import type { GenerateBody } from "../api/endpoints";
+import type { Artifact, ChatSummary, QuizQuestion, QuizQuestionType } from "../api/types";
 import { ArtifactFeedback } from "./ArtifactFeedback";
 import { CheckIcon, ChevronIcon } from "./icons/Icons";
 import { Pills, SourceFocusFields, sourceSummary, type SourceSelection } from "./SourceFocusFields";
@@ -188,21 +188,11 @@ export function ResultScene({ score, total, tone }: { score: number; total: numb
 }
 
 /** The quiz itself, without a frame: in a modal (QuizPlayer) or inside a report. `onExit` adds a Close button. */
-export function QuizRunner({ questions, onExit, feedback, saved, onFinish }: {
-  questions: QuizQuestion[];
-  onExit?: () => void;
-  feedback?: ReactNode;
-  /** A finished run kept earlier: opening the quiz again starts on its result. */
-  saved?: QuizAttempt | null;
-  /** Called with the answers when the last question is done, so the result can be kept. */
-  onFinish?: (answers: QuizAttempt["answers"], score: number) => void;
-}) {
-  const restored = saved && saved.answers.length === questions.length ? saved : null;
+export function QuizRunner({ questions, onExit, feedback }: { questions: QuizQuestion[]; onExit?: () => void; feedback?: ReactNode }) {
   const [i, setI] = useState(0);
-  const [answers, setAnswers] = useState<Answer[]>(() =>
-    restored ? restored.answers.map((a) => ({ choice: a.choice, text: a.text, checked: true, correct: a.correct })) : questions.map(blank));
-  const [done, setDone] = useState(!!restored);
-  const [finished, setFinished] = useState(!!restored); // the results have been reached: a question opened from them leads back to them
+  const [answers, setAnswers] = useState<Answer[]>(() => questions.map(blank));
+  const [done, setDone] = useState(false);
+  const [finished, setFinished] = useState(false); // the results have been reached: a question opened from them leads back to them
   const [detail, setDetail] = useState(false); // the per-question results, under the score
 
   const q = questions[i];
@@ -279,7 +269,6 @@ export function QuizRunner({ questions, onExit, feedback, saved, onFinish }: {
     if (!last) return setI(i + 1);
     setFinished(true);
     setDone(true);
-    onFinish?.(answers.map((x) => ({ choice: x.choice, text: x.text, correct: x.correct })), score);
   };
   const pick = (k: number) => {
     if (a.checked) return;
@@ -372,20 +361,11 @@ export function QuizRunner({ questions, onExit, feedback, saved, onFinish }: {
   );
 }
 
-// A finished run is shown on every open of the quiz, also before the list is fetched again, so the latest copy is kept here.
-const attempts = new Map<string, QuizAttempt>();
-
 export function QuizPlayer({ artifact, onClose }: { artifact: Artifact; onClose: () => void }) {
   const questions = useMemo(() => (artifact.content.questions ?? []) as QuizQuestion[], [artifact]);
-  const saved = attempts.get(artifact.id) ?? artifact.attempt ?? null;
-  const keep = (answers: QuizAttempt["answers"], score: number) => {
-    attempts.set(artifact.id, { score, total: questions.length, answers });
-    artifactsApi.saveAttempt(artifact.id, { answers, score }).catch(() => undefined); // the result is also kept here for this visit
-  };
   return (
     <StudyOverlay title={artifact.title} onClose={onClose}>
-      <QuizRunner questions={questions} onExit={onClose} saved={saved} onFinish={keep}
-                  feedback={<ArtifactFeedback artifact={artifact} label="How was this quiz?" />} />
+      <QuizRunner questions={questions} onExit={onClose} feedback={<ArtifactFeedback artifact={artifact} label="How was this quiz?" />} />
     </StudyOverlay>
   );
 }
@@ -395,12 +375,10 @@ export function QuizBody({ artifact }: { artifact: Artifact }) {
   const [playing, setPlaying] = useState(false);
   const c = artifact.content;
   const from = sourceSummary(c.source);
-  const last = attempts.get(artifact.id) ?? artifact.attempt ?? null; // read again whenever the player closes (the state change re-renders)
   return (
     <div className="artifact-body">
       <p className="muted">{c.question_count ?? 0} questions · {c.difficulty ?? "medium"} · from {from}</p>
-      {last && <p className="muted small">Last score {last.score} / {last.total}</p>}
-      <button type="button" className="btn btn-small" onClick={() => setPlaying(true)}>{last ? "View result" : "Start quiz"}</button>
+      <button type="button" className="btn btn-small" onClick={() => setPlaying(true)}>Start quiz</button>
       {playing && <QuizPlayer artifact={artifact} onClose={() => setPlaying(false)} />}
     </div>
   );

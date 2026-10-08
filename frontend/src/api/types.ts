@@ -190,11 +190,7 @@ export type Artifact = {
   provider?: string | null;
   /** This person's thumbs up or down on a finished report, quiz, flashcard set or infographic. */
   feedback?: AnswerFeedback | null;
-  /** A quiz: this person's last finished run (what they answered, the score), shown again when it is reopened. */
-  attempt?: QuizAttempt | null;
 };
-
-export type QuizAttempt = { score: number; total: number; answers: { choice: number[]; text: string; correct: boolean | null }[] };
 
 export type TopicStatus = "rising" | "steady" | "dormant";
 

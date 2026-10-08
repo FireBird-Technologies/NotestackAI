@@ -18,7 +18,6 @@ from app.models.content import (
     MessageFeedback,
     Notebook,
     NotebookDocument,
-    QuizAttempt,
     ReportTemplateCache,
     SocialAccount,
     Source,
@@ -37,7 +36,6 @@ from app.models.support import SupportConversation, SupportMessage
 from app.models.user import AuthProvider, BillingEvent, PlanRecord, Subscription, User, Workspace, WorkspaceMember
 
 __all__ = [
-    "QuizAttempt",
     "SupportConversation",
     "SupportMessage",
     "Artifact",

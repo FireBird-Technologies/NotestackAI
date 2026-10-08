@@ -11,7 +11,7 @@ from app.auth import Ctx, get_ctx
 from app.config import settings
 from app.infographics.image import ImageUnavailable, render_png
 from app.infographics.themes import theme_id
-from app.models import Artifact, ArtifactFeedback, CalendarItem, Chat, Document, Job, Notebook, QuizAttempt, UserSavedVoice
+from app.models import Artifact, ArtifactFeedback, CalendarItem, Chat, Document, Job, Notebook, UserSavedVoice
 from app.routers.notebooks import ensure_archive_notebook
 from app.services import artifact_feedback
 from app.services.artifacts import latest_jobs, serialize_artifact, start_artifact
@@ -343,37 +343,6 @@ def rate_artifact(artifact_id: uuid.UUID, body: FeedbackIn, ctx: Ctx = Depends(g
     log.info("feedback saved: artifact=%s type=%s rating=%s reasons=%s comment_chars=%d user=%s workspace=%s",
              a.id, a.type, body.rating, row.reasons, len(row.comment or ""), ctx.user.id, ctx.workspace.id)
     return {"feedback": artifact_feedback.feedback_out(row)}
-
-
-class AttemptAnswer(BaseModel):
-    choice: list[int] = Field(default_factory=list, max_length=20)
-    text: str = Field("", max_length=2000)
-    correct: bool | None = None
-
-
-class AttemptIn(BaseModel):
-    answers: list[AttemptAnswer] = Field(max_length=200)
-    score: int = Field(ge=0)
-
-
-@router.put("/{artifact_id}/attempt")
-def save_quiz_attempt(artifact_id: uuid.UUID, body: AttemptIn, ctx: Ctx = Depends(get_ctx)):
-    """The person's finished run of a quiz, kept so the result shows when they open it again. Finishing again replaces it."""
-    a = get_artifact_or_404(ctx, artifact_id)
-    if a.type != "quiz" or a.status != "ready":
-        raise HTTPException(400, "Only a finished quiz keeps a result")
-    total = len((a.content_json or {}).get("questions") or [])
-    if len(body.answers) != total:
-        raise HTTPException(400, "The answers do not match the quiz")
-    row = ctx.db.scalar(select(QuizAttempt).where(QuizAttempt.artifact_id == a.id, QuizAttempt.user_id == ctx.user.id))
-    if not row:
-        row = QuizAttempt(workspace_id=ctx.workspace.id, artifact_id=a.id, user_id=ctx.user.id)
-        ctx.db.add(row)
-    row.total = total
-    row.score = min(body.score, total)
-    row.answers = [x.model_dump() for x in body.answers]
-    ctx.db.commit()
-    return {"attempt": artifact_feedback.attempt_out(row)}
 
 
 @router.get("/{artifact_id}/image")

@@ -62,8 +62,8 @@ export function ArtifactFeedback({ artifact, label, compact = false }: { artifac
   const initial = artifact.feedback ?? null;
   const fb = useSyncExternalStore(subscribe, () => (ratings.has(artifact.id) ? ratings.get(artifact.id)! : initial), () => initial);
   const [open, setOpen] = useState(false);
-  const [reasons, setReasons] = useState<string[]>(initial?.reasons ?? []);
-  const [comment, setComment] = useState(initial?.comment ?? "");
+  const [reasons, setReasons] = useState<string[]>(fb?.reasons ?? []);
+  const [comment, setComment] = useState(fb?.comment ?? "");
   const [error, setError] = useState<string | null>(null);
   const [thanks, setThanks] = useState(false);
   const options = REASONS[artifact.type] ?? [];
@@ -116,6 +116,18 @@ export function ArtifactFeedback({ artifact, label, compact = false }: { artifac
         {thanks && <span className="mono muted small">Thanks, saved.</span>}
         {error && <span className="error-text small">Could not save that. Try again.</span>}
       </div>
+      {!open && fb && (fb.comment || fb.reasons.length > 0) && (
+        <div className="afb-saved">
+          <span className="mono muted small">Your review</span>
+          {fb.reasons.length > 0 && (
+            <div className="fb-chips">
+              {fb.reasons.map((id) => <span key={id} className="fb-chip is-on">{options.find((o) => o.id === id)?.label ?? id}</span>)}
+            </div>
+          )}
+          {fb.comment && <p className="afb-saved-text">{fb.comment}</p>}
+          <button type="button" className="link-btn small" onClick={() => { setReasons(fb.reasons); setComment(fb.comment ?? ""); setOpen(true); }}>Edit</button>
+        </div>
+      )}
       {open && fb && (
         <div className="fb-why afb-why" ref={whyRef}>
           <p className="mono muted small">{fb.rating === "up" ? "What worked well? (optional)" : "What was wrong? (optional)"}</p>

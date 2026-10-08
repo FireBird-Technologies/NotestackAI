@@ -1,7 +1,6 @@
 import { api, apiBlob, del, patch, post, postForm, put, qs, uploadFile } from "./client";
 import type {
   AnswerFeedback,
-  QuizAttempt,
   Artifact,
   ArtifactType,
   BillingStatus,
@@ -161,9 +160,6 @@ export const artifactsApi = {
   /** Thumbs up or down (null takes it back) on a finished report, quiz, flashcard set or infographic. */
   rate: (id: string, body: { rating: "up" | "down" | null; reasons?: string[]; comment?: string }) =>
     put<{ feedback: AnswerFeedback | null }>(`/api/artifacts/${id}/feedback`, body),
-  /** A quiz's finished run, kept so the result shows when it is opened again. */
-  saveAttempt: (id: string, body: { answers: QuizAttempt["answers"]; score: number }) =>
-    put<{ attempt: QuizAttempt }>(`/api/artifacts/${id}/attempt`, body),
   retry: (id: string) => post<Artifact>(`/api/artifacts/${id}/retry`),
   /** A slide deck as a PDF (exactly as shown) or an editable PowerPoint. */
   slidesFile: (id: string, ext: "pdf" | "pptx") => apiBlob(`/api/artifacts/${id}/slides.${ext}`),

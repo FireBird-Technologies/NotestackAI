@@ -6,7 +6,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Artifact, ArtifactFeedback, QuizAttempt
+from app.models import Artifact, ArtifactFeedback
 
 # What each kind can be marked down for (the ids the app sends; anything else is dropped).
 REASONS: dict[str, set[str]] = {
@@ -24,23 +24,14 @@ def feedback_out(f: ArtifactFeedback | None) -> dict | None:
     return {"rating": "up" if f.rating > 0 else "down", "reasons": f.reasons or [], "comment": f.comment}
 
 
-def attempt_out(a: QuizAttempt | None) -> dict | None:
-    return {"score": a.score, "total": a.total, "answers": a.answers or []} if a else None
-
-
 def attach(db: Session, user_id: uuid.UUID, items: list[dict]) -> list[dict]:
     """Add `feedback` (this person's rating, or None) to each serialized artifact that can be rated. One query."""
     ids = [uuid.UUID(i["id"]) for i in items if i.get("type") in RATEABLE]
     rows = {f.artifact_id: f for f in db.scalars(select(ArtifactFeedback).where(
         ArtifactFeedback.artifact_id.in_(ids), ArtifactFeedback.user_id == user_id))} if ids else {}
-    quiz_ids = [uuid.UUID(i["id"]) for i in items if i.get("type") == "quiz"]
-    attempts = {a.artifact_id: a for a in db.scalars(select(QuizAttempt).where(
-        QuizAttempt.artifact_id.in_(quiz_ids), QuizAttempt.user_id == user_id))} if quiz_ids else {}
     for i in items:
         if i.get("type") in RATEABLE:
             i["feedback"] = feedback_out(rows.get(uuid.UUID(i["id"])))
-        if i.get("type") == "quiz":
-            i["attempt"] = attempt_out(attempts.get(uuid.UUID(i["id"])))
     return items
 
 
