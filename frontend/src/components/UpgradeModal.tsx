@@ -28,7 +28,11 @@ function boosts(plan: PlanInfo, current: PlanInfo): string[] {
     else if (b > 0 && a > b) out.push(`${Math.round(a / b)}x ${label}`);
   };
   if (plan.indexed_posts > current.indexed_posts) out.push(`${plan.indexed_posts} indexed posts`);
-  if (current.audio_overviews >= 0 && plan.audio_overviews < 0) out.push(`${plan.audio_minutes} min of audio a month`);
+  // Free has one audio overview; a paid plan's audio is said relative to it, as on the pricing page ("10x more audio than Free").
+  if (current.audio_overviews >= 0 && plan.audio_overviews < 0) {
+    const vsFree: Record<string, number> = { writer: 10, studio: 40 };
+    out.push(vsFree[plan.id] ? `${vsFree[plan.id]}x more audio than Free` : `${plan.audio_minutes} min of audio a month`);
+  }
   times(plan.audio_minutes, current.audio_minutes, "audio minutes");
   times(plan.videos, current.videos, "videos");
   times(plan.launch_kits, current.launch_kits, "Launch Kits");

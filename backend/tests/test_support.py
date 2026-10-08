@@ -224,7 +224,7 @@ def test_plan_doc_lists_report_and_infographic_limits():
 
     body = next(d for d in get_corpus() if d.id == "plans-and-billing").body
     free = PLANS["free"]
-    assert f"{free.reports} reports a month" in body and f"{free.infographics} infographics a month" in body
+    assert f"{free.reports} reports a month" in body and f"{free.infographics} infographics in total" in body
     assert "unlimited reports a month" in body
 
 
@@ -479,3 +479,44 @@ def test_the_support_package_never_touches_the_writers_content():
         for line in path.read_text(encoding="utf-8").splitlines():
             if line.startswith(("from app.models", "import app.models")):
                 assert not forbidden.search(line), f"{path.name} imports the writer's content: {line}"
+
+
+def test_plan_questions_are_product_help_not_the_writers_own_data():
+    for q in ("How many Launch Kits do I get on each plan?", "How many reports and infographics do I get on Writer and on Studio?",
+              "What are the limits on the Free plan?"):
+        assert not scope.about_user_data(q), q
+    for q in ("How many posts do I have in my notebook?", "how many reports have I made", "What did I write about pricing?"):
+        assert scope.about_user_data(q), q
+
+
+def test_plans_doc_describes_free_allowances_as_totals_and_no_minus_one():
+    from app.support.corpus import _plans_doc
+
+    body = _plans_doc().body
+    assert "-1" not in body
+    free = next(line for line in body.splitlines() if line.startswith("Limits")).lower()
+    assert "launch kits in total" in free and "infographics in total" in free and "audio overview" in free
+
+
+@pytest.mark.parametrize("message", [
+    "is there a discount for annual", "do you have a student plan", "any coupon codes?", "promo code please",
+    "can I get it cheaper", "is there a nonprofit discount", "do you run black friday deals", "20% off?",
+])
+def test_discount_questions_are_detected(message):
+    assert scope.asks_for_discount(message), message
+
+
+@pytest.mark.parametrize("message", [
+    "how much is the writer plan", "what is in the free plan", "how do I upgrade", "how do I make a report",
+    "what is the yearly price of studio",
+])
+def test_price_questions_are_not_discount_questions(message):
+    assert not scope.asks_for_discount(message), message
+
+
+def test_a_discount_question_gets_a_fixed_sorry_and_the_contact_form_without_the_model(client, auth, fake_llm):
+    events = sse(client.post("/api/support/chat/stream", headers=auth, json={"message": "any discount for students?"}).text)
+    assert answer_text(events) == scope.DISCOUNT_REPLY and "don't have any information" in scope.DISCOUNT_REPLY
+    d = done(events)
+    assert d["escalate"] is True and d["escalate_reason"] == "human"
+    assert not fake_llm.prompts, "the model must not be called for a discount question"

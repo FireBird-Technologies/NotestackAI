@@ -40,6 +40,8 @@ CASES = [
     ("I want a refund", "hand off line, form"),
     ("will you ever add Ghost newsletters", "answer, plus feature request form"),
     ("how do I delete my account", "Settings > Account"),
+    ("is there a discount for annual", "BLOCKED: no information on discounts, contact form"),
+    ("do you have a student plan", "BLOCKED"),
     ("how do I start a new chat in a notebook", "notebook chat sidebar new chat button"),
     # reports, study tools, infographics, sharing, library
     ("how do I make a report", "Create panel > Report, Made from, format, template, Generate"),
@@ -74,6 +76,9 @@ CASES = [
 
 async def run(question: str) -> None:
     print(f"\n=== {question}")
+    if scope.asks_for_discount(question):
+        print(f"[discount: fixed reply, no model call, form offered]\n{scope.DISCOUNT_REPLY}")
+        return
     if scope.about_user_data(question):
         reply, broken = scope.out_of_scope_reply(question)
         print(f"[blocked by scope gate, no model call; human form: {broken}]\n{reply}")
