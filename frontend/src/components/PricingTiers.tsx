@@ -42,7 +42,7 @@ const FALLBACK: Plan[] = [
     price_monthly_usd: 24.99,
     features: [
       "Up to 100 posts indexed, from any source",
-      "10x more audio overviews than Free (60 min a month)",
+      "10x more audio overviews than Free",
       "10 videos a month",
       "20 Launch Kits a month",
       "30 reports a month",
@@ -57,7 +57,7 @@ const FALLBACK: Plan[] = [
     price_monthly_usd: 48.99,
     features: [
       "Up to 250 posts indexed, from any source",
-      "40x more audio overviews than Free (240 min a month)",
+      "40x more audio overviews than Free",
       "20 videos a month",
       "50 Launch Kits a month",
       "Unlimited reports",
