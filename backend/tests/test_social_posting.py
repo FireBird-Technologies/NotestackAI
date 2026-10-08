@@ -720,3 +720,23 @@ def test_the_list_says_what_each_item_already_has_scheduled(client, auth, ws, db
     assert [s["id"] for s in listed[str(deck.id)]["scheduled"]] == [str(sooner.id), str(later.id)]
     assert listed[str(deck.id)]["scheduled"][0]["platform_label"] == "LinkedIn"
     assert listed[str(video.id)]["scheduled"] == []
+
+
+def test_linkedin_callback_redirect_fits_proxy_header_buffer(client, auth, ws, monkeypatch):
+    from urllib.parse import parse_qs, urlparse
+
+    from app.auth import encode_signed
+    from app.services.social import linkedin
+
+    # LinkedIn's openid scope adds an id_token JWT; carrying it in the ticket made Nginx answer 502.
+    monkeypatch.setattr(linkedin, "exchange_code", lambda code: {
+        "access_token": "a" * 600, "expires_in": 5183999, "scope": "openid,profile,w_member_social",
+        "token_type": "Bearer", "id_token": "j" * 2000, "external_id": "li7", "handle": "Ada Lovelace",
+        "avatar_url": "https://media.licdn.com/" + "p" * 200})
+    state = encode_signed({"typ": "social_state", "nonce": "n", "ws": str(ws.id), "platform": "linkedin"},
+                          timedelta(minutes=5))
+    r = client.get("/api/social/linkedin/callback", params={"code": "c", "state": state}, follow_redirects=False)
+    assert r.status_code == 302 and len(r.headers["location"]) < 3500
+    ticket = parse_qs(urlparse(r.headers["location"]).query)["link"][0]
+    r = client.post("/api/social/complete", json={"ticket": ticket}, headers=auth)
+    assert r.status_code == 200 and any(a["handle"] == "Ada Lovelace" for a in r.json()["accounts"])
