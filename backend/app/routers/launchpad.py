@@ -539,6 +539,7 @@ async def connect_bluesky(body: BlueskyIn, ctx: Ctx = Depends(get_ctx)):
 # short lived encrypted ticket back to the SPA, which completes the link as the signed in user.
 
 STATE_TTL = timedelta(minutes=10)
+LINK_FIELDS = ("access_token", "refresh_token", "expires_in", "scope", "external_id", "handle", "avatar_url")
 
 
 def _launchpad_redirect(**params: str) -> RedirectResponse:
@@ -587,6 +588,9 @@ def oauth_callback(platform: Literal["x", "linkedin"], code: str | None = None, 
     # Do not link here: this request carries no session. The signed in SPA finishes the link, and only
     # for the workspace that started it, so a forwarded authorize link cannot attach someone's account
     # to another workspace.
+    # Only the fields the link needs: the ticket rides in the Location header, and LinkedIn's id_token
+    # alone pushes it past the reverse proxy's header buffer (Nginx answers 502).
+    info = {k: info[k] for k in LINK_FIELDS if info.get(k) is not None}
     ticket = encode_signed({"typ": "social_link", "ws": saved["ws"], "platform": platform,
                             "data": encrypt(json.dumps(info))}, timedelta(minutes=10))
     return _launchpad_redirect(link=ticket, platform=platform)
