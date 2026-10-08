@@ -9,6 +9,10 @@ import { CheckIcon, CollapseIcon, DownloadIcon, ExpandIcon, MoreIcon, PdfIcon, P
 import { LANGUAGES, Pills, SourceFocusFields, sourceSummary, type SourceSelection } from "./SourceFocusFields";
 import { ConfirmDeleteModal, errorMessage, formatDate, JobProgress, Modal } from "./ui";
 
+/** Bumped when the thumbnails are drawn again (backend/scripts/render_slide_thumbnails.py), so browsers fetch the new
+ * images instead of the ones they cached. */
+const THUMBS_VERSION = 2;
+
 /** The two deck themes. Their slides are laid out on the server (backend/app/slides); the thumbnails are rendered from
  * them (backend/scripts/render_slide_thumbnails.py). */
 export const SLIDE_THEMES = [
@@ -60,7 +64,7 @@ export function SlideDeckDialog({ notebookId, notebookTitle, chats, currentChatI
               <button key={t.id} type="button" role="radio" aria-checked={theme === t.id} title={t.blurb}
                       className={`sd-theme${theme === t.id ? " on" : ""}`} onClick={() => setTheme(t.id)}>
                 <span className="sd-theme-img">
-                  <img src={`/slides/${t.id}.png`} alt="" loading="lazy" />
+                  <img src={`/slides/${t.id}.png?v=${THUMBS_VERSION}`} alt="" loading="lazy" />
                   {theme === t.id && <span className="sd-check" aria-hidden="true"><CheckIcon size={12} /></span>}
                 </span>
                 <span className="sd-theme-name">{t.name}</span>

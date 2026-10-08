@@ -2277,54 +2277,6 @@ select.input option {
   animation: welcome-in 0.35s ease both;
 }
 
-/* The link between the two views (Speaking voices / Writing voice): underlined text and an arrow */
-.vp-switch-row {
-  display: flex;
-  justify-content: flex-end; /* at the right end */
-  margin: -6px 0 4px;
-}
-
-.vp-switch {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 0;
-  border: 0;
-  background: none;
-  color: var(--text-2);
-  font: inherit;
-  font-size: 0.95rem;
-  cursor: pointer;
-  transition: color 0.15s;
-}
-
-.vp-switch-text {
-  text-decoration: underline;
-  text-decoration-color: var(--line-strong);
-  text-underline-offset: 4px;
-  transition: text-decoration-color 0.15s;
-}
-
-.vp-switch:hover {
-  color: var(--text);
-}
-
-.vp-switch:hover .vp-switch-text {
-  text-decoration-color: var(--blue);
-}
-
-.vp-switch > span[aria-hidden] {
-  transition: transform 0.15s;
-}
-
-.vp-switch:hover > span[aria-hidden] {
-  transform: translateX(3px);
-}
-
-.vp-switch.back:hover > span[aria-hidden] {
-  transform: translateX(-3px);
-}
-
 .voice-grid {
   list-style: none;
   margin: 0;
@@ -4400,6 +4352,87 @@ select.input,
 .lp-tag.video {
   border-color: var(--blue-35);
   background: transparent;
+  color: var(--white);
+}
+
+/* Under the calendar: how many posts are coming up, and how to change one */
+.lp-cal-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 16px;
+}
+
+.lp-cal-foot p {
+  margin: 0;
+}
+
+.lp-cal-hint {
+  color: var(--text-2);
+}
+
+/* Editing a scheduled post: When and Account side by side, their labels and boxes on one line (the time zone note
+   sits under When without pushing Account down), and the actions on their own line below a rule */
+.lp-edit-when {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 16px;
+}
+
+.lp-edit-when .field {
+  margin: 0;
+}
+
+.lp-edit-when select.input {
+  width: 100%;
+}
+
+@media (max-width: 640px) {
+  .lp-edit-when {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.lp-edit-actions {
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 4px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+/* "Audio can't be posted": the headphones, why, and the download */
+.lp-audio-only {
+  max-width: 460px;
+}
+
+.lp-audio-only p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.lp-audio-only-icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--blue-10);
+  color: var(--blue);
+}
+
+.lp-audio-only-actions {
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+}
+
+/* A slide deck: outlined like a video, dashed (its slides go out as images) */
+.lp-tag.deck {
+  border-color: var(--blue-35);
+  border-style: dashed;
   color: var(--white);
 }
 

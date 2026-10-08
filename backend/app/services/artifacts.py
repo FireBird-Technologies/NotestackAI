@@ -104,7 +104,7 @@ def serialize_artifact(a: Artifact, job: Job | None = None) -> dict:
         "storage_key": a.storage_key,
         # blog2video videos live on blog2video's storage (video_url once rendered)
         "url": storage.presign_get(a.storage_key) if a.storage_key else content.get("video_url"),
-        "download_url": (storage.presign_get(a.storage_key, download_name=_download_name(a)) if a.storage_key
+        "download_url": (storage.presign_get(a.storage_key, download_name=download_name(a)) if a.storage_key
                          else content.get("video_url")),
         "provider": content.get("provider"),
         "slide_urls": [storage.presign_get(k) for k in slides],
@@ -113,7 +113,8 @@ def serialize_artifact(a: Artifact, job: Job | None = None) -> dict:
     }
 
 
-def _download_name(a: Artifact) -> str:
+def download_name(a: Artifact) -> str:
+    """The file name a download is saved under: the artifact's title and its file's extension."""
     title = (a.content_json or {}).get("title") or a.type
     ext = (a.storage_key or "").rsplit(".", 1)[-1]
     return f"{title[:60]}.{ext}"

@@ -47,8 +47,8 @@ def account(db, ws, platform="x", scopes=None, expires_in=None, refresh=None, ex
     return acct
 
 
-def item(db, ws, acct, minutes=60, status="scheduled", **kw):
-    it = CalendarItem(workspace_id=ws.id, platform=acct.platform, content="Hello", social_account_id=acct.id,
+def item(db, ws, acct, minutes=60, status="scheduled", content="Hello", **kw):
+    it = CalendarItem(workspace_id=ws.id, platform=acct.platform, content=content, social_account_id=acct.id,
                       scheduled_at=datetime.now(UTC) + timedelta(minutes=minutes), status=status, **kw)
     db.add(it)
     db.commit()
@@ -552,3 +552,171 @@ def test_uploaded_files_carry_a_preview_link(client, auth, ws, db_session):
     kit = made(db_session, ws, "launch_kit", post_title="Kit", posts={"linkedin": ["Hi"]})
     listed = {a["id"]: a for a in client.get("/api/launchpad/postable", headers=auth).json()}
     assert listed[str(kit.id)]["view_url"] is None
+
+
+def test_a_slide_deck_is_listed_and_posts_its_slides_as_images(client, auth, ws, db_session, monkeypatch):
+    from app.services.social import media
+    from app.slides import export
+    from app.slides.build import fit
+    from app.slides.content import clamp_deck
+
+    raw = {"title": "Pricing for writers", "subtitle": "What two years taught us.", "slides": [
+        {"layout": "title", "heading": "Pricing for writers", "lead": "What two years taught us."},
+        *[{"layout": "section", "heading": f"Part {i}"} for i in range(5)],
+        {"layout": "closing", "heading": "Key takeaways", "takeaways": ["Charge more.", "Readers take it seriously."]}]}
+    deck = fit(clamp_deck(raw, "detailed"), "dark-space", "detailed", 3)
+    art = Artifact(workspace_id=ws.id, type="slide_deck", status="ready",
+                   content_json={"title": "Slide deck: Pricing for writers", "theme": "dark-space", "format": "detailed",
+                                 "seed": "abc", "deck": deck})
+    db_session.add(art)
+    db_session.commit()
+    listed = {a["id"]: a for a in client.get("/api/launchpad/postable", headers=auth).json()}[str(art.id)]
+    assert listed["type"] == "slide_deck" and listed["media"] == "image" and listed["media_count"] == 7
+    assert listed["title"] == "Pricing for writers"
+    assert listed["prefill"]["linkedin"].startswith("Pricing for writers\n\nWhat two years taught us.")
+    assert "- Charge more." in listed["prefill"]["linkedin"]
+
+    drawn: list[int] = []
+
+    def chrome(html, args, out):  # a screenshot of the size asked for: a batch of slides stacked
+        import io
+
+        from PIL import Image
+
+        w, h = (int(v) for v in next(a for a in args if a.startswith("--window-size=")).split("=")[1].split(","))
+        drawn.append(h // 1080)
+        buf = io.BytesIO()
+        Image.new("RGB", (w, h), "navy").save(buf, "PNG")
+        return buf.getvalue(), ""
+
+    monkeypatch.setattr(export, "_run_chrome", chrome)
+    with media.media_for(art, "x") as files:  # X takes 4 images: one Chrome run draws them
+        assert [f.filename for f in files] == [f"slide-{i}.png" for i in range(1, 5)] and drawn == [4]
+        assert all(f.data.startswith(b"\x89PNG") for f in files)
+    with media.media_for(art, "linkedin") as files:
+        assert len(files) == 7 and all(f.content_type == "image/png" for f in files)
+    acct = account(db_session, ws, "linkedin", scopes=LI_SCOPES)
+    assert schedule(client, auth, "linkedin", acct, artifact_id=str(art.id)).status_code == 200
+    r = schedule(client, auth, "bluesky", artifact_id=str(art.id))
+    assert r.status_code == 400 and "X and LinkedIn" in r.json()["detail"]  # images go to X and LinkedIn only
+
+
+def test_a_slide_deck_that_cannot_be_drawn_is_retried(ws, db_session, monkeypatch):
+    from app.infographics.image import ImageUnavailable
+    from app.services.social import SocialError, media
+    from app.slides import export
+
+    art = Artifact(workspace_id=ws.id, type="slide_deck", status="ready", content_json={
+        "format": "detailed", "deck": {"title": "T", "slides": [{"layout": "section", "heading": "Hello"}]}})
+    db_session.add(art)
+    db_session.commit()
+
+    def no_chrome(*a, **k):
+        raise ImageUnavailable("No Chrome")
+
+    monkeypatch.setattr(export, "_run_chrome", no_chrome)
+    with pytest.raises(SocialError, match="could not be drawn") as err, media.media_for(art, "x"):
+        pass
+    assert not err.value.permanent
+
+
+def test_an_audio_overview_is_listed_to_download_but_never_posted(client, auth, ws, db_session):
+    audio = made(db_session, ws, "audio_overview", key="ws/a/overview.mp3", title="Audio overview: Pricing", duration_s=225)
+    listed = {a["id"]: a for a in client.get("/api/launchpad/postable", headers=auth).json()}[str(audio.id)]
+    assert listed["media"] == "audio" and listed["media_count"] == 0 and listed["duration_s"] == 225
+    assert listed["download_url"]
+    acct = account(db_session, ws, "linkedin", scopes=LI_SCOPES)
+    r = schedule(client, auth, "linkedin", acct, artifact_id=str(audio.id))
+    assert r.status_code == 400 and "Audio can't be posted" in r.json()["detail"]
+
+
+def test_a_video_or_image_can_go_out_without_a_caption(client, auth, ws, db_session, monkeypatch):
+    """An upload starts with no words (they are the writer's to add): a post that carries media may stay that way.
+    Without media, a post still needs words."""
+    from app.services import launchpad
+    from app.services.social import linkedin, x
+
+    li = account(db_session, ws, "linkedin", scopes=LI_SCOPES)
+    upload = made(db_session, ws, "upload", key="ws/u/clip.mp4", data=os.urandom(100_000), media="video",
+                  content_type="video/mp4", filename="clip.mp4")
+    r = schedule(client, auth, "linkedin", li, content="", artifact_id=str(upload.id))
+    assert r.status_code == 200, r.text
+    r = schedule(client, auth, "linkedin", li, content="  ")
+    assert r.status_code == 422 and r.json()["detail"]["message"] == "Write something to post, or attach an image or video."
+    created = schedule(client, auth, "linkedin", li, content="Words", artifact_id=str(upload.id)).json()
+    r = client.patch(f"/api/calendar/{created['id']}", json={"content": "", "artifact_id": None}, headers=auth)
+    assert r.status_code == 422 and r.json()["detail"]["code"] == "no_text"  # emptied and no media left
+
+    # Publishing: LinkedIn gets an empty caption, X a post with the media and no "text" at all.
+    sent: dict = {}
+    monkeypatch.setattr(linkedin, "_upload_video", lambda acct, m: "urn:li:video:1")
+    monkeypatch.setattr(linkedin, "_call", lambda method, url, **kw: sent.setdefault("li", kw["json"]) and httpx.Response(
+        201, headers={"x-restli-id": "urn:li:share:1"}, request=httpx.Request(method, url)))
+    li_item = item(db_session, ws, li, minutes=0, content="", artifact_id=upload.id)
+    launchpad.publish_item(db_session, li_item)
+    assert li_item.status == "posted" and sent["li"]["commentary"] == "" and sent["li"]["content"]["media"]["id"]
+
+    xa = account(db_session, ws, "x", scopes="tweet.write media.write")
+    monkeypatch.setattr(x, "can_post_media", lambda a: True)
+    monkeypatch.setattr(x, "_upload_video", lambda headers, m: "m1")
+    monkeypatch.setattr(x, "_access", lambda db, a: "token")
+    monkeypatch.setattr(x, "_call", lambda method, url, **kw: sent.setdefault("x", kw["json"]) and httpx.Response(
+        201, json={"data": {"id": "t1"}}, request=httpx.Request(method, url)))
+    x_item = item(db_session, ws, xa, minutes=0, content="", artifact_id=upload.id)
+    launchpad.publish_item(db_session, x_item)
+    assert x_item.status == "posted" and sent["x"] == {"media": {"media_ids": ["m1"]}}
+
+    text_only = item(db_session, ws, xa, minutes=0, content="")
+    launchpad.publish_item(db_session, text_only)
+    assert text_only.status == "failed" and text_only.error == "Nothing to post."
+
+
+def test_post_now_publishes_in_the_same_request_and_is_never_left_scheduled(client, auth, ws, db_session, monkeypatch):
+    from app.models import Job
+    from app.services.social import linkedin
+
+    li = account(db_session, ws, "linkedin", scopes=LI_SCOPES)
+    monkeypatch.setattr(linkedin, "publish", lambda db, a, posts, media=None: ("urn:li:share:9", "https://linkedin.com/x"))
+    now = lambda **kw: client.post("/api/calendar", json={  # noqa: E731  (no time sent: the server takes it)
+        "platform": "linkedin", "content": "Hello", "social_account_id": str(li.id), "publish_now": True, **kw}, headers=auth)
+
+    text = now()
+    assert text.status_code == 200, text.text
+    assert text.json()["status"] == "posted" and text.json()["external_url"] == "https://linkedin.com/x"
+
+    video = made(db_session, ws, "video", key="ws/v/now.mp4", data=os.urandom(100_000), duration_s=30)
+    media = now(artifact_id=str(video.id)).json()
+    assert media["status"] == "publishing"  # uploading goes through a job: never "scheduled" in between
+    job = db_session.query(Job).filter(Job.kind == "publish_post").one()
+    assert job.params["item_id"] == media["id"]
+
+
+def test_saving_a_failed_or_draft_post_reschedules_it_at_a_time_still_ahead(client, auth, ws, db_session):
+    li = account(db_session, ws, "linkedin", scopes=LI_SCOPES)
+    year = datetime.now(UTC).year + 1
+    for status in ("failed", "draft", "reminded"):
+        it = item(db_session, ws, li, minutes=-90, status=status)
+        # Its old time has passed: rescheduled there, it would go out at the very next run.
+        r = client.patch(f"/api/calendar/{it.id}", json={"status": "scheduled"}, headers=auth)
+        assert r.status_code == 409 and r.json()["detail"]["code"] == "missed", status
+        r = client.patch(f"/api/calendar/{it.id}", json={"status": "scheduled", "local_time": f"{year}-01-05T10:30",
+                                                         "timezone": "UTC"}, headers=auth)
+        assert r.status_code == 200, r.text
+        got = r.json()
+        assert got["status"] == "scheduled" and got["error"] is None
+        assert datetime.fromisoformat(got["scheduled_at"]) == datetime(year, 1, 5, 10, 30, tzinfo=UTC)
+
+
+def test_the_list_says_what_each_item_already_has_scheduled(client, auth, ws, db_session):
+    li = account(db_session, ws, "linkedin", scopes=LI_SCOPES)
+    deck = made(db_session, ws, "summary", summary="Raise prices once a year.")
+    video = made(db_session, ws, "video", key="ws/v/s.mp4", data=os.urandom(100_000), duration_s=30)
+    later = item(db_session, ws, li, minutes=600, artifact_id=deck.id)
+    sooner = item(db_session, ws, li, minutes=120, artifact_id=deck.id)
+    item(db_session, ws, li, minutes=-60, artifact_id=deck.id)  # its time has passed
+    item(db_session, ws, li, minutes=300, status="posted", artifact_id=deck.id)
+    item(db_session, ws, li, minutes=300, status="failed", artifact_id=deck.id)
+    listed = {a["id"]: a for a in client.get("/api/launchpad/postable", headers=auth).json()}
+    assert [s["id"] for s in listed[str(deck.id)]["scheduled"]] == [str(sooner.id), str(later.id)]
+    assert listed[str(deck.id)]["scheduled"][0]["platform_label"] == "LinkedIn"
+    assert listed[str(video.id)]["scheduled"] == []

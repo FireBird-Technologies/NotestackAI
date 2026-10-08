@@ -167,6 +167,13 @@ def slide_html(deck: dict, index: int, theme: str, fmt: str, seed: int) -> str:
                  f"body{{background:{THEMES[theme].pal.bg1}}}")
 
 
+def slides_html(deck: dict, theme: str, fmt: str, seed: int, start: int, end: int) -> str:
+    """Slides start..end-1 of the deck stacked on one page, each as it is in the deck (its number, its sky)."""
+    theme = theme_id(theme)
+    body = "".join(slide_body(compose(deck, i, theme, fmt, seed), deck, i, theme, fmt) for i in range(start, end))
+    return _page(body, f"body{{background:{THEMES[theme].pal.bg1}}}")
+
+
 def deck_print_html(deck: dict, theme: str, fmt: str, seed: int, script: str = "") -> str:
     """Every slide on one page, one per printed page."""
     theme = theme_id(theme)

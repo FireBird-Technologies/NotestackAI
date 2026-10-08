@@ -249,6 +249,8 @@ export type ItemBody = {
   social_account_id?: string | null;
   remind_by_email?: boolean;
   draft?: boolean;
+  /** Post now: published (or reminded) in the same request, never left scheduled. */
+  publish_now?: boolean;
 };
 
 export const launchpadApi = {

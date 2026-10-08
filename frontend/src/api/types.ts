@@ -320,7 +320,8 @@ export type PostableArtifact = {
   type: ArtifactType;
   type_label: string;
   title: string;
-  media: "image" | "video" | "text";
+  /** "audio": an audio overview, listed to download only (X and LinkedIn take no audio files). */
+  media: "image" | "video" | "audio" | "text";
   media_count: number;
   duration_s: number | null;
   thumb_url: string | null;
@@ -332,6 +333,10 @@ export type PostableArtifact = {
   editable_video: boolean;
   /** An uploaded file's link, to preview it (null for anything else). */
   view_url: string | null;
+  /** An audio overview's file, saved as a download (null for anything else). */
+  download_url?: string | null;
+  /** Its posts still to go out (scheduled, ahead), soonest first: the Schedule a launch list offers to reschedule them. */
+  scheduled?: { id: string; scheduled_at: string; platform_label: string }[];
   created_at: string | null;
   /** A starting text: X as a thread (list of posts), LinkedIn as one post. */
   prefill: { x: string[]; linkedin: string };

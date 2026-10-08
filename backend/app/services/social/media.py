@@ -1,4 +1,5 @@
-"""What a scheduled post carries from the artifact it was made from: images (quote cards, carousel slides) or one
+"""What a scheduled post carries from the artifact it was made from: images (quote cards, carousel slides, a slide
+deck's slides, drawn when the post goes out) or one
 video (an audiogram, or a blog2video video), or a file the user uploaded from their computer (an `upload`: one image or
 one MP4). Summaries, launch kits and mind maps post as text; audio overviews can't
 be posted (X and LinkedIn take no audio files).
@@ -69,9 +70,16 @@ def media_count(a: Artifact) -> int:
         return 1
     if a.type == "carousel":
         return len((a.content_json or {}).get("slide_keys") or ([a.storage_key] if a.storage_key else []))
+    if a.type == "slide_deck":
+        return len(((a.content_json or {}).get("deck") or {}).get("slides") or [])
     if a.type in ("video", "upload"):
         return 1
     return 0
+
+
+def carries_media(a: Artifact | None) -> bool:
+    """Whether a post of this artifact carries images or a video: such a post may go out without a caption."""
+    return a is not None and a.type not in TEXT_ONLY and media_count(a) > 0
 
 
 def upload_kind(a: Artifact) -> str | None:
@@ -91,13 +99,16 @@ def check_postable(a: Artifact, platform: str) -> None:
         raise HTTPException(400, "Audio can't be posted: X and LinkedIn don't take audio files.")
     if a.type == "launch_kit":  # a post is written from a kit (kit_id); the kit itself is never an attachment
         raise HTTPException(400, "A launch kit can't be attached. Attach a video, quote card or carousel instead.")
-    if a.type not in TEXT_ONLY and a.type not in ("quote_card", "carousel", "video", "upload"):
+    if a.type not in TEXT_ONLY and a.type not in ("quote_card", "carousel", "video", "upload", "slide_deck"):
         raise HTTPException(400, "This can't be posted.")
     if a.type in TEXT_ONLY:
         return
     if platform not in MEDIA_PLATFORMS:
         raise HTTPException(400, "Images and videos can only be posted to X and LinkedIn.")
-    if a.type == "video" and is_blog2video(a):
+    if a.type == "slide_deck":  # drawn from the deck when the post goes out: nothing stored to wait for
+        if a.status != "ready" or not media_count(a):
+            raise HTTPException(400, "This slide deck isn't ready yet. Post it once it has finished.")
+    elif a.type == "video" and is_blog2video(a):
         if not (a.content_json or {}).get("video_url"):
             raise HTTPException(400, "This video isn't finished yet. Post it once it has rendered.")
     elif a.status != "ready" or not a.storage_key:
@@ -134,6 +145,9 @@ def media_for(a: Artifact | None, platform: str) -> Iterator[list[Media]]:
                 keys = (a.content_json or {}).get("slide_keys") or [a.storage_key]
                 out = [Media("image", f"slide-{i + 1}.png", "image/png", data=storage.get_bytes(k))
                        for i, k in enumerate(keys[:MAX_IMAGES[platform]])]
+            elif a.type == "slide_deck":
+                out = [Media("image", f"slide-{i + 1}.png", "image/png", data=png)
+                       for i, png in enumerate(_slide_images(a, MAX_IMAGES[platform]))]
             elif a.type == "upload" and upload_kind(a) == "image":
                 c = a.content_json or {}
                 out = [Media("image", c.get("filename") or "image", c.get("content_type") or "image/png",
@@ -158,6 +172,21 @@ def media_for(a: Artifact | None, platform: str) -> Iterator[list[Media]]:
         for path in temps:
             with contextlib.suppress(OSError):
                 os.unlink(path)
+
+
+def _slide_images(a: Artifact, limit: int) -> list[bytes]:
+    """A slide deck's first `limit` slides as PNGs, exactly as the deck shows them."""
+    from app.infographics.image import ImageUnavailable
+    from app.slides import export
+    from app.slides.build import stored
+
+    got = stored(a.content_json or {})
+    if not got:
+        raise SocialError("This slide deck has no slides to post.", permanent=True)
+    try:
+        return export.render_slide_pngs(*got, limit=limit)
+    except ImageUnavailable as exc:  # no Chrome on this worker right now: worth another try
+        raise SocialError(f"The slides could not be drawn: {exc}") from exc
 
 
 def _temp_file(temps: list[str]) -> str:

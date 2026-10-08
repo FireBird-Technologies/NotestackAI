@@ -24,7 +24,7 @@ from pptx.util import Emu, Pt
 from app.infographics.image import ImageUnavailable, chrome
 from app.slides.decor import Decor, Shape, build, ring_path
 from app.slides.layout import El, compose
-from app.slides.render import SHADE, color, deck_print_html, planet_colors, ring_shade
+from app.slides.render import SHADE, color, deck_print_html, planet_colors, ring_shade, slides_html
 from app.slides.themes import FONTS, THEMES, H, Palette, W, theme_id
 
 TIMEOUT = 120
@@ -86,6 +86,27 @@ def render_pdf(deck: dict, theme: str, fmt: str, seed: int) -> bytes:
         return data
 
     return _cached(_key("pdf", deck, theme, fmt, seed), make)
+
+
+PNG_BATCH = 8  # slides per Chrome run: one tall screenshot cut into slides (one launch per slide was the slow part)
+
+
+def render_slide_pngs(deck: dict, theme: str, fmt: str, seed: int, limit: int) -> list[bytes]:
+    """The first `limit` slides as PNG images at the slide's own size (1920 x 1080), as a post carries them. A batch
+    of slides is drawn stacked on one page and the screenshot is cut at each slide."""
+    theme = theme_id(theme)
+    n = min(limit, len(deck["slides"]))
+    out: list[bytes] = []
+    for start in range(0, n, PNG_BATCH):
+        count = min(PNG_BATCH, n - start)
+        html = slides_html(deck, theme, fmt, seed, start, start + count)
+        shot, _ = _run_chrome(html, [f"--window-size={W},{H * count}", "--screenshot={out}"], "slides.png")
+        sheet = Image.open(io.BytesIO(shot)).convert("RGB")
+        for i in range(count):
+            buf = io.BytesIO()
+            sheet.crop((0, i * H, W, (i + 1) * H)).save(buf, "PNG", optimize=True)
+            out.append(buf.getvalue())
+    return out
 
 
 # --- overflow check -------------------------------------------------------------------------------------------------

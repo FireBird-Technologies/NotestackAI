@@ -21,7 +21,7 @@ from app.services.email import email_service
 from app.services.jobs import create_job
 from app.services.social import AUTO_POST, PLATFORM_LABELS, SocialError, module
 from app.services.social.health import mark_down
-from app.services.social.media import media_count, media_for
+from app.services.social.media import carries_media, media_count, media_for
 
 log = logging.getLogger("notestack.launchpad")
 _URL = re.compile(r"https?://[^\s)\]>]+")
@@ -60,6 +60,8 @@ def owner_email(db: Session, workspace_id) -> str | None:
 def publish_item(db: Session, item: CalendarItem) -> CalendarItem:
     """Publish or remind now. Leaves the item posted, reminded, failed, or scheduled again for a retry."""
     posts = [p for p in [item.content, *(item.thread or [])] if p and p.strip()]
+    if not posts and carries_media(db.get(Artifact, item.artifact_id) if item.artifact_id else None):
+        posts = [""]  # a video or images on their own: the post goes out without a caption
     if not posts:
         item.status, item.error = "failed", "Nothing to post."
         db.commit()

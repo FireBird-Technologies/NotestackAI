@@ -754,13 +754,14 @@ def _schedule(client, auth, artifact, platform, account=None):
 def test_postable_lists_what_can_be_posted(client, auth, db_session):
     ws = db_session.query(Workspace).first()
     quote = _made(db_session, ws, "quote_card", key="ws/q/quotecard.png", quote="Ship it", source="Ada")
-    _made(db_session, ws, "audio_overview", key="ws/a/audio.mp3")
+    audio = _made(db_session, ws, "audio_overview", key="ws/a/audio.mp3")
     _made(db_session, ws, "video", status="processing", provider="blog2video")  # not rendered yet
     done = _made(db_session, ws, "video", status="processing", provider="blog2video", video_url="https://v/x.mp4")
     unrendered = _made(db_session, ws, "video", status="ready", provider="blog2video", b2v_status="generated")
     _made(db_session, ws, "summary", summary="Raise prices once a year [1].")
     got = {a["id"]: a for a in client.get("/api/launchpad/postable", headers=auth).json()}
-    assert {a["type"] for a in got.values()} == {"quote_card", "video", "summary"}  # no audio, no unfinished video
+    assert {a["type"] for a in got.values()} == {"quote_card", "video", "summary", "audio_overview"}  # no unfinished video
+    assert got[str(audio.id)]["media"] == "audio" and got[str(audio.id)]["download_url"]  # audio: to download, not post
     assert str(done.id) in got and got[str(quote.id)]["thumb_url"] and got[str(quote.id)]["media"] == "image"
     # Made but not rendered: listed, flagged; the rendered one is not.
     assert got[str(unrendered.id)]["needs_render"] is True and got[str(done.id)]["needs_render"] is False
