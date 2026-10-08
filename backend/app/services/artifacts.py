@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, object_session
 from app.models import Artifact, Job
 from app.services.jobs import create_job, serialize_job
 from app.services.storage import storage
+from app.slides.build import slots as slide_slots
 from app.slides.build import view as slide_pages
 
 TYPE_LABELS = {
@@ -87,7 +88,7 @@ def serialize_artifact(a: Artifact, job: Job | None = None) -> dict:
 
         content = {**content, "html": infographic_html(content), "html_landscape": infographic_html(content, "landscape")}
     if a.type == "slide_deck" and a.status == "ready":
-        content = {**content, "slides_html": slide_pages(content)}
+        content = {**content, "slides_html": slide_pages(content), "slide_slots": slide_slots(content)}
     if a.type == "report" and any(b.get("type") == "infographic" for b in content.get("blocks") or []):
         content = {**content, "blocks": report_blocks(a)}
     slides = content.get("slide_keys") or []

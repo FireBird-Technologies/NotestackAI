@@ -161,6 +161,31 @@ export const artifactsApi = {
   retry: (id: string) => post<Artifact>(`/api/artifacts/${id}/retry`),
   /** A slide deck as a PDF (exactly as shown) or an editable PowerPoint. */
   slidesFile: (id: string, ext: "pdf" | "pptx") => apiBlob(`/api/artifacts/${id}/slides.${ext}`),
+  /** A slide deck's slides as the editor has them, drawn without saving (after a slide or a text box is added,
+   * removed, moved or changed to another layout). Returns them as they will be kept. */
+  previewDeck: (id: string, slides: EditSlide[]) =>
+    post<{ slides: EditSlide[]; slides_html: string[]; slide_slots: string[][] }>(`/api/artifacts/${id}/deck-preview`, { slides }),
+  /** The editor's slides kept: the server fits the deck again and returns it. */
+  saveDeck: (id: string, slides: EditSlide[]) => put<Artifact>(`/api/artifacts/${id}/deck`, { slides }),
+};
+
+/** One slide in the stored shape (backend app/slides/content.py, empty_slide). */
+export type EditSlide = {
+  layout: string;
+  variant: string;
+  kicker: string;
+  heading: string;
+  lead: string;
+  points: { term: string; text: string }[];
+  left: { label: string; items: string[] };
+  right: { label: string; items: string[] };
+  stat: { value: string; label: string };
+  quote: { text: string; by: string };
+  takeaways: string[];
+  closing: string;
+  notes: string;
+  sources: { title?: string; path: string; line_start: number; line_end: number }[];
+  shrink?: number;
 };
 
 export const jobsApi = {

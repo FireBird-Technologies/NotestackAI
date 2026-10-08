@@ -22,9 +22,9 @@ from pptx.oxml.ns import qn
 from pptx.util import Emu, Pt
 
 from app.infographics.image import ImageUnavailable, chrome
-from app.slides.decor import Decor, Shape, build
+from app.slides.decor import Decor, Shape, build, ring_path
 from app.slides.layout import El, compose
-from app.slides.render import color, deck_print_html, planet_colors
+from app.slides.render import SHADE, color, deck_print_html, planet_colors, ring_shade
 from app.slides.themes import FONTS, THEMES, H, Palette, W, theme_id
 
 TIMEOUT = 120
@@ -144,6 +144,10 @@ def background(decor: Decor, pal: Palette, dark: bool) -> bytes:
     layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     draw = ImageDraw.Draw(layer)
     for s in decor.shapes:
+        if s.kind in ("glow", "planet", "band"):  # pasted straight onto the sky: put down the lines drawn so far
+            sky.alpha_composite(layer)  # first, so the order is the page's (a ring's far half behind its planet)
+            layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(layer)
         _draw(sky, layer, draw, s, pal, dark)
     sky = Image.alpha_composite(sky, layer).convert("RGB")
     buf = io.BytesIO()
@@ -174,6 +178,10 @@ def _draw(sky: Image.Image, layer: Image.Image, draw: ImageDraw.ImageDraw, s: Sh
         disc.putalpha(mask)
         _paste_clipped(sky, disc, s.cx - s.r, s.cy - s.r)
         draw.ellipse((s.cx - s.r, s.cy - s.r, s.cx + s.r, s.cy + s.r), outline=_hex_rgb(rim) + (180,), width=3)
+    elif s.kind == "band":
+        sky.alpha_composite(_band(s, c))
+    elif s.kind == "ring" and s.arc:
+        draw.line(ring_path(s), fill=c + (int(255 * s.opacity),), width=max(1, round(s.width)), joint="curve")
     elif s.kind == "ring":
         steps = 360
         rot = math.radians(s.rot)
@@ -189,6 +197,25 @@ def _draw(sky: Image.Image, layer: Image.Image, draw: ImageDraw.ImageDraw, s: Sh
             draw.line((x1, y1, x2, y2), fill=c + (int(255 * s.opacity * 0.5),), width=2)
         for x, y, r, _ in s.points:
             draw.ellipse((x - r, y - r, x + r, y + r), fill=c + (int(255 * s.opacity),))
+
+
+def _band(s: Shape, c: tuple[int, int, int]) -> Image.Image:
+    """A ringed planet's band as a slide-sized layer: the shape filled, faded left to right as the page's SHADE."""
+    shape = Image.new("L", (W, H), 0)
+    ImageDraw.Draw(shape).polygon(ring_path(s) + ring_path(s, s.inner)[::-1], fill=255)
+    lo, hi = ring_shade(s)
+    ramp = []
+    for x in range(W):
+        t = min(1.0, max(0.0, (x - lo) / (hi - lo))) if hi > lo else 0.0
+        (o0, a0), (o1, a1) = next((SHADE[k], SHADE[k + 1]) for k in range(len(SHADE) - 1) if t <= SHADE[k + 1][0])
+        ramp.append(int(255 * s.opacity * (a0 + (a1 - a0) * (t - o0) / (o1 - o0))))
+    fade = Image.new("L", (W, 1))
+    fade.putdata(ramp)
+    alpha = Image.new("L", (W, H), 0)
+    alpha.paste(fade.resize((W, H)), mask=shape)
+    out = Image.new("RGBA", (W, H), c + (0,))
+    out.putalpha(alpha)
+    return out
 
 
 def _paste_clipped(base: Image.Image, img: Image.Image, x: float, y: float) -> None:

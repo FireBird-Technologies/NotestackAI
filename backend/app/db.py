@@ -11,8 +11,13 @@ class Base(DeclarativeBase):
 
 
 _sqlite = settings.database_url.startswith("sqlite")
-_connect_args = {"check_same_thread": False, "timeout": 30} if _sqlite else {}
-engine = create_engine(settings.database_url, pool_pre_ping=True, connect_args=_connect_args)
+# Postgres: a connection that dies silently (laptop sleep, network change, Neon dropping it) otherwise leaves a query
+# waiting on the socket forever, and the worker loop with it. Keepalives notice a dead peer within about a minute
+# and the query fails instead; connect_timeout does the same for a connect that never completes.
+_pg_connect_args = {"connect_timeout": 10, "keepalives": 1, "keepalives_idle": 30, "keepalives_interval": 10,
+                    "keepalives_count": 3}
+_connect_args = {"check_same_thread": False, "timeout": 30} if _sqlite else _pg_connect_args
+engine = create_engine(settings.database_url, pool_pre_ping=True, pool_recycle=300, connect_args=_connect_args)
 
 if _sqlite:
     # Local dev: the API and the worker share one file. WAL lets reads run during a write, the busy

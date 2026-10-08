@@ -69,17 +69,21 @@ export function Modal({
   actions?: ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  // The latest onClose, so a parent passing a new function each render neither re-binds Escape nor (worse) pulls focus
+  // back to the dialog, away from whatever is being typed in.
+  const close = useRef(onClose);
+  close.current = onClose;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       // A modal opened from a modal (a picker over the composer): Escape closes only the top one.
       const open = document.querySelectorAll(".modal-backdrop");
-      if (open[open.length - 1] === ref.current?.parentElement) onClose();
+      if (open[open.length - 1] === ref.current?.parentElement) close.current();
     };
     document.addEventListener("keydown", onKey);
-    ref.current?.focus();
+    ref.current?.focus(); // once, on opening
     return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, []);
   // Rendered into <body>: a parent with backdrop-filter or transform (cards have one) would otherwise become the
   // containing block of this fixed backdrop and trap the modal inside that card.
   return createPortal(

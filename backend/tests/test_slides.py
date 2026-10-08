@@ -436,3 +436,155 @@ def test_the_closing_is_tried_again_and_a_repeated_heading_goes(client, auth, ru
     assert len(tries) == 2 and slides[-1]["closing"] == "Price the work like it matters."
     headings = [s["heading"] for s in slides]
     assert len(headings) == len(set(headings)) and 6 <= len(slides) <= 8
+
+
+@pytest.mark.parametrize("key", [("title", "a"), ("title", "c"), ("section", "a"), ("section", "b")])
+def test_light_planets_sit_on_their_ring(key):
+    """A planet beside rings is drawn on one of them, tilt included, whatever the seed."""
+    import math
+
+    from app.slides.decor import build
+
+    for seed in range(40):
+        shapes = build("light-space", *key, seed, 0).shapes
+        rings = [s for s in shapes if s.kind == "ring"]
+        for p in (s for s in shapes if s.kind == "planet"):
+            def off(r, p=p):  # how far the planet's centre is from the ring's line, in units of the ring
+                rot = math.radians(-r.rot)
+                dx, dy = p.cx - r.cx, p.cy - r.cy
+                x, y = dx * math.cos(rot) - dy * math.sin(rot), dx * math.sin(rot) + dy * math.cos(rot)
+                return abs(math.hypot(x / r.rx, y / r.ry) - 1)
+            assert min(off(r) for r in rings) < 1e-6, (key, seed)
+
+
+@pytest.mark.parametrize("key", [("title", "b"), ("points", "a")])
+def test_dark_rings_wrap_round_their_planet(key):
+    """A ringed planet's far half is drawn before the planet (hidden behind it) and the near half after (in front)."""
+    from app.slides.decor import FAR, NEAR, build
+
+    for seed in range(10):
+        shapes = build("dark-space", *key, seed, 0).shapes
+        at = next(i for i, s in enumerate(shapes) if s.kind == "planet")
+        rings = [(i, s) for i, s in enumerate(shapes) if s.kind in ("ring", "band")]
+        assert rings and all(s.arc for _, s in rings)
+        assert all(i < at for i, s in rings if s.arc == FAR) and all(i > at for i, s in rings if s.arc == NEAR)
+        assert all(s.rx * s.inner > shapes[at].r for _, s in rings if s.kind == "band")  # the band clears the planet
+
+
+@pytest.mark.parametrize("theme", ["dark-space", "light-space"])
+def test_every_variant_marks_its_editable_text(theme):
+    """Every piece of a slide's own text is drawn in a span the editor can find, with the field's real limit; numbers
+    and footers are not editable."""
+    from app.slides.content import field_limit
+
+    for fmt in ("detailed", "presenter"):
+        for layout, variants in GEOMETRY[theme].items():
+            for v in variants:
+                deck = clamp_deck({"title": "T", "slides": [{"layout": layout, **FULL[layout]}]}, fmt)
+                deck["slides"][0]["variant"] = v
+                html = slide_html(deck, 0, theme, fmt, 3)
+                found = dict(re.findall(r'data-f="([^"]+)" data-max="(\d+)"', html))
+                assert "heading" in found or layout in ("quote", "closing"), (layout, v)
+                assert all(int(n) == field_limit(layout, f, fmt) for f, n in found.items())
+                s = deck["slides"][0]
+                want = {"points": [f"points.{i}.text" for i in range(len(s["points"]))], "stat": ["stat.value", "stat.label"],
+                        "quote": ["quote.text", "quote.by"], "two_column": ["left.label", "right.items.1"],
+                        "closing": [f"takeaways.{i}" for i in range(len(s["takeaways"]))] + ["closing"]}.get(layout, [])
+                assert set(want) <= set(found), (fmt, layout, v, found)
+                assert not any(f.startswith("footer") for f in found)
+
+
+def _ready_deck(client, auth, run_jobs, monkeypatch, llm):  # noqa: F811
+    pricing, nb = _notebook_with_pricing(client, auth, run_jobs)
+    _fake_many(monkeypatch, pricing["path"], {})
+    llm["OutlineDeck"] = _outline(5)
+    llm["WriteClosing"] = CLOSING
+    art = client.post("/api/artifacts/generate", json={"type": "slide_deck", "notebook_id": nb["id"],
+                      "document_ids": [pricing["id"]], "deck_length": "short"}, headers=auth).json()
+    run_jobs()
+    return client.get(f"/api/artifacts/{art['id']}", headers=auth).json()
+
+
+def test_edited_deck_is_saved_fitted_and_downloaded(client, auth, run_jobs, feed, llm, monkeypatch, no_chrome):  # noqa: F811
+    done = _ready_deck(client, auth, run_jobs, monkeypatch, llm)
+    slides = copy.deepcopy(done["content"]["deck"]["slides"])
+    assert len(done["content"]["slide_slots"]) == len(slides) and "heading" in done["content"]["slide_slots"][0]
+    pi = next(i for i, s in enumerate(slides) if s["points"] and s["layout"] == "points")
+    slides[0]["heading"] = "A brand new title"
+    slides[0]["notes"] = "Say hello first."
+    slides[pi]["points"][0]["text"] = "Edited point " + "very long " * 60
+    slides[-1]["takeaways"][1] = "  An <b>edited</b> takeaway  "
+    url = f"/api/artifacts/{done['id']}/deck"
+    saved = client.put(url, json={"slides": slides}, headers=auth)
+    assert saved.status_code == 200, saved.text
+    after = saved.json()["content"]
+    s = after["deck"]["slides"]
+    assert s[0]["heading"] == "A brand new title" and s[0]["notes"] == "Say hello first."
+    assert s[pi]["points"][0]["text"].startswith("Edited point") and len(s[pi]["points"][0]["text"]) <= LIMITS["detailed"]["text"]
+    assert s[-1]["takeaways"][1] == "An edited takeaway"  # plain text only
+    before = done["content"]["deck"]["slides"]
+    assert [(x["layout"], x["variant"]) for x in s] == [(x["layout"], x["variant"]) for x in before]  # designs kept
+    assert "A brand new title" in after["slides_html"][0]
+    pptx = client.get(f"/api/artifacts/{done['id']}/slides.pptx", headers=auth)
+    texts = [sh.text_frame.text for sh in Presentation(io.BytesIO(pptx.content)).slides[0].shapes if sh.has_text_frame]
+    assert any("A brand new title" in t for t in texts)
+
+    assert client.put(url, json={"slides": []}, headers=auth).status_code == 422
+    assert client.put(url, json={"slides": [{"layout": "points", "heading": ""}]}, headers=auth).status_code == 400
+    assert client.put(url, json={"slides": [slides[0]] * 31}, headers=auth).status_code == 400
+    kept = client.get(f"/api/artifacts/{done['id']}", headers=auth).json()["content"]["deck"]["slides"]
+    assert kept[0]["heading"] == "A brand new title" and len(kept) == len(slides)  # a refused save changes nothing
+
+
+def test_slides_can_be_added_removed_moved_and_change_layout(client, auth, run_jobs, feed, llm, monkeypatch, no_chrome):  # noqa: F811
+    done = _ready_deck(client, auth, run_jobs, monkeypatch, llm)
+    slides = copy.deepcopy(done["content"]["deck"]["slides"])
+    n = len(slides)
+    pi = next(i for i, s in enumerate(slides) if s["layout"] == "points")
+    edited = copy.deepcopy(slides)
+    edited[pi]["points"].append({"term": "", "text": "A point added by hand"})  # a text box added
+    edited[pi]["lead"] = ""  # and one removed
+    stat = {"layout": "stat", "variant": "", "heading": "A new stat slide", "stat": {"value": "42%", "label": "Readers who stayed"}}
+    edited.insert(1, stat)  # a slide added
+    edited.insert(2, copy.deepcopy(edited[0]) | {"variant": ""})  # a slide duplicated
+    del edited[-2]  # a slide removed
+    edited[-1], edited[-2] = edited[-2], edited[-1]  # two moved
+    url = f"/api/artifacts/{done['id']}"
+    prev = client.post(f"{url}/deck-preview", json={"slides": edited}, headers=auth)
+    assert prev.status_code == 200, prev.text
+    got = prev.json()
+    out = got["slides"]
+    assert len(out) == n + 1 and len(got["slides_html"]) == n + 1 and len(got["slide_slots"]) == n + 1
+    assert out[1]["layout"] == "stat" and out[1]["variant"] and "42%" in got["slides_html"][1]
+    assert "value" in got["slide_slots"][1] and "label" in got["slide_slots"][1]
+    moved = next(s for s in out if s["heading"] == slides[pi]["heading"])
+    assert moved["points"][-1]["text"] == "A point added by hand" and moved["lead"] == ""
+    pairs = [(x["layout"], x["variant"]) for x in out]
+    assert all(a != b for a, b in zip(pairs, pairs[1:], strict=False))  # no two alike in a row
+    assert client.get(url, headers=auth).json()["content"]["deck"]["slides"] == done["content"]["deck"]["slides"]  # preview saves nothing
+
+    # a layout change: the points slide becomes a quote slide
+    q = next(i for i, s in enumerate(edited) if s["layout"] == "points")
+    edited[q] = {**edited[q], "layout": "quote", "variant": "", "quote": {"text": "Price the work like it matters.", "by": "A writer"}}
+    saved = client.put(f"{url}/deck", json={"slides": edited}, headers=auth).json()["content"]
+    assert saved["deck"]["slides"][q]["layout"] == "quote" and saved["deck"]["slides"][q]["variant"]
+    assert len(saved["deck"]["slides"]) == n + 1
+    pptx = client.get(f"{url}/slides.pptx", headers=auth)
+    assert len(Presentation(io.BytesIO(pptx.content)).slides) == n + 1
+
+
+def test_fill_variants_keeps_good_variants_and_fixes_the_rest():
+    from app.slides.build import fill_variants
+
+    deck = clamp_deck({"title": "T", "slides": [{"layout": lay, **FULL[lay]} for lay in ("title", "points", "points", "stat", "closing")]},
+                      "detailed")
+    assign_variants(deck["slides"], "dark-space", seed=3)
+    before = [s["variant"] for s in deck["slides"]]
+    fill_variants(deck["slides"], "dark-space", 3)
+    assert [s["variant"] for s in deck["slides"]] == before  # nothing to fix: nothing changes
+    deck["slides"][3]["variant"] = ""  # new
+    deck["slides"][2]["variant"] = deck["slides"][1]["variant"]  # the same as the slide before it
+    fill_variants(deck["slides"], "dark-space", 3)
+    assert deck["slides"][3]["variant"] in VARIANTS["stat"]
+    assert deck["slides"][2]["variant"] != deck["slides"][1]["variant"]
+    assert [s["variant"] for s in deck["slides"]][:2] == before[:2] and deck["slides"][4]["variant"] == before[4]

@@ -31,12 +31,12 @@ class Theme:
 
 
 THEMES: dict[str, Theme] = {t.id: t for t in (
-    Theme("dark-space", "Dark space", True, Palette(
+    Theme("dark-space", "Night stellar", True, Palette(
         bg1="#000000", bg2="#0a1736", ink="#ffffff", mute="#b4bccc", accent="#4d94ff", accent2="#217cff",
         card="#0b1326", cardline="#1f3156", line="#26385c", band="#0e1c3d", bandink="#ffffff", star="#ffffff")),
-    Theme("light-space", "Light space", False, Palette(
-        bg1="#e9eef9", bg2="#ffffff", ink="#0b1a3a", mute="#4b5a7a", accent="#217cff", accent2="#0b3d91",
-        card="#ffffff", cardline="#d3dcef", line="#c6d1ea", band="#0b1a3a", bandink="#ffffff", star="#0b1a3a")),
+    Theme("light-space", "Moon light", False, Palette(
+        bg1="#c3cddf", bg2="#dfe5ef", ink="#0b1a3a", mute="#36435f", accent="#1858c4", accent2="#0b3d91",
+        card="#e9eef6", cardline="#b3bfd5", line="#a7b4cc", band="#0b1a3a", bandink="#ffffff", star="#0b1a3a")),
 )}
 DEFAULT_THEME = "dark-space"
 

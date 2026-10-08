@@ -18,8 +18,8 @@ from app.slides.themes import theme_id
 
 # --- geometry -------------------------------------------------------------------------------------------------------
 # A block is (x, y, w, h[, align[, valign[, kind]]]). `kind` says how a body, a column or the closing line is drawn.
-# Dark space: cinematic, centred openers and closers, asymmetric splits. Light space: editorial, left aligned, top
-# anchored, mirrored splits.
+# Night stellar (dark-space): cinematic, centred openers and closers, asymmetric splits. Moon light (light-space):
+# editorial, left aligned, top anchored, mirrored splits.
 
 GEOMETRY: dict[str, dict[str, dict[str, dict[str, tuple]]]] = {
     "dark-space": {
@@ -160,7 +160,7 @@ def block(theme: str, layout: str, variant: str, name: str) -> tuple | None:
 
 # --- picking variants -----------------------------------------------------------------------------------------------
 
-def _fits(slide: dict, theme: str, variant: str) -> bool:
+def fits_variant(slide: dict, theme: str, variant: str) -> bool:
     """Whether a variant suits this slide's content (a card row needs 3 or 4 points, a timeline 3 to 5)."""
     layout = slide["layout"]
     n = len(slide["points"])
@@ -187,7 +187,7 @@ def assign_variants(slides: list[dict], theme: str, seed: int, previous: list[tu
     before: tuple[str, str] | None = None
     previous = previous or []
     for i, s in enumerate(slides):
-        options = [v for v in VARIANTS[s["layout"]] if _fits(s, theme, v)] or list(VARIANTS[s["layout"]])
+        options = [v for v in VARIANTS[s["layout"]] if fits_variant(s, theme, v)] or list(VARIANTS[s["layout"]])
         fresh = [v for v in options if (s["layout"], v) != before]
         if not fresh:  # the only variant that suits it was just used: any other one draws it too, so never repeat
             fresh = [v for v in VARIANTS[s["layout"]] if (s["layout"], v) != before] or options
@@ -219,6 +219,7 @@ class Run:
     text: str
     bold: bool = False
     color: str = "ink"
+    field: str = ""  # where the text lives in the slide ("heading", "points.2.text"), so the page can edit it; "" is ours
 
 
 def _lines(runs: list[Run], width: float, size: float, font: str, upper: bool, track: float) -> int:
@@ -291,16 +292,16 @@ def _scales(start: int, grow: bool = False) -> tuple[float, ...]:
     """Scales to try, largest first: from `start` down, with the growing ones first when allowed and not shrunk."""
     return (GROW + SCALES) if grow and start == 0 else SCALES[start:]
 
-# Base font sizes in px, by format. Presenter slides carry fewer words, so they are drawn larger.
+# Base font sizes in px, by format (both themes). Presenter slides carry fewer words, so they are drawn larger.
 TYPE = {
-    "detailed": {"kicker": 22, "heading": 60, "title": 100, "section": 80, "lead": 30, "title_lead": 34, "point": 28,
-                 "card_term": 30, "card_text": 25, "value": 220, "label": 34, "quote": 52, "by": 24, "take": 28,
-                 "closing": 46, "closing_big": 66, "agenda": 32, "col_label": 28, "col_item": 27, "num": 22,
-                 "footer": 18},
-    "presenter": {"kicker": 24, "heading": 72, "title": 112, "section": 92, "lead": 36, "title_lead": 38,
-                  "point": 40, "card_term": 34, "card_text": 34, "value": 260, "label": 40, "quote": 60, "by": 26,
-                  "take": 36, "closing": 56, "closing_big": 78, "agenda": 36, "col_label": 30, "col_item": 36,
-                  "num": 24, "footer": 18},
+    "detailed": {"kicker": 24, "heading": 66, "title": 110, "section": 88, "lead": 33, "title_lead": 37, "point": 31,
+                 "card_term": 33, "card_text": 28, "value": 242, "label": 37, "quote": 57, "by": 26, "take": 31,
+                 "closing": 51, "closing_big": 73, "agenda": 35, "col_label": 31, "col_item": 30, "num": 24,
+                 "footer": 20},
+    "presenter": {"kicker": 26, "heading": 79, "title": 123, "section": 101, "lead": 40, "title_lead": 42,
+                  "point": 44, "card_term": 37, "card_text": 37, "value": 286, "label": 44, "quote": 66, "by": 29,
+                  "take": 40, "closing": 62, "closing_big": 86, "agenda": 40, "col_label": 33, "col_item": 40,
+                  "num": 26, "footer": 20},
 }
 
 
@@ -341,10 +342,11 @@ def _text(role: str, rect: tuple, paras: list[list[Run]], base: float, start: in
               upper=upper, track=track, gap=size * gap_em)
 
 
-def _point_runs(p: dict, fmt: str) -> list[Run]:
+def _point_runs(p: dict, i: int, fmt: str) -> list[Run]:
     if p["term"] and fmt == "detailed":
-        return [Run(p["term"] + ".", True, "ink"), Run(" " + p["text"], False, "mute")]
-    return [Run(p["text"], False, "ink")]
+        return [Run(p["term"], True, "ink", f"points.{i}.term"), Run(". ", True, "ink"),
+                Run(p["text"], False, "mute", f"points.{i}.text")]
+    return [Run(p["text"], False, "ink", f"points.{i}.text")]
 
 
 def _body(els: list[El], s: dict, rect: tuple, kind: str, fmt: str, t: dict, start: int, dark: bool) -> None:
@@ -354,13 +356,13 @@ def _body(els: list[El], s: dict, rect: tuple, kind: str, fmt: str, t: dict, sta
 
     if kind in ("list", "list2", "agenda_list", "agenda_grid", "take_stack"):
         if kind in ("agenda_list", "agenda_grid"):
-            items = [[Run(p["text"], False, "ink")] for p in pts]
+            items = [[Run(p["text"], False, "ink", f"points.{i}.text")] for i, p in enumerate(pts)]
             base, numbered = t["agenda"], True
         elif kind == "take_stack":
-            items = [[Run(tx, False, "ink")] for tx in s["takeaways"]]
+            items = [[Run(tx, False, "ink", f"takeaways.{i}")] for i, tx in enumerate(s["takeaways"])]
             base, numbered = t["take"], True
         else:
-            items = [_point_runs(p, fmt) for p in pts]
+            items = [_point_runs(p, i, fmt) for i, p in enumerate(pts)]
             base, numbered = t["point"], False
         cols = 2 if kind in ("list2", "agenda_grid") and len(items) >= 3 else 1
         per = math.ceil(len(items) / cols)
@@ -466,15 +468,16 @@ def _body(els: list[El], s: dict, rect: tuple, kind: str, fmt: str, t: dict, sta
             align = "center" if kind == "take_arc" else "left"
             if term:
                 th = text_height([[Run(term, True)]], inner_w, ts, 1.15, "display")
-                els.append(El("text", "term", cx + pad, cy, inner_w, th + 2, paras=[[Run(term, True, "ink")]], size=ts,
+                els.append(El("text", "term", cx + pad, cy, inner_w, th + 2, paras=[[Run(term, True, "ink", f"points.{i}.term")]], size=ts,
                               lh=1.15, font="display", align=align))
                 cy += th + ts * 0.5
-            els.append(El("text", "item", cx + pad, cy, inner_w, y + h - pad - cy, paras=[[Run(text, False, "mute" if term else "ink")]],
-                          size=xs, lh=1.4, align=align))
+            where = f"points.{i}.text" if kind == "cards" else f"takeaways.{i}"
+            els.append(El("text", "item", cx + pad, cy, inner_w, y + h - pad - cy,
+                          paras=[[Run(text, False, "mute" if term else "ink", where)]], size=xs, lh=1.4, align=align))
         return
 
     if kind in ("timeline_v", "timeline_h"):
-        items = [_point_runs(p, fmt) for p in pts]
+        items = [_point_runs(p, i, fmt) for i, p in enumerate(pts)]
         n = len(items)
         r = 28
         if kind == "timeline_v":
@@ -548,7 +551,7 @@ def _columns(els: list[El], s: dict, rects: tuple[tuple, tuple], t: dict, start:
     else:
         raise NoFit(("left", "right")[bad[0]] + "_items")
     panel_h = max(need) + 2 * pad + top + 8
-    for col, (x, y, w, h, *_) in zip(sides, rects, strict=True):
+    for side, col, (x, y, w, h, *_) in zip(("left", "right"), sides, rects, strict=True):
         if kind == "panel":
             els.append(El("rect", "panel", x, y, w, min(h, panel_h), fill="card", stroke="cardline", stroke_w=2, radius=22))
         else:
@@ -558,13 +561,14 @@ def _columns(els: list[El], s: dict, rects: tuple[tuple, tuple], t: dict, start:
         _, heights = measure(col, iw, ls, xs)
         if col["label"]:
             lab_h = text_height([[Run(col["label"], True)]], iw, ls, 1.2, "display")
-            els.append(El("text", "col_label", ix, cy, iw, lab_h + 2, paras=[[Run(col["label"], True, "accent")]],
+            els.append(El("text", "col_label", ix, cy, iw, lab_h + 2, paras=[[Run(col["label"], True, "accent", f"{side}.label")]],
                           size=ls, lh=1.2, font="display"))
             cy += lab_h + xs * 0.9
-        for item, hh in zip(col["items"], heights, strict=True):
+        for n, (item, hh) in enumerate(zip(col["items"], heights, strict=True)):
             d = xs * 0.32
             els.append(El("circle", "dot", ix + 2, cy + xs * 0.69 - d / 2, d, d, fill="accent"))
-            els.append(El("text", "item", ix + 40, cy, iw - 40, hh + 2, paras=[[Run(item, False, "ink")]], size=xs, lh=1.38))
+            els.append(El("text", "item", ix + 40, cy, iw - 40, hh + 2, paras=[[Run(item, False, "ink", f"{side}.items.{n}")]],
+                          size=xs, lh=1.38))
             cy += hh + xs * 0.75
 
 
@@ -592,13 +596,13 @@ def _compose_once(s: dict, deck: dict, index: int, theme: str, fmt: str, start: 
         x, y, w, h, align, *_ = k
         bar_x = x + (w - 64) / 2 if align == "center" else (x + w - 64 if align == "right" else x)
         els.append(El("rect", "bar", bar_x, y - 18, 64, 5, fill="accent"))
-        els.append(_text("kicker", k, [[Run(s["kicker"], True, "accent")]], t["kicker"], 0, font="mono", lh=1.2,
+        els.append(_text("kicker", k, [[Run(s["kicker"], True, "accent", "kicker")]], t["kicker"], 0, font="mono", lh=1.2,
                          upper=True, track=0.16, field_name="kicker"))
 
     heading_base = {"title": t["title"], "section": t["section"]}.get(layout, t["heading"])
     hr = rect("heading")
     if hr and s["heading"]:
-        els.append(_text("heading", hr, [[Run(s["heading"], True, "ink")]], heading_base, start, font="display",
+        els.append(_text("heading", hr, [[Run(s["heading"], True, "ink", "heading")]], heading_base, start, font="display",
                          lh=1.08, field_name="heading"))
 
     lr = rect("lead")
@@ -609,20 +613,20 @@ def _compose_once(s: dict, deck: dict, index: int, theme: str, fmt: str, start: 
             # Under a top aligned heading in the same column: follow the heading instead of waiting at the box's top.
             top = head.y + head.text_height() + head.size * 0.55
             lr = (lr[0], top, lr[2], lr[1] + lr[3] - top, *lr[4:])
-        els.append(_text("lead", lr, [[Run(s["lead"], False, "mute")]], base, start, lh=1.4, field_name="lead"))
+        els.append(_text("lead", lr, [[Run(s["lead"], False, "mute", "lead")]], base, start, lh=1.4, field_name="lead"))
 
     if layout == "stat":
-        els.append(_text("value", rect("value"), [[Run(s["stat"]["value"], True, "accent")]], t["value"], start,
+        els.append(_text("value", rect("value"), [[Run(s["stat"]["value"], True, "accent", "stat.value")]], t["value"], start,
                          font="display", lh=1.0, field_name="stat_value"))
-        els.append(_text("label", rect("label"), [[Run(s["stat"]["label"], False, "ink")]], t["label"], start, lh=1.35,
+        els.append(_text("label", rect("label"), [[Run(s["stat"]["label"], False, "ink", "stat.label")]], t["label"], start, lh=1.35,
                          field_name="stat_label", grow=True))
     if layout == "quote":
         q = rect("quote")
-        els.append(_text("quote", q, [[Run("“", True, "accent"), Run(s["quote"]["text"], False, "ink"),
+        els.append(_text("quote", q, [[Run("“", True, "accent"), Run(s["quote"]["text"], False, "ink", "quote.text"),
                                        Run("”", True, "accent")]], t["quote"], start, font="display", lh=1.22,
                          field_name="quote", grow=True))
         if s["quote"]["by"] and (b := rect("by")):
-            els.append(_text("by", b, [[Run(s["quote"]["by"], False, "mute")]], t["by"], 0, font="mono", lh=1.3,
+            els.append(_text("by", b, [[Run(s["quote"]["by"], False, "mute", "quote.by")]], t["by"], 0, font="mono", lh=1.3,
                              upper=True, track=0.08, field_name="by"))
     if layout == "two_column":
         _columns(els, s, (rect("left"), rect("right")), t, start)
@@ -636,11 +640,11 @@ def _compose_once(s: dict, deck: dict, index: int, theme: str, fmt: str, start: 
             x, y, w, h, *_ = cr
             els.append(El("rect", "band", x, y, w, h, fill="band", radius=24))
             inner = (x + 60, y, w - 120, h, "left", "middle")
-            els.append(_text("closing", inner, [[Run(s["closing"], True, "bandink")]], t["closing"], start,
+            els.append(_text("closing", inner, [[Run(s["closing"], True, "bandink", "closing")]], t["closing"], start,
                              font="display", lh=1.15, field_name="closing"))
         else:
             base = t["closing_big"] if kind == "big" else t["closing"]
-            els.append(_text("closing", cr, [[Run(s["closing"], True, "ink")]], base, start, font="display", lh=1.12,
+            els.append(_text("closing", cr, [[Run(s["closing"], True, "ink", "closing")]], base, start, font="display", lh=1.12,
                              field_name="closing", grow=kind == "big"))
 
     if layout != "title":

@@ -8360,6 +8360,11 @@ details.map-legend[open] summary {
   pointer-events: none;
 }
 
+/* In edit mode the slide's text is edited in place, so the frame takes the mouse */
+.sd-frame-edit iframe {
+  pointer-events: auto;
+}
+
 /* A deck in the notebook's list: a quiet row (icon, title, "2 sources · 5d ago", menu), highlighted on hover */
 .sd-item {
   display: grid;
@@ -8634,6 +8639,121 @@ details.map-legend[open] summary {
 .sd-slide:focus-visible {
   border-color: var(--blue-60);
   box-shadow: var(--glow-sm);
+}
+
+/* Edit mode: the slide's text boxes are clicked into, so no pointer; the slide being typed in is lit */
+.sd-slide-editing {
+  cursor: default;
+}
+
+.sd-slide-editing:focus-within {
+  border-color: var(--blue);
+  box-shadow: var(--glow-sm);
+}
+
+.sd-save {
+  height: 36px;
+  margin-right: 6px;
+  padding: 0 18px;
+}
+
+.sd-edit-hint {
+  color: var(--text-2);
+}
+
+.sd-edit-error {
+  margin: -4px 0 10px;
+}
+
+/* Edit mode: each slide's controls above it (layout, text boxes to add, move, duplicate, delete) */
+.sd-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.sd-tools-no {
+  margin-right: 4px;
+  color: var(--text-2);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.sd-tools-layout select,
+.sd-add-slide select {
+  width: auto;
+  height: 32px;
+  padding: 0 30px 0 12px;
+  font-size: 0.8125rem;
+}
+
+.sd-tool {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font: 600 0.8125rem var(--font-body);
+  cursor: pointer;
+}
+
+.sd-tool:hover:not(:disabled) {
+  border-color: var(--blue);
+  background: var(--surface-2);
+}
+
+.sd-tool:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.sd-tools-gap {
+  flex: 1;
+}
+
+.sd-tool-icon {
+  width: 32px;
+  height: 32px;
+}
+
+.sd-tool-danger:hover:not(:disabled) {
+  color: #ff8a8a;
+}
+
+/* Between two slides in edit mode: a divider line with "+ Add slide here" on it */
+.sd-add-slide {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 20px 0 12px;
+}
+
+.sd-add-slide::before,
+.sd-add-slide::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line-strong);
+}
+
+.sd-add-slide select {
+  border-style: dashed;
+}
+
+/* The server is drawing the slides again: they wait, not taking clicks */
+.sd-stack.sd-busy .sd-slide {
+  opacity: 0.6;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+
+.sd-notes-edit {
+  min-height: 84px;
+  resize: vertical;
+  line-height: 1.6;
 }
 
 .sd-notes {

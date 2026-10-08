@@ -111,6 +111,23 @@ def _column(raw: object, lim: dict) -> dict:
     return {"label": clip(c.get("label"), lim["label"]), "items": items}
 
 
+_LIMIT_KEY = {"kicker": "kicker", "heading": "heading", "lead": "lead", "closing": "closing", "stat.value": "value",
+              "stat.label": "stat_label", "quote.text": "quote", "quote.by": "by", "left.label": "label",
+              "right.label": "label", "left.items": "item", "right.items": "item", "points.term": "term",
+              "points.text": "text", "takeaways": "takeaway"}
+
+
+def field_limit(layout: str, field: str, fmt: str) -> int:
+    """How many characters `field` may hold on a slide of this layout: what clamp_slide cuts it to."""
+    lim = LIMITS[fmt if fmt in FORMATS else "detailed"]
+    key = re.sub(r"\.\d+", "", field)  # "points.2.text" -> "points.text"
+    if layout == "title" and key in ("heading", "lead"):
+        return lim["title" if key == "heading" else "subtitle"]
+    if layout == "agenda" and key == "points.text":
+        return lim["agenda"]
+    return lim[_LIMIT_KEY[key]]
+
+
 def empty_slide(layout: str = "points") -> dict:
     return {"layout": layout, "variant": "", "kicker": "", "heading": "", "lead": "", "points": [],
             "left": {"label": "", "items": []}, "right": {"label": "", "items": []},

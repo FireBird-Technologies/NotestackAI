@@ -19,7 +19,10 @@ from app.services.renderer import COMPOSITIONS
 from app.services.storage import storage
 from app.services.usage import check_limit
 from app.slides import export as slide_export
+from app.slides.build import BadEdit, restructure
+from app.slides.build import slots as slide_slots
 from app.slides.build import stored as stored_deck
+from app.slides.build import view as slide_pages
 from app.slides.themes import theme_id as slide_theme_id
 
 router = APIRouter(prefix="/api/artifacts", tags=["artifacts"])
@@ -295,6 +298,45 @@ def slide_deck_file(artifact_id: uuid.UUID, ext: Literal["pdf", "pptx"], ctx: Ct
     media = "application/pdf" if ext == "pdf" else \
         "application/vnd.openxmlformats-officedocument.presentationml.presentation"
     return Response(data, media_type=media, headers={"Content-Disposition": f'attachment; filename="{name}.{ext}"'})
+
+
+class DeckIn(BaseModel):
+    # The deck's slides as the editor has them, in the stored shape (app.slides.content.empty_slide); coerced on arrival
+    slides: list[dict] = Field(min_length=1, max_length=60)
+
+
+def _editable_deck(ctx: Ctx, artifact_id: uuid.UUID) -> Artifact:
+    a = get_artifact_or_404(ctx, artifact_id)
+    if a.type != "slide_deck" or a.status != "ready":
+        raise HTTPException(400, "Only a finished slide deck can be edited.")
+    return a
+
+
+@router.post("/{artifact_id}/deck-preview")
+def preview_deck(artifact_id: uuid.UUID, body: DeckIn, ctx: Ctx = Depends(get_ctx)):
+    """The editor's slides drawn, without saving: after a slide is added, removed, moved or changed to another layout,
+    or a text box is added or removed. Returns the slides as they will be kept (variants given, text fitted)."""
+    a = _editable_deck(ctx, artifact_id)
+    try:
+        deck = restructure(a.content_json or {}, body.slides, final=False)
+    except BadEdit as exc:
+        raise HTTPException(400, str(exc)) from exc
+    content = {**(a.content_json or {}), "deck": deck}
+    return {"slides": deck["slides"], "slides_html": slide_pages(content), "slide_slots": slide_slots(content)}
+
+
+@router.put("/{artifact_id}/deck")
+def save_deck(artifact_id: uuid.UUID, body: DeckIn, ctx: Ctx = Depends(get_ctx)):
+    """The editor's slides kept: text, speaker notes, and which slides there are, in what order and layout. The deck is
+    fitted again (with the Chrome check), so the slides, the PDF and the PowerPoint all show it."""
+    a = _editable_deck(ctx, artifact_id)
+    try:
+        deck = restructure(a.content_json or {}, body.slides, final=True)
+    except BadEdit as exc:
+        raise HTTPException(400, str(exc)) from exc
+    a.content_json = {**(a.content_json or {}), "deck": deck}
+    ctx.db.commit()
+    return serialize_artifact(a, latest_jobs(ctx.db, [a.id]).get(a.id))
 
 
 @router.patch("/{artifact_id}")
