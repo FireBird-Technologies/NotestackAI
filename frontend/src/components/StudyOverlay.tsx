@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-/** A full-screen study space (a quiz, a flashcard deck) that opens like the Mind Constellation does, and can be
+/** A popup (a quiz, a flashcard deck) in the same dialog as the other creators, which can be
  * minimised to a small pill in the corner and brought back, keeping its place. Escape minimises. */
 export function StudyOverlay({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   const [minimized, setMinimized] = useState(false);
@@ -16,24 +16,24 @@ export function StudyOverlay({ title, onClose, children }: { title: string; onCl
   return createPortal(
     <>
       {/* Stays mounted while minimised, so the answers given so far are kept */}
-      <div className="so-overlay" role="dialog" aria-modal="true" aria-label={title} hidden={minimized}>
-        <header className="so-top">
-          <h2 className="so-title">{title}</h2>
-          <div className="so-actions">
-            <button type="button" className="icon-btn" onClick={() => setMinimized(true)} aria-label="Minimise" title="Minimise">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                <path d="M5 19h14" />
-              </svg>
-            </button>
-            <button type="button" className="icon-btn" onClick={onClose} aria-label="Close" title="Close">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
-                <path d="M6 6l12 12M18 6L6 18" />
-              </svg>
-            </button>
+      <div className="modal-backdrop so-backdrop" hidden={minimized} onMouseDown={(e) => e.target === e.currentTarget && setMinimized(true)}>
+        <div className="modal card modal-wide so-modal" role="dialog" aria-modal="true" aria-label={title}>
+          <div className="modal-head">
+            <h2 className="so-title">{title}</h2>
+            <div className="so-actions">
+              <button type="button" className="icon-btn" onClick={() => setMinimized(true)} aria-label="Minimise" title="Minimise">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                  <path d="M5 19h14" />
+                </svg>
+              </button>
+              <button type="button" className="icon-btn" onClick={onClose} aria-label="Close" title="Close">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+                  <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
+              </button>
+            </div>
           </div>
-        </header>
-        <div className="so-body">
-          <div className="so-card">{children}</div>
+          <div className="so-content">{children}</div>
         </div>
       </div>
       {minimized && (

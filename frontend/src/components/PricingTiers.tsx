@@ -26,11 +26,13 @@ const FALLBACK: Plan[] = [
     tagline: "For trying Notestack on your archive",
     price_monthly_usd: 0,
     features: [
-      "1 source, your latest 5 posts indexed",
+      "Up to 5 posts indexed, from any source",
       "Grounded research chat with citations",
-      "3 min of audio overviews a month",
-      "1 video to try it",
-      "2 Launch Kits a month",
+      "1 audio overview, any length",
+      "1 video",
+      "2 Launch Kits",
+      "2 infographics",
+      "2 reports a month",
     ],
   },
   {
@@ -39,12 +41,13 @@ const FALLBACK: Plan[] = [
     tagline: "For writers publishing every week",
     price_monthly_usd: 24.99,
     features: [
-      "3 sources, 500 indexed posts",
-      "60 min of audio overviews a month",
+      "Up to 100 posts indexed, from any source",
+      "10x more audio overviews than Free (60 min a month)",
       "10 videos a month",
-      "50 Launch Kits a month",
+      "20 Launch Kits a month",
+      "30 reports a month",
+      "30 infographics a month",
       "Voice cloning with consent",
-      "Your brand colors and logo",
     ],
   },
   {
@@ -53,12 +56,13 @@ const FALLBACK: Plan[] = [
     tagline: "For publications and power users",
     price_monthly_usd: 48.99,
     features: [
-      "10 sources, 5,000 indexed posts",
-      "240 min of audio overviews a month",
+      "Up to 250 posts indexed, from any source",
+      "40x more audio overviews than Free (240 min a month)",
       "20 videos a month",
-      "Unlimited Launch Kits",
-      "Launchpad calendar and resurfacing",
-      "Priority rendering",
+      "50 Launch Kits a month",
+      "Unlimited reports",
+      "Unlimited infographics",
+      "Voice cloning with consent",
     ],
   },
 ];
@@ -88,7 +92,7 @@ export function annualTotal(plan: Plan): number {
 export default function PricingTiers() {
   const [plans, setPlans] = useState<Plan[]>(FALLBACK);
   const [billingEnabled, setBillingEnabled] = useState(false);
-  const [cycle, setCycle] = useState<Cycle>("monthly");
+  const [cycle, setCycle] = useState<Cycle>("annual");
   const bestSaving = Math.max(0, ...plans.map(savingsPct));
 
   useEffect(() => {

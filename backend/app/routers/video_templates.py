@@ -179,7 +179,6 @@ def delete_template(template_id: int, ctx: Ctx = Depends(get_ctx), _: None = Dep
 
 @dataclass(frozen=True)
 class Rule:
-    ai_edit: bool = False  # ★ one AI edit
     metric: str | None = None  # another counter this uses (a lifetime slot, a daily AI step)
     raw: bool = False
 
@@ -190,8 +189,6 @@ RULES: list[tuple[str, re.Pattern, Rule]] = [(m, re.compile(f"^{p}$"), r) for m,
     ("PUT", "", Rule()),
     ("GET", "code", Rule()),
     ("POST", "upload-logo", Rule()),
-    ("POST", f"scenes/{K}/ai-edit", Rule(ai_edit=True)),
-    ("GET", f"scenes/{K}/ai-edit/status", Rule()),
     ("GET", "scene-drafts", Rule()),
     ("GET", f"scenes/{K}/draft", Rule()),
     ("POST", f"scenes/{K}/draft/apply", Rule()),
@@ -214,10 +211,6 @@ def _rule(method: str, path: str) -> Rule | None:
 def _take(ctx: Ctx, rule: Rule) -> list[str]:
     taken: list[str] = []
     try:
-        if rule.ai_edit:
-            plan = video_limits.require_premium(ctx.db, ctx.workspace, "AI template editing")
-            video_limits.take(ctx.db, ctx.workspace, "ai_edits", plan=plan)
-            taken.append("ai_edits")
         if rule.metric:
             video_limits.take(ctx.db, ctx.workspace, rule.metric)
             taken.append(rule.metric)

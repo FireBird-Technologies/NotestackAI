@@ -63,7 +63,7 @@ export default function AppShell() {
               </button>
             ) : (
               <NavLink to="/" className="sidebar-brand">
-                <Logo size={28} withWordmark={false} />
+                <Logo size={28} />
               </NavLink>
             )}
             <button

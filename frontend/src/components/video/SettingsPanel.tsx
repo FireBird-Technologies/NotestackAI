@@ -181,13 +181,14 @@ export function LookPanel(p: PanelProps & { catalog: VideoCatalog | null }) {
   }, [pr]);
 
   useEffect(() => {
-    videoVoicesApi.list().then((v) => setVoices(v.saved)).catch(() => undefined);
+    // A video speaks in the free built-in voices; a Notestack voice (made on the Voice page) is for audio overviews.
+    videoVoicesApi.list().then((v) => setVoices(v.saved.filter((x) => x.source !== "notestack"))).catch(() => undefined);
   }, []);
 
-  const templates = [...(p.catalog?.my_templates ?? []), ...(p.catalog?.crafted_templates ?? []), ...(p.catalog?.templates ?? [])];
+  const templates = [...(p.catalog?.my_templates ?? []), ...(p.catalog?.templates ?? [])];
   const current = templates.find((t) => t.id === pr.template);
-  // Only blog2video's built-in templates can be switched to (no designer or custom ones).
-  const builtIn = (p.catalog?.templates ?? []).filter((t) => !t.id.startsWith("crafted_") && !t.custom);
+  // Only blog2video's built-in templates can be switched to (no custom ones).
+  const builtIn = (p.catalog?.templates ?? []).filter((t) => !t.custom);
   const languages = p.catalog?.languages ?? [];
   const currentLanguage = languages.find((l) => l.code === pr.content_language)?.name ?? "Auto-detected";
   const currentVoice = voices.find((v) => v.voice_id === pr.custom_voice_id);
@@ -205,7 +206,6 @@ export function LookPanel(p: PanelProps & { catalog: VideoCatalog | null }) {
   const speedChanged = Math.abs(speed - (pr.playback_speed ?? 1)) > 0.001;
 
   function changeVoice() {
-    if (chosenVoice?.premium && !p.premium) return p.locked();
     const body = voiceId === NO_VOICE ? { voice_gender: "none" } : {
       voice_gender: chosenVoice?.gender === "male" ? "male" : "female",
       voice_accent: chosenVoice?.accent === "british" ? "british" : "american",
@@ -379,8 +379,7 @@ export function LookPanel(p: PanelProps & { catalog: VideoCatalog | null }) {
             <Dropdown label="Voice" value={voiceId || NO_VOICE} onChange={setVoiceId}
                       options={[{ value: NO_VOICE, label: "No voiceover" },
                         ...voices.map((v) => ({ value: v.voice_id, label: v.name,
-                          hint: [cap(v.gender), cap(v.accent)].filter(Boolean).join(" • ") || undefined,
-                          badge: v.premium && !p.premium ? <span className="vw-premium-badge small">Premium</span> : undefined }))]} />
+                          hint: [cap(v.gender), cap(v.accent)].filter(Boolean).join(" • ") || undefined }))]} />
             <div className="row wrap">
               <button type="button" className="btn btn-small vw-danger-soft" disabled={off || pr.voice_gender === "none"}
                       onClick={() => setDeletingVoice(true)}>

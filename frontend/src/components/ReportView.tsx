@@ -15,6 +15,8 @@ export type ReportEditor = {
   /** The suggestion being built right now (its card shows a loader), and what the job is doing. */
   adding?: string | null;
   addingMessage?: string | null;
+  /** The block id being removed right now (its Remove button shows a loader). */
+  removing?: string | null;
 };
 
 const KIND_LABEL = {
@@ -152,36 +154,82 @@ function contents(blocks: ReportBlock[], withSources: boolean): { id: string; ti
 
 type SourceRow = { title: string; url?: string | null; document_id?: string };
 
-/** The sources a report was made from, always at its end: each post once (a link when it has a public address), with
- * the numbers of the places it is cited as clickable chips, and how many chats were used. */
+/** What a report was made from, in a drop-down at its end: the prompt it was written to (the owner's view only: a shared page does
+ * not carry it) and every post it was made from, each once (a link when it has a public address), and how many chats were used. A
+ * report cites nothing in its text. Older reports that still have numbered citations show them as chips beside their posts. */
 function SourcesSection({ content, onCite }: { content: Record<string, any>; onCite?: (c: Citation) => void }) {
+  const [open, setOpen] = useState(false);
+  const [filter, setFilter] = useState("");
   const rows = (content.sources ?? []) as SourceRow[];
   const chats = Number(content.chat_count ?? (content.source?.chat_ids?.length ?? 0));
+  const prompt = typeof content.instructions === "string" ? content.instructions.trim() : "";
   const cites = (content.citations ?? []) as Citation[];
   if (!rows.length && !chats) return null;
   const citedBy = (r: SourceRow) => cites.filter((c) => (r.document_id ? c.document_id === r.document_id : c.title === r.title));
+  const needle = filter.trim().toLowerCase();
+  const shown = needle ? rows.filter((r) => r.title.toLowerCase().includes(needle)) : rows;
+  const label = `${prompt ? "View prompt and " : "View "}${rows.length} source${rows.length === 1 ? "" : "s"}${chats > 0 ? ` and ${chats} chat${chats === 1 ? "" : "s"}` : ""}`;
   return (
     <section id="rp-sources" className="rp-slot rp-sources-section" aria-label="Sources">
-      <h2 className="rp-sources-h">Sources</h2>
-      <ul className="cites cites-grouped">
-        {rows.map((r) => (
-          <li key={r.document_id ?? r.title}>
-            {r.url ? <a className="cite-title" href={r.url} target="_blank" rel="noreferrer noopener">{r.title}</a> : <span className="cite-title">{r.title}</span>}
-            {onCite && citedBy(r).length > 0 && (
-              <span className="cite-nums">
-                {citedBy(r).map((c, i) => (
-                  <span key={c.marker}>
-                    {i > 0 && <span className="muted">, </span>}
-                    <button type="button" className="cite-marker cite-num mono" onClick={() => onCite(c)}
-                            title={`lines ${c.line_start}${c.line_end > c.line_start ? ` to ${c.line_end}` : ""}`}>{c.marker}</button>
-                  </span>
-                ))}
-              </span>
-            )}
-          </li>
-        ))}
-        {chats > 0 && <li><span className="cite-title">{chats} notebook chat{chats === 1 ? "" : "s"}</span></li>}
-      </ul>
+      <button type="button" className={`rp-sources-toggle${open ? " open" : ""}`} aria-expanded={open} aria-controls="rp-sources-panel"
+              onClick={() => setOpen((o) => !o)}>
+        <span>{label}</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+      {open && (
+        <div id="rp-sources-panel" className="rp-sources-panel">
+          {prompt && (
+            <div className="rp-sources-block">
+              <h3 className="rp-sources-sub">Prompt</h3>
+              <p className="rp-sources-prompt">{prompt}</p>
+            </div>
+          )}
+          <div className="rp-sources-block">
+            <div className="rp-sources-head">
+              <h3 className="rp-sources-sub">Sources <span className="rp-sources-count mono">{rows.length}</span></h3>
+              {rows.length > 8 && (
+                <input className="input input-sm rp-sources-filter" type="search" placeholder="Filter sources" value={filter}
+                       onChange={(e) => setFilter(e.target.value)} aria-label="Filter sources" />
+              )}
+            </div>
+            <ol className="rp-sources-list">
+              {shown.map((r) => {
+                const n = rows.indexOf(r) + 1;
+                const title = (
+                  <>
+                    <span className="rp-src-n mono" aria-hidden="true">{String(n).padStart(2, "0")}</span>
+                    <span className="rp-src-title">{r.title}</span>
+                    {r.url && (
+                      <svg className="rp-src-out" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                           strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M7 17L17 7M9 7h8v8" />
+                      </svg>
+                    )}
+                  </>
+                );
+                return (
+                  <li key={r.document_id ?? r.title} className="rp-src-row">
+                    {r.url
+                      ? <a className="rp-src-main" href={r.url} target="_blank" rel="noreferrer noopener" title={r.title}>{title}</a>
+                      : <span className="rp-src-main" title={r.title}>{title}</span>}
+                    {onCite && citedBy(r).map((c) => (
+                      <button key={c.marker} type="button" className="cite-marker cite-num mono" onClick={() => onCite(c)}
+                              title={`lines ${c.line_start}${c.line_end > c.line_start ? ` to ${c.line_end}` : ""}`}>{c.marker}</button>
+                    ))}
+                  </li>
+                );
+              })}
+              {chats > 0 && !needle && (
+                <li className="rp-src-row"><span className="rp-src-main"><span className="rp-src-n mono" aria-hidden="true">+</span>
+                  <span className="rp-src-title">{chats} notebook chat{chats === 1 ? "" : "s"}</span></span></li>
+              )}
+            </ol>
+            {shown.length === 0 && <p className="muted small">No source matches "{filter}".</p>}
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -276,11 +324,20 @@ export function ReportView({ content, artifactId, onCite, editor }: Props & { ed
               </>
             )}
             <Block block={b} content={content} artifactId={artifactId} onCite={onCite} />
-            {editor && b.type !== "prose" && (
-              <button type="button" className="link-btn rp-remove" onClick={() => editor.onRemove(b.id)}>
-                Remove this {KIND_LABEL[b.type as keyof typeof KIND_LABEL]?.toLowerCase() ?? "visual"}
-              </button>
-            )}
+            {editor && b.type !== "prose" && (() => {
+              const removing = editor.removing === b.id;
+              return (
+                <button type="button" className="link-btn rp-remove" disabled={!!editor.removing} onClick={() => editor.onRemove(b.id)}>
+                  {removing ? (
+                    <>
+                      <span className="nbv-send-spinner" aria-hidden="true" /> Removing...
+                    </>
+                  ) : (
+                    `Remove this ${KIND_LABEL[b.type as keyof typeof KIND_LABEL]?.toLowerCase() ?? "visual"}`
+                  )}
+                </button>
+              );
+            })()}
             {editor && suggestions.filter((s) => s.after_block_id === b.id).map((s) => {
               const building = editor.adding === s.id;
               return (

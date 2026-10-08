@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { authApi } from "../api/auth";
-import { tokens, uploadFile } from "../api/client";
+import { tokens } from "../api/client";
 import { settingsApi, type SettingsPatch } from "../api/endpoints";
 import type { Settings as SettingsData } from "../api/types";
 import { MemoryNotes } from "../components/MemoryNotes";
@@ -43,8 +43,6 @@ export default function Settings() {
   const [s, setS] = useState<SettingsData | null>(null);
   const [name, setName] = useState("");
   const [workspace, setWorkspace] = useState("");
-  const [brandName, setBrandName] = useState("");
-  const [accent, setAccent] = useState("#217cff");
   const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sounds, setSounds] = useState(soundsEnabled);
@@ -55,8 +53,6 @@ export default function Settings() {
     setS(d);
     setName(d.user.name ?? "");
     setWorkspace(d.workspace.name);
-    setBrandName(d.brand.name ?? "");
-    setAccent(d.brand.accent);
   };
 
   useEffect(() => {
@@ -80,9 +76,6 @@ export default function Settings() {
   const saveProfile = () => {
     if (name !== (s.user.name ?? "") || workspace !== s.workspace.name) void save({ name, workspace_name: workspace }, "profile");
   };
-  const saveBrand = (next = { brandName, accent }) => {
-    if (next.brandName !== (s.brand.name ?? "") || next.accent !== s.brand.accent) void save({ brand_name: next.brandName, brand_accent: next.accent }, "brand");
-  };
 
   return (
     <div className="page-wrap">
@@ -102,49 +95,6 @@ export default function Settings() {
               <span>Workspace name</span>
               <input className="input input-sm" value={workspace} onChange={(e) => setWorkspace(e.target.value)} onBlur={saveProfile} />
             </label>
-          </Section>
-
-          <Section title="Brand kit" saved={saved === "brand" || saved === "logo"}>
-            <p className="muted">Used on videos, quote cards and carousels.</p>
-            <label className="field">
-              <span>Name on renders</span>
-              <input className="input input-sm" placeholder="Your publication" value={brandName} onChange={(e) => setBrandName(e.target.value)} onBlur={() => saveBrand()} />
-            </label>
-            <label className="field">
-              <span>Accent color</span>
-              <div className="row">
-                <input type="color" value={accent} onChange={(e) => setAccent(e.target.value)} onBlur={() => saveBrand()} aria-label="Accent color" className="color" />
-                <input className="input input-sm mono" value={accent} onChange={(e) => setAccent(e.target.value)} onBlur={() => saveBrand()} aria-label="Accent hex" />
-              </div>
-            </label>
-            <div className="field">
-              <span>Logo</span>
-              <div className="row">
-                {s.brand.logo_url && <img src={s.brand.logo_url} alt="Logo" className="logo-preview" />}
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp,image/svg+xml"
-                  className="input file-input"
-                  aria-label="Logo file"
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    e.target.value = "";
-                    if (!file) return;
-                    try {
-                      const up = await uploadFile(file);
-                      await save({ logo_upload_id: up.upload_id }, "logo");
-                    } catch (err) {
-                      setError(errorMessage(err));
-                    }
-                  }}
-                />
-                {s.brand.logo_url && (
-                  <button className="btn btn-small" onClick={() => save({ logo_upload_id: "" }, "logo")}>
-                    Remove
-                  </button>
-                )}
-              </div>
-            </div>
           </Section>
 
           <Section title="What the assistant should know">
@@ -183,11 +133,14 @@ export default function Settings() {
             <p>
               <strong>{s.plan.name}</strong> plan
             </p>
-            <Meter label="Audio overviews" used={u.used.audio_minutes} limit={u.limits.audio_minutes} unit="min" />
+            {u.limits.audio_overviews >= 0
+              ? <Meter label="Audio overviews" used={u.used.audio_overviews} limit={u.limits.audio_overviews} unit="" />
+              : <Meter label="Audio overviews" used={u.used.audio_minutes} limit={u.limits.audio_minutes} unit="min" />}
             <Meter label="Videos" used={u.used.videos} limit={u.limits.videos} unit="" />
             <Meter label="Launch Kits" used={u.used.launch_kits} limit={u.limits.launch_kits} unit="" />
             <Meter label="Reports" used={u.used.reports} limit={u.limits.reports} unit="" />
             <Meter label="Infographics" used={u.used.infographics} limit={u.limits.infographics} unit="" />
+            <Meter label="Indexed posts" used={u.used.indexed_posts} limit={u.limits.indexed_posts} unit="" />
             <p className="mono muted small">
               Refills on the 1st of every month.
               {u.videos_resets_at && ` Videos refill on ${formatDate(u.videos_resets_at)}.`}
@@ -207,9 +160,6 @@ export default function Settings() {
               </div>
             )}
             {upgrade.error && !upgrade.modal && <p className="error-text">{upgrade.error}</p>}
-            <p className="mono muted small">
-              {s.plan.sources} sources · {s.plan.indexed_posts.toLocaleString()} indexed posts
-            </p>
           </Section>
 
           <Section title="Account">

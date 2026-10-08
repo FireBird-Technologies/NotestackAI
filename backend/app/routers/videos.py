@@ -140,7 +140,7 @@ class VideoOptions(BaseModel):
     # Step 1: Project (script review is always off: blog2video goes straight to the video)
     stock_footage_enabled: bool = True
     aspect_ratio: Literal["landscape", "portrait"] = "landscape"
-    video_length: Literal["short", "medium", "detailed", "more_detailed"] = "short"
+    video_length: Literal["short", "medium"] = "short"
     logo_upload_id: uuid.UUID | None = None  # a file uploaded through /api/storage/uploads
     logo_position: Literal["bottom_right", "bottom_left", "top_left", "top_right"] = "bottom_right"
     logo_opacity: float = Field(0.9, ge=0.1, le=1.0)
@@ -155,7 +155,6 @@ class VideoOptions(BaseModel):
     voice_gender: Literal["female", "male", "none"] = "female"
     voice_accent: str = Field("american", max_length=30)
     custom_voice_id: str | None = Field(None, max_length=100)
-    voice_emotion: str | None = Field(None, max_length=200)  # ["<expressiveness>","<speed>","<emotion>",...]
     bgm_track_id: str | None = Field(None, max_length=100)
     bgm_volume: float = Field(0.10, ge=0, le=1)
 
@@ -167,7 +166,6 @@ class VideoOptions(BaseModel):
         data["script_review_enabled"] = False
         if self.voice_gender == "none":
             data.pop("custom_voice_id", None)
-            data.pop("voice_emotion", None)
         if not self.bgm_track_id:
             data.pop("bgm_volume", None)
         return data
@@ -369,9 +367,6 @@ def _check(ctx: Ctx, options: VideoOptions) -> tuple[dict, Plan]:
         if length := b2v_access.house_length(payload.get("video_style")):
             payload["video_length"] = length
         plan = b2v_access.check_refs(ctx, payload)
-    accent = (ctx.workspace.brand_json or {}).get("accent")
-    if plan.brand_kit and accent and "accent_color" not in payload:
-        payload["accent_color"] = accent
     return payload, plan
 
 
@@ -626,10 +621,10 @@ def quota(ctx: Ctx = Depends(get_ctx)):
 
 def _with_posters(t: dict) -> dict:
     """Poster images for the template picker. Built-in templates have baked posters on blog2video's web app (a few
-    have none; the picker then shows the template's colors); designer templates carry their own image."""
+    have none; the picker then shows the template's colors)."""
     if t.get("preview_image_url") and not t.get("preview_url"):
         return {**t, "preview_url": t["preview_image_url"]}
-    if t.get("preview_url") or not t.get("id") or str(t["id"]).startswith("crafted_"):
+    if t.get("preview_url") or not t.get("id"):
         return t
     base = f"{settings.b2v_app_url.rstrip('/')}/template-posters/{t['id']}"
     return {**t, "preview_url": f"{base}.webp", "preview_portrait_url": f"{base}-portrait.webp"}
@@ -637,20 +632,15 @@ def _with_posters(t: dict) -> dict:
 
 @router.get("/catalog")
 def catalog(ctx: Ctx = Depends(get_ctx), _: None = Depends(b2v_ready)):
-    """What the wizard offers this workspace: built-in and designer templates, its own ready custom templates,
+    """What the wizard offers this workspace: built-in templates, its own ready custom templates,
     built-in and its own styles, music, languages. Nothing another workspace made."""
     with upstream():
         builtin = b2v.builtin_templates()
-        try:
-            crafted = b2v.crafted_templates()
-        except b2v.B2VError:
-            crafted = []
         mine = [{"id": f"custom_{t.b2v_template_id}", "name": t.name, "custom": True}
                 for t in b2v_access.my_templates(ctx, ready_only=True)]
         styles = b2v_access.visible_styles(ctx)
         music = b2v.music_tracks()
     return {"templates": [_with_posters(t) for t in builtin if isinstance(t, dict)],
-            "crafted_templates": [_with_posters(t) for t in crafted if isinstance(t, dict)],
             "my_templates": mine, "video_styles": styles,
             "music": music, "languages": [{"code": c, "name": n} for c, n in LANGUAGES]}
 
@@ -888,10 +878,6 @@ class ReviewPreviewIn(BaseModel):
     revision: int = Field(0, ge=0)
 
 
-class ReviewAiIn(ReviewPreviewIn):
-    instruction: str = Field(min_length=2, max_length=1000)
-
-
 class ReviewApproveScene(DraftScene):
     preferred_layout: str | None = Field(None, max_length=100)
     source_fingerprint: str | None = Field(None, max_length=200)
@@ -921,22 +907,6 @@ def narration_preview(artifact_id: uuid.UUID, scene_id: int, body: ReviewPreview
     with upstream():
         return b2v.project_call("POST", vid, f"script-review/scenes/{scene_id}/narration-preview",
                                 json=body.model_dump(), timeout=60)
-
-
-@router.post("/{artifact_id}/script/scenes/{scene_id}/ai-preview")
-def ai_preview(artifact_id: uuid.UUID, scene_id: int, body: ReviewAiIn, ctx: Ctx = Depends(get_ctx),
-               _: None = Depends(b2v_ready)):
-    """★ Rewrite one scene from an instruction. Uses one AI edit."""
-    _, vid, _ = b2v_access.video_or_404(ctx, artifact_id)
-    plan = video_limits.require_premium(ctx.db, ctx.workspace, "AI rewrites")
-    video_limits.take(ctx.db, ctx.workspace, "ai_edits", plan=plan)
-    try:
-        with upstream():
-            return b2v.project_call("POST", vid, f"script-review/scenes/{scene_id}/ai-preview",
-                                    json=body.model_dump(), timeout=60)
-    except HTTPException:
-        video_limits.give_back(ctx.db, ctx.workspace.id, "ai_edits")
-        raise
 
 
 @router.post("/{artifact_id}/script/approve")

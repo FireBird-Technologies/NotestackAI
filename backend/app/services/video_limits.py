@@ -1,5 +1,5 @@
 """Per-workspace shares of what blog2video only limits account-wide: AI edits, custom templates, template AI
-operations, voice designs, voice samples, custom voices (plans.VIDEO_LIMITS), plus premium (★) video options.
+operations (plans.VIDEO_LIMITS).
 
 blog2video checks every limit against our own (Pro) account, so every workspace passes its checks. These counters
 stop a workspace before it uses up everyone's share. Videos themselves are counted in video_quota.py.
@@ -21,9 +21,6 @@ LABELS = {
     "ai_edits": ("AI edits", "this month"),
     "templates": ("custom templates", "in total"),
     "template_ai_daily": ("AI template steps", "today"),
-    "voice_designs_daily": ("voice designs", "today"),
-    "voice_samples_daily": ("voice samples", "today"),
-    "custom_voices": ("custom voices", "at a time"),
 }
 
 
@@ -68,7 +65,7 @@ def take(db: Session, workspace: Workspace, metric: str, n: int = 1, plan: Plan 
 
 
 def give_back(db: Session, workspace_id: uuid.UUID, metric: str, n: int = 1) -> None:
-    """Undo a take whose blog2video call failed (or a custom voice that was deleted)."""
+    """Undo a take whose blog2video call failed."""
     db.execute(update(UsageCounter)
                .where(UsageCounter.workspace_id == workspace_id, UsageCounter.period == period_key(metric),
                       UsageCounter.metric == metric)
@@ -76,18 +73,10 @@ def give_back(db: Session, workspace_id: uuid.UUID, metric: str, n: int = 1) -> 
     db.commit()
 
 
-def require_premium(db: Session, workspace: Workspace, what: str, plan: Plan | None = None) -> Plan:
-    plan = plan or effective_plan(db, workspace)
-    if not plan.video_premium:
-        raise plan_limit_error(plan, "video_premium", f"{what} comes with a paid plan.")
-    return plan
-
-
 def report(db: Session, workspace: Workspace) -> dict:
-    """What the wizard shows: premium or not, and each counter's used / limit."""
+    """What the wizard shows: each counter's used / limit."""
     plan = effective_plan(db, workspace)
     rows = {(r.period, r.metric): r.used for r in db.scalars(
         select(UsageCounter).where(UsageCounter.workspace_id == workspace.id))}
-    return {"premium": plan.video_premium,
-            "limits": {m: {"used": rows.get((period_key(m), m), 0), "limit": int(plan.video_limits.get(m, 0))}
+    return {"limits": {m: {"used": rows.get((period_key(m), m), 0), "limit": int(plan.video_limits.get(m, 0))}
                        for m in VIDEO_LIMITS}}

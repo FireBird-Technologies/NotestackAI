@@ -111,8 +111,6 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
   const set = (patch: Partial<VideoOptions>) => setForm((f) => ({ ...f, ...patch }));
   const gridBox = useRef<HTMLDivElement>(null);
 
-  const premium = !!config?.premium;
-
   const loadVoices = useCallback(
     () => videoVoicesApi.list().then((v) => {
       setVoices(v);
@@ -134,10 +132,9 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
     if (!config?.configured) return;
     videosApi.catalog().then((c) => {
       setCatalog(c);
-      // Start on a random built-in template (never a premium designer one), unless the form already names a real one.
-      const pool = c.templates.filter((t) => !t.id.startsWith("crafted_"));
-      const first = pool[Math.floor(Math.random() * pool.length)];
-      const known = new Set([...c.my_templates, ...c.crafted_templates, ...c.templates].map((t) => t.id));
+      // Start on a random built-in template, unless the form already names a real one.
+      const first = c.templates[Math.floor(Math.random() * c.templates.length)];
+      const known = new Set([...c.my_templates, ...c.templates].map((t) => t.id));
       if (first) setForm((f) => (known.has(f.template) ? f : { ...f, ...templateFields(first) }));
       // Start on the first house style (Overview) unless the form already names one on offer.
       const house = c.video_styles.filter((s) => s.kind === "house");
@@ -145,7 +142,7 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
     }).catch((e) => setLoadError(errorMessage(e)));
     loadVoices()
       .then((v) => v.saved[0] && pickVoice(v.saved[0]))
-      .catch(() => setVoices({ saved: [], library: [], custom: [], notestack: [] }));
+      .catch(() => setVoices({ saved: [], library: [], notestack: [] }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config?.configured]);
 
@@ -167,16 +164,15 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
   const houseStyles = listed.some((s) => s.kind === "house");
   const styles: VideoStyleItem[] = houseStyles ? listed : [{ id: "auto", name: "Auto", kind: "builtin" }, ...listed];
   const picked = styles.find((s) => s.id === form.video_style);
-  const saved = voices?.saved ?? [];
+  // A video speaks in a free built-in voice; a Notestack voice (made on the Voice page) is for audio overviews.
+  const saved = (voices?.saved ?? []).filter((v) => v.source !== "notestack");
   const left = quota ? Math.max(quota.limit - quota.used, 0) : null;
 
   function pickTemplate(t: VideoTemplate) {
-    if (t.id.startsWith("crafted_") && !premium) return openUpgrade();
     set(templateFields(t));
   }
 
   function pickVoice(v: VideoSavedVoice) {
-    if (v.premium && config && !config.premium) return openUpgrade();
     setForm((f) => ({
       ...f,
       voice_gender: v.gender === "male" ? "male" : "female",
@@ -396,8 +392,7 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
                     <button key={t.id} type="button" data-id={t.id} className={`vw-template${form.template === t.id ? " on" : ""}`}
                             aria-pressed={form.template === t.id} onClick={() => pickTemplate(t)}>
                       <TemplateThumb template={t} portrait={form.aspect_ratio === "portrait"} />
-                      {t.id.startsWith("crafted_") ? <span className="vw-badge mono">Designer ★</span>
-                        : t.custom ? <span className="vw-badge mono">Yours</span>
+                      {t.custom ? <span className="vw-badge mono">Yours</span>
                         : (t.badge || t.popular_template) && <span className="vw-badge mono">{t.badge ?? "Popular"}</span>}
                       <strong>{t.name}</strong>
                       {form.template === t.id && <span className="vw-template-check" aria-hidden="true"><CheckIcon size={14} /></span>}
@@ -477,7 +472,7 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
                         <button type="button" role="radio" aria-checked={on} className="vw-vpick"
                                 disabled={form.voice_gender === "none"} onClick={() => pickVoice(v)}>
                           <strong>{v.name}</strong>
-                          <span className="muted">{v.source === "notestack" ? "Notestack voice" : v.is_custom ? "Your voice" : [cap(v.gender), cap(v.accent)].filter(Boolean).join(" • ")}</span>
+                          <span className="muted">{[cap(v.gender), cap(v.accent)].filter(Boolean).join(" • ")}</span>
                         </button>
                         {on && <span className="vw-hero-check"><CheckIcon size={14} /></span>}
                       </div>

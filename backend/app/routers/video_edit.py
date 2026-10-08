@@ -4,7 +4,7 @@
 
 Only paths in RULES pass (anything else is 404). Before forwarding, the video must be this workspace's
 (b2v_access.video_or_404), every template / voice / style id in a JSON body must be this workspace's (check_refs),
-premium (★) features need a paid plan, and AI edits come out of the workspace's own counter (given back if
+AI edits come out of the workspace's own counter (given back if
 blog2video refuses). A template switch also uses one video, as it does on blog2video.
 
 JSON bodies, multipart uploads (images, voiceovers, portraits) and binary answers (downloads, stills) pass through.
@@ -35,8 +35,6 @@ S = r"\d+"  # a scene id
 @dataclass(frozen=True)
 class Rule:
     ai_edits: int = 0  # AI edits this call uses (per workspace, video_limits "ai_edits")
-    per_scene: bool = False  # ai_edits is per scene_ids entry (avatar batches)
-    premium: str | None = None  # ★: what to call it in the upgrade message
     uses_video: bool = False  # a template switch: one video from the allowance
     raw: bool = False  # binary answer (download, still)
     timeout: float = 30
@@ -94,29 +92,12 @@ RULES: list[tuple[str, re.Pattern, Rule]] = [(m, re.compile(f"^{p}$"), r) for m,
     ("GET", "regenerate-script/preview", Rule()),
     ("POST", "regenerate-script/verify", Rule()),
     ("POST", "regenerate-script/regenerate", Rule()),
-    # AI chat editing ★
-    ("POST", "chat", Rule(ai_edits=1, premium="AI chat editing", timeout=120)),
-    ("GET", "chat/history", Rule(premium="AI chat editing")),
-    # Avatars ★ (blog2video charges the whole batch at authorize: 10 AI edits per scene)
-    ("POST", "avatar-batch/authorize", Rule(ai_edits=10, per_scene=True, premium="Avatars")),
-    ("POST", rf"scenes/{S}/avatar", Rule(premium="Avatars")),
-    ("GET", rf"scenes/{S}/avatar-status", Rule()),
-    ("DELETE", rf"scenes/{S}/avatar", Rule()),
-    ("POST", rf"scenes/{S}/avatar-matte", Rule(premium="Avatars")),
-    ("POST", "avatar-matte-all", Rule(premium="Avatars")),
-    ("POST", "avatar-retry-failed", Rule(premium="Avatars")),
-    ("GET", "avatar-progress", Rule()),
-    ("POST", "avatar-portrait", Rule(premium="Avatars", timeout=60)),
-    ("DELETE", "avatar-portrait", Rule()),
-    ("PATCH", rf"scenes/{S}/avatar-focus", Rule()),
-    ("PATCH", rf"scenes/{S}/avatar-appearance", Rule()),
     # Render, download, frames
     ("POST", "render", Rule(status="rendering")),
     ("GET", "render-status", Rule()),
     ("POST", "cancel-render", Rule()),
     ("GET", "download-url", Rule()),
     ("GET", "download", Rule(raw=True, timeout=120)),
-    ("GET", "download-studio", Rule(raw=True, premium="The Remotion source download", timeout=120)),
     ("GET", "render-still", Rule(raw=True, timeout=60)),
     ("POST", "render-stills", Rule(timeout=120)),
 ]]
@@ -157,19 +138,12 @@ async def _read_body(request: Request) -> tuple[dict | None, dict | None, list |
 
 
 def _charge(ctx: Ctx, rule: Rule, body: dict | None, form: dict | None) -> int:
-    """Premium, references and counters, all before blog2video is called. Returns AI edits taken."""
+    """References and counters, all before blog2video is called. Returns AI edits taken."""
     plan = effective_plan(ctx.db, ctx.workspace)
-    if rule.premium:
-        video_limits.require_premium(ctx.db, ctx.workspace, rule.premium, plan)
     refs = body if isinstance(body, dict) else (form or {})
     with upstream():  # checking a template or voice may need blog2video's catalog
         b2v_access.check_refs(ctx, refs, plan)
     edits = rule.ai_edits
-    if rule.per_scene:
-        scenes = (body or {}).get("scene_ids") if isinstance(body, dict) else None
-        if not isinstance(scenes, list) or not scenes:
-            raise HTTPException(400, "Pick at least one scene")
-        edits *= len(scenes)
     if edits:
         video_limits.take(ctx.db, ctx.workspace, "ai_edits", edits, plan=plan)
     if rule.uses_video and not video_quota.reserve(ctx.db, ctx.workspace.id):

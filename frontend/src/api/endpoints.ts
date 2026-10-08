@@ -50,8 +50,6 @@ import type {
   VideoCreateBody,
   VideoFocusSource,
   VideoFocusTopic,
-  VideoCustomVoice,
-  VideoDesignedVoice,
   VideoJobState,
   VideoListItem,
   VideoOptions,
@@ -141,8 +139,9 @@ export type GenerateBody = {
   report_format?: "document" | "interactive";
   template_id?: string;
   instructions?: string;
-  /** infographic: one of the premade themes (see components/Infographic.tsx); slide_deck: dark-space or light-space. */
+  /** infographic: one of the looks, and the kind of layout to lean towards (see components/Infographic.tsx); slide_deck: dark-space or light-space. */
   theme?: string;
+  ig_style?: string;
   /** slide_deck: read on its own ("detailed") or shown behind a speaker ("presenter"), and how many slides. */
   deck_format?: "detailed" | "presenter";
   deck_length?: "short" | "default" | "long";
@@ -158,6 +157,9 @@ export const artifactsApi = {
   remove: (id: string) => del(`/api/artifacts/${id}`),
   /** An infographic drawn as a PNG. */
   image: (id: string, layout: "landscape" | "portrait" = "landscape") => apiBlob(`/api/artifacts/${id}/image${qs({ layout })}`),
+  /** Thumbs up or down (null takes it back) on a finished report, quiz, flashcard set or infographic. */
+  rate: (id: string, body: { rating: "up" | "down" | null; reasons?: string[]; comment?: string }) =>
+    put<{ feedback: AnswerFeedback | null }>(`/api/artifacts/${id}/feedback`, body),
   retry: (id: string) => post<Artifact>(`/api/artifacts/${id}/retry`),
   /** A slide deck as a PDF (exactly as shown) or an editable PowerPoint. */
   slidesFile: (id: string, ext: "pdf" | "pptx") => apiBlob(`/api/artifacts/${id}/slides.${ext}`),
@@ -285,9 +287,6 @@ export const resurfaceApi = {
 export type SettingsPatch = {
   name?: string;
   workspace_name?: string;
-  brand_name?: string;
-  brand_accent?: string;
-  logo_upload_id?: string;
   training_opt_in?: boolean;
   allow_public_links?: boolean;
   email_unsubscribed?: boolean;
@@ -297,6 +296,8 @@ export const settingsApi = {
   get: () => api<Settings>("/api/settings"),
   update: (body: SettingsPatch) => patch<Settings>("/api/settings", body),
   usage: () => api<Usage>("/api/settings/usage"),
+  /** How many posts a generated thing can read (set by the server's ARTIFACT_MAX_POSTS settings). */
+  limits: () => api<{ posts: number; selectable_posts: number }>("/api/settings/limits"),
 };
 
 export const memoryApi = {
@@ -374,8 +375,6 @@ export const videosApi = {
   script: (id: string) => api<{ status: string; scenes: ScriptScene[] }>(`/api/videos/${id}/script`),
   narrationPreview: (id: string, sceneId: number, body: ScriptDraft) =>
     post<ScriptPreview>(`/api/videos/${id}/script/scenes/${sceneId}/narration-preview`, body),
-  aiPreview: (id: string, sceneId: number, body: ScriptDraft & { instruction: string }) =>
-    post<ScriptPreview>(`/api/videos/${id}/script/scenes/${sceneId}/ai-preview`, body),
   approveScript: (id: string, scenes: (ScriptScene & { source_fingerprint?: string; accepted_ai_instructions?: string[] })[]) =>
     post<unknown>(`/api/videos/${id}/script/approve`, { scenes }),
 };
@@ -448,8 +447,7 @@ export const videoEditApi = {
   uploadVoiceover: (id: string, sceneId: number, audio: File) =>
     postForm<VideoScene>(P(id, `scenes/${sceneId}/voiceover`), form({ audio })),
   deleteVoiceover: (id: string) => post<unknown>(P(id, "delete-voiceover")),
-  changeVoice: (id: string, body: { voice_gender?: string; voice_accent?: string; custom_voice_id?: string | null;
-    voice_emotion?: string | null }) => post<VideoJobState>(P(id, "change-voice"), body),
+  changeVoice: (id: string, body: { voice_gender?: string; voice_accent?: string; custom_voice_id?: string | null }) => post<VideoJobState>(P(id, "change-voice"), body),
   voiceStatus: (id: string) => api<VideoJobState>(P(id, "voice-change-status")),
   changeLanguage: (id: string, content_language: string) => post<VideoJobState>(P(id, "change-language"), { content_language }),
   languageStatus: (id: string) => api<VideoJobState>(P(id, "language-change-status")),
@@ -463,21 +461,6 @@ export const videoEditApi = {
   refreshVerify: (id: string) => post<unknown>(P(id, "regenerate-script/verify")),
   refreshRetry: (id: string, user_instruction?: string) =>
     post<VideoJobState>(P(id, "regenerate-script/regenerate"), { user_instruction }),
-  // AI chat editing ★
-  chat: (id: string, message: string, conversation_id?: number) =>
-    post<{ reply?: string; message?: string; conversation_id?: number; [k: string]: unknown }>(P(id, "chat"), { message, conversation_id }),
-  chatHistory: (id: string) => api<unknown>(P(id, "chat/history")),
-  // Avatars ★
-  authorizeAvatars: (id: string, scene_ids: number[], avatar_preset?: string, avatar_motion_style?: string) =>
-    post<unknown>(P(id, "avatar-batch/authorize"), { scene_ids, avatar_preset, avatar_motion_style }),
-  makeAvatar: (id: string, sceneId: number, avatar_preset?: string) =>
-    postForm<unknown>(P(id, `scenes/${sceneId}/avatar`), form({ avatar_preset })),
-  avatarProgress: (id: string) => api<Record<string, unknown>>(P(id, "avatar-progress")),
-  deleteAvatar: (id: string, sceneId: number) => del<unknown>(P(id, `scenes/${sceneId}/avatar`)),
-  uploadPortrait: (id: string, file: File) => postForm<unknown>(P(id, "avatar-portrait"), form({ file })),
-  deletePortrait: (id: string) => del<unknown>(P(id, "avatar-portrait")),
-  avatarAppearance: (id: string, sceneId: number, body: { avatar_shape?: string; avatar_size?: number;
-    avatar_position?: string; avatar_opacity?: number }) => patch<unknown>(P(id, `scenes/${sceneId}/avatar-appearance`), body),
   // Render, download, frames
   /** force renders again even when an MP4 is already on R2 (blog2video otherwise just returns the old one). */
   render: (id: string, { force = false, resolution = "1080p" }: { force?: boolean; resolution?: string } = {}) =>
@@ -485,7 +468,6 @@ export const videoEditApi = {
   renderStatus: (id: string) => api<VideoJobState>(P(id, "render-status")),
   cancelRender: (id: string) => post<unknown>(P(id, "cancel-render")),
   downloadUrl: (id: string) => api<{ url: string }>(P(id, "download-url")),
-  downloadStudio: (id: string) => apiBlob(P(id, "download-studio")),
   still: (id: string, frame: number) => apiBlob(P(id, `render-still${qs({ frame })}`)),
 };
 
@@ -493,19 +475,6 @@ export const videoVoicesApi = {
   list: () => api<VideoVoicesResponse>("/api/video-voices"),
   save: (voice_id: string) => post<VideoSavedVoice>("/api/video-voices/saved", { voice_id }),
   unsave: (voice_id: string) => del(`/api/video-voices/saved/${encodeURIComponent(voice_id)}`),
-  designFromPrompt: (prompt: string) => post<{ previews: VideoDesignedVoice[] }>("/api/video-voices/design/prompt", { prompt }),
-  designFromPreset: (body: { gender: string; age: string; persona: string; speed: string; accent: string }) =>
-    post<{ previews: VideoDesignedVoice[] }>("/api/video-voices/design/preset", body),
-  keep: (body: { generated_voice_id: string; source: "prompt" | "preset"; name: string; prompt_text?: string }) =>
-    post<VideoCustomVoice>("/api/video-voices/custom", body),
-  clone: (name: string, file: File, remove_background_noise = true) =>
-    postForm<VideoCustomVoice>("/api/video-voices/clone", form({ name, file, remove_background_noise })),
-  customPreview: (customId: number) =>
-    api<{ preview_url: string | null; ready: boolean }>(`/api/video-voices/custom/${customId}/preview`),
-  removeCustom: (customId: number) => del(`/api/video-voices/custom/${customId}`),
-  /** ★ A few seconds of the voice with the chosen tuning (audio/mpeg). */
-  sample: (body: { voice_gender: string; voice_accent: string; custom_voice_id?: string; voice_emotion?: string;
-                   video_style?: string }) => apiBlob("/api/video-voices/sample", { method: "POST", body: JSON.stringify(body) }),
 };
 
 export const videoStylesApi = {
@@ -535,8 +504,6 @@ export const videoTemplatesApi = {
   get: (id: number) => api<Record<string, unknown>>(T(id, "")),
   update: (id: number, body: { name?: string; theme?: Record<string, unknown> }) => put<Record<string, unknown>>(T(id, ""), body),
   uploadLogo: (id: number, file: File) => postForm<unknown>(T(id, "upload-logo"), form({ file })),
-  aiEdit: (id: number, sceneKey: string, prompt: string) => post<unknown>(T(id, `scenes/${sceneKey}/ai-edit`), { prompt }),
-  aiEditStatus: (id: number, sceneKey: string) => api<VideoJobState>(T(id, `scenes/${sceneKey}/ai-edit/status`)),
   drafts: (id: number) => api<unknown>(T(id, "scene-drafts")),
   applyDraft: (id: number, sceneKey: string) => post<unknown>(T(id, `scenes/${sceneKey}/draft/apply`)),
   discardDraft: (id: number, sceneKey: string) => post<unknown>(T(id, `scenes/${sceneKey}/draft/discard`)),

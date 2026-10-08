@@ -29,6 +29,7 @@ export function SourcePicker({
   chatIds = [],
   onChatIds,
   autoSelect = true,
+  autoCount,
 }: {
   source: VideoSource | null;
   onSource: (s: VideoSource | null) => void;
@@ -48,6 +49,8 @@ export function SourcePicker({
   onChatIds?: (ids: string[]) => void;
   /** Tick the first posts when the list loads. Off when the dialog was opened from a chat. */
   autoSelect?: boolean;
+  /** How many posts to tick to start with (default: as many as can be ticked). */
+  autoCount?: number;
 }) {
   const [notebooks, setNotebooks] = useState<NotebookSummary[] | null>(sourceCache.notebooks);
   const [docs, setDocs] = useState<Doc[] | null>(null);
@@ -68,7 +71,7 @@ export function SourcePicker({
     if (!notebookId) return;
     let live = true;
     const tickable = (list: Doc[]) => list.filter((d) => !d.locked).map((d) => d.id);
-    const firstFew = (list: Doc[]) => tickable(list).slice(0, max);
+    const firstFew = (list: Doc[]) => tickable(list).slice(0, Math.min(autoCount ?? max, max));
     // A cached list shows at once, the first few posts ticked; the refresh below then only updates it.
     const cached = sourceCache.docs.get(notebookId);
     setDocs(cached ?? null);
@@ -88,7 +91,7 @@ export function SourcePicker({
     return () => {
       live = false;
     };
-  }, [notebookId, onPostIds, max, autoSelect]);
+  }, [notebookId, onPostIds, max, autoSelect, autoCount]);
 
   const ticked = docs ? postIds.length : 0;
   const pickable = docs?.filter((d) => !d.locked).length ?? 0;

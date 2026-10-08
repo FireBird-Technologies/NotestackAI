@@ -188,6 +188,8 @@ export type Artifact = {
   job: Job | null;
   /** "blog2video" for videos made in the Videos editor. */
   provider?: string | null;
+  /** This person's thumbs up or down on a finished report, quiz, flashcard set or infographic. */
+  feedback?: AnswerFeedback | null;
 };
 
 export type TopicStatus = "rising" | "steady" | "dormant";
@@ -411,20 +413,20 @@ export type Plan = {
   reports: number;
   infographics: number;
   voice_cloning: boolean;
-  brand_kit: boolean;
+  /** Audio overviews allowed (in total on Free), whatever their length; -1 = no cap. */
+  audio_overviews: number;
 };
 
 export type Usage = {
   plan: string;
-  used: { audio_minutes: number; videos: number; launch_kits: number; reports: number; infographics: number; llm_tokens: number; since: string };
-  limits: { audio_minutes: number; videos: number; launch_kits: number; reports: number; infographics: number; sources: number; indexed_posts: number };
+  used: { audio_minutes: number; audio_overviews: number; videos: number; launch_kits: number; reports: number; infographics: number; indexed_posts: number; llm_tokens: number; since: string };
+  limits: { audio_minutes: number; audio_overviews: number; videos: number; launch_kits: number; reports: number; infographics: number; sources: number; indexed_posts: number };
   videos_resets_at: string | null;
 };
 
 export type Settings = {
   user: { name: string | null; email: string; auth_provider: string; email_unsubscribed: boolean };
   workspace: { id: string; name: string; training_opt_in: boolean; allow_public_links: boolean };
-  brand: { name: string | null; accent: string; logo_url: string | null };
   plan: Plan;
   billing_enabled: boolean;
   usage: Usage;
@@ -467,6 +469,8 @@ export type BillingStatus = {
   has_billing_account: boolean;
   period_end: string | null;
   meters: Meter[];
+  /** Posts indexed, reports and infographics: shown when the sidebar plan card is opened. */
+  more_meters: Meter[];
   since: string;
   /** Videos reset on renewal (or monthly without one), not on the 1st like the other meters. */
   videos_resets_at: string | null;
@@ -483,13 +487,10 @@ export type MindNode = {
 
 // Videos (blog2video). Everything goes through our API; ids are our artifact ids unless named b2v/custom.
 
-export type VideoLimitMetric =
-  | "ai_edits" | "templates" | "template_ai_daily" | "voice_designs_daily" | "voice_samples_daily" | "custom_voices";
+export type VideoLimitMetric = "ai_edits" | "templates" | "template_ai_daily";
 
 export type VideoConfig = {
   configured: boolean;
-  /** Premium (★) video options are included in this workspace's plan. */
-  premium: boolean;
   limits: Record<VideoLimitMetric, { used: number; limit: number }>;
 };
 
@@ -535,7 +536,6 @@ export type MusicTrack = { track_id: string; display_name: string; mood?: string
 
 export type VideoCatalog = {
   templates: VideoTemplate[];
-  crafted_templates: VideoTemplate[];
   my_templates: VideoTemplate[];
   video_styles: VideoStyleItem[];
   music: MusicTrack[];
@@ -549,8 +549,6 @@ export type VideoSavedVoice = {
   preview_url: string | null;
   gender: string | null;
   accent: string | null;
-  premium: boolean;
-  is_custom: boolean;
   /** notestack: made or added on the Voice page (played through the Voice page's preview, not a link). */
   source?: "notestack" | "blog2video";
 };
@@ -563,16 +561,6 @@ export type VideoLibraryVoice = {
   gender: string | null;
   accent: string | null;
   age?: string | null;
-  premium: boolean;
-  saved: boolean;
-};
-
-export type VideoCustomVoice = {
-  id: number;
-  voice_id: string;
-  name: string;
-  source: "prompt" | "preset" | "clone";
-  preview_url: string | null;
   saved: boolean;
 };
 
@@ -582,18 +570,10 @@ export type VideoNotestackVoice = { voice_id: string; name: string; kind: "clone
 export type VideoVoicesResponse = {
   saved: VideoSavedVoice[];
   library: VideoLibraryVoice[];
-  custom: VideoCustomVoice[];
   notestack: VideoNotestackVoice[];
 };
 
-export type VideoDesignedVoice = {
-  generated_voice_id: string;
-  audio_base_64: string;
-  media_type: string;
-  duration_secs: number;
-};
-
-export type VideoLength = "short" | "medium" | "detailed" | "more_detailed";
+export type VideoLength = "short" | "medium";
 export type LogoPosition = "bottom_right" | "bottom_left" | "top_left" | "top_right";
 
 /** Every field of the 3-step wizard, named as blog2video names them. */
@@ -616,7 +596,6 @@ export type VideoOptions = {
   voice_gender: "female" | "male" | "none";
   voice_accent: string;
   custom_voice_id?: string;
-  voice_emotion?: string;
   bgm_track_id?: string;
   bgm_volume: number;
 };

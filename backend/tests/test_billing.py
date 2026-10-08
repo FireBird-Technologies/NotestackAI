@@ -3,7 +3,7 @@
 import pytest
 
 from app.config import settings
-from app.models import Artifact, Notebook, Workspace
+from app.models import Artifact, Document, Notebook, Source, Workspace
 from app.services.billing import apply_subscription
 from tests.conftest import last_code
 
@@ -38,6 +38,8 @@ def test_free_plan_nudges_and_out_of_fuel_402(client, auth, billing_on, db_sessi
     assert body["plan"]["id"] == "free" and body["can_upgrade"] and body["next_plan"] == "writer"
     kits = next(m for m in body["meters"] if m["key"] == "launch_kits")
     assert kits["used"] == 2 and kits["pct"] == 1
+    more = {m["key"]: m for m in body["more_meters"]}  # the rest of the plan, behind the sidebar card's chevron
+    assert set(more) == {"indexed_posts", "reports", "infographics"} and more["indexed_posts"]["limit"] == 5
     ids = [n["id"] for n in body["nudges"]]
     assert ids[0].startswith("empty-launch_kits") and "perk-voice" in ids
     assert "—" not in str(body)
@@ -45,10 +47,77 @@ def test_free_plan_nudges_and_out_of_fuel_402(client, auth, billing_on, db_sessi
     nb = Notebook(workspace_id=ws.id, title="Pricing")
     db_session.add(nb)
     db_session.commit()
-    r = client.post("/api/artifacts/generate", headers=auth,
-                    json={"type": "audio_overview", "notebook_id": str(nb.id), "minutes": 6})
+    # Free gets one audio overview in total, whatever its length (here 6 minutes), then it is used up for good.
+    body_in = {"type": "audio_overview", "notebook_id": str(nb.id), "minutes": 6}
+    assert client.post("/api/artifacts/generate", headers=auth, json=body_in).status_code == 200
+    r = client.post("/api/artifacts/generate", headers=auth, json=body_in)
     detail = r.json()["detail"]
-    assert r.status_code == 402 and detail["kind"] == "audio_minutes" and detail["upgrade_to"] == "writer"
+    assert r.status_code == 402 and detail["kind"] == "audio_overviews" and detail["upgrade_to"] == "writer"
+    assert "in total" in detail["message"]
+    audio = next(m for m in client.get("/api/billing/status", headers=auth).json()["meters"] if m["key"] == "audio_overviews")
+    assert audio["used"] == 1 and audio["limit"] == 1
+
+
+def _index_posts(db, ws, n, source):
+    for i in range(n):
+        db.add(Document(workspace_id=ws.id, source_id=source.id, title=f"Post {i}", url=f"https://x.test/{source.title}/{i}",
+                        path=f"sources/{source.title}/post-{i}.md"))
+    db.commit()
+
+
+def test_post_limit_is_one_total_across_sources_links_and_uploads(client, auth, billing_on, db_session):
+    from app.services.plans import PLANS, post_room
+
+    ws = db_session.query(Workspace).one()
+    feed_a = Source(workspace_id=ws.id, feed_url="https://a.test/feed", title="a")
+    feed_b = Source(workspace_id=ws.id, feed_url="https://b.test/feed", title="b")
+    db_session.add_all([feed_a, feed_b])
+    db_session.commit()
+    free = PLANS["free"]
+    assert free.indexed_posts == 5 and free.sources == -1  # any number of sources, five posts in all
+    _index_posts(db_session, ws, 3, feed_a)
+    assert post_room(db_session, ws.id, free) == 2
+    assert post_room(db_session, ws.id, free, feed_b.id) == 2  # a second source gets what the first leaves
+    _index_posts(db_session, ws, 2, feed_b)
+    assert post_room(db_session, ws.id, free) == 0
+    assert post_room(db_session, ws.id, free, feed_a.id) == 3  # a source keeps the posts it already has
+
+    # A link or a file is refused with the upgrade prompt once all five are used.
+    r = client.post("/api/sources/url", headers=auth, json={"url": "https://example.com/a-post"})
+    assert r.status_code == 402 and r.json()["detail"]["kind"] == "indexed_posts" and r.json()["detail"]["upgrade_to"] == "writer"
+    assert client.post("/api/sources/upload", headers=auth, json={"upload_id": "00000000-0000-0000-0000-000000000000"}).status_code == 404
+    assert (PLANS["writer"].indexed_posts, PLANS["studio"].indexed_posts) == (100, 250)
+
+
+def test_free_allowances_are_totals_and_paid_ones_are_monthly(client, auth, billing_on, db_session):
+    from app.services.plans import PLANS
+    from app.services.usage import check_limit, month_usage
+
+    ws = db_session.query(Workspace).one()
+    free, writer, studio = PLANS["free"], PLANS["writer"], PLANS["studio"]
+    assert (free.videos, free.audio_overviews, free.launch_kits, free.infographics) == (2, 1, 2, 2) and free.lifetime
+    assert (writer.launch_kits, writer.audio_minutes, writer.reports) == (20, 60, 30) and not writer.lifetime
+    assert (studio.launch_kits, studio.audio_minutes, studio.reports) == (50, 240, -1)
+
+    old = Artifact(workspace_id=ws.id, type="infographic", status="ready")
+    db_session.add_all([old, Artifact(workspace_id=ws.id, type="infographic", status="failed")])
+    db_session.commit()
+    # An infographic made in an earlier month still counts on Free, a failed one never does.
+    from datetime import UTC, datetime, timedelta
+
+    old.created_at = datetime.now(UTC) - timedelta(days=90)
+    db_session.commit()
+    assert month_usage(db_session, ws.id, lifetime=True)["infographics"] == 1
+    assert month_usage(db_session, ws.id, lifetime=False)["infographics"] == 1  # (the failed one is this month's)
+    db_session.add(Artifact(workspace_id=ws.id, type="infographic", status="ready"))
+    db_session.commit()
+    with pytest.raises(Exception) as err:
+        check_limit(db_session, ws, "infographics", 1)
+    assert err.value.status_code == 402 and "in total" in err.value.detail["message"]
+    # Deleting one gives its place back.
+    db_session.delete(old)
+    db_session.commit()
+    check_limit(db_session, ws, "infographics", 1)
 
 
 def test_checkout_guards(client, auth, billing_on, db_session):
@@ -100,7 +169,7 @@ def plans_table(monkeypatch):
             db.add(PlanRecord(id=p.id, sort_order=i, name=p.name, tagline=p.tagline,
                               price_monthly_usd=p.price_monthly_usd, sources=p.sources, indexed_posts=p.indexed_posts,
                               audio_minutes=p.audio_minutes, videos=p.videos, launch_kits=p.launch_kits,
-                              voice_cloning=p.voice_cloning, brand_kit=p.brand_kit, features=list(p.features)))
+                              voice_cloning=p.voice_cloning, features=list(p.features)))
         db.commit()
     PLANS.reload()
     yield session_factory

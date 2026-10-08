@@ -57,12 +57,15 @@ def upgrade() -> None:
             sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
             sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         )
+    # Columns a later migration drops (brand_kit) are not in a table 0001 built from today's models: seed what exists.
+    have = {c["name"] for c in sa.inspect(bind).get_columns("plans")}
+    seed = [{k: v for k, v in p.items() if k in have} for p in SEED]
     types = {"features": sa.JSON(), "voice_cloning": sa.Boolean(), "brand_kit": sa.Boolean(),
              "created_at": sa.DateTime(timezone=True), "updated_at": sa.DateTime(timezone=True)}
-    plans = sa.table("plans", *(sa.column(k, types.get(k)) for k in [*SEED[0], "created_at", "updated_at"]))
+    plans = sa.table("plans", *(sa.column(k, types.get(k)) for k in [*seed[0], "created_at", "updated_at"]))
     existing = {row[0] for row in bind.execute(sa.text("SELECT id FROM plans"))}
     now = datetime.now(UTC)
-    missing = [{**p, "created_at": now, "updated_at": now} for p in SEED if p["id"] not in existing]
+    missing = [{**p, "created_at": now, "updated_at": now} for p in seed if p["id"] not in existing]
     if missing:
         op.bulk_insert(plans, missing)
 

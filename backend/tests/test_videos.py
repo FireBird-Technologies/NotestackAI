@@ -237,7 +237,7 @@ def test_link_create_forwards_every_wizard_field(client, b2v, owner, db_session)
             "video_length": "medium", "logo_position": "top_left", "logo_opacity": 0.5, "template": "geometric",
             "video_style": "storytelling", "accent_color": "#FF5A1F", "bg_color": "#0B0B0F", "text_color": "#FFFFFF",
             "content_language": "es", "voice_gender": "female", "voice_accent": "british",
-            "custom_voice_id": SARAH, "voice_emotion": '["0.5","1.0","calm","0","1"]',
+            "custom_voice_id": SARAH,
             "bgm_track_id": "corporate_upbeat", "bgm_volume": 0.2}
     art = make_video(client, headers, **body)
     call = creates(b2v)[0]
@@ -508,12 +508,9 @@ def test_foreign_references_are_refused_before_calling_out(client, b2v, owner, t
 def test_own_references_pass(client, b2v, owner, db_session):
     headers, ws = owner
     db_session.add_all([B2VTemplate(b2v_template_id=58, workspace_id=ws.id, name="Mine", ready=True),
-                        B2VStyle(b2v_style_id=7, workspace_id=ws.id, name="Mine"),
-                        B2VCustomVoice(b2v_custom_voice_id=31, workspace_id=ws.id, voice_id="vc_mine", name="M",
-                                       source="prompt")])
+                        B2VStyle(b2v_style_id=7, workspace_id=ws.id, name="Mine")])
     db_session.commit()
-    make_video(client, headers, template="custom_58", video_style="custom:7", custom_voice_id="vc_mine")
-    make_video(client, headers, template="crafted_neon")
+    make_video(client, headers, template="custom_58", video_style="custom:7", custom_voice_id=SARAH)
 
 
 def test_template_still_generating_is_refused(client, b2v, owner, db_session):
@@ -566,7 +563,7 @@ def test_catalog_offers_only_the_house_styles(client, b2v, owner, house, db_sess
 
 @pytest.mark.parametrize("style,length", [("custom:20", "short"), ("custom:21", "medium")])
 def test_house_style_sets_the_length(client, b2v, owner, house, free_plan, style, length):
-    make_video(client, owner[0], video_style=style, video_length="detailed")
+    make_video(client, owner[0], video_style=style, video_length="short" if style == "custom:21" else "medium")
     sent = creates(b2v)[-1]["json"]
     assert sent["video_style"] == style and sent["video_length"] == length
 
@@ -910,17 +907,15 @@ def test_chat_with_a_focus_keeps_the_chat_context_first(client, b2v, owner, hous
     assert content.startswith(CHAT_CONTEXT) and content.index('"Annual raises"') < content.index("User:")
 
 
-# Premium (★) and per-workspace counters
+# The standard options only, and per-workspace counters
 
 
 @pytest.mark.parametrize("body", [{"video_length": "detailed"}, {"video_length": "more_detailed"},
-                                  {"custom_voice_id": BELLA}, {"voice_emotion": '["0.5","1.0","calm","0","1"]'},
-                                  {"template": "crafted_neon"}])
-def test_premium_options_refused_on_free(client, b2v, owner, free_plan, db_session, body):
+                                  {"custom_voice_id": BELLA}, {"template": "crafted_neon"}])
+def test_options_that_are_not_offered_are_refused_on_every_plan(client, b2v, owner, body):
     headers, ws = owner
     r = client.post("/api/videos", json={"url": "https://a.test/x", **body}, headers=headers)
-    assert r.status_code == 402 and r.json()["detail"]["kind"] == "video_premium" and not creates(b2v)
-    assert r.json()["detail"]["upgrade_to"] == "writer"
+    assert r.status_code in (400, 404, 422) and not creates(b2v)
 
 
 def test_free_plan_can_make_a_plain_video(client, b2v, owner, free_plan):
@@ -944,16 +939,8 @@ def test_ai_edits_stop_at_the_workspace_limit(client, b2v, owner, db_session):
                                 used=1000))
     db_session.commit()
     b2v.calls.clear()
-    r = client.post(f"/api/videos/{art['id']}/p/chat", json={"message": "shorter"}, headers=headers)
+    r = client.post(f"/api/videos/{art['id']}/p/scenes/1/regenerate", json={"description": "shorter"}, headers=headers)
     assert r.status_code == 402 and r.json()["detail"]["kind"] == "video_limits.ai_edits" and b2v.calls == []
-
-
-def test_avatar_batch_charges_ten_per_scene(client, b2v, owner, db_session):
-    headers, ws = owner
-    art = make_video(client, headers)
-    r = client.post(f"/api/videos/{art['id']}/p/avatar-batch/authorize", json={"scene_ids": [1, 2, 3]},
-                    headers=headers)
-    assert r.status_code == 200 and video_limits.used(db_session, ws.id, "ai_edits") == 30
 
 
 def test_template_switch_uses_a_video_and_checks_the_template(client, b2v, owner, theirs, db_session):
@@ -1019,12 +1006,14 @@ def test_editor_passes_downloads_through(client, b2v, owner):
     assert r.status_code == 200 and r.content == b"ID3audio" and r.headers["content-type"] == "audio/mpeg"
 
 
-def test_editor_premium_features_refused_on_free(client, b2v, owner, free_plan):
+def test_removed_editor_features_are_not_proxied(client, b2v, owner):
     headers, _ = owner
     art = make_video(client, headers)
-    for method, path in [("POST", "chat"), ("GET", "download-studio"), ("POST", "avatar-portrait")]:
-        r = client.request(method, f"/api/videos/{art['id']}/p/{path}", json={}, headers=headers)
-        assert r.status_code == 402, path
+    b2v.calls.clear()
+    for method, path in [("POST", "chat"), ("GET", "chat/history"), ("GET", "download-studio"),
+                         ("POST", "avatar-portrait"), ("POST", "avatar-batch/authorize")]:
+        assert client.request(method, f"/api/videos/{art['id']}/p/{path}", json={}, headers=headers).status_code == 404
+    assert b2v.calls == []
 
 
 # Script review
@@ -1036,9 +1025,9 @@ def test_script_review_flow(client, b2v, owner, db_session):
     scenes = client.get(f"/api/videos/{art['id']}/script", headers=headers).json()["scenes"]
     assert [s["id"] for s in scenes] == [1, 2]
     draft = {"title": "A", "display_text": "Text", "narration_text": "", "draft_scenes": [], "revision": 1}
-    client.post(f"/api/videos/{art['id']}/script/scenes/1/ai-preview", json={**draft, "instruction": "punchier"},
-                headers=headers)
-    assert video_limits.used(db_session, ws.id, "ai_edits") == 1
+    r = client.post(f"/api/videos/{art['id']}/script/scenes/1/ai-preview", json={**draft, "instruction": "punchier"},
+                    headers=headers)
+    assert r.status_code in (404, 405)  # rewriting a scene with AI is not offered
     r = client.post(f"/api/videos/{art['id']}/script/approve",
                     json={"scenes": [{"id": 1, "title": "A", "narration_text": "Hi"}]}, headers=headers)
     assert r.status_code == 200 and "/api/projects/812/script-review/approve" in b2v.paths("POST")
@@ -1136,12 +1125,14 @@ def test_capacity_alert(b2v, caplog):
 def test_new_workspace_gets_starter_voices_and_library(client, b2v, owner):
     got = client.get("/api/video-voices", headers=owner[0]).json()
     assert [v["voice_id"] for v in got["saved"]] == [SARAH]  # free voices only
-    assert {v["voice_id"]: v["premium"] for v in got["library"]} == {SARAH: False, BELLA: True}
+    assert [v["voice_id"] for v in got["library"]] == [SARAH]  # the paid voice is not offered
+    assert "custom" not in got and all("premium" not in v for v in got["saved"] + got["library"])
 
 
-def test_saving_a_paid_voice_needs_premium(client, b2v, owner, free_plan):
-    r = client.post("/api/video-voices/saved", json={"voice_id": BELLA}, headers=owner[0])
-    assert r.status_code == 402
+def test_a_paid_voice_cannot_be_saved_or_used_on_any_plan(client, b2v, owner):
+    assert client.post("/api/video-voices/saved", json={"voice_id": BELLA}, headers=owner[0]).status_code == 404
+    r = client.post("/api/videos", json={"url": "https://a.test/x", "custom_voice_id": BELLA}, headers=owner[0])
+    assert r.status_code == 404 and not creates(b2v)
 
 
 def test_saved_voices_never_touch_blog2video_saved_list(client, b2v, owner, db_session):
@@ -1163,36 +1154,22 @@ def test_any_number_of_voices_can_be_saved(client, b2v, owner, db_session):
     for i in range(7):
         db_session.add(UserSavedVoice(workspace_id=ws.id, voice_id=f"v{i}", name=f"V{i}"))
     db_session.commit()
-    assert client.post("/api/video-voices/saved", json={"voice_id": BELLA}, headers=headers).status_code == 201
+    assert client.post("/api/video-voices/saved", json={"voice_id": SARAH}, headers=headers).status_code in (200, 201)
     got = client.get("/api/video-voices", headers=headers).json()
-    assert len(got["saved"]) == 9 and "max_saved" not in got
+    assert len(got["saved"]) == 8 and "max_saved" not in got
 
 
-def test_notestack_voices_can_be_saved_and_used_in_a_video(client, b2v, owner, other, db_session):
+def test_notestack_voices_are_saved_for_audio_but_not_used_in_videos(client, b2v, owner, other, db_session):
     headers, ws = owner
     notestack_voice(db_session, ws)
     got = client.get("/api/video-voices", headers=headers).json()
     assert got["notestack"] == [{"voice_id": "nv_narrator", "name": "Narrator", "kind": "designed", "saved": False}]
     r = client.post("/api/video-voices/saved", json={"voice_id": "nv_narrator"}, headers=headers)
-    assert r.status_code == 201 and r.json()["source"] == "notestack" and r.json()["premium"]
+    assert r.status_code == 201 and r.json()["source"] == "notestack"
     saved = client.get("/api/video-voices", headers=headers).json()["saved"]
-    assert [v["source"] for v in saved if v["voice_id"] == "nv_narrator"] == ["notestack"]
-    make_video(client, headers, custom_voice_id="nv_narrator")
-    assert creates(b2v)[-1]["json"]["custom_voice_id"] == "nv_narrator"
-    # Another workspace cannot use it.
-    r = client.post("/api/videos", json={"url": "https://a.test/x", "custom_voice_id": "nv_narrator"},
-                    headers=other[0])
-    assert r.status_code == 404
-
-
-def test_notestack_voices_are_saved_on_any_plan_but_need_premium_in_videos(client, b2v, owner, db_session,
-                                                                          free_plan):
-    headers, ws = owner
-    notestack_voice(db_session, ws)
-    assert client.post("/api/video-voices/saved", json={"voice_id": "nv_narrator"},
-                       headers=headers).status_code == 201  # in the list, for audio overviews
+    assert [v["source"] for v in saved if v["voice_id"] == "nv_narrator"] == ["notestack"]  # kept, for audio overviews
     r = client.post("/api/videos", json={"url": "https://a.test/x", "custom_voice_id": "nv_narrator"}, headers=headers)
-    assert r.status_code == 402 and not creates(b2v)
+    assert r.status_code == 404 and not creates(b2v)  # a video uses the free built-in voices
 
 
 def test_revoking_the_clone_drops_it_from_video_voices(client, b2v, owner, db_session, monkeypatch):
@@ -1207,37 +1184,11 @@ def test_revoking_the_clone_drops_it_from_video_voices(client, b2v, owner, db_se
     assert "nv_clone" not in [v["voice_id"] for v in client.get("/api/video-voices", headers=headers).json()["saved"]]
 
 
-def test_design_keep_and_delete_a_custom_voice(client, b2v, owner, other, db_session):
-    headers, ws = owner
-    previews = client.post("/api/video-voices/design/prompt", json={"prompt": "A calm, warm narrator voice please"},
-                           headers=headers).json()["previews"]
-    kept = client.post("/api/video-voices/custom", json={"generated_voice_id": previews[0]["generated_voice_id"],
-                                                         "source": "prompt", "name": "Narrator"}, headers=headers)
-    assert kept.status_code == 201
-    assert db_session.get(UserSavedVoice, {"workspace_id": ws.id, "voice_id": "vc_designed"}).is_custom
-    assert video_limits.used(db_session, ws.id, "voice_designs_daily") == 1
-    assert video_limits.used(db_session, ws.id, "custom_voices") == 1
-    # Another workspace can not play or delete it, nor use it on a video.
-    assert client.get("/api/video-voices/custom/31/preview", headers=other[0]).status_code == 404
-    assert client.delete("/api/video-voices/custom/31", headers=other[0]).status_code == 404
-    r = client.post("/api/videos", json={"url": "https://a.test/x", "custom_voice_id": "vc_designed"},
-                    headers=other[0])
-    assert r.status_code == 404
-    assert client.delete("/api/video-voices/custom/31", headers=headers).status_code == 200
-    assert video_limits.used(db_session, ws.id, "custom_voices") == 0
-
-
-def test_clone_voice(client, b2v, owner):
-    r = client.post("/api/video-voices/clone", data={"name": "Me"}, files={"file": ("me.mp3", b"ID3", "audio/mpeg")},
-                    headers=owner[0])
-    assert r.status_code == 201 and r.json()["voice_id"] == "vc_clone"
-
-
-def test_voice_sample_returns_audio_and_counts(client, b2v, owner, db_session):
-    headers, ws = owner
-    r = client.post("/api/video-voices/sample", json={"custom_voice_id": SARAH}, headers=headers)
-    assert r.status_code == 200 and r.content == b"ID3audio"
-    assert video_limits.used(db_session, ws.id, "voice_samples_daily") == 1
+def test_designing_cloning_and_sampling_voices_for_videos_are_gone(client, b2v, owner):
+    headers, _ = owner
+    for method, path in [("POST", "design/prompt"), ("POST", "design/preset"), ("POST", "custom"), ("POST", "clone"),
+                         ("POST", "sample"), ("GET", "custom/31/preview"), ("DELETE", "custom/31")]:
+        assert client.request(method, f"/api/video-voices/{path}", json={}, headers=headers).status_code in (404, 405), path
 
 
 # Styles
@@ -1324,7 +1275,7 @@ def test_sync_follows_effective_plan(client, owner, db_session, monkeypatch):
     sub.status = "canceled"
     db_session.commit()
     sub = video_quota.sync_video_quota(db_session, ws)
-    assert (sub.video_plan, sub.video_limit) == ("free", 1)
+    assert (sub.video_plan, sub.video_limit) == ("free", 2)
 
 
 def test_monthly_fallback_reset(client, owner, db_session, session_factory):
@@ -1405,15 +1356,16 @@ def test_plan_video_limits(client, owner, db_session, monkeypatch):
     _, ws = owner
     monkeypatch.setattr(settings, "billing_enabled", True)
     video_quota.sync_video_quota(db_session, ws)
-    for plan, limit in (("free", 1), ("writer", 10), ("studio", 20)):
+    for plan, limit in (("free", 2), ("writer", 10), ("studio", 20)):
         _on_plan(db_session, ws, plan)
         assert video_quota.sync_video_quota(db_session, ws).video_limit == limit
 
 
-def test_free_is_one_video_in_total(client, b2v, owner, free_plan, db_session, session_factory):
+def test_free_is_two_videos_in_total(client, b2v, owner, free_plan, db_session, session_factory):
     headers, ws = owner
     make_video(client, headers)
-    r = client.post("/api/videos", json={"url": "https://a.test/2"}, headers=headers)
+    make_video(client, headers, url="https://a.test/2")
+    r = client.post("/api/videos", json={"url": "https://a.test/3"}, headers=headers)
     assert r.status_code == 402
     usage = client.get("/api/videos/quota", headers=headers).json()
     assert usage["resets_at"] is None
@@ -1424,7 +1376,7 @@ def test_free_is_one_video_in_total(client, b2v, owner, free_plan, db_session, s
     # Deleting the video does not give it back.
     art_id = db_session.scalar(select(B2VVideo)).artifact_id
     client.delete(f"/api/videos/{art_id}", headers=headers)
-    assert client.post("/api/videos", json={"url": "https://a.test/3"}, headers=headers).status_code == 402
+    assert client.post("/api/videos", json={"url": "https://a.test/4"}, headers=headers).status_code == 402
 
 
 def test_free_video_that_failed_is_given_back(client, b2v, owner, free_plan, db_session):
@@ -1443,7 +1395,7 @@ def test_dropping_to_free_counts_what_was_made(client, b2v, owner, db_session, m
         make_video(client, headers, url=f"https://a.test/{i}")
     _on_plan(db_session, ws, "free")
     usage = client.get("/api/videos/quota", headers=headers).json()
-    assert (usage["used"], usage["limit"]) == (3, 1)
+    assert (usage["used"], usage["limit"]) == (3, 2)
     assert client.post("/api/videos", json={"url": "https://a.test/x"}, headers=headers).status_code == 402
 
 

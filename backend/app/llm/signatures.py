@@ -451,6 +451,58 @@ class PlanInfographic(dspy.Signature):
     infographic: InfographicOut = dspy.OutputField()
 
 
+class KeyFigure(BaseModel):
+    value: str = Field(description="A number or a very short fact, at most 12 characters, e.g. 30%, 8 steps, Layer 1")
+    label: str = Field(description="What it counts or means, at most 6 words")
+
+
+class DesignOut(BaseModel):
+    title: str = Field(description="At most 8 words")
+    subtitle: str = Field(description="One line, at most 16 words")
+    eyebrow: str = Field(description="A 1 to 3 word topic label, e.g. Agent engineering")
+    key_figures: list[KeyFigure] = Field(description="The 2 or 3 most important numbers or short facts in the material, shown beside the title")
+    body_html: str = Field(description="The body of the page: 2 to 4 sections of HTML built only from the allowed components")
+    rule: str = Field(description="The one takeaway, at most 14 words")
+    notes: list[str] = Field(description="Exactly 3 supporting notes, at most 14 words each")
+
+
+class DesignInfographic(dspy.Signature):
+    """Design a one page infographic from the material. You write the body of the page as HTML, composed ONLY from the
+    components below, choosing the ones that make the content clearest (a flow chart for steps, a timeline for events,
+    a hierarchy for a whole and its parts, a comparison for two options, cards for the key ideas, stats for numbers that
+    matter). Use only what the material says. When a layout style is asked for, build the page around it. When a focus is
+    given, make it about that, as far as the material covers it. The page is black, blue and white and printed on a
+    poster: plain text only, short lines, no markdown, no emoji, no quotes around names, no em dashes. Write in the
+    language of the material.
+
+    HTML rules: tags allowed are div, section, span, p, ul, ol, li, strong, em, small, br. Use no style, id, href, src,
+    script, svg, img or any attribute except class. Only these class names exist: sec, sec-t, lead, hl, node, n-no, n-t,
+    n-d, flow, col, grid, c2, c3, c4, card, c-k, c-t, c-d, timeline, t-item, t-when, t-t, t-d, tree, t-root, t-kids,
+    compare, side, s-h, stats, stat, s-n, s-l, cols, pills, pill, callout.
+
+    Every part sits in a section: <section class="sec"><div class="sec-t">Short heading</div> COMPONENT </section>.
+    Components:
+    - Flow chart, left to right, at most 4 boxes, arrows are drawn between them for you:
+      <div class="flow"><div class="node"><span class="n-no">01</span><span class="n-t">Title</span><span class="n-d">One short line</span></div> ...</div>
+      Add class hl to the box that matters most (class="node hl"). For more than 4 steps use two flows, or a vertical one: class="flow col" (at most 5 boxes).
+    - Cards in a grid of 2, 3 or 4 columns (class grid c2, grid c3 or grid c4, at most 8 cards):
+      <div class="grid c3"><div class="card"><span class="c-k">Kicker</span><span class="c-t">Title</span><span class="c-d">One short line</span></div> ...</div>
+    - Timeline, at most 5 moments: <div class="timeline"><div class="t-item"><span class="t-when">When</span><span class="t-t">Title</span><span class="t-d">One short line</span></div> ...</div>
+    - Hierarchy, one root and 2 to 4 children: <div class="tree"><div class="node hl t-root"><span class="n-t">Whole</span><span class="n-d">Line</span></div><div class="t-kids"><div class="node"><span class="n-t">Part</span><span class="n-d">Line</span></div> ...</div></div>
+    - Comparison of two sides, 2 to 4 short lines each: <div class="compare"><div class="side"><span class="s-h">Side A</span><ul><li>Line</li></ul></div><div class="side hl"><span class="s-h">Side B</span><ul><li>Line</li></ul></div></div>
+    - Numbers, 2 to 4: <div class="stats"><div class="stat"><span class="s-n">30%</span><span class="s-l">What it counts</span></div> ...</div>
+    - A callout sentence: <div class="callout">One sentence.</div>
+    The key_figures are separate from the body and are shown beside the title, so do not repeat them in the body.
+    Lengths: a box or card title at most 4 words, its line at most 14 words, a heading at most 4 words. Use two to four
+    sections, and mix components (never one grid of 8 cards alone). Keep the whole page short enough for one poster."""
+
+    title: str = dspy.InputField(desc="What the material is from")
+    material: list[str] = dspy.InputField(desc="Ideas from posts, or chat transcripts")
+    focus: str = dspy.InputField(desc="What the infographic should be about, or (none)")
+    layout_style: str = dspy.InputField(desc="The kind of layout asked for, or auto to choose")
+    design: DesignOut = dspy.OutputField()
+
+
 class WriteReport(dspy.Signature):
     """Write the report the reader describes, using only the material given: never add facts from outside it. Follow
     the reader's instructions on structure, style, tone and length. Write in Markdown that starts straight at the
@@ -460,9 +512,8 @@ class WriteReport(dspy.Signature):
     unless the reader's instructions ask for a different structure. Every "## " heading is specific and descriptive of
     what is in that section (for example "The Context Window Bottleneck: Moving Beyond Basic Summarization", never
     "Section 2" or "Details"), and they read in a logical order. Use "### " inside sections, lists, and tables where
-    they help. When the material has numbered lines (FILE blocks), put a [n] marker after each
-    claim it supports and list each n in citations with the path and lines it came from; when it is a chat transcript,
-    write no markers and no citations. Do not write a quiz, flashcards, practice or review questions into the report
+    they help. Do not cite: no [n] markers, footnotes, references or lists of sources in the text; the app shows the reader
+    the sources separately. Do not write a quiz, flashcards, practice or review questions into the report
     unless the reader's instructions
     ask for one: those are offered to the reader separately as visuals they can add. Never write about visuals, mind
     maps, flashcards, quizzes, tables or timelines in the text, and never suggest or describe one, even if the
@@ -476,7 +527,6 @@ class WriteReport(dspy.Signature):
     language: str = dspy.InputField(desc="The language to write in")
     report_title: str = dspy.OutputField(desc="A specific title, 3 to 10 words")
     markdown: str = dspy.OutputField(desc="The report body in Markdown, starting at the first ## heading")
-    citations: list[FileCitation] = dspy.OutputField()
 
 
 class PlannedEmbed(BaseModel):
@@ -521,22 +571,166 @@ class WriteReportSection(dspy.Signature):
     and length; a section is two to five short paragraphs, or a list or table where that reads better. Do not write
     quiz questions, flashcards or
     review questions in the section (those are offered to the reader separately). Do not repeat
-    the heading, and do not use "#" or "##" headings; "###" subheadings are fine. When the material has numbered lines (FILE
-    blocks), put a [n] marker after each claim it supports and list each n in citations with the path and lines; when it
-    is a chat transcript, write no markers and no citations. Never write about visuals, mind maps, flashcards,
+    the heading, and do not use "#" or "##" headings; "###" subheadings are fine. Do not cite: no [n] markers, footnotes,
+    references or lists of sources in the text; the app shows the reader the sources separately. Never write about visuals, mind maps, flashcards,
     quizzes, tables or timelines in the text, and never suggest or describe one, even if the reader's instructions
     mention them: the app offers those to the reader separately, so write only the report itself. Write in the
     language requested. Never use em dashes."""
 
+    # The parts every section shares come first, so a provider can reuse them across the section calls.
     title: str = dspy.InputField()
     report_title: str = dspy.InputField()
-    heading: str = dspy.InputField()
-    brief: str = dspy.InputField(desc="What this section should say")
     request: str = dspy.InputField(desc="What the reader wants the report to be")
     material: list[str] = dspy.InputField(desc="Posts with path and numbered lines, or chat transcripts")
     language: str = dspy.InputField()
+    heading: str = dspy.InputField()
+    brief: str = dspy.InputField(desc="What this section should say")
     markdown: str = dspy.OutputField(desc="The section body in Markdown, without its heading")
-    citations: list[FileCitation] = dspy.OutputField()
+
+
+# Themed reports: the posts' stored ideas are grouped into themes, a blueprint plans the whole report, and each section is
+# written from its own evidence (pipeline/report_themes.py, report_blueprint.py, report_evidence.py).
+
+
+class ReportTheme(BaseModel):
+    name: str = Field(description="2 to 5 words, a noun phrase a reader would recognise")
+    summary: str = Field(description="One or two plain sentences on what the posts say about it")
+    idea_ids: list[str] = Field(description="Ids of the ideas that belong to this theme, exactly as listed")
+    matches_request: bool = Field(False, description="True when the reader's request asks for this theme to be focused on, "
+                                                     "included or given more room")
+
+
+class ThemeRelation(BaseModel):
+    a: str = Field(description="A theme name, exactly as you wrote it in themes")
+    b: str = Field(description="Another theme name, exactly as you wrote it in themes")
+    relation: str = Field(description="How they connect, one short sentence")
+
+
+class GroupThemes(dspy.Signature):
+    """Group ideas taken from a writer's posts into themes. Every idea belongs to exactly one theme, listed by its id as
+    given. A theme is something several ideas are about, named the way a reader would name it: not a post title, not a
+    single idea, not 'Other'. Choose 4 to 12 themes, fewer when the ideas really are about few things. Also note how themes
+    connect (one cause of another, one the context of another, two sides of a choice), only where the ideas show it.
+    Where the reader's request asks to focus on, include or give more room to something, set matches_request on the theme
+    that is about it. Never use em dashes."""
+
+    title: str = dspy.InputField(desc="The notebook or posts the ideas come from")
+    request: str = dspy.InputField(desc="What the reader wants the report to be")
+    ideas: list[str] = dspy.InputField(desc="One per line: id | label: note")
+    themes: list[ReportTheme] = dspy.OutputField(desc="4 to 12 themes")
+    relations: list[ThemeRelation] = dspy.OutputField(desc="How themes connect, at most 8, only where the ideas show it")
+
+
+class BlueprintSection(BaseModel):
+    heading: str = Field(description="2 to 8 words, specific to what the section says, never generic")
+    role: Literal["intro", "body", "synthesis", "summary"] = Field(
+        "body", description="intro opens the report, summary closes it, synthesis ties two or more themes together, "
+                            "body covers its themes")
+    brief: str = Field(description="What this section says, 1 to 2 sentences")
+    theme_ids: list[str] = Field(description="Ids of the themes this section is about, as listed. A body section's "
+                                             "themes belong to it alone")
+    depth: Literal["deep", "standard", "brief"] = Field("standard", description="deep for a theme with a large weight "
+                                                        "or one the reader asked for, brief for a small one")
+    must_cover: list[str] = Field(description="2 to 4 specific points this section has to make")
+    embed: PlannedEmbed | None = Field(None, description="A visual to suggest right after this section, only where it "
+                                                         "really helps")
+
+
+class ThemeConnection(BaseModel):
+    theme_ids: list[str] = Field(description="Two or more theme ids that are connected")
+    relation: str = Field(description="How they connect, one short sentence")
+    section: str = Field(description="Heading of the section that should bridge them")
+
+
+class PlanReportBlueprint(dspy.Signature):
+    """Plan a whole report before any of it is written. The themes come with their weight (their share of what the posts say), a
+    tier (major, medium, minor) and whether the reader asked for them. Give every major theme and every theme the reader asked
+    for its own section with depth deep, in an order that builds an argument; put the ones the reader asked for early. Put medium
+    themes in standard sections and merge the minor ones into one brief section. A theme is the subject of exactly one section.
+    Write a storyline of three to five sentences: what the report as a whole says, so every section can be written toward it.
+    Start with an intro section and end with a summary section unless the reader asks for something else; the summary must
+    restate the major themes. Where themes connect, say which section bridges them (connections), and add a synthesis section
+    only if the connection deserves its own. Each section's must_cover is specific to it and shares no point with another.
+    Choose at most max_sections sections. Never plan a section that is itself a quiz, flashcards, practice questions or a
+    mind map: when allowed_kinds is not empty those are visuals, suggested through a section's embed (at most four in all, each
+    kind once, only the kinds allowed): a mind_map to show how many linked themes fit together (at most one, near the start or
+    the end), flashcards to learn a set of terms or facts, a quiz to check understanding after a dense section, and an
+    infographic, a one page picture of the main ideas, which every report with that kind allowed should suggest once, on the
+    last section before the summary. Suggest the others only where they really help; none where plain prose reads better. When
+    allowed_kinds is empty, plan no embeds, and a quiz or practice section is allowed only if the reader's request asks for
+    one. Use only what the themes cover. Never use em dashes."""
+
+    title: str = dspy.InputField()
+    request: str = dspy.InputField(desc="What the reader wants the report to be")
+    themes: list[str] = dspy.InputField(desc="One per line: id | name | tier | weight | posts | asked for: summary")
+    relations: list[str] = dspy.InputField(desc="One per line: id <-> id: how they connect, or empty")
+    allowed_kinds: list[str] = dspy.InputField(desc="The visuals that may be suggested, or empty")
+    language: str = dspy.InputField()
+    max_sections: int = dspy.InputField(desc="The most sections to plan")
+    report_title: str = dspy.OutputField(desc="A specific title, 3 to 10 words")
+    storyline: str = dspy.OutputField(desc="Three to five sentences on what the whole report says")
+    sections: list[BlueprintSection] = dspy.OutputField(desc="2 to max_sections sections, in reading order")
+    connections: list[ThemeConnection] = dspy.OutputField(desc="At most 6")
+
+
+class WriteThemedSection(dspy.Signature):
+    """Write one section of a report that has already been planned. You are given the storyline of the whole report and its
+    outline: write toward that storyline, and do not make points that another section owns (covered_elsewhere). Make the
+    points in must_cover. Use only the evidence given; never add facts from outside it. The evidence is grouped by post and
+    comes in two forms: text as the writer wrote it, and short summaries of other posts. Combine what
+    several posts say about the same thing: say where they agree, where they differ or where the writer changed their mind,
+    and never go through the posts one at a time. Where a connection is listed, bridge the themes in a sentence or two.
+    Follow the reader's instructions on style, tone and length; a section is two to five short paragraphs, or a list or table
+    where that reads better; a deep section is longer than a brief one. For role intro, say what the report covers and why it
+    matters; for role summary, restate the main points of the sections as written, in the digests given. Do not repeat the
+    heading, and do not use "#" or "##" headings; "###" subheadings are fine. Do not cite: no [n] markers, footnotes,
+    references or lists of sources in the text, and do not name the posts or their paths; the app shows the reader the
+    sources separately. Do not write quiz questions, flashcards or review questions, and never write about visuals, mind maps,
+    flashcards, quizzes, tables or timelines in the text: the app offers those separately. Write in the language requested.
+    Never use em dashes."""
+
+    # What every section shares comes first, so a provider can reuse it across the section calls.
+    storyline: str = dspy.InputField(desc="What the whole report says")
+    outline: list[str] = dspy.InputField(desc="Every section: number, heading, role, what it says")
+    connections: list[str] = dspy.InputField(desc="Themes the report connects, with the section that bridges them")
+    request: str = dspy.InputField(desc="What the reader wants the report to be")
+    language: str = dspy.InputField()
+    heading: str = dspy.InputField(desc="The section to write")
+    role: str = dspy.InputField(desc="intro, body, synthesis or summary")
+    depth: str = dspy.InputField(desc="deep, standard or brief")
+    brief: str = dspy.InputField(desc="What this section should say")
+    must_cover: list[str] = dspy.InputField(desc="Points this section has to make")
+    covered_elsewhere: list[str] = dspy.InputField(desc="Points other sections own: do not make them here")
+    bridges: list[str] = dspy.InputField(desc="Connections this section should bridge, or empty")
+    evidence: list[str] = dspy.InputField(desc="Posts as written, short summaries of other posts, or digests of the written "
+                                               "sections")
+    markdown: str = dspy.OutputField(desc="The section body in Markdown, without its heading")
+
+
+class WriteThemedReport(dspy.Signature):
+    """Write a whole report that has already been planned, in one piece. You are given the storyline and the planned sections
+    in order, each with what it must cover and the evidence for it. Write in Markdown that starts straight at the first "## "
+    heading (the title goes in report_title, not in the text), with one "## " heading per planned section, in that order and
+    with those headings, and write toward the storyline. Make each section's must_cover points, and do not make a point
+    another section owns. Use only the evidence given; never add facts from outside it. The evidence is grouped by post and
+    comes in two forms: text as the writer wrote it, and short summaries of other posts. Combine what
+    several posts say about the same thing: say where they agree, where they differ or where the writer changed their mind,
+    and never go through the posts one at a time. Where a connection is listed, bridge the themes. A deep section is longer
+    than a brief one. Follow the reader's instructions on style, tone and length. Use "### " inside sections, lists, and tables
+    where they help. Do not cite: no [n] markers, footnotes, references or lists of sources in the text, and do not name the
+    posts or their paths; the app shows the reader the sources separately. Do not write a quiz, flashcards, practice or
+    review questions unless the reader's instructions ask for one, and never write about visuals, mind maps, flashcards or
+    timelines in the text. Write in the language requested. Never use em dashes."""
+
+    title: str = dspy.InputField(desc="The notebook or posts the evidence comes from")
+    storyline: str = dspy.InputField(desc="What the whole report says")
+    request: str = dspy.InputField(desc="What the reader wants the report to be")
+    language: str = dspy.InputField(desc="The language to write in")
+    connections: list[str] = dspy.InputField(desc="Themes the report connects, with the section that bridges them")
+    sections: list[str] = dspy.InputField(desc="The planned sections in order: heading, role, depth, what it says, must cover, "
+                                               "followed by its evidence")
+    report_title: str = dspy.OutputField(desc="A specific title, 3 to 10 words")
+    markdown: str = dspy.OutputField(desc="The report body in Markdown, starting at the first ## heading")
 
 
 class ReportTemplateIdea(BaseModel):
@@ -552,7 +746,7 @@ class SuggestReportTemplates(dspy.Signature):
     a practical how-to, a comparison, a beginner primer and an in-depth analysis, when the material supports them).
     Never use em dashes."""
 
-    items: list[str] = dspy.InputField(desc="The title and the start of each source")
+    items: list[str] = dspy.InputField(desc="Each source: its title, topics and key ideas, or the start of it")
     topic: str = dspy.InputField(desc="What the reader wants the report to be about, or (none)")
     templates: list[ReportTemplateIdea] = dspy.OutputField(desc="Exactly 4")
 

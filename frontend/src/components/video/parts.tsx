@@ -1,11 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { VideoTemplate } from "../../api/types";
-import { EMOTIONS, CHARACTER, EXPRESSIVENESS, SPEED, TUNING_STEP, type VoiceTuning } from "./voiceTuning";
-
-/** The ★ badge on premium options. */
-export function Premium({ small = false }: { small?: boolean }) {
-  return <span className={`vw-premium-badge${small ? " small" : ""}`}>Premium</span>;
-}
 
 /** Portrait (9:16) video format. */
 export function PhoneIcon() {
@@ -63,62 +57,6 @@ export function PlayButton({ on, disabled, label, onClick }: { on: boolean; disa
             onClick={onClick}>
       {on ? <span className="vw-stop" /> : <span className="vw-tri" />}
     </button>
-  );
-}
-
-function Slider({ label, value, range, left, right, onChange, format }: {
-  label: string; value: number; range: { min: number; max: number }; left: string; right: string;
-  onChange: (v: number) => void; format?: (v: number) => string;
-}) {
-  return (
-    <label className="field vw-slider">
-      <span className="row between">
-        <span>{label}</span>
-        <span className="mono muted">{format ? format(value) : value.toFixed(2)}</span>
-      </span>
-      <input type="range" min={range.min} max={range.max} step={TUNING_STEP} value={value}
-             onChange={(e) => onChange(Number(e.target.value))} />
-      <span className="row between small muted"><span>{left}</span><span>{right}</span></span>
-    </label>
-  );
-}
-
-/** Emotion, expressiveness, character and speed, as on blog2video's Advanced Options. */
-export function AdvancedVoice({ value, onChange, sample }: { value: VoiceTuning; onChange: (v: VoiceTuning) => void;
-                                                             sample?: ReactNode }) {
-  const set = (patch: Partial<VoiceTuning>) => onChange({ ...value, ...patch });
-  return (
-    <div className="stack">
-      <label className="vw-option">
-        <input type="checkbox" checked={value.enabled} onChange={(e) => set({ enabled: e.target.checked })} />
-        Use advanced voice options
-      </label>
-      <fieldset className="stack vw-fieldset" disabled={!value.enabled}>
-        <div className="field">
-          <span className="vw-label">Emotion</span>
-          <div className="vw-chips">
-            {EMOTIONS.map((em) => (
-              <button key={em.value} type="button" className={`vw-chip${value.emotion === em.value ? " on" : ""}`}
-                      aria-pressed={value.emotion === em.value}
-                      onClick={() => set({ emotion: value.emotion === em.value ? "" : em.value })}>
-                {em.label}
-              </button>
-            ))}
-          </div>
-          <small className="muted">Pick one to steer delivery, or leave unselected.</small>
-        </div>
-        <Slider label="Expressiveness" value={value.expressiveness} range={EXPRESSIVENESS} left="Steady" right="Expressive"
-                onChange={(v) => set({ expressiveness: v })} />
-        <Slider label="Character" value={value.character} range={CHARACTER} left="Natural" right="Dramatic"
-                onChange={(v) => set({ character: v })} />
-        {value.character > 0.3 && value.expressiveness > 0.7 && (
-          <small className="muted">High Character with high Expressiveness can sound distorted. Try lowering one.</small>
-        )}
-        <Slider label="Speed" value={value.speed} range={SPEED} left="0.7x" right="1.2x" format={(v) => `${v.toFixed(2)}x`}
-                onChange={(v) => set({ speed: v })} />
-      </fieldset>
-      {sample}
-    </div>
   );
 }
 

@@ -1,3 +1,4 @@
+import logging
 import re
 import uuid
 from typing import Literal
@@ -10,8 +11,9 @@ from app.auth import Ctx, get_ctx
 from app.config import settings
 from app.infographics.image import ImageUnavailable, render_png
 from app.infographics.themes import theme_id
-from app.models import Artifact, CalendarItem, Chat, Document, Job, Notebook, UserSavedVoice
+from app.models import Artifact, ArtifactFeedback, CalendarItem, Chat, Document, Job, Notebook, UserSavedVoice
 from app.routers.notebooks import ensure_archive_notebook
+from app.services import artifact_feedback
 from app.services.artifacts import latest_jobs, serialize_artifact, start_artifact
 from app.services.jobs import create_job, serialize_job
 from app.services.plans import effective_plan, plan_limit_error
@@ -24,6 +26,8 @@ from app.slides.build import slots as slide_slots
 from app.slides.build import stored as stored_deck
 from app.slides.build import view as slide_pages
 from app.slides.themes import theme_id as slide_theme_id
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/artifacts", tags=["artifacts"])
 
@@ -69,7 +73,8 @@ class GenerateIn(BaseModel):
     question_types: list[Literal["multiple_choice", "multiple_select", "fill_blank", "short_answer"]] = Field(
         default_factory=lambda: ["multiple_choice", "multiple_select"], min_length=1)
     language: str | None = Field(None, max_length=40)
-    theme: str | None = Field(None, max_length=30)  # infographic: app.infographics.themes; slide_deck: app.slides.themes
+    theme: str | None = Field(None, max_length=30)  # infographic: one of the looks (app.infographics.design.LOOKS); slide_deck: app.slides.themes
+    ig_style: str | None = Field(None, max_length=20)  # infographic: the layout to lean towards (design.STYLES), auto when empty
     # slide_deck: read on its own ("detailed") or shown behind a speaker ("presenter"), and how many slides
     deck_format: Literal["detailed", "presenter"] = "detailed"
     deck_length: Literal["short", "default", "long"] = "default"
@@ -166,6 +171,7 @@ def generate(body: GenerateIn, ctx: Ctx = Depends(get_ctx)):
         if body.format == "debate" and body.hosts == 1:
             raise HTTPException(400, "A debate needs two hosts")
         check_limit(ctx.db, ctx.workspace, "audio_minutes", body.minutes)
+        check_limit(ctx.db, ctx.workspace, "audio_overviews", 1)
         ids = body.document_ids or ([body.document_id] if body.document_id else [])
         hosts = _hosts(ctx, body)
         if body.hosts == 1:
@@ -197,7 +203,8 @@ def generate(body: GenerateIn, ctx: Ctx = Depends(get_ctx)):
         check_limit(ctx.db, ctx.workspace, "infographics", 1)
         ids = body.document_ids or ([body.document_id] if body.document_id else [])
         params = {"document_ids": [str(i) for i in ids], "chat_ids": [str(i) for i in body.chat_ids or []],
-                  "theme": theme_id(body.theme), "instructions": (body.instructions or "").strip()[:600]}
+                  "theme": theme_id(body.theme), "style": body.ig_style or "auto",
+                  "instructions": (body.instructions or "").strip()[:600]}
         title = f"Infographic: {params['instructions'][:60] or target}"
     elif body.type == "slide_deck":
         ids = body.document_ids or ([body.document_id] if body.document_id else [])
@@ -257,13 +264,85 @@ def list_artifacts(
     rows = ctx.db.scalars(query.order_by(Artifact.created_at.desc()).offset(max(offset, 0)).limit(min(limit, 200)))
     rows = list(rows.all())
     jobs = latest_jobs(ctx.db, [a.id for a in rows])
-    return {"total": total, "items": [serialize_artifact(a, jobs.get(a.id)) for a in rows]}
+    items = [serialize_artifact(a, jobs.get(a.id)) for a in rows]
+    return {"total": total, "items": artifact_feedback.attach(ctx.db, ctx.user.id, items)}
+
+
+@router.get("/feedback/export")
+def export_artifact_feedback(ctx: Ctx = Depends(get_ctx), rating: Literal["up", "down"] | None = None, type: str | None = None,
+                             limit: int = 200):
+    """The ratings of generated reports, quizzes, flashcards and infographics, newest first, with what each one was, to see
+    which kinds do well and which do not."""
+    q = select(ArtifactFeedback).where(ArtifactFeedback.workspace_id == ctx.workspace.id)
+    if rating:
+        q = q.where(ArtifactFeedback.rating == (1 if rating == "up" else -1))
+    if type:
+        q = q.where(ArtifactFeedback.artifact_type == type)
+    rows = ctx.db.scalars(q.order_by(ArtifactFeedback.updated_at.desc()).limit(min(limit, 1000))).all()
+    log.info("feedback exported: rows=%d rating=%s type=%s user=%s workspace=%s", len(rows), rating, type, ctx.user.id,
+             ctx.workspace.id)
+    return [{"id": str(f.id), "artifact_id": str(f.artifact_id) if f.artifact_id else None, "type": f.artifact_type,
+             "rating": "up" if f.rating > 0 else "down", "reasons": f.reasons, "comment": f.comment, "snapshot": f.snapshot,
+             "rated_at": f.updated_at.isoformat() if f.updated_at else None} for f in rows]
 
 
 @router.get("/{artifact_id}")
 def get_artifact(artifact_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
     a = get_artifact_or_404(ctx, artifact_id)
-    return serialize_artifact(a, latest_jobs(ctx.db, [a.id]).get(a.id))
+    _offer_visuals_once(ctx, a)
+    return artifact_feedback.attach(ctx.db, ctx.user.id, [serialize_artifact(a, latest_jobs(ctx.db, [a.id]).get(a.id))])[0]
+
+
+def _offer_visuals_once(ctx: Ctx, a: Artifact) -> None:
+    """An interactive report made before interactive reports always offered visuals gets them the first time it is opened (once: after
+    that, the ones the reader has added or taken away stay as they are). A document report never offers any."""
+    c = a.content_json or {}
+    if a.type != "report" or a.status != "ready" or c.get("format") != "interactive" or c.get("suggestions_offered") \
+            or not c.get("blocks"):
+        return
+    from app.pipeline.report import EMBED_KINDS, fill_suggestions, merge_suggestions
+
+    has_posts = bool((c.get("source") or {}).get("document_ids"))
+    kinds = [k for k in EMBED_KINDS if k != "mind_map" or has_posts]
+    a.content_json = {**c, "suggestions": merge_suggestions(fill_suggestions(list(c.get("suggestions") or []), c["blocks"], kinds)),
+                      "suggestions_offered": True}
+    ctx.db.commit()
+
+
+class FeedbackIn(BaseModel):
+    rating: Literal["up", "down"] | None  # null takes the rating back
+    reasons: list[str] = []
+    comment: str | None = Field(None, max_length=1000)
+
+
+@router.put("/{artifact_id}/feedback")
+def rate_artifact(artifact_id: uuid.UUID, body: FeedbackIn, ctx: Ctx = Depends(get_ctx)):
+    """Thumbs up or down on a finished report, quiz, flashcard set or infographic. Rating again replaces it; null removes it."""
+    a = get_artifact_or_404(ctx, artifact_id)
+    allowed = artifact_feedback.REASONS.get(a.type)
+    if allowed is None or a.status != "ready":
+        log.warning("feedback refused: artifact=%s type=%s status=%s user=%s", a.id, a.type, a.status, ctx.user.id)
+        raise HTTPException(400, "Only a finished report, quiz, flashcard set or infographic can be rated")
+    row = ctx.db.scalar(select(ArtifactFeedback).where(ArtifactFeedback.artifact_id == a.id, ArtifactFeedback.user_id == ctx.user.id))
+    if body.rating is None:
+        if row:
+            ctx.db.delete(row)
+            ctx.db.commit()
+            log.info("feedback removed: artifact=%s type=%s user=%s workspace=%s", a.id, a.type, ctx.user.id, ctx.workspace.id)
+        return {"feedback": None}
+    if not row:
+        row = ArtifactFeedback(workspace_id=ctx.workspace.id, artifact_id=a.id, user_id=ctx.user.id)
+        ctx.db.add(row)
+    row.artifact_type = a.type
+    row.rating = 1 if body.rating == "up" else -1
+    row.reasons = [r for r in dict.fromkeys(body.reasons) if r in allowed] if body.rating == "down" else []
+    row.comment = (body.comment or "").strip() or None
+    row.snapshot = artifact_feedback.snapshot(a)
+    ctx.db.commit()
+    # The comment's text stays out of the logs (it is the user's own words); its length and the reasons are enough.
+    log.info("feedback saved: artifact=%s type=%s rating=%s reasons=%s comment_chars=%d user=%s workspace=%s",
+             a.id, a.type, body.rating, row.reasons, len(row.comment or ""), ctx.user.id, ctx.workspace.id)
+    return {"feedback": artifact_feedback.feedback_out(row)}
 
 
 @router.get("/{artifact_id}/image")

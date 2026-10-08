@@ -1,6 +1,5 @@
 """The workspace's own ElevenLabs voices, made or added on the Voice page: its clone, designed voices, and voices added
-from the ElevenLabs library. blog2video speaks with the same ElevenLabs account, so these can be used in videos too
-(as `custom_voice_id`); video_voices lists them and b2v_access accepts them."""
+from the ElevenLabs library. They speak audio overviews; video_voices lists them with the workspace's saved voices."""
 
 import uuid
 
@@ -32,8 +31,8 @@ def is_notestack_voice(db: Session, workspace_id: uuid.UUID, voice_id: str) -> b
 
 
 def save_notestack_voice(db: Session, workspace_id: uuid.UUID, voice_id: str, name: str) -> UserSavedVoice:
-    """Put a Notestack voice in the workspace's voices (the one list for audio and video), once. Saving needs no plan:
-    using it in a video is premium (b2v_access.check_voice). No preview link: it is played through /api/voice/preview.
+    """Put a Notestack voice in the workspace's voices (the one list for audio and video), once. Saving needs no plan; it speaks audio
+    overviews (a video uses the free built-in voices). No preview link: it is played through /api/voice/preview.
     The caller commits."""
     row = db.get(UserSavedVoice, {"workspace_id": workspace_id, "voice_id": voice_id})
     if row is None:

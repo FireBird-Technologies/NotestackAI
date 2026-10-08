@@ -29,7 +29,7 @@ log an `ALERT` line and users see "temporarily unavailable".
 
 ## Ownership
 
-Everything made with the key (videos, custom templates, custom voices, styles) belongs to one blog2video account,
+Everything made with the key (videos, custom templates, styles) belongs to one blog2video account,
 and blog2video's ownership checks stop at the account. Notestack is the only place each workspace's things are kept
 apart (`backend/app/services/b2v_access.py`):
 
@@ -64,20 +64,19 @@ built-in style overrides, style pin/selection, "Your Style", script preferences)
 
 The live preview link comes from `POST /api/embed/token/{id}` and is safe for the browser.
 
-## Premium and per-workspace limits
+## Per-workspace limits
 
 blog2video checks every limit against our Pro account, so every workspace passes its checks. Notestack divides them:
-each plan row has `video_premium` (★: detailed lengths, paid and custom voices, advanced voice tuning, voice samples,
-AI script rewrites, AI chat, avatars, designer templates, the source download) and `video_limits`:
+each plan row has `video_limits`. There are no premium (★) video options: videos use the standard lengths (short,
+medium), the built-in templates and styles, and the free built-in voices. Notestack does not proxy AI chat editing,
+avatars, AI script or scene rewrites, AI template editing, designer templates, paid or custom voices, voice tuning,
+voice design or cloning for videos, or the source download.
 
 | Metric | Period | Free / Writer / Studio | Counts |
 |---|---|---|---|
-| `ai_edits` | month | 20 / 300 / 1000 | scene regenerate/add, AI image, stock clip, AI chat, AI rewrites, template AI edits, avatars (10 per scene) |
+| `ai_edits` | month | 20 / 300 / 1000 | scene regenerate/add, AI image, stock clip |
 | `templates` | lifetime | 0 / 2 / 5 | custom templates made (blog2video slots are never given back) |
 | `template_ai_daily` | day | 0 / 3 / 5 | theme from a document or prompt, code generation |
-| `voice_designs_daily` | day | 0 / 5 / 10 | voice designs |
-| `voice_samples_daily` | day | 0 / 20 / 40 | voice samples |
-| `custom_voices` | total | 0 / 3 / 10 | kept or cloned voices (a delete frees one) |
 
 Edit a plan row to change them. A counter is given back when blog2video refuses the call. A template switch also
 uses a video.

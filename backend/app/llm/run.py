@@ -77,7 +77,8 @@ def predict_many(
 def _record(db: Session, workspace_id: uuid.UUID, job: Job | None, signature: type[dspy.Signature], lm: dspy.LM,
             usage, calls: list[tuple[dict, dict]]) -> None:
     if usage.total:
-        record_usage(db, workspace_id=workspace_id, kind="llm", provider=provider_name(), model=settings.llm_model,
+        model = getattr(lm, "model", None) or settings.llm_model  # the model that answered, not always the main one
+        record_usage(db, workspace_id=workspace_id, kind="llm", provider=provider_name(model), model=model,
                      quantity=usage.total, unit="tokens", cost_usd=usage.cost_usd, job=job)
     workspace = db.get(Workspace, workspace_id)
     for inputs, outputs in calls:

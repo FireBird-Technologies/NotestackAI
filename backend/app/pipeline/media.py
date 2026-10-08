@@ -17,7 +17,7 @@ from app.pipeline.passages import notebook_docs, passages_for, tools_for, verify
 from app.pipeline.report import SAME_LANGUAGE
 from app.services import tts
 from app.services.jobs import record_usage, update_job
-from app.services.renderer import PermanentJobError, brand_props, request_render
+from app.services.renderer import PermanentJobError, request_render
 from app.services.storage import keys, storage
 
 
@@ -160,14 +160,13 @@ def make_audiogram(db: Session, job: Job, artifact: Artifact) -> None:
     source = db.get(Artifact, uuid.UUID(job.params["audio_artifact_id"]))
     if not source or source.type != "audio_overview" or not source.storage_key:
         raise PermanentJobError("Pick a finished audio overview for the audiogram.")
-    workspace = db.get(Workspace, artifact.workspace_id)
     content = source.content_json or {}
     duration = float(content.get("duration_s") or 30)
     segments = [{"speaker": s["speaker"], "text": s["text"], "startMs": int(s["start"] * 1000),
                  "endMs": int(s["end"] * 1000)} for s in content.get("segments", [])]
     props = {"title": (content.get("title") or "Audio overview")[:140],
              "audioUrl": storage.presign_get(source.storage_key, ttl=6 * 3600),
-             "durationS": round(min(duration, 600), 2), "segments": segments, "brand": brand_props(workspace)}
+             "durationS": round(min(duration, 600), 2), "segments": segments }
     artifact.content_json = {**(artifact.content_json or {}), "style": "audiogram", "composition": "AudiogramSquare",
                              "audio_artifact_id": str(source.id), "duration_s": props["durationS"]}
     artifact.status = "rendering"
@@ -184,12 +183,11 @@ def make_audiogram(db: Session, job: Job, artifact: Artifact) -> None:
 def author_line(db: Session, workspace_id: uuid.UUID) -> str:
     ws = db.get(Workspace, workspace_id)
     owner = db.get(User, ws.owner_id) if ws else None
-    return (ws.brand_json or {}).get("name") or (owner.name if owner and owner.name else "") or "Notestack"
+    return (owner.name if owner and owner.name else "") or "Notestack"
 
 
 def make_quote_card(db: Session, job: Job, artifact: Artifact) -> None:
     content = artifact.content_json or {}
-    workspace = db.get(Workspace, artifact.workspace_id)
     if not content.get("quote"):
         docs = artifact_docs(db, artifact)
         if not docs:
@@ -212,8 +210,7 @@ def make_quote_card(db: Session, job: Job, artifact: Artifact) -> None:
     if doc and doc.source_id:
         src = db.get(Source, doc.source_id)
         publication = src.title if src else None
-    props = {"quote": content["quote"][:380], "author": author_line(db, artifact.workspace_id),
-             "brand": brand_props(workspace)}
+    props = {"quote": content["quote"][:380], "author": author_line(db, artifact.workspace_id)}
     if publication or (doc and doc.title):
         props["publication"] = (publication or doc.title)[:120]
     artifact.content_json = {**content, "composition": "QuoteCard"}
@@ -226,10 +223,8 @@ def render_carousel(db: Session, job: Job, artifact: Artifact) -> None:
     slides = (artifact.content_json or {}).get("slides") or []
     if not slides:
         raise PermanentJobError("This carousel has no slides.")
-    workspace = db.get(Workspace, artifact.workspace_id)
-    brand = brand_props(workspace)
     stills = [{"heading": s.get("heading", "")[:120], "body": s.get("body", "")[:500], "index": i + 1,
-               "total": len(slides), "brand": brand} for i, s in enumerate(slides)]
+               "total": len(slides)} for i, s in enumerate(slides)]
     artifact.status = "rendering"
     db.commit()
     request_render(job, artifact, "CarouselSlide", stills=stills)

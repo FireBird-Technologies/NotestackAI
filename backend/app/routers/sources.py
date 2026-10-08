@@ -10,7 +10,7 @@ from app.corpus import INDEX, Corpus, CorpusError
 from app.models import Document, Job, NotebookDocument, Source, Upload
 from app.pipeline.ingest import IMPORTS_FEED, FeedNotFound, discover_feed, imports_source, rebuild_index
 from app.services.jobs import create_job, serialize_job
-from app.services.plans import effective_plan, plan_limit_error
+from app.services.plans import effective_plan, plan_limit_error, post_room
 from app.services.storage import storage
 
 router = APIRouter(prefix="/api/sources", tags=["sources"])
@@ -74,7 +74,7 @@ async def create_source(body: SourceIn, ctx: Ctx = Depends(get_ctx)):
         select(func.count()).select_from(Source)
         .where(Source.workspace_id == ctx.workspace.id, Source.feed_url != IMPORTS_FEED)
     )
-    if count >= plan.sources:
+    if 0 <= plan.sources <= count:
         raise plan_limit_error(plan, "sources", f"Your plan includes {plan.sources} sources.")
     source = Source(workspace_id=ctx.workspace.id, feed_url=found.feed_url, platform=found.platform,
                     site_url=found.site_url, title=found.title)
@@ -135,8 +135,17 @@ def delete_source(source_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
     return {"ok": True, "removed_posts": len(docs)}
 
 
+def _require_room(ctx: Ctx) -> None:
+    """A link or a file adds a post: refused (with the upgrade prompt) once the plan's posts are all indexed."""
+    plan = effective_plan(ctx.db, ctx.workspace)
+    if post_room(ctx.db, ctx.workspace.id, plan) <= 0:
+        raise plan_limit_error(plan, "indexed_posts", f"Your plan indexes up to {plan.indexed_posts} posts, and they are all "
+                                                       "used. Remove a post or upgrade to add more.")
+
+
 @router.post("/url")
 def import_url(body: SourceIn, ctx: Ctx = Depends(get_ctx)):
+    _require_room(ctx)
     source = imports_source(ctx.db, ctx.workspace.id)
     ctx.db.commit()
     job = create_job(ctx.db, ctx.workspace.id, "import_url", {"source_id": str(source.id), "url": body.url})
@@ -148,6 +157,7 @@ def import_upload(body: UploadImportIn, ctx: Ctx = Depends(get_ctx)):
     upload = ctx.db.scalar(select(Upload).where(Upload.id == body.upload_id, Upload.workspace_id == ctx.workspace.id))
     if not upload or upload.status != "complete":
         raise HTTPException(404, "Upload not found or not finished")
+    _require_room(ctx)
     source = imports_source(ctx.db, ctx.workspace.id)
     ctx.db.commit()
     job = create_job(ctx.db, ctx.workspace.id, "import_upload",

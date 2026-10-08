@@ -26,7 +26,7 @@ export function ReportAddDialog({ suggestion, existing, loading = false, busy, e
 }) {
   const [useExisting, setUseExisting] = useState(false);
   const [pick, setPick] = useState(existing[0]?.id ?? "");
-  const [theme, setTheme] = useState("launch");
+  const [theme, setTheme] = useState("midnight");
   // The list arrives after the dialog opens: pick its first one then, so choosing "use one you made" is never empty.
   useEffect(() => {
     if (!existing.some((a) => a.id === pick)) setPick(existing[0]?.id ?? "");

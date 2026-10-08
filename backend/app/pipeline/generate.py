@@ -112,22 +112,39 @@ def ideas_fresh(d) -> bool:
     return bool(md.get("ideas")) and md.get("ideas_hash") == (d.content_hash or "")
 
 
-def extract_ideas(db: Session, job: Job | None, workspace_id: uuid.UUID, doc_ids: list[str] | None = None) -> dict:
+def extract_ideas(db: Session, job: Job | None, workspace_id: uuid.UUID, doc_ids: list[str] | None = None, *,
+                  parallel: bool = False, limit: int | None = None) -> dict:
     """Read each post that has no current ideas once and keep what it says on the post (label, note, points and
-    the lines they came from). Maps are arranged from these, so they never re-read the posts."""
+    the lines they came from). Maps are arranged from these, so they never re-read the posts. `parallel` reads the
+    posts together instead of one after the other (a report that needs many at once); `limit` reads at most that many."""
     docs = workspace_docs(db, workspace_id, [uuid.UUID(str(i)) for i in doc_ids] if doc_ids is not None else None)
     todo = [d for d in docs if not ideas_fresh(d)]
+    if limit is not None:
+        todo = todo[:limit]
     corpus = Corpus(workspace_id)
     lm = fast_lm()
     done = 0
-    for i, d in enumerate(todo):
+    answers: list[dict | None] | None = None
+    if parallel and todo:
         if job:
-            update_job(db, job, progress=0.05 + 0.85 * i / max(len(todo), 1), message=f"Reading {d.title[:70]}")
-        try:
-            out = run.predict(ExtractIdeas, db=db, workspace_id=workspace_id, job=job, lm=lm, title=d.title,
-                              passage="\n\n".join(passages_for(corpus, [d], budget_chars=IDEAS_BUDGET)))
-        except Exception:
-            continue
+            update_job(db, job, progress=0.05, message=f"Reading {len(todo)} posts for their key ideas")
+        answers = run.predict_many(
+            ExtractIdeas,
+            [dict(title=d.title, passage="\n\n".join(passages_for(corpus, [d], budget_chars=IDEAS_BUDGET))) for d in todo],
+            db=db, workspace_id=workspace_id, lm=lm)
+    for i, d in enumerate(todo):
+        if answers is not None:
+            out = answers[i]
+            if out is None:
+                continue
+        else:
+            if job:
+                update_job(db, job, progress=0.05 + 0.85 * i / max(len(todo), 1), message=f"Reading {d.title[:70]}")
+            try:
+                out = run.predict(ExtractIdeas, db=db, workspace_id=workspace_id, job=job, lm=lm, title=d.title,
+                                  passage="\n\n".join(passages_for(corpus, [d], budget_chars=IDEAS_BUDGET)))
+            except Exception:
+                continue
         tools = tools_for(corpus, [d])
 
         def keep(items, tools=tools, d=d) -> list[dict]:
