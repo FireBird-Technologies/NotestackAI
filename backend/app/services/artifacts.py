@@ -58,6 +58,27 @@ def latest_jobs(db: Session, artifact_ids: list[uuid.UUID]) -> dict[uuid.UUID, J
     return {j.artifact_id: j for j in jobs}  # later rows win, so this is the newest job per artifact
 
 
+def active_block_jobs(db: Session, artifact_id: uuid.UUID) -> list[Job]:
+    """The "add a visual" jobs of one report that are waiting or running: several can be building at once."""
+    return list(db.scalars(select(Job).where(Job.artifact_id == artifact_id, Job.kind == "report_block",
+                                             Job.status.in_(("queued", "running"))).order_by(Job.created_at)))
+
+
+def report_adding(a: Artifact) -> list[dict]:
+    """What the report page shows on each suggestion card: one entry per suggestion that is being built (queued or
+    running), or whose newest attempt failed while the suggestion is still on offer."""
+    db = object_session(a)
+    offered = {s.get("id") for s in (a.content_json or {}).get("suggestions") or []}
+    jobs = db.scalars(select(Job).where(Job.artifact_id == a.id, Job.kind == "report_block").order_by(Job.created_at)).all()
+    newest = {(j.params or {}).get("suggestion_id") or str(j.id): j for j in jobs}  # later rows win
+    out = []
+    for sid, j in newest.items():
+        if j.status in ("queued", "running") or (j.status == "failed" and sid in offered):
+            out.append({"suggestion_id": sid, "status": j.status, "message": j.message, "error": j.error,
+                        "kind": (j.params or {}).get("kind")})
+    return out
+
+
 def report_blocks(a: Artifact) -> list[dict]:
     """A report's blocks, each infographic block with its page: the child artifact's html and status (or "missing"
     once it was deleted). Read when the report is read, so one still being written shows up when it is ready."""
@@ -110,6 +131,7 @@ def serialize_artifact(a: Artifact, job: Job | None = None) -> dict:
         "slide_urls": [storage.presign_get(k) for k in slides],
         "created_at": a.created_at.isoformat() if a.created_at else None,
         "job": serialize_job(job) if job else None,
+        **({"adding": report_adding(a)} if a.type == "report" else {}),
     }
 
 

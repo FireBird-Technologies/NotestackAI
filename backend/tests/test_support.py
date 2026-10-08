@@ -173,6 +173,19 @@ def test_escalation_fires(message, reason):
     assert esc.classify_question(message) is reason
 
 
+def test_typo_heavy_request_to_pass_it_to_the_team_is_a_handoff():
+    assert esc.classify_question("pass this t team") is esc.Reason.HUMAN
+
+
+@pytest.mark.parametrize("answer", [
+    "I can pass this to our team if you'd like.",
+    "I don't know, but our team can help.",
+])
+def test_a_short_yes_accepts_the_previous_handoff_offer(answer):
+    assert esc.accepts_previous_handoff("sure", answer)
+    assert not esc.accepts_previous_handoff("sure", "Sure, click Download.")
+
+
 @pytest.mark.parametrize("message", [
     "what formats do you support",
     "do you support pdf uploads",
@@ -263,6 +276,7 @@ def test_plan_doc_matches_the_plan_table():
     ("what is a mind constellation", "study-tools"),
     ("how do I make an infographic", "infographics"),
     ("what infographic themes are there", "infographics"),
+    ("the infogrpahic can i downlaod it", "infographics"),
     ("how do I share a report with a link", "sharing"),
     ("how do I stop sharing", "sharing"),
     ("where is the library", "library"),
@@ -295,6 +309,13 @@ def test_the_current_page_breaks_a_tie():
 def test_a_short_follow_up_borrows_the_earlier_question():
     hits = get_retriever().retrieve("and on the free plan?", history=["how many sources can I connect"])
     assert hits[0].doc.id in {"plans-and-billing", "sources-and-syncing"}
+
+
+def test_an_ambiguous_download_follow_up_keeps_the_infographic_context():
+    hits = get_retriever().retrieve(
+        "can I download that", history=["what is an infographic"], last_cited=["infographics"]
+    )
+    assert hits and hits[0].doc.id == "infographics"
 
 
 # ---- the stream endpoint ------------------------------------------------------------------------------------
@@ -360,6 +381,19 @@ def test_asking_for_a_person_skips_the_docs_and_offers_the_form(client, auth, fa
     assert payload["escalate"] and payload["escalate_reason"] == "human"
     assert "--- id:" not in fake_llm.prompts[0][0]["content"]  # no documents in the hand off prompt
     assert answer_text(events) == fake_llm.answer
+
+
+def test_sure_after_the_bot_offers_the_team_opens_the_handoff(client, auth, fake_llm):
+    fake_llm.answer = "I'm sorry, I don't know whether that is available. I can pass this to our team if you'd like."
+    fake_llm.meta = {"citations": [], "escalate": True}
+    first = done(chat(client, auth, "does it integrate with something obscure"))
+
+    fake_llm.answer = "Sure, use the form below and our team will email you back."
+    events = chat(client, auth, "sure", conversation_id=first["conversation_id"])
+
+    assert answer_text(events) == fake_llm.answer
+    assert done(events)["escalate_reason"] == "human"
+    assert "DOCUMENTS:" not in fake_llm.prompts[-1][0]["content"]
 
 
 def test_a_handoff_that_lies_is_replaced(client, auth, fake_llm):

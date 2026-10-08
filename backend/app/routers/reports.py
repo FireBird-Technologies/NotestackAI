@@ -12,12 +12,14 @@ from app.pipeline.report import EMBED_KINDS, keep_visual, remove_block
 from app.routers.artifacts import get_artifact_or_404
 from app.routers.videos import FocusIn, _focus_material
 from app.services import report_suggestions
-from app.services.artifacts import latest_jobs, serialize_artifact
+from app.services.artifacts import active_block_jobs, latest_jobs, serialize_artifact
 from app.services.jobs import create_job
 from app.services.report_templates import INTERACTIVE, TEMPLATES
 from app.services.usage import check_limit
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
+
+MAX_ADDING = 4  # visuals that can be built into one report at the same time
 
 
 
@@ -72,9 +74,11 @@ def add_block(artifact_id: uuid.UUID, body: AddBlockIn, ctx: Ctx = Depends(get_c
         raise HTTPException(400, "A Mind Constellation is made from posts, not chats")
     if body.after_block_id and body.after_block_id not in {b["id"] for b in content.get("blocks") or []}:
         raise HTTPException(404, "Section not found")
-    last = latest_jobs(ctx.db, [a.id]).get(a.id)
-    if last and last.status in {"queued", "running"}:
-        raise HTTPException(409, "Something is already being added to this report")
+    active = active_block_jobs(ctx.db, a.id)
+    if body.suggestion_id and any(j.params.get("suggestion_id") == body.suggestion_id for j in active):
+        raise HTTPException(409, "That one is already being added")
+    if len(active) >= MAX_ADDING:
+        raise HTTPException(409, f"{MAX_ADDING} visuals are being added already. Wait for one to finish.")
     if body.existing_artifact_id:
         existing = ctx.db.scalar(select(Artifact).where(Artifact.id == body.existing_artifact_id,
                                                         Artifact.workspace_id == ctx.workspace.id,

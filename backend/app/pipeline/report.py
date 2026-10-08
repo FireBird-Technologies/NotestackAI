@@ -617,6 +617,9 @@ def handle_report_block(db: Session, job: Job) -> dict:
             keep_visual(db, report, {"type": kind, **block})  # a new one also lands in the notebook's Studio list
     except NothingToDo as exc:
         raise PermanentJobError(str(exc)) from exc
+    # Several visuals can be built at once and each takes a while: lock the report and read it again here, so this
+    # one is added to what the others have already put in, not to the copy read before the slow part.
+    db.refresh(report, with_for_update=True)
     report.content_json = insert_block(report.content_json or {}, {"type": kind, **block}, p.get("after_block_id"),
                                        p.get("suggestion_id"))
     db.commit()
