@@ -6,11 +6,12 @@
 set -euo pipefail
 
 cd "$(dirname "$0")"
+ENV_FILE=../backend/.env  # every setting lives here (the API reads it in every setup)
 git -C .. pull --ff-only
 
 # Placeholders look like =<...> or <user>/<password> inside DATABASE_URL (FROM_EMAIL's <address> is fine).
-if grep -qE '=<|<(user|password|ep-xxxx|region|db)>' .env.prod; then
-  echo "deploy/.env.prod still has <placeholders>; fill them in first."
+if grep -qE '=<|<(user|password|ep-xxxx|region|db)>' "$ENV_FILE"; then
+  echo "backend/.env still has <placeholders>; fill them in first."
   exit 1
 fi
 
@@ -18,20 +19,20 @@ profile=()
 [ "${RENDER:-0}" = "1" ] && profile+=(--profile render)
 [ "${CADDY:-0}" = "1" ] && profile+=(--profile caddy)
 
-docker compose --env-file .env.prod -f docker-compose.prod.yml "${profile[@]}" up -d --build --remove-orphans
+docker compose --env-file "$ENV_FILE" -f docker-compose.prod.yml "${profile[@]}" up -d --build --remove-orphans
 docker image prune -f >/dev/null
 
-port=$(grep -E '^API_PORT=' .env.prod | cut -d= -f2)
+port=$(grep -E '^API_PORT=' "$ENV_FILE" | cut -d= -f2)
 port=${port:-8010}
 echo "==> Waiting for the API on 127.0.0.1:$port"
 for _ in $(seq 1 30); do
   curl -fsS "http://127.0.0.1:$port/api/health" >/dev/null 2>&1 && break
   sleep 4
 done
-curl -fsS "http://127.0.0.1:$port/api/health" || { echo "API not up. Logs: cd deploy && docker compose --env-file .env.prod -f docker-compose.prod.yml logs -f api"; exit 1; }
+curl -fsS "http://127.0.0.1:$port/api/health" || { echo "API not up. Logs: cd deploy && docker compose --env-file ../backend/.env -f docker-compose.prod.yml logs -f api"; exit 1; }
 echo
 
-domain=$(grep -E '^API_DOMAIN=' .env.prod | cut -d= -f2)
+domain=$(grep -E '^API_DOMAIN=' "$ENV_FILE" | cut -d= -f2)
 echo "==> Waiting for https://$domain/api/health"
 for _ in $(seq 1 30); do
   if curl -fsS "https://$domain/api/health" >/dev/null 2>&1; then
@@ -42,5 +43,5 @@ for _ in $(seq 1 30); do
   fi
   sleep 4
 done
-echo "Health check did not pass yet. Logs: cd deploy && docker compose --env-file .env.prod -f docker-compose.prod.yml logs -f api"
+echo "Health check did not pass yet. Logs: cd deploy && docker compose --env-file ../backend/.env -f docker-compose.prod.yml logs -f api"
 exit 1
