@@ -26,20 +26,19 @@ export default function ReportPage() {
   useEffect(() => {
     void load();
   }, [load]);
-  const [addingId, setAddingId] = useState<string | null>(null); // the suggestion being built (its card shows a loader)
-  const job = useJob(artifact?.job, () => {
-    void load();
-    setAddingId(null);
-  });
+  // Suggestions whose Add was just clicked and that the server has not listed yet (the card shows its loader at once).
+  const [pending, setPending] = useState<string[]>([]);
+  const job = useJob(artifact?.job, () => void load());
 
-  // If the live updates drop, the loader still ends once the job's own state is final. Only the job that adds a visual counts: the
-  // report's own, long finished job is what the page still holds in the moment after Add is clicked.
+  // Visuals are added one job each and several can run together: while any is queued or running, look again every
+  // couple of seconds. A finished one shows up in the report and drops off the list.
+  const building = (artifact?.adding ?? []).filter((a) => a.status !== "failed");
+  const buildingKey = building.map((a) => a.suggestion_id).join(",");
   useEffect(() => {
-    if (addingId && job && job.kind === "report_block" && job.id === artifact?.job?.id && (job.status === "done" || job.status === "failed")) {
-      setAddingId(null);
-      void load();
-    }
-  }, [job, addingId, artifact?.job?.id, load]);
+    if (!buildingKey) return;
+    const t = setTimeout(() => void load(), 2000);
+    return () => clearTimeout(t);
+  }, [buildingKey, artifact, load]);
 
   // An infographic added to the report is drawn after the report page shows it: look again until it is ready.
   const drawing = (artifact?.content.blocks ?? []).some((b: { type: string; status?: string }) =>
@@ -53,10 +52,10 @@ export default function ReportPage() {
   if (error) return <p className="error-text">{error}</p>;
   if (!artifact) return <Loading label="Opening report" />;
   const running = job && (job.status === "queued" || job.status === "running");
-  const adding_ = !!addingId || !!(running && job?.kind === "report_block"); // a visual is being added: one at a time
-  // Which suggestion's card shows the loader: the one just clicked, or, after a reload or a dropped update, the one the running job is adding.
-  const buildingId = addingId ?? (running && job?.kind === "report_block" ? (job.params.suggestion_id as string | undefined) ?? null : null);
-  const blockFailed = job?.kind === "report_block" && job.status === "failed" ? job.error : null;
+  // Each suggestion card that is being built shows its own loader: the ones the server lists, and the ones just clicked.
+  const addingNow: Record<string, { message?: string | null }> = Object.fromEntries(pending.map((id) => [id, {}]));
+  for (const a of building) addingNow[a.suggestion_id] = { message: a.message };
+  const blockFailed = (artifact.adding ?? []).find((a) => a.status === "failed")?.error ?? null;
   const back = artifact.notebook_id ? `/app/notebooks/${artifact.notebook_id}` : "/app/archive";
 
   const download = () => {
@@ -83,7 +82,7 @@ export default function ReportPage() {
     if (!adding) return;
     const { suggestion } = adding;
     setAddFailed(null);
-    setAddingId(suggestion.id);
+    setPending((p) => [...p, suggestion.id]);
     setAdding(null);
     try {
       setArtifact(await reportsApi.addBlock(artifact.id, {
@@ -91,8 +90,9 @@ export default function ReportPage() {
         brief: suggestion.brief, existing_artifact_id: existingId ?? undefined, theme,
       }));
     } catch (e) {
-      setAddingId(null);
       setAddFailed(errorMessage(e));
+    } finally {
+      setPending((p) => p.filter((id) => id !== suggestion.id)); // the server's own list takes over from here
     }
   };
   const remove = async (blockId: string) => {
@@ -135,8 +135,7 @@ export default function ReportPage() {
       {(addFailed ?? blockFailed) && <p className="error-text">{addFailed ?? blockFailed}</p>}
       {artifact.status === "ready" && (
         <ReportView content={artifact.content} artifactId={artifact.id} onCite={cite}
-                    editor={{ onAdd: startAdd, onRemove: remove, busy: adding_, adding: buildingId,
-                             addingMessage: job?.kind === "report_block" ? job.message : null, removing: removingId }} />
+                    editor={{ onAdd: startAdd, onRemove: remove, adding: addingNow, removing: removingId }} />
       )}
       {sharing && <ShareDialog artifactId={artifact.id} onClose={() => setSharing(false)} />}
       {adding && <ReportAddDialog suggestion={adding.suggestion} existing={adding.existing} loading={adding.loading} busy={false} error={null}

@@ -119,7 +119,10 @@ async def chat_stream(body: ChatIn, ctx: Ctx = Depends(get_ctx)) -> StreamingRes
     plan = effective_plan(db, ctx.workspace).id
 
     recent = memory.recent_messages(db, conv_id)
+    previous_assistant = next((m.content for m in reversed(recent) if m.role == "assistant"), None)
     question_reason = esc.classify_question(message)
+    if question_reason is None and esc.accepts_previous_handoff(message, previous_assistant):
+        question_reason = esc.Reason.HUMAN
     discount = scope.asks_for_discount(message)
     out_of_scope = scope.about_user_data(message) and not discount
     short_circuit = esc.should_short_circuit(question_reason) and not out_of_scope and not discount

@@ -48,6 +48,14 @@ _FEATURE = re.compile(
     """
 )
 _BARE_ASK = re.compile(r"^\s*(?:support|help)\s*[!.?]*\s*$", re.I)
+_HANDOFF_REQUEST = re.compile(
+    r"(?ix)\b(?:pass|send|forward|route|hand)\b[^.?!]{0,40}"
+    r"\b(?:to\s+|t\s+)?(?:the\s+|your\s+|our\s+)?(?:team|support|human|person|someone)\b"
+)
+_AFFIRMATIVE = re.compile(
+    r"(?ix)^\s*(?:yes|yeah|yep|sure|okay|ok|please|do\s+it|go\s+ahead|that(?:'s|\s+is)\s+fine)"
+    r"(?:\s+please)?[\s!.]*$"
+)
 
 # The bot offering the team in its own answer ("I can pass this to our team").
 _ANSWER_OFFERS_TEAM = re.compile(
@@ -58,11 +66,17 @@ _ANSWER_OFFERS_TEAM = re.compile(
 def classify_question(message: str) -> Reason | None:
     if _REFUND.search(message):
         return Reason.REFUND
-    if _HUMAN.search(message) or _BARE_ASK.match(message) or _FRUSTRATION.search(message):
+    if (_HUMAN.search(message) or _HANDOFF_REQUEST.search(message)
+            or _BARE_ASK.match(message) or _FRUSTRATION.search(message)):
         return Reason.HUMAN
     if _FEATURE.search(message):
         return Reason.FEATURE
     return None
+
+
+def accepts_previous_handoff(message: str, previous_assistant: str | None) -> bool:
+    """A short yes after the bot offers the team is a handoff request, not a new greeting."""
+    return bool(previous_assistant and _AFFIRMATIVE.match(message) and _ANSWER_OFFERS_TEAM.search(previous_assistant))
 
 
 def should_short_circuit(reason: Reason | None) -> bool:

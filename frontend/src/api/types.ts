@@ -190,6 +190,16 @@ export type Artifact = {
   provider?: string | null;
   /** This person's thumbs up or down on a finished report, quiz, flashcard set or infographic. */
   feedback?: AnswerFeedback | null;
+  /** A report: the visuals being added right now (several at once), by the suggestion each answers. */
+  adding?: ReportAdding[];
+};
+
+export type ReportAdding = {
+  suggestion_id: string;
+  status: "queued" | "running" | "failed";
+  message: string | null;
+  error: string | null;
+  kind: string | null;
 };
 
 export type TopicStatus = "rising" | "steady" | "dormant";

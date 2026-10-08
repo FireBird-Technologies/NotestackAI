@@ -1770,6 +1770,35 @@ def test_interactive_report_only_suggests_visuals_until_the_reader_adds_them(cli
     assert done["status"] == "ready" and done["content"]["format"] == "document"
 
 
+def test_several_visuals_can_be_added_to_a_report_at_the_same_time(client, auth, run_jobs, feed, llm):
+    pricing, nb = _notebook_with_pricing(client, auth, run_jobs)
+    done = _make_report(client, auth, run_jobs, llm, pricing, nb)
+    llm["GenerateFlashcards"] = {"cards": [{"front": "Term", "back": "Meaning", "sources": []}]}
+    llm["GenerateQuiz"] = {"questions": [{"type": "multiple_choice", "question": "Q?", "options": ["a", "b"],
+                                          "correct": [0], "explanation": "e", "sources": []}]}
+    url = f"/api/reports/{done['id']}/blocks"
+    first = client.post(url, json={"kind": "flashcards", "after_block_id": "b1", "suggestion_id": "s1",
+                                   "brief": "Terms"}, headers=auth)
+    assert first.status_code == 200, first.text
+    # a second visual starts while the first is still waiting: that used to be refused
+    second = client.post(url, json={"kind": "quiz", "after_block_id": "b1", "suggestion_id": "s2", "brief": "Test"},
+                         headers=auth)
+    assert second.status_code == 200, second.text
+    # the same card clicked twice is still refused
+    again = client.post(url, json={"kind": "flashcards", "after_block_id": "b1", "suggestion_id": "s1",
+                                   "brief": "Terms"}, headers=auth)
+    assert again.status_code == 409
+    adding = client.get(f"/api/artifacts/{done['id']}", headers=auth).json()["adding"]
+    assert {a["suggestion_id"] for a in adding} == {"s1", "s2"} and all(a["status"] == "queued" for a in adding)
+
+    run_jobs()
+    after = client.get(f"/api/artifacts/{done['id']}", headers=auth).json()
+    kinds = [b["type"] for b in after["content"]["blocks"]]
+    assert "flashcards" in kinds and "quiz" in kinds  # neither overwrote the other
+    assert len({b["id"] for b in after["content"]["blocks"]}) == len(kinds)  # block ids stay unique
+    assert after["adding"] == []
+
+
 def test_quiz_can_be_made_from_posts_and_chats_together(client, auth, run_jobs, feed, llm, db_session):
     from app.models import Chat, Message, Notebook
 

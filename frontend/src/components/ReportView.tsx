@@ -10,11 +10,9 @@ import { QuizRunner } from "./Quiz";
 export type ReportEditor = {
   onAdd: (s: ReportSuggestion) => void;
   onRemove: (blockId: string) => void;
-  /** A visual is being added: no second one is started meanwhile. */
-  busy: boolean;
-  /** The suggestion being built right now (its card shows a loader), and what the job is doing. */
-  adding?: string | null;
-  addingMessage?: string | null;
+  /** The suggestions being built right now, by id (each card shows its own loader and what its job is doing). Several
+   * can be building at once; the others' Add buttons stay usable. */
+  adding?: Record<string, { message?: string | null }>;
   /** The block id being removed right now (its Remove button shows a loader). */
   removing?: string | null;
 };
@@ -339,7 +337,8 @@ export function ReportView({ content, artifactId, onCite, editor }: Props & { ed
               );
             })()}
             {editor && suggestions.filter((s) => s.after_block_id === b.id).map((s) => {
-              const building = editor.adding === s.id;
+              const progress = editor.adding?.[s.id];
+              const building = !!progress;
               return (
                 <div key={s.id} className={`rp-suggestion${building ? " building" : ""}`} aria-busy={building}>
                   <div>
@@ -355,10 +354,10 @@ export function ReportView({ content, artifactId, onCite, editor }: Props & { ed
                   {building ? (
                     <span className="rp-building-label" role="status">
                       <span className="nbv-send-spinner" aria-hidden="true" />
-                      {editor.addingMessage || `Building the ${KIND_LABEL[s.kind].toLowerCase()}...`}
+                      {progress?.message || `Building the ${KIND_LABEL[s.kind].toLowerCase()}...`}
                     </span>
                   ) : (
-                    <button type="button" className="btn btn-small" disabled={editor.busy} onClick={() => editor.onAdd(s)}>Add</button>
+                    <button type="button" className="btn btn-small" onClick={() => editor.onAdd(s)}>Add</button>
                   )}
                 </div>
               );

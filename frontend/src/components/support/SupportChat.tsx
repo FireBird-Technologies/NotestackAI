@@ -24,6 +24,16 @@ const FORM_COPY: Record<EscalateReason, string> = {
   feature: "Request this feature",
 };
 
+const HANDOFF_REPLY = /^\s*(?:yes|yeah|yep|sure|ok(?:ay)?|please|do it|go ahead)[\s!.]*$/i;
+const HANDOFF_ONLY = /^(?:pass|send|forward|route|hand)\b.{0,40}\b(?:team|support|human|person|someone)\b/i;
+
+function escalationConcern(messages: Msg[], assistantIndex: number): string {
+  const userMessages = messages.slice(0, assistantIndex).filter((m) => m.role === "user");
+  return [...userMessages].reverse().find((m) => !HANDOFF_REPLY.test(m.text) && !HANDOFF_ONLY.test(m.text))?.text
+    ?? userMessages.at(-1)?.text
+    ?? "";
+}
+
 function EscalationForm({ reason, concern, page, conversationId, defaultEmail, open }: {
   reason: EscalateReason;
   concern: string;
@@ -137,7 +147,6 @@ export function SupportChat({ onClose }: { onClose: () => void }) {
         },
         onAnswerDone: () => {
           update({ streaming: false });
-          setBusy(false);
         },
         onDone: (d: DonePayload) => {
           setConversationId(d.conversation_id);
@@ -209,7 +218,7 @@ export function SupportChat({ onClose }: { onClose: () => void }) {
                       {m.escalate && m.reason && (
                         <EscalationForm
                           reason={m.reason}
-                          concern={m.reason === "feature" ? messages[i - 1]?.text ?? "" : ""}
+                          concern={escalationConcern(messages, i)}
                           page={pathname}
                           conversationId={conversationId}
                           defaultEmail={user.email}
