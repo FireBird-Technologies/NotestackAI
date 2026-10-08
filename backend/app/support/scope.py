@@ -34,7 +34,8 @@ _MINE = (
 _ABOUT_MY_DATA = re.compile(
     rf"""(?ix)
     \bmy\s+(?:[\w'-]+\s+){{0,3}}{_MINE}\b
-    | \b(?:what|which|show|list|find|tell)\b[^.?!]{{0,40}}\b(?:i|we)\s+(?:wrote|written|said|posted|published|have|uploaded|added)\b
+    | \b(?:what|which|show|list|find|tell)\b[^.?!]{{0,40}}\b(?:i|we)\s+(?:have\s+)?(?:wrote|written|said|posted|published|uploaded|added)\b
+    | \b(?:what|which|show|list|find|tell)\b[^.?!]{{0,40}}\b{_MINE}\b[^.?!]{{0,20}}\b(?:i|we)\s+have\b
     | \bhow\s+many\b[^.?!]{{0,40}}\b(?:do\s+i|have\s+i|did\s+i|i\s+have)\b
     | \b(?:summari[sz]e|analy[sz]e|review|compare|search)\b[^.?!]{{0,30}}\b(?:my|this|the)\s+(?:\w+\s+)?{_MINE}\b
     | \bwhat(?:'s|\s+is)\s+in\s+(?:my|this|the)\s+{_MINE}\b
@@ -50,6 +51,9 @@ _ABOUT_MY_DATA = re.compile(
 # writer's own content, unless it also asks what they have made or hold.
 _PLAN_WORDS = re.compile(r"(?i)\b(?:plans?|tiers?|pricing|prices?|free|writer|studio|allowance|limits?|upgrade|subscription)\b")
 _OWN_STATE = re.compile(r"(?i)\b(?:i\s+have|have\s+i|did\s+i|i\s+(?:wrote|made|created|used|posted|published))\b")
+_OWN_CONTENT = re.compile(
+    rf"(?i)\bmy\s+(?:[\w'-]+\s+){{0,3}}{_MINE}\b|\b(?:the|this)\s+(?:notebook|chat|conversation)\b|\b(?:in|from)\s+(?:our|my|this)\s+(?:chat|conversation|notebook)\b"
+)
 # Words that mean something went wrong with their work; the reply also offers the human form.
 _BROKEN = re.compile(
     r"(?i)\b(?:fail\w*|slow|forever|too\s+long|taking\s+(?:so\s+|way\s+)?long|hang\w*"
@@ -69,7 +73,7 @@ def about_user_data(message: str) -> bool:
     text = message.strip()
     if _HOWTO.match(text) and not re.search(r"(?i)\b(?:i|we)\s+(?:wrote|said|posted|published)\b", text):
         return False
-    if _PLAN_WORDS.search(text) and not _OWN_STATE.search(text) and not re.search(rf"(?i)\bmy\s+(?:[\w'-]+\s+){{0,3}}{_MINE}\b", text):
+    if _PLAN_WORDS.search(text) and not _OWN_STATE.search(text) and not _OWN_CONTENT.search(text):
         return False
     return bool(_ABOUT_MY_DATA.search(text))
 
@@ -78,3 +82,24 @@ def out_of_scope_reply(message: str) -> tuple[str, bool]:
     """(reply, offer_human_form)"""
     broken = bool(_BROKEN.search(message))
     return OUT_OF_SCOPE_REPLY + (OUT_OF_SCOPE_BROKEN_SUFFIX if broken else ""), broken
+
+
+# Any kind of price reduction. The bot has no information on these, so it never answers or guesses; the writer is
+# pointed to the team instead (a fixed reply, no model call, so it cannot invent a discount or confirm one).
+_DISCOUNT = re.compile(
+    r"""(?ix)
+    \b(?:discounts?|discounted|coupons?|promo(?:tions?|\s*codes?)?|voucher|vouchers|cheaper|price\s+(?:drop|cut|match)|
+    reduced\s+(?:price|rate)|special\s+(?:price|pricing|rate|offer)|special\s+deals?|(?:any|a|good|best)\s+deals?|
+    on\s+sale|sales?\s+(?:price|event)|black\s+friday|cyber\s+monday|lifetime\s+deal|appsumo|
+    (?:student|educator|teacher|nonprofit|non-profit|ngo|startup|academic)\s+(?:plan|pricing|price|rate|discount)s?|
+    (?:\d+\s*%|percent)\s+off|money\s+off|save\s+(?:money|on)|bundle|bulk|volume\s+pricing|negotiat\w*)\b
+    """
+)
+DISCOUNT_REPLY = (
+    "I'm sorry, I don't have any information about discounts or special pricing. "
+    "If you'd like to ask about it, use the form below and our team will email you back."
+)
+
+
+def asks_for_discount(message: str) -> bool:
+    return bool(_DISCOUNT.search(message))

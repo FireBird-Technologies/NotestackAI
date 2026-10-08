@@ -120,11 +120,12 @@ async def chat_stream(body: ChatIn, ctx: Ctx = Depends(get_ctx)) -> StreamingRes
 
     recent = memory.recent_messages(db, conv_id)
     question_reason = esc.classify_question(message)
-    out_of_scope = scope.about_user_data(message)
-    short_circuit = esc.should_short_circuit(question_reason) and not out_of_scope
+    discount = scope.asks_for_discount(message)
+    out_of_scope = scope.about_user_data(message) and not discount
+    short_circuit = esc.should_short_circuit(question_reason) and not out_of_scope and not discount
 
     scored, messages = [], []
-    if not out_of_scope and not short_circuit:
+    if not out_of_scope and not short_circuit and not discount:
         scored = get_retriever().retrieve(
             message, history=memory.user_texts(recent), page_path=page, last_cited=memory.last_cited(recent)
         )
@@ -138,7 +139,10 @@ async def chat_stream(body: ChatIn, ctx: Ctx = Depends(get_ctx)) -> StreamingRes
 
     async def generate() -> AsyncIterator[str]:
         answer, escalate_reason, meta = "", None, llm.Meta()
-        if out_of_scope:
+        if discount:
+            answer, escalate_reason = scope.DISCOUNT_REPLY, esc.Reason.HUMAN
+            yield _sse("token", answer)
+        elif out_of_scope:
             answer, broken = scope.out_of_scope_reply(message)
             escalate_reason = esc.Reason.HUMAN if broken else None
             yield _sse("token", answer)
@@ -168,7 +172,7 @@ async def chat_stream(body: ChatIn, ctx: Ctx = Depends(get_ctx)) -> StreamingRes
             answer = strip_em_dashes(answer.strip()) or "Sorry, I could not form an answer."
         yield _sse("answer_done", {"conversation_id": str(conv_id)})
 
-        if not out_of_scope and not short_circuit:
+        if not out_of_scope and not short_circuit and not discount:
             meta_system = prompts.META_PROMPT.format(
                 doc_ids="\n".join(f"- {s.doc.id}: {s.doc.title}" for s in scored) or "(none)"
             )

@@ -59,6 +59,10 @@ def _parse(path: Path) -> Doc:
     )
 
 
+def _count(n: int) -> str:
+    return "unlimited" if n < 0 else str(n)
+
+
 def _plans_doc() -> Doc:
     """Built from services/plans.py so prices and limits can never drift from what the app enforces."""
     from app.services.plans import PLANS, annual_prices, plan_order
@@ -73,27 +77,24 @@ def _plans_doc() -> Doc:
         if p.price_monthly_usd:
             monthly, yearly = annual_prices(p)
             price += f", or ${monthly:g} a month billed yearly (${yearly:g} a year)"
-        per = "in total, never renewing," if p.lifetime else "a month"
+        per = "in total (never renewing)" if p.lifetime else "a month"
 
-        def count(n: int) -> str:
-            return "unlimited" if n < 0 else str(n)
-
-        audio = f"{count(p.audio_overviews)} audio overviews in total, any length" if p.audio_overviews >= 0 \
+        audio = f"{_count(p.audio_overviews)} audio overviews in total, any length" if p.audio_overviews >= 0 \
             else f"{p.audio_minutes} minutes of audio a month"
         lines += [
             f"## {p.name}",
             f"{p.tagline}. Price: {price}.",
-            f"Limits: {p.sources} sources, {p.indexed_posts} indexed posts across every source, {audio}, "
+            f"Limits: {_count(p.sources)} sources, {p.indexed_posts} indexed posts across every source, {audio}, "
             f"{p.videos} videos {'a month' if p.videos_monthly else 'in total, never renewing'}, "
-            f"{count(p.launch_kits)} Launch Kits {per}, {count(p.infographics)} infographics {per}, "
-            f"{count(p.reports)} reports a month. "
+            f"{_count(p.launch_kits)} Launch Kits {per}, {_count(p.infographics)} infographics {per}, "
+            f"{_count(p.reports)} reports a month. "
             f"Voice cloning: {'yes' if p.voice_cloning else 'no'}.",
             "Includes: " + "; ".join(p.features) + ".",
         ]
     lines += [
         "## Billing",
         "Upgrade, change plan or manage billing from Settings under Plan and usage. "
-        "Annual billing is cheaper than monthly. Checkout may be switched off while billing is being finished, "
+        "Monthly and yearly prices are listed above. Checkout may be switched off while billing is being finished, "
         "in which case every workspace gets Studio limits.",
         "Refunds and billing problems are handled by the team: use the Talk to a human button in this chat.",
     ]
