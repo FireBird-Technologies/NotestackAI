@@ -1,4 +1,4 @@
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import AppShell from "./components/AppShell";
 import { PublicFooter, PublicNav } from "./components/PublicChrome";
 import PricingTiers from "./components/PricingTiers";
@@ -8,20 +8,25 @@ import AuthPage from "./pages/AuthPage";
 import { Blog, BlogPostPage } from "./pages/Blog";
 import Landing from "./pages/Landing";
 import Archive from "./pages/Archive";
-import Launchpad from "./pages/Launchpad";
-import LaunchKit from "./pages/LaunchKit";
+import Voices from "./pages/Voices";
+import Launchpad, { ScheduleLaunch } from "./pages/Launchpad";
+import LaunchKitRedirect, { LaunchKitPage, LaunchKits } from "./pages/LaunchKit";
 import MissionControl from "./pages/MissionControl";
 import Notebooks from "./pages/Notebooks";
 import NotebookLMAlternative from "./pages/NotebookLMAlternative";
 import NotebookView from "./pages/NotebookView";
+import PublicReport from "./pages/PublicReport";
+import ReportPage from "./pages/ReportPage";
 import Resurface from "./pages/Resurface";
 import Settings from "./pages/Settings";
 import Sources from "./pages/Sources";
 import Studio from "./pages/Studio";
+import VideoCreate from "./pages/VideoCreate";
+import VideoEditor from "./pages/VideoEditor";
 import TopicMap from "./pages/TopicMap";
 import { ToolPage, ToolsHub } from "./pages/Tools";
-import VoiceProfile from "./pages/VoiceProfile";
 import Welcome from "./pages/Welcome";
+import { SupportWidget } from "./components/support/SupportWidget";
 
 function PricingPage() {
   return (
@@ -40,6 +45,7 @@ function PricingPage() {
 
 export default function App() {
   return (
+    <>
     <Routes>
       <Route path="/" element={<Landing />} />
       <Route path="/pricing" element={<PricingPage />} />
@@ -48,6 +54,7 @@ export default function App() {
       <Route path="/tools/:slug" element={<ToolPage />} />
       <Route path="/blogs" element={<Blog />} />
       <Route path="/blogs/:slug" element={<BlogPostPage />} />
+      <Route path="/r/:token" element={<PublicReport />} />
       <Route path="/auth" element={<AuthPage />} />
       <Route path="/auth/callback" element={<AuthCallback />} />
       <Route path="/welcome" element={<Welcome />} />
@@ -55,18 +62,34 @@ export default function App() {
         <Route index element={<MissionControl />} />
         <Route path="notebooks" element={<Notebooks />} />
         <Route path="notebooks/:id" element={<NotebookView />} />
+        <Route path="reports/:id" element={<ReportPage />} />
+        <Route path="videos" element={<Navigate to="/app/archive?tab=videos" replace />} />
+        <Route path="videos/new" element={<VideoCreate />} />
+        <Route path="videos/voices" element={<Navigate to="/app/voices" replace />} />
+        <Route path="videos/:id" element={<VideoEditor />} />
         <Route path="sources" element={<Sources />} />
         <Route path="map" element={<TopicMap />} />
-        <Route path="voice" element={<VoiceProfile />} />
+        <Route path="voice" element={<VoiceRedirect />} />
         <Route path="studio" element={<Studio />} />
-        <Route path="launch-kit" element={<LaunchKit />} />
+        <Route path="launch-kit" element={<LaunchKitRedirect />} />
         <Route path="launchpad" element={<Launchpad />} />
+        <Route path="launchpad/new" element={<ScheduleLaunch />} />
+        <Route path="launchpad/kits" element={<LaunchKits />} />
+        <Route path="launchpad/kits/:id" element={<LaunchKitPage />} />
         <Route path="archive" element={<Archive />} />
+        <Route path="voices" element={<Voices />} />
         <Route path="resurface" element={<Resurface />} />
         <Route path="settings" element={<Settings />} />
         <Route path="*" element={<MissionControl />} />
       </Route>
       <Route path="*" element={<Landing />} />
     </Routes>
+    <SupportWidget />
+    </>
   );
+}
+
+/** The old Voice page (/app/voice) is Manage voices (/app/voices) now. */
+function VoiceRedirect() {
+  return <Navigate to="/app/voices" replace />;
 }

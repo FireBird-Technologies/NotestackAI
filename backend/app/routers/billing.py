@@ -8,7 +8,7 @@ from app.auth import Ctx, get_ctx
 from app.config import settings
 from app.db import get_db
 from app.services.billing import billing_status, create_checkout_url, create_portal_url
-from app.services.plans import PLAN_ORDER, PLANS, effective_plan, plan_dict
+from app.services.plans import PLANS, effective_plan, plan_dict, plan_order
 
 router = APIRouter(prefix="/api/billing", tags=["billing"])
 
@@ -40,7 +40,8 @@ def checkout(body: CheckoutIn, ctx: Ctx = Depends(get_ctx)):
     if not settings.billing_enabled:
         raise HTTPException(409, {"code": "billing_disabled", "message": "Checkout is not available yet."})
     current = effective_plan(ctx.db, ctx.workspace)
-    if PLAN_ORDER.index(body.plan) <= PLAN_ORDER.index(current.id):
+    order = plan_order()
+    if body.plan not in PLANS or order.index(body.plan) <= order.index(current.id):
         raise HTTPException(409, {"code": "already_on_plan", "message": f"You are already on {current.name}."})
     return {"url": create_checkout_url(ctx.db, ctx.user, ctx.workspace, PLANS[body.plan], body.cycle)}
 

@@ -44,6 +44,13 @@ export function NudgeDock() {
 }
 
 /** Sidebar card: plan, monthly meters and the upgrade button. Collapses to a rocket button. */
+/** What is left this period: "12 left", "45 min left" or "Unlimited". */
+function fuelLeft(m: { used: number; limit: number; unit: string }): string {
+  if (m.limit < 0) return "Unlimited";
+  const left = Math.max(m.limit - m.used, 0);
+  return `${Number.isInteger(left) ? left : left.toFixed(1)}${m.unit ? ` ${m.unit}` : ""} left`;
+}
+
 export function FuelGauge({ collapsed }: { collapsed: boolean }) {
   const { status, openUpgrade } = useUpgrade();
   if (!status) return null;
@@ -64,7 +71,10 @@ export function FuelGauge({ collapsed }: { collapsed: boolean }) {
       </div>
       {meters.map((m) => (
         <div key={m.key} className="fuel-row" title={`${m.used} / ${m.limit < 0 ? "unlimited" : m.limit} ${m.unit}`}>
-          <span className="mono">{m.label}</span>
+          <span className="fuel-label">
+            <span className="mono">{m.label}</span>
+            <span className={`mono fuel-left${m.limit >= 0 && m.pct >= 0.8 ? " hot" : ""}`}>{fuelLeft(m)}</span>
+          </span>
           <div className="fuel-track">
             <div className={`fuel-fill${m.pct >= 0.8 ? " hot" : ""}`} style={{ width: `${m.limit < 0 ? 4 : Math.max(3, m.pct * 100)}%` }} />
           </div>

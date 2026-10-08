@@ -12,6 +12,7 @@ from app.config import settings
 from app.models import Document, Job, Upload, VoiceConsent, VoiceProfile
 from app.services import tts
 from app.services.jobs import create_job, record_usage, serialize_job
+from app.services.notestack_voices import forget_video_voice, save_notestack_voice
 from app.services.plans import effective_plan, plan_limit_error
 from app.services.storage import storage
 
@@ -206,10 +207,16 @@ async def add_from_library(body: LibraryAddIn, ctx: Ctx = Depends(get_ctx)):
         voice_id = await run_in_threadpool(tts.add_library_voice, body.public_owner_id, body.voice_id, body.name)
     except tts.TTSError as exc:
         raise HTTPException(502, str(exc)) from exc
+    vp = _ensure_profile(ctx)
+    voices = dict(vp.host_voices or {})
+    # Listed, so it can be added to the workspace's video voices too.
+    added = [v for v in voices.get("added") or [] if v.get("voice_id") != voice_id]
+    voices["added"] = [*added, {"voice_id": voice_id, "name": body.name[:100]}]
     if body.use_as in ("host_a", "host_b"):
-        vp = _ensure_profile(ctx)
-        vp.host_voices = {**(vp.host_voices or {}), body.use_as: voice_id}
-        ctx.db.commit()
+        voices[body.use_as] = voice_id
+    vp.host_voices = voices
+    save_notestack_voice(ctx.db, ctx.workspace.id, voice_id, body.name)  # a voice added is a voice saved
+    ctx.db.commit()
     return {"voice_id": voice_id, **_serialize(ctx)}
 
 
@@ -266,7 +273,8 @@ async def design(body: DesignIn, ctx: Ctx = Depends(get_ctx)):
     for p in previews:
         key = f"ws/{ctx.workspace.id}/voice-previews/{uuid.uuid4().hex}.mp3"
         storage.put_bytes(key, p["audio"], "audio/mpeg")
-        out.append({"generated_voice_id": p["generated_voice_id"], "url": storage.presign_get(key), "seconds": p["seconds"]})
+        out.append({"generated_voice_id": p["generated_voice_id"], "url": storage.presign_get(key),
+                    "seconds": p["seconds"]})
     record_usage(ctx.db, workspace_id=ctx.workspace.id, kind="voice_design", provider="elevenlabs",
                  quantity=len(out), unit="previews")
     return {"description": description, "previews": out}
@@ -286,6 +294,7 @@ async def save_design(body: DesignSaveIn, ctx: Ctx = Depends(get_ctx)):
     if body.use_as in ("host_a", "host_b"):
         voices[body.use_as] = voice_id
     vp.host_voices = voices
+    save_notestack_voice(ctx.db, ctx.workspace.id, voice_id, body.name)  # a voice made is a voice saved
     ctx.db.commit()
     return {"voice_id": voice_id, **_serialize(ctx)}
 
@@ -368,5 +377,7 @@ async def revoke_consent(ctx: Ctx = Depends(get_ctx)):
     vp = _profile(ctx)
     if vp and vp.host_voices:
         vp.host_voices = {k: v for k, v in vp.host_voices.items() if v != consent.elevenlabs_voice_id}
+    if consent.elevenlabs_voice_id:
+        forget_video_voice(ctx.db, ctx.workspace.id, consent.elevenlabs_voice_id)
     ctx.db.commit()
     return _serialize(ctx)

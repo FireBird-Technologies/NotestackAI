@@ -7,26 +7,21 @@ import { FuelGauge, NudgeDock } from "./Nudges";
 import SkyCanvas from "./SkyCanvas";
 import UpgradeModal from "./UpgradeModal";
 import {
-  AsteroidIcon,
-  HelmetIcon,
   LaunchpadIcon,
-  LaunchWindowIcon,
+  LibraryIcon,
+  MicIcon,
   OrbitIcon,
   PlanetIcon,
-  RadarIcon,
   SatelliteDishIcon,
 } from "./icons/Icons";
 
-// Theme in the icon, clarity in the label: the plain label always shows.
-// Seven stops: related pages share one entry (`also` keeps it lit on them).
-const NAV: { to: string; label: string; icon: typeof RadarIcon; end?: boolean; also?: string[] }[] = [
-  { to: "/app", label: "Home", icon: RadarIcon, end: true },
-  { to: "/app/sources", label: "Sources", icon: SatelliteDishIcon, also: ["/app/map"] },
+// Keep the primary navigation focused; related pages remain reachable through these destinations.
+const NAV: { to: string; label: string; icon: typeof PlanetIcon; end?: boolean; also?: string[] }[] = [
   { to: "/app/notebooks", label: "Notebooks", icon: PlanetIcon },
-  { to: "/app/studio", label: "Create", icon: LaunchWindowIcon, also: ["/app/launch-kit"] },
-  { to: "/app/launchpad", label: "Launchpad", icon: LaunchpadIcon, also: ["/app/resurface"] },
-  { to: "/app/archive", label: "Library", icon: AsteroidIcon },
-  { to: "/app/voice", label: "Voice", icon: HelmetIcon },
+  { to: "/app/sources", label: "Sources", icon: SatelliteDishIcon, also: ["/app/map"] },
+  { to: "/app/archive", label: "Library", icon: LibraryIcon, also: ["/app/videos"] },
+  { to: "/app/launchpad", label: "Launchpad", icon: LaunchpadIcon, also: ["/app/resurface", "/app/launch-kit"] },
+  { to: "/app/voices", label: "Manage voices", icon: MicIcon },
 ];
 
 const COLLAPSED_KEY = "ns_sidebar_collapsed";
@@ -40,8 +35,9 @@ function readCollapsed(): boolean {
 }
 
 export default function AppShell() {
-  const { user, loading, logout } = useAuth();
+  const { user, loading, signingOut, logout } = useAuth();
   const location = useLocation();
+  const notebookFocus = /^\/app\/notebooks\/[^/]+$/.test(location.pathname);
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const toggle = () =>
     setCollapsed((c) => {
@@ -53,14 +49,11 @@ export default function AppShell() {
       return !c;
     });
   if (loading) return <div className="boot"><div className="orbit-loader"><span /></div></div>;
-  if (!user) {
-    const next = new URLSearchParams({ next: location.pathname + location.search });
-    return <Navigate to={`/auth?${next}`} replace />;
-  }
+  if (!user) return <Navigate to="/" replace />;
 
   return (
     <UpgradeProvider>
-      <div className={`shell${collapsed ? " collapsed" : ""}`}>
+      <div className={`shell${collapsed ? " collapsed" : ""}${notebookFocus ? " notebook-focus" : ""}`}>
         <SkyCanvas intensity={0.35} />
         <aside className="sidebar">
           <div className="sidebar-top">
@@ -70,7 +63,7 @@ export default function AppShell() {
               </button>
             ) : (
               <NavLink to="/" className="sidebar-brand">
-                <Logo size={28} withWordmark={false} />
+                <Logo size={28} />
               </NavLink>
             )}
             <button
@@ -109,7 +102,7 @@ export default function AppShell() {
           </NavLink>
           <div className="sidebar-user">
             <span className="mono muted side-label">{user.email}</span>
-            <button className="link-btn" onClick={logout} title="Sign out">
+            <button className="link-btn" onClick={logout} disabled={signingOut} title="Sign out">
               Sign out
             </button>
           </div>

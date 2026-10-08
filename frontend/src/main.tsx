@@ -7,6 +7,8 @@ import "./styles/global.css";
 import "./styles/app.css";
 import "./styles/pages.css";
 import "./styles/upgrade.css";
+import "./styles/support.css";
+import "./styles/videos.css";
 import { installClickSounds } from "./lib/sound";
 
 installClickSounds();

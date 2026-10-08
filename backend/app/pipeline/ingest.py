@@ -551,6 +551,9 @@ def store_entries(
         if not sections:
             skipped += 1
             continue
+        # Postgres text cannot hold NUL bytes, and some PDFs (icon glyphs) extract with them.
+        sections = [(h and h.replace("\x00", ""), t.replace("\x00", "")) for h, t in sections]
+        entry.title = entry.title.replace("\x00", "")
         if not doc:
             doc = Document(id=uuid.uuid4(), workspace_id=source.workspace_id, source_id=source.id, url=entry.url)
             db.add(doc)
@@ -627,29 +630,39 @@ def store_locked(db: Session, source: Source, entries: list[FeedEntry]) -> tuple
 
 def ingest_source(db: Session, source: Source, job: Job, max_posts: int) -> dict:
     source.sync_status = "syncing"
-    update_job(db, job, status="running", progress=0.02, message="Contacting your feed")
     fetch_limit = max(SCAN_CAP, max_posts)
+    # Live counts the Sources page shows while this runs: found on the site, fetched (read), indexed.
+    live = {"stage": "fetching", "found": 0, "fetched": 0, "fetch_total": 0, "indexed": 0, "index_total": 0}
+
+    def report(progress: float | None = None, message: str | None = None, **counts) -> None:
+        live.update(counts)
+        update_job(db, job, progress=progress, message=message, result=dict(live))
+
+    update_job(db, job, status="running", progress=0.02, message="Contacting your feed", result=dict(live))
 
     if source.feed_url.startswith(SITE_PREFIX):
         update_job(db, job, message="Mapping your site")
         entries = crawl_site(
             source.feed_url.removeprefix(SITE_PREFIX), fetch_limit,
-            on_found=lambda n: update_job(db, job, progress=0.05, message=f"Found {n} pages, reading them"),
-            on_post=lambda done, total: update_job(db, job, progress=0.05 + 0.05 * done / total,
-                                                   message=f"Read {done} of {total} pages"),
-            read_limit=max_posts,
+            on_found=lambda n: report(0.05, f"Found {n} pages, reading them", found=n),
+            on_post=lambda done, total: report(0.05 + 0.05 * done / total, f"Read {done} of {total} pages",
+                                               fetched=done, fetch_total=total),
+            read_limit=max(max_posts, 1),
         )
         title = None
     else:
         title, entries = fetch_feed(source.feed_url, fetch_limit)
+        report(found=len(entries), fetched=len(entries), fetch_total=len(entries))
     source.title = source.title or title
     if source.platform == "substack" and len(entries) < fetch_limit:
         site = f"{urlparse(source.feed_url).scheme}://{urlparse(source.feed_url).netloc}"
-        update_job(db, job, progress=0.05, message="Reading your Substack archive")
+        report(0.05, "Reading your Substack archive")
         try:
             entries += fetch_substack_archive(
                 site, {e.url for e in entries}, fetch_limit,
-                on_page=lambda n: update_job(db, job, message=f"Found {len(entries) + n} posts in the archive"),
+                on_page=lambda n: report(message=f"Found {len(entries) + n} posts in the archive",
+                                         found=len(entries) + n, fetched=len(entries) + n,
+                                         fetch_total=len(entries) + n),
                 body_budget=max(0, max_posts - len(entries)),
             )
         except (httpx.HTTPError, ValueError):
@@ -659,9 +672,9 @@ def ingest_source(db: Session, source: Source, job: Job, max_posts: int) -> dict
     available, beyond = entries[:max_posts], entries[max_posts:]
 
     def progress(done: int, total: int, post_title: str) -> None:
-        update_job(db, job, progress=0.1 + 0.7 * done / total, message=f"{post_title[:80]} is in orbit")
+        report(0.1 + 0.7 * done / total, f"{post_title[:80]} is in orbit", stage="indexing", indexed=done)
 
-    update_job(db, job, progress=0.1, message=f"Indexing {len(available)} posts")
+    report(0.1, f"Indexing {len(available)} posts", stage="indexing", found=len(entries), index_total=len(available))
     indexed, skipped, changed = store_entries(db, source, available, progress)
 
     locked = 0
@@ -681,6 +694,34 @@ def ingest_source(db: Session, source: Source, job: Job, max_posts: int) -> dict
             "changed": [str(i) for i in changed]}
 
 
+_VTT_TIME = re.compile(r"^(\d+:)?\d{1,2}:\d{2}[.,]\d{3}\s+-->\s+")
+
+
+def vtt_to_text(text: str) -> str:
+    """The spoken words of a WebVTT transcript: the header, notes, cue ids, timestamps and markup dropped, a line
+    repeated from the cue before (rolling captions) kept once, the rest joined into paragraphs."""
+    lines: list[str] = []
+    in_cue = False
+    skipping = False  # inside a NOTE / STYLE / REGION block, until the blank line
+    for raw in text.lstrip("\ufeff").splitlines():
+        line = raw.strip()
+        if not line:
+            in_cue = skipping = False
+            continue
+        if skipping or line.startswith(("WEBVTT", "NOTE", "STYLE", "REGION")) and not in_cue:
+            skipping = True
+            continue
+        if _VTT_TIME.match(line):
+            in_cue = True
+            continue
+        if not in_cue:
+            continue  # a cue id
+        line = re.sub(r"<[^>]+>", "", line).strip()
+        if line and (not lines or lines[-1] != line):
+            lines.append(line)
+    return "\n\n".join(" ".join(lines[i:i + 8]) for i in range(0, len(lines), 8))
+
+
 def entry_from_upload(filename: str, content_type: str, data: bytes) -> FeedEntry:
     name = filename.rsplit("/", 1)[-1]
     stem = re.sub(r"\.[A-Za-z0-9]+$", "", name).replace("-", " ").replace("_", " ").strip() or "Untitled"
@@ -693,6 +734,8 @@ def entry_from_upload(filename: str, content_type: str, data: bytes) -> FeedEntr
         soup = BeautifulSoup(text, "html.parser")
         title = soup.title.get_text(strip=True) if soup.title else stem
         return FeedEntry(title=title, url=url, published_at=None, html=text)
+    if lower.endswith(".vtt") or text.lstrip("\ufeff").startswith("WEBVTT"):
+        text = vtt_to_text(text)
     sections = markdown_to_sections(text)
     first_heading = re.search(r"^#\s+(.+)$", text, re.M)
     title = first_heading.group(1).strip() if first_heading else stem

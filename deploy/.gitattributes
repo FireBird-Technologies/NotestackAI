@@ -1,4 +1,0 @@
-*.sh text eol=lf
-Caddyfile text eol=lf
-*.yml text eol=lf
-env.prod.example text eol=lf

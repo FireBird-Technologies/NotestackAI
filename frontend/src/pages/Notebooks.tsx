@@ -136,7 +136,7 @@ export default function Notebooks() {
           New notebook
         </button>
       </PageHeader>
-      {!notebooks && <Loading />}
+      {!notebooks && <Loading center="page" />}
       <section className="nb-grid">
         {notebooks?.map((n) => (
           <article key={n.id} className={`card nb-card${n.is_archive ? " nb-archive" : ""}`}>
@@ -179,13 +179,6 @@ export default function Notebooks() {
             )}
           </article>
         ))}
-        <button type="button" className="card nb-card nb-new" onClick={() => setCreating(true)}>
-          <span className="mc-more" aria-hidden="true">
-            +
-          </span>
-          <strong>New notebook</strong>
-          <span className="muted small">Group posts by theme, series or year</span>
-        </button>
       </section>
       {creating && <NewNotebookModal onClose={() => setCreating(false)} />}
     </div>

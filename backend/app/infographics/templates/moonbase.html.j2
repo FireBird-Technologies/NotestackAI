@@ -1,0 +1,51 @@
+{% extends "base.html.j2" %}
+{% set eyebrow = "Lunar surface log" %}
+{% set pal = {"bg1":"#222226","bg2":"#3b3b42","ink":"#efeae0","mute":"#c7c3b9","a":"#d8d2c4","b":"#c8745f","card":"rgba(239,234,224,.07)","line":"rgba(239,234,224,.2)","paper":"#d8d2c4","paperink":"#222226","r":20} %}
+{% set fonts = {"h":"Outfit","b":"Outfit","m":"Space Mono","hw":600,"ht":"none","bt":"none"} %}
+{% set cycle = ["#d8d2c4","#c8745f","#9fb4a4","#8fa6c4","#d6b66a"] %}
+{% block bg %}
+<circle cx="1360" cy="190" r="110" fill="#5c7ea6" opacity=".55"/><circle cx="1360" cy="190" r="110" fill="none" stroke="#8fb0c9" stroke-opacity=".5" stroke-width="3"/>
+<path d="M0 2210Q300 2150 600 2190T1200 2180T1600 2170V2260H0Z" fill="#d8d2c4" opacity=".1"/>
+<g fill="#d8d2c4" opacity=".08"><ellipse cx="260" cy="2225" rx="120" ry="22"/><ellipse cx="900" cy="2235" rx="170" ry="24"/><ellipse cx="1400" cy="2220" rx="90" ry="18"/></g>
+{% endblock %}
+{% block hero %}
+<path d="M0 392Q120 340 240 372T480 350V400H0Z" fill="#d8d2c4" opacity=".85"/>
+<ellipse cx="90" cy="372" rx="46" ry="10" fill="#9b968a"/><ellipse cx="420" cy="380" rx="34" ry="8" fill="#9b968a"/>
+<path d="M130 365C130 270 190 220 250 220S370 270 370 360Z" fill="#8fa6c4" fill-opacity=".35" stroke="#d8d2c4" stroke-width="4"/>
+<path d="M190 366V318H310V366" fill="#c7c3b9" stroke="#222226" stroke-width="3"/><rect x="236" y="330" width="28" height="36" fill="#222226"/>
+<path d="M250 220V130" stroke="#d8d2c4" stroke-width="4"/><path d="M250 130H310L292 148L310 166H250Z" fill="#c8745f"/>
+<circle cx="70" cy="90" r="6" fill="#efeae0"/><circle cx="410" cy="60" r="8" fill="#efeae0" opacity=".7"/>
+{% endblock %}
+{% block css %}
+.ig h1{font-size:74px;letter-spacing:-.01em}
+.mc{display:flex;flex-direction:column;gap:14px;flex:none}
+.mc .cap{display:grid;grid-template-columns:84px 270px 1fr;gap:22px;align-items:center;width:1210px;min-height:104px;padding:12px 34px 12px 14px;border-radius:70px;background:var(--card);border:1px solid var(--line)}
+.mc .cap:nth-child(even){margin-left:auto}
+.mc .mk{width:76px;height:76px;border-radius:50%;display:grid;place-items:center;font-family:var(--fh);font-weight:600;font-size:36px;color:#222226;background:var(--c);border:6px solid rgba(34,34,38,.55);outline:3px solid var(--c)}
+.mc b{font-family:var(--fh);font-weight:600;font-size:31px;line-height:1.08}
+.mc p{font-size:23px;line-height:1.32;color:var(--mute)}
+.mt{display:grid;grid-template-columns:1fr 1fr;gap:0 56px;flex:none}
+.mt .col{position:relative;padding-left:46px}
+.mt .col:before{content:"";position:absolute;left:11px;top:8px;bottom:8px;width:3px;background:repeating-linear-gradient(180deg,var(--a) 0 10px,transparent 10px 18px);opacity:.55}
+.mt .ev{position:relative;padding:4px 0 18px}
+.mt .ev:before{content:"";position:absolute;left:-46px;top:8px;width:26px;height:26px;border-radius:7px;background:var(--c);box-shadow:0 0 0 6px rgba(216,210,196,.12)}
+.mt small{font-family:var(--fm);font-size:19px;letter-spacing:.14em;color:var(--c)}
+.mt b{display:block;font-family:var(--fh);font-weight:600;font-size:30px;margin:2px 0 3px}
+.mt p{font-size:22px;line-height:1.32;color:var(--mute)}
+.ig .band{border-top:10px solid transparent;border-image:repeating-linear-gradient(135deg,#c8745f 0 18px,#222226 18px 36px) 10}
+{% endblock %}
+{% block body %}{% set half = (c.steps|length + 1) // 2 %}
+<section><div class="lab">{{ c.items_label }}</div>
+<div class="mc">
+  {% for e in c["items"] %}<div class="cap" style="--c:{{ cycle[loop.index0 % cycle|length] }}"><div class="mk">{{ loop.index }}</div><b>{{ e.name }}</b><p>{{ e.text }}</p></div>{% endfor %}
+</div></section>
+<section><div class="lab">{{ c.steps_label }}</div>
+<div class="mt">
+  <div class="col">
+    {% for e in c.steps[:half] %}<div class="ev" style="--c:{{ cycle[loop.index0 % cycle|length] }}"><small>SOL {{ loop.index }}</small><b>{{ e.name }}</b><p>{{ e.text }}</p></div>{% endfor %}
+  </div>
+  <div class="col">
+    {% for e in c.steps[half:] %}<div class="ev" style="--c:{{ cycle[(loop.index0 + half) % cycle|length] }}"><small>SOL {{ loop.index + half }}</small><b>{{ e.name }}</b><p>{{ e.text }}</p></div>{% endfor %}
+  </div>
+</div></section>
+{% endblock %}

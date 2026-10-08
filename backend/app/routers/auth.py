@@ -1,3 +1,4 @@
+import logging
 import secrets
 from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
@@ -26,11 +27,22 @@ from app.services import auth_identity as ident
 from app.services import email_verification as ev
 from app.services.email import email_service
 
+log = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 def _err(exc: ident.IdentityError | ev.VerificationError, status: int = 400) -> HTTPException:
     return HTTPException(getattr(exc, "status", status), {"code": exc.code, "message": exc.message})
+
+
+def _sent_or_fail(db: Session, sent: bool, email: str, purpose: VerificationPurpose) -> None:
+    """A code the user never receives is useless: drop it and say so instead of reporting success."""
+    if sent:
+        return
+    ev.clear_codes(db, email, purpose)
+    db.commit()
+    raise HTTPException(502, {"code": "email_failed", "message": "We couldn't send the code. Try again in a moment."})
 
 
 def _serialize_user(user: User) -> dict:
@@ -79,9 +91,11 @@ def google_login(body: GoogleIn, db: Session = Depends(get_db)):
         raise HTTPException(503, "Google sign in is not configured")
     try:
         info = google_id_token.verify_oauth2_token(
-            body.credential, google_requests.Request(), settings.google_client_id
+            body.credential, google_requests.Request(), settings.google_client_id,
+            clock_skew_in_seconds=GOOGLE_CLOCK_SKEW_SECONDS,
         )
     except ValueError as exc:
+        log.warning("Google credential rejected: %s", exc)
         raise HTTPException(401, "Invalid Google credential") from exc
     if not info.get("email_verified"):
         raise HTTPException(401, "Google email is not verified")
@@ -113,6 +127,9 @@ def providers():
 
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+# Google stamps the ID token with its own clock. google-auth rejects a token issued even a second after the local clock
+# ("Token used too early"), and a laptop clock is often a few seconds behind, so allow some drift.
+GOOGLE_CLOCK_SKEW_SECONDS = 10
 STATE_COOKIE = "ns_oauth_state"
 STATE_TTL = timedelta(minutes=10)
 
@@ -145,7 +162,8 @@ def exchange_google_code(code: str) -> dict:
     )
     res.raise_for_status()
     return google_id_token.verify_oauth2_token(
-        res.json()["id_token"], google_requests.Request(), settings.google_client_id
+        res.json()["id_token"], google_requests.Request(), settings.google_client_id,
+        clock_skew_in_seconds=GOOGLE_CLOCK_SKEW_SECONDS,
     )
 
 
@@ -199,9 +217,12 @@ def google_callback(
         return _auth_error("Google sign in expired. Try again.")
     try:
         info = exchange_google_code(code)
-    except (httpx.HTTPError, KeyError, ValueError):
+    except (httpx.HTTPError, KeyError, ValueError) as exc:
+        # The cause (rejected code, bad client secret, token clock, wrong audience) is only in this exception.
+        log.warning("Google sign in failed while exchanging the code: %s: %s", type(exc).__name__, exc)
         return _auth_error("Google sign in failed. Try again.")
     if info.get("nonce") != saved["nonce"]:
+        log.warning("Google sign in failed: the ID token's nonce does not match this browser's")
         return _auth_error("Google sign in failed. Try again.")
     if not info.get("email_verified"):
         return _auth_error("Google email is not verified.")
@@ -267,7 +288,7 @@ def register_start(body: RegisterStartIn, db: Session = Depends(get_db)):
     except (ident.IdentityError, ev.VerificationError) as exc:
         raise _err(exc, 429 if getattr(exc, "code", "") == "cooldown" else 400) from exc
     db.commit()
-    email_service.send_verification_code(email, issued.code)
+    _sent_or_fail(db, email_service.send_verification_code(email, issued.code), email, VerificationPurpose.SIGNUP)
     return {"ok": True}
 
 
@@ -302,7 +323,7 @@ def register_resend(body: EmailIn, db: Session = Depends(get_db)):
     except ev.VerificationError as exc:
         raise _err(exc, 429) from exc
     db.commit()
-    email_service.send_verification_code(email, issued.code)
+    _sent_or_fail(db, email_service.send_verification_code(email, issued.code), email, VerificationPurpose.SIGNUP)
     return {"ok": True}
 
 
@@ -326,14 +347,19 @@ def email_login(body: LoginIn, db: Session = Depends(get_db)):
 @router.post("/password/forgot/start")
 def forgot_start(body: EmailIn, db: Session = Depends(get_db)):
     user = ident.find_user(db, body.email)
-    # Always 200 so the endpoint does not reveal which emails exist.
-    if user and user.auth_provider == AuthProvider.EMAIL and user.is_active:
-        try:
-            issued = ev.issue_code(db, user.email, VerificationPurpose.PASSWORD_RESET)
-            db.commit()
-            email_service.send_password_reset_code(user.email, issued.code)
-        except ev.VerificationError:
-            pass
+    # Sign up already tells whether an email is taken, so naming the problem here leaks nothing new.
+    if not user or user.deleted_at or not user.is_active:
+        raise HTTPException(404, {"code": "not_found", "message": "No account found with this email. Create one instead."})
+    if user.auth_provider != AuthProvider.EMAIL:
+        raise _err(ident.wrong_provider_error(user))
+    try:
+        issued = ev.issue_code(db, user.email, VerificationPurpose.PASSWORD_RESET)
+    except ev.VerificationError as exc:
+        raise _err(exc, 429) from exc
+    db.commit()
+    _sent_or_fail(
+        db, email_service.send_password_reset_code(user.email, issued.code), user.email, VerificationPurpose.PASSWORD_RESET
+    )
     return {"ok": True}
 
 

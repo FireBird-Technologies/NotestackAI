@@ -39,7 +39,7 @@ export const NOTEBOOKLM_ALT_ROWS: { feature: string; notestack: string; notebook
   },
   {
     feature: "Video",
-    notestack: "9:16 shorts, 16:9 explainers and 1:1 audiograms with captions and your brand",
+    notestack: "9:16 shorts, 16:9 explainers and 1:1 audiograms with captions",
     notebooklm: "Video overviews",
   },
   {
