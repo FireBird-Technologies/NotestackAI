@@ -27,13 +27,13 @@ if [ ! -f /swapfile ]; then
   echo '/swapfile none swap sw 0 0' >> /etc/fstab
 fi
 
-if [ ! -f .env.prod ]; then
-  cp env.prod.example .env.prod
-  chmod 600 .env.prod
+if [ ! -f ../backend/.env ]; then
+  cp env.prod.example ../backend/.env
+  chmod 600 ../backend/.env
   echo
-  echo "Created deploy/.env.prod. Fill in every <...> value, then run: bash deploy/update.sh"
+  echo "Created backend/.env. Fill in every <...> value, then run: bash deploy/update.sh"
   exit 0
 fi
 
-echo "==> .env.prod exists; starting the stack"
+echo "==> backend/.env exists; starting the stack"
 bash ./update.sh

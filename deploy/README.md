@@ -15,8 +15,8 @@ The database is Neon. The frontend is on Cloudflare Pages.
 4. On the Droplet:
    ```bash
    git clone https://github.com/FireBird-Technologies/NotestackAI.git /opt/notestack
-   bash /opt/notestack/deploy/setup.sh        # installs Docker, firewall, swap, creates deploy/.env.prod
-   nano /opt/notestack/deploy/.env.prod       # fill in every <...> value
+   bash /opt/notestack/deploy/setup.sh        # installs Docker, firewall, swap, creates backend/.env
+   nano /opt/notestack/backend/.env       # fill in every <...> value
    bash /opt/notestack/deploy/update.sh       # builds, starts, waits for https://API_DOMAIN/api/health
    ```
    Add `RENDER=1` before `update.sh` to also run the video renderer.
@@ -44,9 +44,9 @@ bash /opt/notestack/deploy/update.sh
 ## Useful commands (from /opt/notestack/deploy)
 
 ```bash
-docker compose --env-file .env.prod -f docker-compose.prod.yml ps
-docker compose --env-file .env.prod -f docker-compose.prod.yml logs -f api worker
-docker compose --env-file .env.prod -f docker-compose.prod.yml restart worker
+docker compose --env-file ../backend/.env -f docker-compose.prod.yml ps
+docker compose --env-file ../backend/.env -f docker-compose.prod.yml logs -f api worker
+docker compose --env-file ../backend/.env -f docker-compose.prod.yml restart worker
 ```
 
 ## Notes
@@ -59,4 +59,4 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml restart worker
   Droplet (covered by Droplet backups). Switch to Cloudflare R2 before real traffic if you want them to survive
   losing the Droplet.
 - **Migrations** are not applied automatically. After an update that adds one, run from `deploy/`:
-  `docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm api alembic upgrade head`
+  `docker compose --env-file ../backend/.env -f docker-compose.prod.yml run --rm api alembic upgrade head`

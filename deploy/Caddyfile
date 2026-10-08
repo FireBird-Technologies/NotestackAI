@@ -2,7 +2,7 @@
 	email {$ACME_EMAIL}
 }
 
-# HTTPS certificates are issued and renewed automatically for API_DOMAIN (set in .env.prod).
+# HTTPS certificates are issued and renewed automatically for API_DOMAIN (set in backend/.env).
 {$API_DOMAIN} {
 	encode zstd gzip
 

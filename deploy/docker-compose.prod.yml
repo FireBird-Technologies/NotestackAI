@@ -1,5 +1,6 @@
-# Production stack for a single DigitalOcean Droplet. The database is Neon (DATABASE_URL in .env.prod).
-#   cd /opt/notestack/deploy && docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
+# Production stack for a single DigitalOcean Droplet. The database is Neon (DATABASE_URL in backend/.env).
+# Every setting comes from backend/.env, the one file the API reads in every setup (also for ${API_PORT} etc. below).
+#   cd /opt/notestack/deploy && docker compose --env-file ../backend/.env -f docker-compose.prod.yml up -d --build
 # The API listens on 127.0.0.1:API_PORT (default 8010) for the reverse proxy already on this host (Nginx,
 # Caddy...). On a Droplet with nothing else on ports 80/443, start the bundled Caddy with --profile caddy.
 
@@ -7,8 +8,8 @@ services:
   api:
     build: ../backend
     restart: unless-stopped
-    env_file: .env.prod
-    # Migrations are NOT applied on start. Run them by hand: docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm api alembic upgrade head
+    env_file: ../backend/.env
+    # Migrations are NOT applied on start. Run them by hand: docker compose --env-file ../backend/.env -f docker-compose.prod.yml run --rm api alembic upgrade head
     # Proxy headers let the API see the real client IP and https scheme behind Caddy.
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips='*'
     ports:
@@ -25,7 +26,7 @@ services:
   worker:
     build: ../backend
     restart: unless-stopped
-    env_file: .env.prod
+    env_file: ../backend/.env
     command: python -m app.worker
     volumes:
       - appdata:/data # same volume as the API, so both see the same stored files and corpus cache
