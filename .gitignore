@@ -22,5 +22,5 @@ renderer/build/
 .storage/
 
 # Local-only notes, not for the repo
-docs-local/
-docs/
+/docs-local/
+/docs/
