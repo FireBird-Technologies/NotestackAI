@@ -42,8 +42,9 @@ function groupChats(chats: ChatSummary[]): { label: string; items: ChatSummary[]
   const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
   const today = startOfDay(new Date());
   const groups: { label: string; items: ChatSummary[] }[] = [];
-  [...chats].sort((a, b) => +new Date(b.updated_at) - +new Date(a.updated_at)).forEach((c) => {
-    const when = new Date(c.updated_at);
+  const stamp = (c: ChatSummary) => (c.updated_at ? new Date(c.updated_at) : new Date()); // a chat with no time yet is brand new
+  [...chats].sort((a, b) => +stamp(b) - +stamp(a)).forEach((c) => {
+    const when = stamp(c);
     const days = Math.round((today - startOfDay(when)) / 86400000);
     const label = days <= 0 ? "Today" : days === 1 ? "Yesterday" : days <= 7 ? "Previous 7 days" : days <= 30 ? "Previous 30 days"
       : when.toLocaleDateString(undefined, { month: "long", year: "numeric" });

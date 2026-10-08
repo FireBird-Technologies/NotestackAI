@@ -46,6 +46,10 @@ _ABOUT_MY_DATA = re.compile(
     | \b(?:recap|remind\s+me|repeat)\b[^.?!]{{0,40}}\b(?:chat|conversation|discussion|said|discussed)\b
     """
 )
+# A question about what the plans include ("How many Launch Kits do I get on each plan?") is product help, not about the
+# writer's own content, unless it also asks what they have made or hold.
+_PLAN_WORDS = re.compile(r"(?i)\b(?:plans?|tiers?|pricing|prices?|free|writer|studio|allowance|limits?|upgrade|subscription)\b")
+_OWN_STATE = re.compile(r"(?i)\b(?:i\s+have|have\s+i|did\s+i|i\s+(?:wrote|made|created|used|posted|published))\b")
 # Words that mean something went wrong with their work; the reply also offers the human form.
 _BROKEN = re.compile(
     r"(?i)\b(?:fail\w*|slow|forever|too\s+long|taking\s+(?:so\s+|way\s+)?long|hang\w*"
@@ -64,6 +68,8 @@ def about_user_data(message: str) -> bool:
     """True when the message asks about the writer's own content or account state rather than how to do something."""
     text = message.strip()
     if _HOWTO.match(text) and not re.search(r"(?i)\b(?:i|we)\s+(?:wrote|said|posted|published)\b", text):
+        return False
+    if _PLAN_WORDS.search(text) and not _OWN_STATE.search(text) and not re.search(rf"(?i)\bmy\s+(?:[\w'-]+\s+){{0,3}}{_MINE}\b", text):
         return False
     return bool(_ABOUT_MY_DATA.search(text))
 

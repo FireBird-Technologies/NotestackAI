@@ -73,16 +73,20 @@ def _plans_doc() -> Doc:
         if p.price_monthly_usd:
             monthly, yearly = annual_prices(p)
             price += f", or ${monthly:g} a month billed yearly (${yearly:g} a year)"
-        kits = "unlimited" if p.launch_kits < 0 else str(p.launch_kits)
-        reports = "unlimited" if p.reports < 0 else str(p.reports)
-        infographics = "unlimited" if p.infographics < 0 else str(p.infographics)
+        per = "in total, never renewing," if p.lifetime else "a month"
+
+        def count(n: int) -> str:
+            return "unlimited" if n < 0 else str(n)
+
+        audio = f"{count(p.audio_overviews)} audio overviews in total, any length" if p.audio_overviews >= 0 \
+            else f"{p.audio_minutes} minutes of audio a month"
         lines += [
             f"## {p.name}",
             f"{p.tagline}. Price: {price}.",
-            f"Limits: {p.sources} sources, {p.indexed_posts} indexed posts, "
-            f"{p.audio_minutes} minutes of audio a month, "
-            f"{p.videos} videos {'a month' if p.videos_monthly else 'in total'}, {kits} Launch Kits a month, "
-            f"{reports} reports a month, {infographics} infographics a month. "
+            f"Limits: {p.sources} sources, {p.indexed_posts} indexed posts across every source, {audio}, "
+            f"{p.videos} videos {'a month' if p.videos_monthly else 'in total, never renewing'}, "
+            f"{count(p.launch_kits)} Launch Kits {per}, {count(p.infographics)} infographics {per}, "
+            f"{count(p.reports)} reports a month. "
             f"Voice cloning: {'yes' if p.voice_cloning else 'no'}.",
             "Includes: " + "; ".join(p.features) + ".",
         ]
