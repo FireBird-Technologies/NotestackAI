@@ -1,5 +1,6 @@
 from app.models.content import (
     Artifact,
+    ArtifactFeedback,
     ArtifactShare,
     B2VCustomVoice,
     B2VStyle,
@@ -17,6 +18,8 @@ from app.models.content import (
     MessageFeedback,
     Notebook,
     NotebookDocument,
+    QuizAttempt,
+    ReportTemplateCache,
     SocialAccount,
     Source,
     Topic,
@@ -34,9 +37,11 @@ from app.models.support import SupportConversation, SupportMessage
 from app.models.user import AuthProvider, BillingEvent, PlanRecord, Subscription, User, Workspace, WorkspaceMember
 
 __all__ = [
+    "QuizAttempt",
     "SupportConversation",
     "SupportMessage",
     "Artifact",
+    "ArtifactFeedback",
     "ArtifactShare",
     "AuthProvider",
     "B2VCustomVoice",
@@ -58,6 +63,7 @@ __all__ = [
     "Notebook",
     "PlanRecord",
     "NotebookDocument",
+    "ReportTemplateCache",
     "SocialAccount",
     "Source",
     "Subscription",

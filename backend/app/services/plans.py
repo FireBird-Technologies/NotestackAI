@@ -31,36 +31,32 @@ class Plan:
     indexed_posts: int
     audio_minutes: int
     videos: int  # blog2video videos per month, or in total when videos_monthly is False
-    launch_kits: int  # -1 = unlimited
+    launch_kits: int  # a month (or in total on a lifetime plan); -1 = unlimited
     voice_cloning: bool
-    brand_kit: bool
     features: tuple[str, ...]
-    # Premium (★) video options: long durations, paid and custom voices, voice tuning and samples, AI script
-    # rewrites, AI chat editing, avatars, the Remotion source download.
-    video_premium: bool = False
     # Per-workspace shares of what blog2video only limits account-wide (keys in VIDEO_LIMITS; 0 = none).
     video_limits: dict = field(default_factory=dict)
     videos_monthly: bool = True
     reports: int = 0  # reports a month; -1 = unlimited
-    infographics: int = 0  # infographics a month; -1 = unlimited
+    infographics: int = 0  # infographics a month (in total on a lifetime plan); -1 = unlimited
+    audio_overviews: int = -1  # audio overviews allowed (in total on a lifetime plan), whatever their length; -1 = no cap
+
+    @property
+    def lifetime(self) -> bool:
+        """The allowances for videos, audio overviews, Launch Kits and infographics are totals that never reset (Free)."""
+        return not self.videos_monthly
 
 
 # metric -> period it counts over (app/services/video_limits.py)
 VIDEO_LIMITS = {
-    "ai_edits": "month",  # scene regenerate/add, AI images, stock clips, AI chat, template AI edits, avatars
+    "ai_edits": "month",  # scene regenerate/add, AI images, stock clips
     "templates": "all",  # custom templates: blog2video's slots are lifetime, never given back
     "template_ai_daily": "day",  # template theme extraction from a prompt or document, code generation
-    "voice_designs_daily": "day",
-    "voice_samples_daily": "day",
-    "custom_voices": "all",  # kept voices; deleting one frees its place
 }
 
-FREE_VIDEO_LIMITS = {"ai_edits": 20, "templates": 0, "template_ai_daily": 0, "voice_designs_daily": 0,
-                     "voice_samples_daily": 0, "custom_voices": 0}
-WRITER_VIDEO_LIMITS = {"ai_edits": 300, "templates": 2, "template_ai_daily": 3, "voice_designs_daily": 5,
-                       "voice_samples_daily": 20, "custom_voices": 3}
-STUDIO_VIDEO_LIMITS = {"ai_edits": 1000, "templates": 5, "template_ai_daily": 5, "voice_designs_daily": 10,
-                       "voice_samples_daily": 40, "custom_voices": 10}
+FREE_VIDEO_LIMITS = {"ai_edits": 20, "templates": 0, "template_ai_daily": 0}
+WRITER_VIDEO_LIMITS = {"ai_edits": 300, "templates": 2, "template_ai_daily": 3}
+STUDIO_VIDEO_LIMITS = {"ai_edits": 1000, "templates": 5, "template_ai_daily": 5}
 
 
 DEFAULT_PLANS: dict[str, Plan] = {
@@ -69,23 +65,23 @@ DEFAULT_PLANS: dict[str, Plan] = {
         name="Free",
         tagline="For trying Notestack on your archive",
         price_monthly_usd=0,
-        sources=1,
+        sources=-1,
         indexed_posts=5,
-        audio_minutes=3,
+        audio_minutes=-1,
+        audio_overviews=1,
         videos=1,
         launch_kits=2,
         reports=2,
         infographics=2,
         voice_cloning=False,
-        brand_kit=False,
         features=(
-            "1 source, your latest 5 posts indexed",
+            "Up to 5 posts indexed, from any source",
             "Grounded research chat with citations",
-            "3 min of audio overviews a month",
-            "1 video to try it",
-            "2 Launch Kits a month",
+            "1 audio overview, any length",
+            "1 video",
+            "2 Launch Kits",
+            "2 infographics",
             "2 reports a month",
-            "2 infographics a month",
         ),
         video_limits=FREE_VIDEO_LIMITS,
         videos_monthly=False,
@@ -95,26 +91,23 @@ DEFAULT_PLANS: dict[str, Plan] = {
         name="Writer",
         tagline="For writers publishing every week",
         price_monthly_usd=24.99,
-        sources=3,
-        indexed_posts=500,
+        sources=-1,
+        indexed_posts=100,
         audio_minutes=60,
         videos=10,
-        launch_kits=50,
+        launch_kits=20,
         reports=30,
         infographics=30,
         voice_cloning=True,
-        brand_kit=True,
         features=(
-            "3 sources, 500 indexed posts",
-            "60 min of audio overviews a month",
+            "Up to 100 posts indexed, from any source",
+            "10x more audio overviews than Free (60 min a month)",
             "10 videos a month",
-            "50 Launch Kits a month",
+            "20 Launch Kits a month",
             "30 reports a month",
             "30 infographics a month",
             "Voice cloning with consent",
-            "Your brand colors and logo",
         ),
-        video_premium=True,
         video_limits=WRITER_VIDEO_LIMITS,
     ),
     "studio": Plan(
@@ -122,26 +115,24 @@ DEFAULT_PLANS: dict[str, Plan] = {
         name="Studio",
         tagline="For publications and power users",
         price_monthly_usd=48.99,
-        sources=10,
-        indexed_posts=5000,
+        sources=-1,
+        indexed_posts=250,
         audio_minutes=240,
         videos=20,
-        launch_kits=-1,
+        launch_kits=50,
         reports=-1,
         infographics=-1,
         voice_cloning=True,
-        brand_kit=True,
         features=(
-            "10 sources, 5,000 indexed posts",
-            "240 min of audio overviews a month",
+            "Up to 250 posts indexed, from any source",
+            "40x more audio overviews than Free (240 min a month)",
             "20 videos a month",
-            "Unlimited Launch Kits",
+            "50 Launch Kits a month",
             "Unlimited reports",
             "Unlimited infographics",
             "Launchpad calendar and resurfacing",
             "Priority rendering",
         ),
-        video_premium=True,
         video_limits=STUDIO_VIDEO_LIMITS,
     ),
 }
@@ -154,10 +145,10 @@ def _plan_from_row(row: PlanRecord) -> Plan:
     return Plan(id=row.id, name=row.name, tagline=row.tagline or "",
                 price_monthly_usd=float(row.price_monthly_usd or 0), sources=row.sources,
                 indexed_posts=row.indexed_posts, audio_minutes=row.audio_minutes,
-                videos=row.videos, launch_kits=row.launch_kits, reports=row.reports, infographics=row.infographics,
+                videos=row.videos, launch_kits=row.launch_kits, reports=row.reports, infographics=row.infographics, audio_overviews=row.audio_overviews,
                 voice_cloning=bool(row.voice_cloning),
-                brand_kit=bool(row.brand_kit), features=tuple(row.features or ()),
-                video_premium=bool(row.video_premium), videos_monthly=bool(row.videos_monthly),
+                features=tuple(row.features or ()),
+                videos_monthly=bool(row.videos_monthly),
                 video_limits={**{k: 0 for k in VIDEO_LIMITS}, **(row.video_limits or {})})
 
 
@@ -249,6 +240,22 @@ def effective_plan(db: Session, workspace: Workspace) -> Plan:
     if not sub or sub.status not in {"active", "trialing", "past_due"}:
         return PLANS["free"]
     return PLANS.get(sub.plan, PLANS["free"])
+
+
+def post_room(db: Session, workspace_id, plan: Plan, source_id=None) -> int:
+    """How many more posts the plan lets this workspace index: its limit across every source, link and upload, less the
+    posts indexed already. With `source_id`, that source's own posts are left out of the count, and a source never loses
+    posts it already has indexed (a plan that went down keeps what is stored; it only stops new ones)."""
+    from sqlalchemy import func
+
+    from app.models import Document
+
+    base = select(func.count()).select_from(Document).where(Document.workspace_id == workspace_id, Document.path.is_not(None))
+    total = db.scalar(base) or 0
+    if source_id is None:
+        return max(plan.indexed_posts - total, 0)
+    own = db.scalar(base.where(Document.source_id == source_id)) or 0
+    return max(plan.indexed_posts - (total - own), own)
 
 
 def plan_order() -> list[str]:

@@ -13,7 +13,6 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
     Uuid,
-    false,
     true,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -56,7 +55,6 @@ class Workspace(IdMixin, TimestampMixin, Base):
     training_opt_in: Mapped[bool] = mapped_column(Boolean, default=False)
     # Off: no report of this workspace can be shared by link, and existing links stop working.
     allow_public_links: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
-    brand_json: Mapped[dict] = mapped_column(JSON, default=dict)
 
     members: Mapped[list["WorkspaceMember"]] = relationship(back_populates="workspace")
 
@@ -112,11 +110,10 @@ class PlanRecord(TimestampMixin, Base):
     launch_kits: Mapped[int] = mapped_column(Integer, default=0)  # -1 = unlimited
     reports: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # per month, -1 = unlimited
     infographics: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # per month, -1 = unlimited
+    audio_overviews: Mapped[int] = mapped_column(Integer, default=-1, server_default="-1")  # allowed (in total on Free); -1 = no cap
     voice_cloning: Mapped[bool] = mapped_column(Boolean, default=False)
-    brand_kit: Mapped[bool] = mapped_column(Boolean, default=False)
     features: Mapped[list] = mapped_column(JSON, default=list)  # bullet points on the pricing page
     # Server defaults: 0006 seeds this table without these columns on a database 0001 built from the models.
-    video_premium: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())  # premium options
     # False: `videos` is a lifetime total that never refills (Free). True: per month.
     videos_monthly: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
     video_limits: Mapped[dict | None] = mapped_column(JSON, default=dict)  # see plans.VIDEO_LIMITS

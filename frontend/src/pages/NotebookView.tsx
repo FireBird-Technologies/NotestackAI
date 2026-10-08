@@ -14,7 +14,9 @@ import { InfographicDialog, type InfographicRequest } from "../components/Infogr
 import { SlideDeckDialog, SlideDeckRow, type SlideDeckRequest } from "../components/SlideDeck";
 import { AudioOverviewCard, AudioOverviewDialog, prefetchVoices, type AudioOverviewRequest } from "../components/AudioOverview";
 import { QuizDialog, type QuizRequest } from "../components/Quiz";
-import { MAX_STUDY_POSTS, prefetchFocus } from "../components/SourceFocusFields";
+import { prefetchFocus } from "../components/SourceFocusFields";
+import { prefetchSuggestions } from "../hooks/reportSuggestions";
+import { useArtifactLimits } from "../hooks/useArtifactLimits";
 import { ReportDialog, type ReportRequest } from "../components/ReportDialog";
 import { PaneResizer, usePaneWidths } from "../components/PaneResizer";
 import { Reader } from "../components/Reader";
@@ -34,6 +36,23 @@ type Turn = {
   saved?: MemoryChange[];
 };
 
+
+/** Chats under date headings: Today, Yesterday, the last week, the last month, then by month. Newest first. */
+function groupChats(chats: ChatSummary[]): { label: string; items: ChatSummary[] }[] {
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const today = startOfDay(new Date());
+  const groups: { label: string; items: ChatSummary[] }[] = [];
+  [...chats].sort((a, b) => +new Date(b.updated_at) - +new Date(a.updated_at)).forEach((c) => {
+    const when = new Date(c.updated_at);
+    const days = Math.round((today - startOfDay(when)) / 86400000);
+    const label = days <= 0 ? "Today" : days === 1 ? "Yesterday" : days <= 7 ? "Previous 7 days" : days <= 30 ? "Previous 30 days"
+      : when.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+    const last = groups[groups.length - 1];
+    if (last && last.label === label) last.items.push(c);
+    else groups.push({ label, items: [c] });
+  });
+  return groups;
+}
 
 const STARTERS = ["What are the strongest ideas across these posts?", "Where do I contradict myself?", "Which post is most worth updating, and why?"];
 const CHAT_RAIL_KEY = "ns_notebook_chat_rail";
@@ -93,9 +112,13 @@ function StudioPanel({ notebookId, notebookTitle, docs, chats, currentChatId, di
   }, []);
 
   // The focus suggestions the study dialogs show, made now so they are waiting when a dialog opens.
-  const startIds = docs.filter((d) => !d.locked).slice(0, MAX_STUDY_POSTS).map((d) => d.id).join(",");
+  const limits = useArtifactLimits();
+  const startIds = docs.filter((d) => !d.locked).slice(0, limits.posts).map((d) => d.id).join(",");
   useEffect(() => {
-    if (startIds) prefetchFocus(notebookId, startIds.split(","));
+    if (startIds) {
+      prefetchFocus(notebookId, startIds.split(","));
+      prefetchSuggestions(notebookId, startIds.split(",")); // the Create report dialog's suggested templates, ready before it opens
+    }
   }, [notebookId, startIds]);
 
 
@@ -258,6 +281,10 @@ export default function NotebookView() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [q, setQ] = useState("");
+  const [postFilter, setPostFilter] = useState("");
+  const [postsOpen, setPostsOpen] = useState(true);
+  const [chatsOpen, setChatsOpen] = useState(true);
+  const [closedGroups, setClosedGroups] = useState<string[]>([]); // date headings folded shut
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [busy, setBusy] = useState(false);
   const [loadingChatId, setLoadingChatId] = useState<string | null>(null);
@@ -535,43 +562,100 @@ export default function NotebookView() {
           </div>
         </div>
         <nav className="nbv-chat-list" aria-label="Chat history">
+          {chats.length > 0 && (
+            <button type="button" className="nbv-posts-toggle nbv-chats-toggle" aria-expanded={chatsOpen} onClick={() => setChatsOpen(!chatsOpen)}>
+              <svg className={`nbv-posts-chev${chatsOpen ? " open" : ""}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
+              Recent <span className="nbv-posts-count">{chats.length}</span>
+            </button>
+          )}
           {chats.length === 0 ? (
             <p className="nbv-history-empty muted small">Your conversations in this notebook will appear here.</p>
-          ) : (
-            <>
-              <p className="nbv-chat-list-label">
-                Recent <span>{chats.length}</span>
-              </p>
-              {chats.map((c) => {
-                const chatTitle = c.title?.trim() || "Untitled chat";
-                return (
-                  <div key={c.id} className={`nbv-chat-item${chatId === c.id ? " active" : ""}`}>
-                    <button
-                      type="button"
-                      className="nbv-chat-link"
-                      onClick={() => void openChat(c.id)}
-                      disabled={busy}
-                      aria-current={chatId === c.id ? "page" : undefined}
-                      aria-label={`${chatTitle}, updated ${formatDate(c.updated_at)}`}
-                    >
-                      <span>{chatTitle}</span>
-                    </button>
-                    <ConfirmButton
-                      className="nbv-chat-delete"
-                      confirmLabel="✓"
-                      onConfirm={() => removeChat(c.id)}
-                    >
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5" />
-                      </svg>
-                      <span className="sr-only">Delete {chatTitle}</span>
-                    </ConfirmButton>
-                  </div>
-                );
-              })}
-            </>
+          ) : chatsOpen && (
+            groupChats(chats).map((g) => (
+              <div key={g.label} className="nbv-chat-group">
+                <button type="button" className="nbv-chat-list-label nbv-group-toggle" aria-expanded={!closedGroups.includes(g.label)}
+                        onClick={() => setClosedGroups((o) => (o.includes(g.label) ? o.filter((x) => x !== g.label) : [...o, g.label]))}>
+                  <svg className={`nbv-posts-chev${!closedGroups.includes(g.label) ? " open" : ""}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
+                  {g.label} <span className="nbv-group-count">{g.items.length}</span>
+                </button>
+                {!closedGroups.includes(g.label) && g.items.map((c) => {
+                  const chatTitle = c.title?.trim() || "Untitled chat";
+                  return (
+                    <div key={c.id} className={`nbv-chat-item${chatId === c.id ? " active" : ""}`}>
+                      <button
+                        type="button"
+                        className="nbv-chat-link"
+                        onClick={() => void openChat(c.id)}
+                        disabled={busy}
+                        aria-current={chatId === c.id ? "page" : undefined}
+                        aria-label={`${chatTitle}, updated ${formatDate(c.updated_at)}`}
+                      >
+                        <span>{chatTitle}</span>
+                      </button>
+                      <ConfirmButton
+                        className="nbv-chat-delete"
+                        confirmLabel="✓"
+                        onConfirm={() => removeChat(c.id)}
+                      >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5" />
+                        </svg>
+                        <span className="sr-only">Delete {chatTitle}</span>
+                      </ConfirmButton>
+                    </div>
+                  );
+                })}
+              </div>
+            ))
           )}
         </nav>
+
+        {/* Posts: below the chat history */}
+        <section className="nbv-section nbv-posts">
+          <div className="nbv-section-head">
+            <button type="button" className="nbv-posts-toggle" aria-expanded={postsOpen} onClick={() => setPostsOpen(!postsOpen)}>
+              <svg className={`nbv-posts-chev${postsOpen ? " open" : ""}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
+              Posts <span className="nbv-posts-count">{nb.documents.length}</span>
+            </button>
+            {!nb.is_archive && (
+              <button className="btn btn-small" onClick={() => setAdding(true)}>+ Add</button>
+            )}
+          </div>
+          {postsOpen && (
+            <>
+              {nb.is_archive && <p className="muted small">Every indexed post. New posts join automatically.</p>}
+              {!nb.is_archive && nb.documents.length === 0 && <p className="muted small">No posts yet. Add some to start asking and creating.</p>}
+              {nb.documents.length > 6 && (
+                <input className="input nbv-posts-search" type="search" placeholder="Find a post" value={postFilter} onChange={(e) => setPostFilter(e.target.value)} aria-label="Find a post" />
+              )}
+              <ul className="nbv-docs">
+                {nb.documents.filter((d) => d.title.toLowerCase().includes(postFilter.trim().toLowerCase())).map((d) => (
+                  <li key={d.id} className="nbv-doc">
+                    <button className="link-btn" onClick={() => setReading({ id: d.id })} title={d.title}>
+                      {d.title}
+                    </button>
+                    {d.published_at && <span className="mono muted">{formatDate(d.published_at)}</span>}
+                    {!nb.is_archive && (
+                      <button
+                        className="icon-btn nbv-remove"
+                        aria-label={`Remove ${d.title} from this notebook`}
+                        title="Remove from this notebook (the post itself is kept)"
+                        onClick={async () => {
+                          await notebooksApi.removeDoc(nb.id, d.id);
+                          load();
+                        }}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+                          <path d="M6 6l12 12M18 6L6 18" />
+                        </svg>
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </section>
       </aside>}
 
       <section className="card nbv-pane nbv-chat">
@@ -724,43 +808,6 @@ export default function NotebookView() {
                        seedDocs(nb.id, nb.documents); // the posts this page already has: the wizard shows them at once
                        setMakingVideo(true);
                      }} />
-
-        {/* Posts: below the create buttons and what was made */}
-        <section className="nbv-section">
-          <div className="nbv-section-head">
-            <span className="vw-label">Posts <span className="mono muted">{nb.documents.length}</span></span>
-            {!nb.is_archive && (
-              <button className="btn btn-small" onClick={() => setAdding(true)}>+ Add posts</button>
-            )}
-          </div>
-          {nb.is_archive && <p className="muted small">Every indexed post. New posts join automatically.</p>}
-          {!nb.is_archive && nb.documents.length === 0 && <p className="muted small">No posts yet. Add some to start asking and creating.</p>}
-          <ul className="nbv-docs">
-            {nb.documents.map((d) => (
-              <li key={d.id} className="nbv-doc">
-                <button className="link-btn" onClick={() => setReading({ id: d.id })}>
-                  {d.title}
-                </button>
-                <span className="mono muted">{formatDate(d.published_at)}</span>
-                {!nb.is_archive && (
-                  <button
-                    className="icon-btn nbv-remove"
-                    aria-label={`Remove ${d.title} from this notebook`}
-                    title="Remove from this notebook (the post itself is kept)"
-                    onClick={async () => {
-                      await notebooksApi.removeDoc(nb.id, d.id);
-                      load();
-                    }}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
-                      <path d="M6 6l12 12M18 6L6 18" />
-                    </svg>
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
-        </section>
       </aside>
 
       {makingVideo && (

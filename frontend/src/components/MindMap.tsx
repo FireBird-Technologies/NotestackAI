@@ -479,6 +479,40 @@ export function MindMapExplorer({ artifact, onClose, warp = true, startAt = "roo
     return false;
   };
   const labelWorld = (level: number) => (LABEL_PX[level] * Math.pow(cam.s, 0.3)) / cam.s;
+  // Declutter: at any zoom, several labels can be visible at once and sit close together on screen. A bigger or more
+  // central node (lower level first, then closer to the view centre) claims its space; one whose box would then
+  // overlap an already-claimed box is hidden until zooming in spreads the nodes apart.
+  const hiddenLabels = (() => {
+    const centerX = size.w / 2 - cam.x * cam.s;
+    const centerY = size.h / 2 - cam.y * cam.s;
+    const toScreen = (p: Placed) => ({ x: centerX + p.x * cam.s, y: centerY + p.y * cam.s });
+    const candidates = placed
+      .filter((p) => levelOp[p.level] * (inFocus(p) ? 1 : 0.28) >= 0.3)
+      .map((p) => {
+        const s = toScreen(p);
+        const fsPx = labelWorld(p.level) * cam.s * (p.level === 0 ? 0.82 : 1);
+        const text = p.level === 0 ? p.node.label.toUpperCase() : p.node.label;
+        const w = Math.min(text.length, p.level >= 2 ? 16 : 14) * fsPx * 0.58;
+        const r = RADIUS[p.level] * cam.s;
+        const top = s.y + r * 1.35;
+        return { p, box: { x1: s.x - w / 2, x2: s.x + w / 2, y1: top, y2: top + fsPx * 1.3 } };
+      })
+      .sort((a, b) => {
+        if (a.p.level !== b.p.level) return a.p.level - b.p.level; // bigger levels (branches) win over small ones
+        const da = (a.box.x1 + a.box.x2) ** 2 + (a.box.y1 + a.box.y2) ** 2;
+        const db = (b.box.x1 + b.box.x2) ** 2 + (b.box.y1 + b.box.y2) ** 2;
+        return da - db; // within a level, whichever sits nearer the view centre wins
+      });
+    const kept: { x1: number; x2: number; y1: number; y2: number }[] = [];
+    const hidden = new Set<string>();
+    const overlaps = (a: typeof candidates[number]["box"], b: typeof candidates[number]["box"]) =>
+      a.x1 < b.x2 && a.x2 > b.x1 && a.y1 < b.y2 && a.y2 > b.y1;
+    for (const { p, box } of candidates) {
+      if (p.node.id === focusId || kept.every((k) => !overlaps(box, k))) kept.push(box);
+      else hidden.add(p.node.id);
+    }
+    return hidden;
+  })();
   const trail: Placed[] = [];
   for (let c: Placed | null = focused; c; c = c.parent) trail.unshift(c);
 
@@ -634,13 +668,15 @@ export function MindMapExplorer({ artifact, onClose, warp = true, startAt = "roo
                       +{p.node.children.length}
                     </text>
                   )}
-                  <text className="mm-label" textAnchor="middle" fontSize={p.level === 0 ? fs * 0.82 : fs} y={r * 1.35 + fs * 1.15}>
-                    {lines.map((l, i) => (
-                      <tspan key={i} x={0} dy={i === 0 ? 0 : fs * 1.12}>
-                        {l}
-                      </tspan>
-                    ))}
-                  </text>
+                  {!hiddenLabels.has(p.node.id) && (
+                    <text className="mm-label" textAnchor="middle" fontSize={p.level === 0 ? fs * 0.82 : fs} y={r * 1.35 + fs * 1.15}>
+                      {lines.map((l, i) => (
+                        <tspan key={i} x={0} dy={i === 0 ? 0 : fs * 1.12}>
+                          {l}
+                        </tspan>
+                      ))}
+                    </text>
+                  )}
                   {showNote && (
                     <text className="mm-note" textAnchor="middle" fontSize={noteFs} y={r * 1.35 + fs * 1.15 + lines.length * fs * 1.12 + noteFs * 0.8} style={{ opacity: ramp(z, 6, 8) }}>
                       {wrap(p.node.note, 30, 5).map((l, i) => (

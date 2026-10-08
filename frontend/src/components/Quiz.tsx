@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
-import type { GenerateBody } from "../api/endpoints";
-import type { Artifact, ChatSummary, QuizQuestion, QuizQuestionType } from "../api/types";
+import { useMemo, useState, type ReactNode } from "react";
+import { artifactsApi, type GenerateBody } from "../api/endpoints";
+import type { Artifact, ChatSummary, QuizAttempt, QuizQuestion, QuizQuestionType } from "../api/types";
+import { ArtifactFeedback } from "./ArtifactFeedback";
 import { CheckIcon, ChevronIcon } from "./icons/Icons";
 import { Pills, SourceFocusFields, sourceSummary, type SourceSelection } from "./SourceFocusFields";
 import { StudyOverlay } from "./StudyOverlay";
@@ -71,7 +72,7 @@ export function QuizDialog({ notebookId, notebookTitle, chats, currentChatId, bu
             </div>
           </div>
           <SourceFocusFields notebookId={notebookId} notebookTitle={notebookTitle} chats={chats} currentChatId={currentChatId}
-                             preselectChat what="quiz" onChange={setSel} />
+                             preselectChat what="quiz" largeSelection onChange={setSel} />
           <div className="qz-foot">
             <div>
               {!sel?.ready && <p className="muted small">Select at least one post or chat to generate a quiz.</p>}
@@ -118,33 +119,90 @@ function resultTier(pct: number): { tone: "gold" | "silver" | "bronze" | "low"; 
   if (pct >= 90) return { tone: "gold", title: "Outstanding!", note: "You know this material inside out." };
   if (pct >= 70) return { tone: "silver", title: "Great job!", note: "A solid grasp. Review the ones you missed." };
   if (pct >= 50) return { tone: "bronze", title: "Good effort", note: "You are getting there. Another pass will help." };
-  return { tone: "low", title: "Better luck next time", note: "Read the material again, then give it another go." };
+  return { tone: "low", title: "Back to the launchpad", note: "Read the material again, then relaunch." };
 }
 
-function ResultBadge({ tone }: { tone: "gold" | "silver" | "bronze" | "low" }) {
-  if (tone === "low") {
-    return (
-      <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="9" />
-        <path d="M8.5 15.5c1-1.2 2.2-1.8 3.5-1.8s2.5.6 3.5 1.8M9 9.5v.01M15 9.5v.01" />
-      </svg>
-    );
-  }
+const STAR_PATH = "m0-9 2.6 5.6 6.1.7-4.5 4.2 1.2 6L0 4.2-5.4 7.5l1.2-6-4.5-4.2 6.1-.7z";
+const ROCKET_PATH = "M0-11c4 2.700 6 7 6 11.500v6H-6v-6c0-4.500 2-8.800 6-11.500zM-6 1l-3.500 4v4L-6 7M6 1l3.500 4v4L6 7";
+
+/** The result as a small galaxy: a medal-planet with a ring and a moon, one star per question on a wide orbit around it
+ * (lit for each right answer), and a field of stars behind. The colours come from the tone (see .quiz-hero in the CSS). */
+export function ResultScene({ score, total, tone }: { score: number; total: number; tone: string }) {
+  const n = Math.min(Math.max(total, 1), 14);
+  const lit = Math.round((score / Math.max(total, 1)) * n);
+  const orbit = Array.from({ length: n }, (_, i) => {
+    const a = Math.PI + (i / n) * Math.PI * 2;
+    return { i, x: 200 + Math.cos(a) * 168, y: 90 + Math.sin(a) * 40, front: Math.sin(a) > 0 };
+  });
+  const field = (() => {
+    let seed = 7;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    return Array.from({ length: 46 }, (_, k) => ({ x: rnd() * 400, y: rnd() * 180, r: 0.5 + rnd() * 1.1, d: (rnd() * 4).toFixed(2), big: k % 11 === 0 }));
+  })();
+  const dot = (p: (typeof orbit)[number]) => (
+    <g key={p.i} className={p.i < lit ? "orb lit" : "orb"} style={{ animationDelay: `${p.i * 0.15}s` }}>
+      {p.i < lit && <circle className="orb-halo" cx={p.x} cy={p.y} r="8" />}
+      <circle cx={p.x} cy={p.y} r={p.i < lit ? 3 : 1.8} />
+    </g>
+  );
   return (
-    <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M8 3l4 6 4-6M7 3h10" />
-      <circle cx="12" cy="15" r="5.5" />
-      <path d="M12 12.6l.8 1.7 1.8.2-1.3 1.2.4 1.8-1.7-.9-1.7.9.4-1.8-1.3-1.2 1.8-.2z" />
+    <svg className="quiz-scene" viewBox="0 0 400 180" aria-hidden="true">
+      <defs>
+        <radialGradient id="qs-planet" cx="34%" cy="28%" r="80%">
+          <stop offset="0" style={{ stopColor: "var(--c1)" }} />
+          <stop offset="0.5" style={{ stopColor: "var(--c2)" }} />
+          <stop offset="1" style={{ stopColor: "var(--c3)" }} />
+        </radialGradient>
+        <radialGradient id="qs-glow" cx="50%" cy="50%" r="50%">
+          <stop offset="0" style={{ stopColor: "var(--c2)", stopOpacity: 0.45 }} />
+          <stop offset="1" style={{ stopColor: "var(--c2)", stopOpacity: 0 }} />
+        </radialGradient>
+        <clipPath id="qs-clip"><circle cx="200" cy="90" r="40" /></clipPath>
+      </defs>
+      {field.map((f, k) => f.big ? (
+        <path key={k} className="qs-spark" d="M0-5 1-1 5 0 1 1 0 5-1 1-5 0-1-1z" transform={`translate(${f.x} ${f.y})`} style={{ animationDelay: `${f.d}s` }} />
+      ) : (
+        <circle key={k} className="qs-star" cx={f.x} cy={f.y} r={f.r} style={{ animationDelay: `${f.d}s` }} />
+      ))}
+      <circle cx="200" cy="90" r="84" fill="url(#qs-glow)" />
+      <g transform="rotate(-12 200 90)">
+        <ellipse className="qs-orbit" cx="200" cy="90" rx="168" ry="40" />
+        {orbit.filter((p) => !p.front).map(dot)}
+        <path className="qs-ring back" d="M118 90a82 19 0 0 1 164 0" />
+        <circle cx="200" cy="90" r="40" fill="url(#qs-planet)" />
+        <g clipPath="url(#qs-clip)" className="qs-bands">
+          <path d="M150 74q50 -9 100 0M150 104q50 10 100 0" />
+          <ellipse cx="228" cy="112" rx="34" ry="30" className="qs-shade" />
+        </g>
+        <g transform="translate(200 90) rotate(12)" className="qs-emblem">
+          {tone === "low" ? <path d={ROCKET_PATH} transform="scale(1.15)" /> : <path d={STAR_PATH} transform="scale(1.35)" />}
+        </g>
+        <path className="qs-ring front" d="M118 90a82 19 0 0 0 164 0" />
+        {orbit.filter((p) => p.front).map(dot)}
+        <circle className="qs-moon" r="5">
+          <animateMotion dur="11s" repeatCount="indefinite" path="M368 90a168 40 0 1 0 -336 0a168 40 0 1 0 336 0" />
+        </circle>
+      </g>
     </svg>
   );
 }
 
 /** The quiz itself, without a frame: in a modal (QuizPlayer) or inside a report. `onExit` adds a Close button. */
-export function QuizRunner({ questions, onExit }: { questions: QuizQuestion[]; onExit?: () => void }) {
+export function QuizRunner({ questions, onExit, feedback, saved, onFinish }: {
+  questions: QuizQuestion[];
+  onExit?: () => void;
+  feedback?: ReactNode;
+  /** A finished run kept earlier: opening the quiz again starts on its result. */
+  saved?: QuizAttempt | null;
+  /** Called with the answers when the last question is done, so the result can be kept. */
+  onFinish?: (answers: QuizAttempt["answers"], score: number) => void;
+}) {
+  const restored = saved && saved.answers.length === questions.length ? saved : null;
   const [i, setI] = useState(0);
-  const [answers, setAnswers] = useState<Answer[]>(() => questions.map(blank));
-  const [done, setDone] = useState(false);
-  const [finished, setFinished] = useState(false); // the results have been reached: a question opened from them leads back to them
+  const [answers, setAnswers] = useState<Answer[]>(() =>
+    restored ? restored.answers.map((a) => ({ choice: a.choice, text: a.text, checked: true, correct: a.correct })) : questions.map(blank));
+  const [done, setDone] = useState(!!restored);
+  const [finished, setFinished] = useState(!!restored); // the results have been reached: a question opened from them leads back to them
   const [detail, setDetail] = useState(false); // the per-question results, under the score
 
   const q = questions[i];
@@ -169,10 +227,15 @@ export function QuizRunner({ questions, onExit }: { questions: QuizQuestion[]; o
       <>
         <div className="quiz-result">
           <div className={`quiz-hero ${t.tone}`}>
-            <span className="quiz-badge" aria-hidden="true"><ResultBadge tone={t.tone} /></span>
+            <ResultScene score={score} total={total} tone={t.tone} />
             <p className="quiz-verdict">{t.title}</p>
             <p className="quiz-score">{score} <span>/ {total}</span></p>
-            <p className="muted">{pct}% correct. {t.note}</p>
+            <p className="quiz-note muted">{t.note}</p>
+            <div className="quiz-chips">
+              <span className="quiz-chip pct">{pct}%</span>
+              <span className="quiz-chip right">{score} correct</span>
+              <span className="quiz-chip wrong">{total - score} to review</span>
+            </div>
           </div>
 
           <button type="button" className={`quiz-detail-toggle${detail ? " open" : ""}`} aria-expanded={detail} onClick={() => setDetail(!detail)}>
@@ -197,6 +260,7 @@ export function QuizRunner({ questions, onExit }: { questions: QuizQuestion[]; o
             </ol>
           )}
 
+          {feedback}
           <div className="row end">
             {onExit && <button type="button" className="btn" onClick={onExit}>Close</button>}
             <button type="button" className="btn btn-primary" onClick={restart}>Retake</button>
@@ -215,6 +279,7 @@ export function QuizRunner({ questions, onExit }: { questions: QuizQuestion[]; o
     if (!last) return setI(i + 1);
     setFinished(true);
     setDone(true);
+    onFinish?.(answers.map((x) => ({ choice: x.choice, text: x.text, correct: x.correct })), score);
   };
   const pick = (k: number) => {
     if (a.checked) return;
@@ -307,11 +372,20 @@ export function QuizRunner({ questions, onExit }: { questions: QuizQuestion[]; o
   );
 }
 
+// A finished run is shown on every open of the quiz, also before the list is fetched again, so the latest copy is kept here.
+const attempts = new Map<string, QuizAttempt>();
+
 export function QuizPlayer({ artifact, onClose }: { artifact: Artifact; onClose: () => void }) {
   const questions = useMemo(() => (artifact.content.questions ?? []) as QuizQuestion[], [artifact]);
+  const saved = attempts.get(artifact.id) ?? artifact.attempt ?? null;
+  const keep = (answers: QuizAttempt["answers"], score: number) => {
+    attempts.set(artifact.id, { score, total: questions.length, answers });
+    artifactsApi.saveAttempt(artifact.id, { answers, score }).catch(() => undefined); // the result is also kept here for this visit
+  };
   return (
     <StudyOverlay title={artifact.title} onClose={onClose}>
-      <QuizRunner questions={questions} onExit={onClose} />
+      <QuizRunner questions={questions} onExit={onClose} saved={saved} onFinish={keep}
+                  feedback={<ArtifactFeedback artifact={artifact} label="How was this quiz?" />} />
     </StudyOverlay>
   );
 }
@@ -321,10 +395,12 @@ export function QuizBody({ artifact }: { artifact: Artifact }) {
   const [playing, setPlaying] = useState(false);
   const c = artifact.content;
   const from = sourceSummary(c.source);
+  const last = attempts.get(artifact.id) ?? artifact.attempt ?? null; // read again whenever the player closes (the state change re-renders)
   return (
     <div className="artifact-body">
       <p className="muted">{c.question_count ?? 0} questions · {c.difficulty ?? "medium"} · from {from}</p>
-      <button type="button" className="btn btn-small" onClick={() => setPlaying(true)}>Start quiz</button>
+      {last && <p className="muted small">Last score {last.score} / {last.total}</p>}
+      <button type="button" className="btn btn-small" onClick={() => setPlaying(true)}>{last ? "View result" : "Start quiz"}</button>
       {playing && <QuizPlayer artifact={artifact} onClose={() => setPlaying(false)} />}
     </div>
   );

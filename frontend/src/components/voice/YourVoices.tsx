@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { videosApi, videoVoicesApi, voiceApi } from "../../api/endpoints";
+import { videoVoicesApi, voiceApi } from "../../api/endpoints";
 import type { VideoLibraryVoice, VideoSavedVoice, VideoVoicesResponse } from "../../api/types";
-import { useUpgrade } from "../../hooks/useUpgrade";
 import { errorMessage, Loading } from "../ui";
-import { Premium, PlayButton, useAudio } from "../video/parts";
+import { PlayButton, useAudio } from "../video/parts";
 
 const cap = (s?: string | null) => (s ? s[0].toUpperCase() + s.slice(1) : "");
 
@@ -33,16 +32,13 @@ export function YourVoices({ reloadKey = 0, onAdd }: {
   onAdd: () => void;
 }) {
   const [voices, setVoices] = useState<VideoVoicesResponse | null>(null);
-  const [premium, setPremium] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { playing, play, playSaved } = useVoicePlayer(setError);
-  const { openUpgrade } = useUpgrade();
 
   const load = useCallback(() => videoVoicesApi.list().then(setVoices).catch((e) => setError(errorMessage(e))), []);
   useEffect(() => {
     load();
-    videosApi.config().then((c) => setPremium(!!c.premium)).catch(() => undefined);
   }, [load, reloadKey]);
 
   async function act(voiceId: string, fn: () => Promise<unknown>) {
@@ -58,14 +54,13 @@ export function YourVoices({ reloadKey = 0, onAdd }: {
     }
   }
 
-  const add = (v: VideoLibraryVoice) =>
-    v.premium && !premium ? openUpgrade() : act(v.voice_id, () => videoVoicesApi.save(v.voice_id));
+  const add = (v: VideoLibraryVoice) => act(v.voice_id, () => videoVoicesApi.save(v.voice_id));
   const library = voices?.library.filter((v) => !v.saved) ?? [];
 
   return (
     <div className="stack">
       <div className="row between wrap manage-top">
-        <p className="muted">Your voices read your audio overviews and videos. Add your own, or pick from the library.</p>
+        <p className="muted">Your voices read your audio overviews, and the free ones can narrate videos. Add your own, or pick from the library.</p>
         <button className="btn btn-primary" onClick={onAdd}>Add voices</button>
       </div>
       {error && <p className="error-text">{error}</p>}
@@ -86,11 +81,10 @@ export function YourVoices({ reloadKey = 0, onAdd }: {
                     <div className="vw-vpick static">
                       <strong>{v.name}</strong>
                       <span className="muted">
-                        {v.source === "notestack" || v.is_custom ? "Your voice"
+                        {v.source === "notestack" ? "Your voice"
                           : [cap(v.gender), cap(v.accent)].filter(Boolean).join(" • ")}
                       </span>
                     </div>
-                    {v.premium && <Premium small />}
                     <button className="btn btn-small" disabled={busy === v.voice_id}
                             onClick={() => act(v.voice_id, () => videoVoicesApi.unsave(v.voice_id))}>
                       Remove
@@ -118,7 +112,6 @@ export function YourVoices({ reloadKey = 0, onAdd }: {
                         {v.description ? ` - ${v.description}` : ""}
                       </span>
                     </div>
-                    {v.premium && <Premium small />}
                     <button className="btn btn-small btn-primary" disabled={busy === v.voice_id} onClick={() => add(v)}>
                       Add
                     </button>

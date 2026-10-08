@@ -997,6 +997,19 @@
   font-size: 0.75rem;
 }
 
+/* A long message wraps inside its own column; the percentage keeps its width and never breaks across lines ("80%" as 8, 0, %). */
+.ascent-meta > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ascent-meta > :last-child:not(:first-child) {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Notebook view: sources | chat | artifacts */
 .nbv {
   display: grid;

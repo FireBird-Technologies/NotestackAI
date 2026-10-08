@@ -232,7 +232,7 @@ def test_create_panel_buttons_in_the_docs_exist_in_the_app():
     """The docs name the Create panel's buttons; each must still be a real button in NotebookView."""
     view = (FRONTEND / "pages" / "NotebookView.tsx").read_text(encoding="utf-8")
     docs = " ".join(d.body for d in get_corpus())
-    for label in ("Report", "Summary", "Infographic", "Quiz", "Flashcards", "Mind Constellation", "Video"):
+    for label in ("Report", "Infographic", "Quiz", "Flashcards", "Mind Constellation", "Video"):
         assert re.search(rf">\s*{label}\s*<", view) or re.search(rf"\n\s*{label}\n", view), f"{label} button is gone"
         assert f"**{label}**" in docs, f"{label} is not documented"
 
@@ -272,7 +272,6 @@ def test_plan_doc_matches_the_plan_table():
     ("why did I get an email reminder instead of an auto post", "launchpad"),
     ("how does voice cloning work", "voice-profile"),
     ("what is the topic map", "topic-map-and-resurfacing"),
-    ("how do I add my logo and brand colors", "settings-and-account"),
     ("how do I delete my account", "settings-and-account"),
     ("how much does the writer plan cost", "plans-and-billing"),
     ("what is in the free plan", "plans-and-billing"),

@@ -8,7 +8,7 @@ import { ConfirmButton, ErrorText, errorMessage, Loading, Modal, PageHeader, Sta
 import { ImagesPanel, VoicePanel, type PanelProps } from "../components/video/EditorPanels";
 import { LookPanel } from "../components/video/SettingsPanel";
 import { SceneList } from "../components/video/SceneList";
-import { PhoneIcon, Premium, ScreenIcon } from "../components/video/parts";
+import { PhoneIcon, ScreenIcon } from "../components/video/parts";
 import { usePoll } from "../hooks/usePoll";
 import { finished, jobPercent } from "../components/video/jobState";
 import { useUpgrade } from "../hooks/useUpgrade";
@@ -345,12 +345,11 @@ export default function VideoEditor() {
   }
   const locked = !!running || generating;
   const portrait = project?.project.aspect_ratio === "portrait";
-  const premium = !!config?.premium;
   const summary = project?.project.summary;
   const aiEdits = config?.limits.ai_edits;
   const aiEditsLeft = aiEdits ? Math.max(aiEdits.limit - aiEdits.used, 0) : null;
   const panelProps: PanelProps | null = project ? {
-    id, project: project.project, layoutSchema, layoutNames, layoutInfo, disabled: locked, premium, act, startJob, locked: () => openUpgrade(),
+    id, project: project.project, layoutSchema, layoutNames, layoutInfo, disabled: locked, act, startJob, locked: () => openUpgrade(),
   } : null;
 
   return (
@@ -391,7 +390,7 @@ export default function VideoEditor() {
       )}
 
       {status?.status === "awaiting_script_review" && (
-        <ScriptReview id={id} premium={premium} locked={() => openUpgrade()}
+        <ScriptReview id={id}
                       onApproved={() => setGenKey((k) => k + 1)} />
       )}
 
@@ -503,10 +502,9 @@ export default function VideoEditor() {
   );
 }
 
-/** Script review: edit each scene, rewrite its narration (or the whole scene ★ with AI), then approve. */
-function ScriptReview({ id, premium, locked, onApproved }: { id: string; premium: boolean; locked: () => void; onApproved: () => void }) {
+/** Script review: edit each scene, rewrite its narration to match, then approve. */
+function ScriptReview({ id, onApproved }: { id: string; onApproved: () => void }) {
   const [scenes, setScenes] = useState<(ScriptScene & { source_fingerprint?: string; accepted_ai_instructions?: string[] })[] | null>(null);
-  const [instruction, setInstruction] = useState<Record<number, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -523,19 +521,15 @@ function ScriptReview({ id, premium, locked, onApproved }: { id: string; premium
     draft_scenes: (scenes ?? []).map((d) => ({ id: d.id, title: d.title, display_text: d.display_text, narration_text: d.narration_text })),
   });
 
-  async function rewrite(s: ScriptScene, ai: boolean) {
-    if (ai && !premium) return locked();
-    setBusy(`${ai ? "ai" : "n"}${s.id}`);
+  async function rewrite(s: ScriptScene) {
+    setBusy(`n${s.id}`);
     setError(null);
     try {
-      const text = instruction[s.id]?.trim();
-      const res = ai ? await videosApi.aiPreview(id, s.id, { ...draft(s), instruction: text ?? "" })
-                     : await videosApi.narrationPreview(id, s.id, draft(s));
+      const res = await videosApi.narrationPreview(id, s.id, draft(s));
       setRevision(res.revision);
       setScenes((list) => list?.map((d) => (d.id === s.id ? {
         ...d, title: res.title, display_text: res.display_text, narration_text: res.narration_text,
         source_fingerprint: res.source_fingerprint,
-        accepted_ai_instructions: ai && text ? [...(d.accepted_ai_instructions ?? []), text].slice(-10) : d.accepted_ai_instructions,
       } : d)) ?? null);
     } catch (e) {
       setError(errorMessage(e));
@@ -570,14 +564,8 @@ function ScriptReview({ id, premium, locked, onApproved }: { id: string; premium
           <textarea className="input" rows={3} value={s.narration_text} maxLength={6000} aria-label="Narration"
                     onChange={(e) => edit(s.id, { narration_text: e.target.value })} />
           <div className="row wrap">
-            <button className="btn btn-small" disabled={!!busy || !s.title.trim()} onClick={() => rewrite(s, false)}>
+            <button className="btn btn-small" disabled={!!busy || !s.title.trim()} onClick={() => rewrite(s)}>
               {busy === `n${s.id}` ? "Rewriting..." : "Rewrite narration to match"}
-            </button>
-            <input className="input" value={instruction[s.id] ?? ""} maxLength={1000} placeholder="Tell AI what to change"
-                   onChange={(e) => setInstruction({ ...instruction, [s.id]: e.target.value })} />
-            <button className="btn btn-small" disabled={!!busy || (instruction[s.id]?.trim().length ?? 0) < 2}
-                    onClick={() => rewrite(s, true)}>
-              {busy === `ai${s.id}` ? "Rewriting..." : "Rewrite with AI"} <Premium small />
             </button>
           </div>
         </div>

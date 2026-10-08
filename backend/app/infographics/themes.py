@@ -19,8 +19,11 @@ THEMES: dict[str, Theme] = {t.id: t for t in (
     Theme("moonbase", "Moon Base", "A lunar surface, a dome and a flag", ("#2b2b30", "#d8d2c4", "#c8745f")),
     Theme("observatory", "Observatory", "A telescope under a chart of stars", ("#14282b", "#8fc2b4", "#d6b66a")),
 )}
-DEFAULT_THEME = "launch"
+DEFAULT_THEME = "midnight"  # the look new infographics start with (the six above are the older fixed themes)
 
 
 def theme_id(value: object) -> str:
-    return value if isinstance(value, str) and value in THEMES else DEFAULT_THEME
+    """A look (design.LOOKS) or one of the older themes; the default when unknown."""
+    from app.infographics.design import LOOKS
+
+    return value if isinstance(value, str) and (value in LOOKS or value in THEMES) else DEFAULT_THEME

@@ -36,6 +36,7 @@ from app.pipeline.research import Turn, research
 from app.pipeline.trace import ChatTrace, use_trace
 from app.routers.sources import serialize_document
 from app.services.artifacts import latest_jobs, serialize_artifact
+from app.services import report_suggestions
 from app.services.jobs import create_job, record_usage
 from app.services.memory import list_facts, profile_text
 from app.services.storage import storage
@@ -86,6 +87,8 @@ def _add_docs(ctx: Ctx, nb: Notebook, ids: list[uuid.UUID]) -> int:
     fresh = [d for d in ctx.db.scalars(select(Document).where(Document.id.in_(valid - existing))) if not ideas_fresh(d)]
     if fresh and settings.llm_api_key:
         create_job(ctx.db, ctx.workspace.id, "ideas", {"document_ids": [str(d.id) for d in fresh]}, max_attempts=2)
+    if valid - existing:
+        report_suggestions.queue_warmup(ctx.db, ctx.workspace.id)  # the Create report dialog's templates, ready before it is opened
     return len(valid - existing)
 
 
@@ -254,7 +257,9 @@ def notebook_artifacts(notebook_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
         select(Artifact).where(Artifact.notebook_id == nb.id).order_by(Artifact.created_at.desc())
     ).all())
     jobs = latest_jobs(ctx.db, [a.id for a in rows])
-    return [serialize_artifact(a, jobs.get(a.id)) for a in rows]
+    from app.services import artifact_feedback  # the ratings ride along on each artifact the panel lists
+
+    return artifact_feedback.attach(ctx.db, ctx.user.id, [serialize_artifact(a, jobs.get(a.id)) for a in rows])
 
 
 @router.get("/{notebook_id}/chats")

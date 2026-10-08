@@ -176,15 +176,6 @@
   font-size: 0.7rem;
 }
 
-.vw-premium {
-  margin-left: 6px;
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: var(--blue);
-  color: var(--white);
-  font-size: 0.65rem;
-}
-
 .vw-dim {
   opacity: 0.5;
 }
@@ -611,16 +602,6 @@
   white-space: nowrap;
   text-overflow: ellipsis;
   font-size: 0.9rem;
-}
-
-.vw-premium-badge {
-  flex: none;
-  padding: 4px 14px;
-  border-radius: 999px;
-  background: var(--blue);
-  color: var(--white);
-  font-size: 0.8rem;
-  font-weight: 600;
 }
 
 /* Wizard footer */
@@ -1053,11 +1034,6 @@ a.mc-action {
   line-clamp: 3;
 }
 
-.vw-premium-badge.small {
-  padding: 1px 8px;
-  font-size: 0.68rem;
-}
-
 .vw-grid2 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1203,26 +1179,6 @@ a.mc-action {
   background: var(--surface);
   font-size: 0.8rem;
   white-space: pre-wrap;
-}
-
-.vw-chat {
-  display: grid;
-  gap: 8px;
-  max-height: 360px;
-  overflow-y: auto;
-}
-
-.vw-chat-line {
-  margin: 0;
-  padding: 10px 12px;
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-}
-
-.vw-chat-line.user {
-  justify-self: end;
-  background: var(--blue);
-  color: var(--white);
 }
 
 .vw-still {

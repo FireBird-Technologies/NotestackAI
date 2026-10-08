@@ -1,6 +1,6 @@
 """Who owns what on our one blog2video account.
 
-blog2video's ownership checks stop at the account: any video, custom template, custom voice or style made with our
+blog2video's ownership checks stop at the account: any video, custom template or style made with our
 key can be used, listed and edited with it. So every route that takes a blog2video id checks here first that it
 belongs to the current workspace (404 otherwise, so another workspace's ids are never confirmed), and every create or
 edit body has its references checked before it is forwarded (check_refs).
@@ -12,11 +12,9 @@ from fastapi import HTTPException
 from sqlalchemy import select
 
 from app.auth import Ctx
-from app.models import Artifact, B2VCustomVoice, B2VStyle, B2VTemplate, B2VVideo
+from app.models import Artifact, B2VStyle, B2VTemplate, B2VVideo
 from app.services import blog2video as b2v
-from app.services.notestack_voices import is_notestack_voice
 from app.services.plans import Plan, effective_plan
-from app.services.video_limits import require_premium
 
 BUILTIN_STYLES = {"auto", "explainer", "storytelling", "promotional"}
 # Custom styles made on our blog2video account itself, offered to every workspace in place of the others when they
@@ -29,7 +27,6 @@ HOUSE_STYLES = [  # (name on blog2video, video length, what the wizard says it i
                             "scene building on the last. Best for YouTube, tutorials and full explainers. Usually 1 to "
                             "2 minutes long."),
 ]
-PREMIUM_LENGTHS = {"detailed", "more_detailed", "mdetailed"}
 
 
 def not_found(what: str = "Not found") -> HTTPException:
@@ -79,14 +76,6 @@ def owned_template(ctx: Ctx, template_id: int) -> B2VTemplate:
     return row
 
 
-def owned_custom_voice(ctx: Ctx, custom_voice_id: int) -> B2VCustomVoice:
-    row = ctx.db.scalar(select(B2VCustomVoice).where(B2VCustomVoice.b2v_custom_voice_id == custom_voice_id,
-                                                     B2VCustomVoice.workspace_id == ctx.workspace.id))
-    if not row:
-        raise not_found("Voice not found")
-    return row
-
-
 def owned_style(ctx: Ctx, style_id: int) -> B2VStyle:
     row = ctx.db.scalar(select(B2VStyle).where(B2VStyle.b2v_style_id == style_id,
                                                B2VStyle.workspace_id == ctx.workspace.id))
@@ -100,15 +89,6 @@ def _custom_id(ref: str, prefix: str) -> int | None:
     return int(raw) if ref.startswith(prefix) and raw.isdigit() else None
 
 
-def crafted_ids() -> set[str]:
-    out = set()
-    for t in b2v.crafted_templates():
-        tid = t.get("id") if isinstance(t, dict) else t
-        if isinstance(tid, str) and tid.startswith("crafted_"):
-            out.add(tid)
-    return out
-
-
 def check_template(ctx: Ctx, template: str, plan: Plan) -> None:
     if template == "default":
         return
@@ -116,12 +96,6 @@ def check_template(ctx: Ctx, template: str, plan: Plan) -> None:
         row = owned_template(ctx, cid)
         if not row.ready:
             raise HTTPException(400, "That template is still being made.")
-        return
-    if template.startswith("crafted_"):
-        # blog2video silently falls back to "default" for an unknown id, so check it exists.
-        if template not in crafted_ids():
-            raise not_found("Template not found")
-        require_premium(ctx.db, ctx.workspace, "Designer templates", plan)
         return
     if template not in {t.get("id") for t in b2v.builtin_templates() if isinstance(t, dict)}:
         raise not_found("Template not found")
@@ -157,38 +131,26 @@ def check_style(ctx: Ctx, style: str) -> None:
     raise not_found("Video style not found")  # includes your_style, which learns from every workspace's edits
 
 
-def check_voice(ctx: Ctx, voice_id: str, plan: Plan) -> None:
-    """A built-in voice (premium if blog2video marks it paid), or one of this workspace's custom or Notestack
-    voices."""
-    prebuilt = {v.get("voice_id"): v for v in b2v.prebuilt_voices()}
-    if voice_id in prebuilt:
-        if prebuilt[voice_id].get("plan") == "paid":
-            require_premium(ctx.db, ctx.workspace, "This voice", plan)
-        return
-    if ctx.db.scalar(select(B2VCustomVoice).where(B2VCustomVoice.voice_id == voice_id,
-                                                  B2VCustomVoice.workspace_id == ctx.workspace.id)):
-        require_premium(ctx.db, ctx.workspace, "Custom voices", plan)
-        return
-    # One of this workspace's Notestack voices (clone, designed, added): same ElevenLabs account, premium like custom.
-    if is_notestack_voice(ctx.db, ctx.workspace.id, voice_id):
-        require_premium(ctx.db, ctx.workspace, "Custom voices", plan)
-        return
-    raise not_found("Voice not found")
+def check_voice(voice_id: str) -> None:
+    """A free built-in voice (blog2video marks the paid ones)."""
+    voice = next((v for v in b2v.prebuilt_voices() if v.get("voice_id") == voice_id), None)
+    if not voice or voice.get("plan") == "paid":
+        raise not_found("Voice not found")
 
 
 def check_refs(ctx: Ctx, body: dict, plan: Plan | None = None) -> Plan:
-    """Every id in a create or edit body must be this workspace's, and premium options need a paid plan."""
+    """Every id in a create or edit body must be this workspace's, and only the standard options are accepted."""
     plan = plan or effective_plan(ctx.db, ctx.workspace)
     if body.get("template"):
         check_template(ctx, str(body["template"]), plan)
     if body.get("video_style"):
         check_style(ctx, str(body["video_style"]))
     if body.get("custom_voice_id") and body.get("voice_gender") != "none":
-        check_voice(ctx, str(body["custom_voice_id"]), plan)
-    if str(body.get("video_length") or "") in PREMIUM_LENGTHS:
-        require_premium(ctx.db, ctx.workspace, "Longer videos", plan)
+        check_voice(str(body["custom_voice_id"]))
+    if str(body.get("video_length") or "") not in {"", "short", "medium"}:
+        raise HTTPException(400, "That video length is not available.")
     if body.get("voice_emotion"):
-        require_premium(ctx.db, ctx.workspace, "Advanced voice options", plan)
+        raise HTTPException(400, "Voice tuning is not available.")
     return plan
 
 

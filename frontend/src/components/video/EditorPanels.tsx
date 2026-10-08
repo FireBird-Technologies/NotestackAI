@@ -7,8 +7,7 @@ import type {
   VideoScene,
 } from "../../api/types";
 import { ChevronIcon, TrashIcon } from "../icons/Icons";
-import { ConfirmButton, ErrorText, errorMessage } from "../ui";
-import { Premium } from "./parts";
+import { ErrorText, errorMessage } from "../ui";
 import { DeleteAssetModal, RemoveMediaModal } from "./SceneMedia";
 import { Voiceovers } from "./Voiceovers";
 
@@ -23,7 +22,6 @@ export type PanelProps = {
   /** Every layout of the template with its visual variants (Scene layout / Scene style in the scene editor). */
   layoutInfo: LayoutInfo | null;
   disabled: boolean;
-  premium: boolean;
   /** Run a quick change, then reload the project. Resolves true on success, false when it failed. */
   act: (fn: () => Promise<unknown>, done?: string) => Promise<boolean>;
   /** Start a background job and poll it until it finishes. */
@@ -80,139 +78,6 @@ export function ScriptPanel(p: PanelProps) {
       {error && <ErrorText message={error} />}
       {preview && <pre className="vw-pre">{JSON.stringify(preview, null, 2)}</pre>}
     </section>
-  );
-}
-
-// AI chat editing ★
-
-type ChatLine = { role: "user" | "assistant"; text: string };
-
-export function ChatPanel(p: PanelProps) {
-  const [lines, setLines] = useState<ChatLine[]>([]);
-  const [message, setMessage] = useState("");
-  const [conversation, setConversation] = useState<number | undefined>();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!p.premium) return;
-    videoEditApi.chatHistory(p.id).then((h) => {
-      const list = (Array.isArray(h) ? h : (h as { messages?: unknown[] })?.messages ?? []) as { role?: string; content?: string; message?: string }[];
-      setLines(list.map((m) => ({ role: m.role === "user" ? "user" : "assistant", text: m.content ?? m.message ?? "" })));
-    }).catch(() => undefined);
-  }, [p.id, p.premium]);
-
-  if (!p.premium) {
-    return (
-      <section className="card notice row between wrap">
-        <span>Edit the video by chatting with AI. <Premium small /></span>
-        <button className="btn btn-small btn-primary" onClick={p.locked}>See plans</button>
-      </section>
-    );
-  }
-
-  async function send() {
-    const text = message.trim();
-    if (!text) return;
-    setBusy(true);
-    setError(null);
-    setLines((l) => [...l, { role: "user", text }]);
-    setMessage("");
-    try {
-      const res = await videoEditApi.chat(p.id, text, conversation);
-      if (res.conversation_id) setConversation(res.conversation_id);
-      setLines((l) => [...l, { role: "assistant", text: String(res.reply ?? res.message ?? res.response ?? "Done.") }]);
-      await p.act(async () => undefined);
-    } catch (e) {
-      setError(errorMessage(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <section className="card stack">
-      <h3>Edit with AI chat <span className="muted small">(1 AI edit per message)</span></h3>
-      <div className="vw-chat">
-        {lines.length === 0 && <p className="muted">Ask for changes, like "make scene 2 shorter" or "use warmer colors".</p>}
-        {lines.map((l, i) => <p key={i} className={`vw-chat-line ${l.role}`}>{l.text}</p>)}
-      </div>
-      {error && <ErrorText message={error} />}
-      <div className="row">
-        <input className="input" value={message} maxLength={4000} disabled={busy || p.disabled} placeholder="Ask for a change"
-               onChange={(e) => setMessage(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} />
-        <button className="btn btn-primary btn-small" disabled={busy || p.disabled || !message.trim()} onClick={send}>
-          {busy ? "Working..." : "Send"}
-        </button>
-      </div>
-    </section>
-  );
-}
-
-// Avatars ★: a talking presenter on chosen scenes
-
-export function AvatarPanel(p: PanelProps) {
-  const scenes = sorted(p.project.scenes);
-  const [picked, setPicked] = useState<number[]>([]);
-  const [progress, setProgress] = useState<Record<string, unknown> | null>(null);
-
-  useEffect(() => {
-    if (p.premium) videoEditApi.avatarProgress(p.id).then(setProgress).catch(() => undefined);
-  }, [p.id, p.premium, p.project]);
-
-  if (!p.premium) {
-    return (
-      <section className="card notice row between wrap">
-        <span>Add a talking presenter to your scenes. <Premium small /></span>
-        <button className="btn btn-small btn-primary" onClick={p.locked}>See plans</button>
-      </section>
-    );
-  }
-
-  const toggle = (sid: number) => setPicked((l) => (l.includes(sid) ? l.filter((x) => x !== sid) : [...l, sid]));
-
-  return (
-    <div className="stack">
-      <section className="card stack">
-        <h3>Presenter avatars <span className="muted small">(10 AI edits per scene)</span></h3>
-        <div className="stack">
-          {scenes.map((s) => (
-            <label key={s.id} className="vw-option row between">
-              <span>
-                <input type="checkbox" checked={picked.includes(s.id)} disabled={!!s.avatar_credits_refunded}
-                       onChange={() => toggle(s.id)} /> {s.order}. {s.title}
-              </span>
-              {s.avatar_video_path && (
-                <ConfirmButton className="btn btn-small" onConfirm={() => p.act(() => videoEditApi.deleteAvatar(p.id, s.id), "Avatar removed.")}>
-                  Remove avatar
-                </ConfirmButton>
-              )}
-            </label>
-          ))}
-        </div>
-        <div className="row wrap">
-          <button className="btn btn-primary btn-small" disabled={p.disabled || picked.length === 0}
-                  onClick={() => p.act(async () => {
-                    await videoEditApi.authorizeAvatars(p.id, picked);
-                    await Promise.all(picked.map((sid) => videoEditApi.makeAvatar(p.id, sid)));
-                    setPicked([]);
-                  }, "Avatars are being made. They appear as each one finishes.")}>
-            Make avatars for {picked.length} scene{picked.length === 1 ? "" : "s"} ({picked.length * 10} AI edits)
-          </button>
-        </div>
-        {progress && <pre className="vw-pre small">{JSON.stringify(progress, null, 2)}</pre>}
-      </section>
-      <section className="card stack">
-        <h3>Your own presenter photo</h3>
-        <input className="input" type="file" accept="image/*" disabled={p.disabled}
-               onChange={(e) => { const f = e.target.files?.[0]; if (f) p.act(() => videoEditApi.uploadPortrait(p.id, f), "Photo uploaded."); }} />
-        <div>
-          <ConfirmButton className="btn btn-small" onConfirm={() => p.act(() => videoEditApi.deletePortrait(p.id), "Back to the built-in presenters.")}>
-            Use the built-in presenters
-          </ConfirmButton>
-        </div>
-      </section>
-    </div>
   );
 }
 

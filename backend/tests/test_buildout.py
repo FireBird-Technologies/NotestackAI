@@ -939,11 +939,10 @@ def test_publish_now_with_media_goes_through_a_job(client, auth, db_session, mon
 def test_settings_and_usage(client, auth):
     s = client.get("/api/settings", headers=auth).json()
     assert s["user"]["name"] == "Ada Lovelace" and s["usage"]["used"]["launch_kits"] == 0
-    r = client.patch("/api/settings", json={"name": "Ada L", "workspace_name": "Ada HQ", "brand_accent": "#FF0000",
+    r = client.patch("/api/settings", json={"name": "Ada L", "workspace_name": "Ada HQ",
                                             "training_opt_in": True}, headers=auth).json()
     assert r["user"]["name"] == "Ada L" and r["workspace"]["name"] == "Ada HQ"
-    assert r["brand"]["accent"] == "#ff0000" and r["workspace"]["training_opt_in"] is True
-    assert client.patch("/api/settings", json={"brand_accent": "red"}, headers=auth).status_code == 422
+    assert r["workspace"]["training_opt_in"] is True and "brand" not in r
 
 
 def test_active_jobs_listing(client, auth, feed):
@@ -1657,14 +1656,7 @@ def test_flashcards_drop_repeats_empties_and_invented_sources(client, auth, run_
 
 
 def _make_report(client, auth, run_jobs, llm, pricing, nb):
-    good = {"path": pricing["path"], "line_start": 1, "line_end": 3}
-    fake = {"path": "sources/fake.md", "line_start": 1, "line_end": 2}
-    llm["WriteReport"] = {"report_title": "Pricing Brief", "markdown": "## One\nFirst point [1].\n\n## Two\nSecond [2].",
-                          "citations": [{"marker": 1, **good}, {"marker": 2, **fake}]}
-    llm["SuggestEmbeds"] = {"suggestions": [
-        {"after_block_id": "b1", "kind": "flashcards", "brief": "Terms", "why": "Learn them"},
-        {"after_block_id": "nope", "kind": "quiz", "brief": "x", "why": "y"},
-        {"after_block_id": "b2", "kind": "mind_map", "brief": "Links", "why": "See them"}]}
+    llm["WriteReport"] = {"report_title": "Pricing Brief", "markdown": "## One\nFirst point [1].\n\n## Two\nSecond [2]."}
     art = client.post("/api/artifacts/generate", json={
         "type": "report", "notebook_id": nb["id"], "document_ids": [pricing["id"]], "report_format": "document",
         "template_id": "briefing", "instructions": "Write a brief."}, headers=auth).json()
@@ -1672,15 +1664,15 @@ def _make_report(client, auth, run_jobs, llm, pricing, nb):
     return client.get(f"/api/artifacts/{art['id']}", headers=auth).json()
 
 
-def test_document_report_is_blocks_with_checked_citations_and_suggestions(client, auth, run_jobs, feed, llm):
+def test_document_report_is_blocks_without_citations_and_with_the_posts_it_was_made_from(client, auth, run_jobs, feed, llm):
     pricing, nb = _notebook_with_pricing(client, auth, run_jobs)
     done = _make_report(client, auth, run_jobs, llm, pricing, nb)
     c = done["content"]
     assert done["status"] == "ready" and done["type_label"] == "Report" and c["format"] == "document"
     assert [b["type"] for b in c["blocks"]] == ["prose", "prose"] and c["blocks"][0]["id"] == "b1"
-    assert len(c["citations"]) == 1 and "[2]" not in c["blocks"][1]["text"]  # the invented source was dropped
-    assert [s["after_block_id"] for s in c["suggestions"]] == ["b1", "b2"]  # the unknown section was dropped
-    assert c["sources"][0]["title"] == "On Pricing"
+    assert c["citations"] == [] and not any("[" in b["text"] for b in c["blocks"])  # a report cites nothing: markers are removed
+    assert c["suggestions"] == []  # a document never offers visuals; only an interactive report does
+    assert c["sources"][0]["title"] == "On Pricing" and c["instructions"] == "Write a brief."  # what the drop-down shows
 
 
 def test_add_and_remove_a_suggested_visual(client, auth, run_jobs, feed, llm):
@@ -1688,15 +1680,22 @@ def test_add_and_remove_a_suggested_visual(client, auth, run_jobs, feed, llm):
     done = _make_report(client, auth, run_jobs, llm, pricing, nb)
     llm["GenerateFlashcards"] = {"cards": [{"front": "Term", "back": "Meaning", "sources": []}]}
     r = client.post(f"/api/reports/{done['id']}/blocks", json={
-        "kind": "flashcards", "after_block_id": "b1", "suggestion_id": "s1", "brief": "Terms"}, headers=auth)
+        "kind": "flashcards", "after_block_id": "b1", "brief": "Terms"}, headers=auth)
     assert r.status_code == 200, r.text
     run_jobs()
     c = client.get(f"/api/artifacts/{done['id']}", headers=auth).json()["content"]
     assert [b["type"] for b in c["blocks"]] == ["prose", "flashcards", "prose"]
-    assert c["blocks"][1]["after"] == "b1" and [s["id"] for s in c["suggestions"]] == ["s2"]
+    assert c["blocks"][1]["after"] == "b1" and c["suggestions"] == []
     added = c["blocks"][1]["id"]
+
+    def saved_sets():
+        items = client.get("/api/artifacts", params={"type": "flashcards", "notebook_id": nb["id"]}, headers=auth).json()
+        return [a for a in (items["items"] if isinstance(items, dict) else items) if a["status"] == "ready"]
+
+    assert len(saved_sets()) == 1  # a set made in the report is also in the notebook's Studio list
     assert client.delete(f"/api/reports/{done['id']}/blocks/b1", headers=auth).status_code == 404  # prose stays
     assert client.delete(f"/api/reports/{done['id']}/blocks/{added}", headers=auth).status_code == 200
+    assert len(saved_sets()) == 1  # still there to use again, and not saved twice
     # a kind of visual the report does not know is refused
     assert client.post(f"/api/reports/{done['id']}/blocks", json={"kind": "poem"}, headers=auth).status_code == 422
 
@@ -1743,7 +1742,7 @@ def test_interactive_report_only_suggests_visuals_until_the_reader_adds_them(cli
         {"heading": "Compare", "brief": "b",
          "embed": {"kind": "table", "title": "Options", "brief": "options", "why": "Not a kind we offer"}}]}
     monkeypatch.setattr(run, "predict_many", lambda sig, inputs, **kw: [
-        {"markdown": f"Body {i} [1].", "citations": [{"marker": 1, **good}]} for i, _ in enumerate(inputs)])
+        {"markdown": f"Body {i} [1]."} for i, _ in enumerate(inputs)])
     art = client.post("/api/artifacts/generate", json={
         "type": "report", "notebook_id": nb["id"], "document_ids": [pricing["id"]], "report_format": "interactive",
         "instructions": "Make it interactive."}, headers=auth).json()
@@ -1751,9 +1750,11 @@ def test_interactive_report_only_suggests_visuals_until_the_reader_adds_them(cli
     c = client.get(f"/api/artifacts/{art['id']}", headers=auth).json()["content"]
     assert c["format"] == "interactive"
     assert [b["type"] for b in c["blocks"]] == ["prose", "prose", "prose"]  # nothing is built until the reader asks
-    assert [(s["after_block_id"], s["kind"]) for s in c["suggestions"]] == [("b1", "flashcards")]  # a table is not a visual we offer
+    # a table is not a visual we offer; the plan suggested no infographic, so one is offered before the last section
+    assert [(s["after_block_id"], s["kind"]) for s in c["suggestions"]] == [
+        ("b1", "flashcards"), ("b2", "infographic"), ("b2", "quiz")]  # filled up to three
     assert "GenerateFlashcards" not in llm["_calls"]
-    assert [x["marker"] for x in c["citations"]] == [1, 2, 3] and "[3]" in c["blocks"][2]["text"]  # renumbered
+    assert c["citations"] == [] and not any("[" in b["text"] for b in c["blocks"])  # nothing is cited
 
     r = client.post(f"/api/reports/{art['id']}/blocks", json={
         "kind": "table", "after_block_id": "b3", "brief": "options"}, headers=auth)
@@ -1799,11 +1800,10 @@ def test_quiz_can_be_made_from_posts_and_chats_together(client, auth, run_jobs, 
     assert any(m.startswith("FILE ") for m in seen["material"]) and any(m.startswith("CHAT ") for m in seen["material"])
 
 
-def test_a_quiz_section_the_ai_wrote_becomes_a_suggestion_unless_it_was_asked_for(client, auth, run_jobs, feed, llm):
+def test_a_document_report_keeps_whatever_sections_the_ai_wrote_and_suggests_nothing(client, auth, run_jobs, feed, llm):
     pricing, nb = _notebook_with_pricing(client, auth, run_jobs)
     llm["WriteReport"] = {"report_title": "Pricing", "citations": [], "markdown":
                           "## Why price\nText.\n\n## How to raise\nMore.\n\n## Quick quiz\n1. What is a price? (Answer: x)"}
-    llm["SuggestEmbeds"] = {"suggestions": []}
 
     def make(instructions):
         art = client.post("/api/artifacts/generate", json={
@@ -1813,21 +1813,25 @@ def test_a_quiz_section_the_ai_wrote_becomes_a_suggestion_unless_it_was_asked_fo
         return client.get(f"/api/artifacts/{art['id']}", headers=auth).json()["content"]
 
     c = make("Write a short brief.")
-    assert [b["text"].split("\n")[0] for b in c["blocks"]] == ["## Why price", "## How to raise"]  # no quiz in the text
-    assert [(s["after_block_id"], s["kind"]) for s in c["suggestions"]] == [("b2", "quiz")]  # offered, not added
-
-    c = make("Write a study guide with a quiz at the end.")  # the reader asked for it: it stays
     assert [b["text"].split("\n")[0] for b in c["blocks"]][-1] == "## Quick quiz" and c["suggestions"] == []
 
 
 # ---- infographics ----------------------------------------------------------------------------------------------
 
 def _fake_infographic(**over):
-    out = {"title": "Pricing <script>x</script> Plan", "subtitle": "How to raise prices", "items_label": "Ideas",
-           "items": [{"name": f"Idea {i}", "text": "A short plain sentence about it."} for i in range(4)],
-           "steps_label": "Steps", "steps": [{"name": f"Step {i}", "text": "Do the thing."} for i in range(5)],
+    nodes = "".join(f'<div class="node"><span class="n-no">0{i}</span><span class="n-t">Idea {i}</span>'
+                    '<span class="n-d">A short plain sentence about it.</span></div>' for i in range(4))
+    out = {"title": "Pricing <script>x</script> Plan", "subtitle": "How to raise prices", "eyebrow": "Pricing", "key_figures": [{"value": "30%", "label": "Raise carefully"}, {"value": "x" * 40, "label": "<b>Long</b> one"}],
+           "body_html": f'<section class="sec"><div class="sec-t">Ideas</div><div class="flow">{nodes}</div></section>'
+                        '<script>bad()</script><img src=x onerror=alert(1)><a href="http://evil.test">a link that stays as plain text</a>',
            "rule": "Raise slowly.", "notes": ["One.", "Two.", "Three."]}
-    return {"infographic": {**out, **over}}
+    return {"design": {**out, **over}}
+
+
+@pytest.fixture(autouse=True)
+def _no_chrome_fit(monkeypatch):
+    """The fit of an infographic is measured in Chrome when it is made; tests do not need a browser."""
+    monkeypatch.setattr("app.pipeline.infographic.measure_fit", lambda html, layout: 1.0)
 
 
 def test_every_theme_escapes_and_clamps_model_text():
@@ -1844,22 +1848,26 @@ def test_every_theme_escapes_and_clamps_model_text():
         html = build_html(tid, evil)
         assert "<script" not in html and "onerror" not in html and "Hello" in html, tid
     for tid in THEMES:
-        assert '<div class="mark">notestack.ai</div>' in build_html(tid, evil)  # every theme carries the mark
+        html = build_html(tid, evil)
+        assert 'class="mark"' in html and "<span>notestack.ai</span>" in html  # every theme carries the mark (logo and name)
 
 
 def test_infographic_is_a_page_at_once_and_can_be_shared_by_link(client, auth, run_jobs, feed, llm):
     pricing, nb = _notebook_with_pricing(client, auth, run_jobs)
     llm["ExtractIdeas"] = {"ideas": []}
-    llm["PlanInfographic"] = _fake_infographic()
+    llm["DesignInfographic"] = _fake_infographic()
     art = client.post("/api/artifacts/generate", json={"type": "infographic", "notebook_id": nb["id"],
-                      "document_ids": [pricing["id"]], "theme": "galaxy", "instructions": "About raising prices"},
+                      "document_ids": [pricing["id"]], "theme": "paper", "ig_style": "flowchart", "instructions": "About raising prices"},
                       headers=auth).json()
     assert art["type_label"] == "Infographic"
     run_jobs()
     done = client.get(f"/api/artifacts/{art['id']}", headers=auth).json()
-    assert done["status"] == "ready" and done["content"]["theme"] == "galaxy" and not done["download_url"]
-    assert "Idea 0" in done["content"]["html"] and "<script" not in done["content"]["html"]
-    assert 'class="mark">notestack.ai' in done["content"]["html"]
+    assert done["status"] == "ready" and done["content"]["theme"] == "paper" and not done["download_url"]
+    html = done["content"]["html"]
+    assert "Idea 0" in html and "<script" not in html and "<img" not in html and "evil.test" not in html and "onerror" not in html
+    assert 'class="fig-v">30%<' in html
+    assert "notestack.ai" in html and "html_landscape" in done["content"] and "ig2 look-paper landscape" in done["content"]["html_landscape"]
+    assert done["content"]["content"]["fit"] == {"landscape": 1.0, "portrait": 1.0}
 
     share = client.post(f"/api/artifacts/{art['id']}/share", headers=auth).json()
     assert share["shared"] and "/r/" in share["url"]
@@ -1879,7 +1887,7 @@ def test_infographic_needs_a_source_and_enough_text_and_obeys_its_limit(client, 
 
     pricing, nb = _notebook_with_pricing(client, auth, run_jobs)
     llm["ExtractIdeas"] = {"ideas": []}
-    llm["PlanInfographic"] = _fake_infographic(items=[])
+    llm["DesignInfographic"] = _fake_infographic(body_html="")
     art = client.post("/api/artifacts/generate", json={"type": "infographic", "notebook_id": nb["id"],
                       "document_ids": [pricing["id"]]}, headers=auth).json()
     run_jobs()
@@ -1903,15 +1911,95 @@ def test_a_report_can_add_an_infographic_that_shows_on_the_shared_page(client, a
     pricing, nb = _notebook_with_pricing(client, auth, run_jobs)
     done = _make_report(client, auth, run_jobs, llm, pricing, nb)
     llm["ExtractIdeas"] = {"ideas": []}
-    llm["PlanInfographic"] = _fake_infographic()
+    llm["DesignInfographic"] = _fake_infographic()
     r = client.post(f"/api/reports/{done['id']}/blocks", json={"kind": "infographic", "after_block_id": "b1",
-                    "brief": "The steps to raise prices", "theme": "moonbase"}, headers=auth)
+                    "brief": "The steps to raise prices", "theme": "paper"}, headers=auth)
     assert r.status_code == 200, r.text
     run_jobs()  # adds the block, and writes the infographic it points at
     block = next(b for b in client.get(f"/api/artifacts/{done['id']}", headers=auth).json()["content"]["blocks"]
                  if b["type"] == "infographic")
-    assert block["theme"] == "moonbase" and block["status"] == "ready" and "Idea 0" in block["html"]
+    assert block["theme"] == "paper" and block["status"] == "ready" and "Idea 0" in block["html"]
     token = client.post(f"/api/artifacts/{done['id']}/share", headers=auth).json()["url"].rsplit("/", 1)[1]
     public = client.get(f"/api/public/reports/{token}").json()
     shared = next(b for b in public["blocks"] if b["type"] == "infographic")
     assert "Idea 0" in shared["html"] and "artifact_id" not in shared and "theme" not in shared
+
+
+def test_a_composed_infographic_keeps_only_allowed_markup_and_draws_in_every_look():
+    from app.infographics.design import LOOKS, SAMPLE, build_content, render_design, sanitize_body
+    from app.infographics.render import SIZES
+
+    dirty = ('<div class="node evil" style="x:y" onclick="a()" id="k"><span class="n-t">A node title long enough to count</span>'
+             '<script>bad()</script><iframe src="http://x"></iframe><svg><circle/></svg><a href="http://e.test">words that stay</a>'
+             '<span class="n-d">Another line of readable text here — with a dash</span></div>')
+    clean = sanitize_body(dirty)
+    assert clean and 'class="node"' in clean
+    for bad in ("style", "onclick", "id=", "<script", "<iframe", "<svg", "<a ", "href", "evil.test", "—"):
+        assert bad not in clean
+    assert "words that stay" in clean
+    assert sanitize_body("") is None and sanitize_body("<div></div>") is None and sanitize_body("<script>x()</script>") is None
+    assert sanitize_body('<div class="node">' + "word " * 5000 + "</div>") is None  # more than a poster holds
+    figs = build_content({**SAMPLE, "title": "<b>Hi</b> there", "key_figures": [{"value": "9" * 40, "label": "<i>Up</i> a lot"}, {"value": "", "label": "none"}]})["key_figures"]
+    assert figs == [{"value": "9" * 13 + "…", "label": "Up a lot"}]
+    assert build_content({**SAMPLE, "body_html": "<p></p>"}) is None
+    for look in LOOKS:
+        for layout in SIZES:
+            html = render_design(look, SAMPLE, layout)
+            assert f"look-{look} {layout}" in html and "notestack.ai" in html and "<script" not in html
+    assert "--fit:0.7" in render_design("mono", {**SAMPLE, "fit": {"portrait": 0.7}}, "portrait")
+
+
+def test_artifacts_can_be_rated_with_a_thumb_and_reasons(client, auth, run_jobs, feed, llm):
+    pricing, nb = _notebook_with_pricing(client, auth, run_jobs)
+    llm["ExtractIdeas"] = {"ideas": []}
+    llm["DesignInfographic"] = _fake_infographic()
+    art = client.post("/api/artifacts/generate", json={"type": "infographic", "notebook_id": nb["id"],
+                      "document_ids": [pricing["id"]]}, headers=auth).json()
+    # Not finished yet: nothing to rate
+    assert client.put(f"/api/artifacts/{art['id']}/feedback", json={"rating": "up"}, headers=auth).status_code == 400
+    run_jobs()
+    url = f"/api/artifacts/{art['id']}/feedback"
+    assert client.get(f"/api/artifacts/{art['id']}", headers=auth).json()["feedback"] is None
+
+    up = client.put(url, json={"rating": "up"}, headers=auth).json()["feedback"]
+    assert up == {"rating": "up", "reasons": [], "comment": None}
+    listed = client.get(f"/api/notebooks/{nb['id']}/artifacts", headers=auth).json()
+    assert next(a for a in listed if a["id"] == art["id"])["feedback"]["rating"] == "up"
+
+    # Rating again replaces it; unknown reasons are dropped, known ones for this kind kept; a thumbs up carries none
+    down = client.put(url, json={"rating": "down", "reasons": ["messy_layout", "nonsense", "wrong_answers"],
+                                 "comment": "  Boxes overlap  "}, headers=auth).json()["feedback"]
+    assert down == {"rating": "down", "reasons": ["messy_layout"], "comment": "Boxes overlap"}
+    assert client.get("/api/artifacts?type=infographic", headers=auth).json()["items"][0]["feedback"]["rating"] == "down"
+    rows = client.get("/api/artifacts/feedback/export?rating=down", headers=auth).json()
+    assert len(rows) == 1 and rows[0]["type"] == "infographic" and rows[0]["snapshot"]["layout"] == "composed"
+    assert client.get("/api/artifacts/feedback/export?rating=up", headers=auth).json() == []
+
+    assert client.put(url, json={"rating": None}, headers=auth).json() == {"feedback": None}
+    assert client.get(f"/api/artifacts/{art['id']}", headers=auth).json()["feedback"] is None
+
+    # Only reports, quizzes, flashcards and infographics are rated
+    summary = client.post("/api/artifacts/generate", json={"type": "summary", "notebook_id": nb["id"]}, headers=auth).json()
+    assert "feedback" not in summary
+    assert client.put(f"/api/artifacts/{summary['id']}/feedback", json={"rating": "up"}, headers=auth).status_code == 400
+
+
+def test_rating_an_artifact_is_logged_without_the_comment_text(client, auth, run_jobs, feed, llm, caplog):
+    import logging
+
+    pricing, nb = _notebook_with_pricing(client, auth, run_jobs)
+    llm["ExtractIdeas"] = {"ideas": []}
+    llm["DesignInfographic"] = _fake_infographic()
+    art = client.post("/api/artifacts/generate", json={"type": "infographic", "notebook_id": nb["id"],
+                      "document_ids": [pricing["id"]]}, headers=auth).json()
+    url = f"/api/artifacts/{art['id']}/feedback"
+    with caplog.at_level(logging.INFO, logger="app.routers.artifacts"):
+        client.put(url, json={"rating": "up"}, headers=auth)  # not finished: refused, and said so
+        run_jobs()
+        client.put(url, json={"rating": "down", "reasons": ["messy_layout"], "comment": "private words here"}, headers=auth)
+        client.get("/api/artifacts/feedback/export", headers=auth)
+        client.put(url, json={"rating": None}, headers=auth)
+    text = "\n".join(r.getMessage() for r in caplog.records)
+    assert "feedback refused" in text and "feedback saved" in text and "feedback exported" in text and "feedback removed" in text
+    assert art["id"] in text and "rating=down" in text and "messy_layout" in text and "comment_chars=18" in text
+    assert "private words here" not in text

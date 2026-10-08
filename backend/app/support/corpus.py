@@ -83,7 +83,7 @@ def _plans_doc() -> Doc:
             f"{p.audio_minutes} minutes of audio a month, "
             f"{p.videos} videos {'a month' if p.videos_monthly else 'in total'}, {kits} Launch Kits a month, "
             f"{reports} reports a month, {infographics} infographics a month. "
-            f"Voice cloning: {'yes' if p.voice_cloning else 'no'}. Brand kit: {'yes' if p.brand_kit else 'no'}.",
+            f"Voice cloning: {'yes' if p.voice_cloning else 'no'}.",
             "Includes: " + "; ".join(p.features) + ".",
         ]
     lines += [

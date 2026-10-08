@@ -23,6 +23,29 @@ export function SourcesNav() {
   );
 }
 
+/** Live counts from a running sync: posts found, fetched and indexed so far. */
+function SyncStats({ job }: { job: Job }) {
+  const r = job.result as { found?: number; fetched?: number; fetch_total?: number; indexed?: number; index_total?: number };
+  if (job.kind !== "ingest" || !r || r.found === undefined) return null;
+  const of = (done?: number, total?: number) => (total ? `${done ?? 0} / ${total}` : `${done ?? 0}`);
+  return (
+    <dl className="sync-stats mono" aria-label="Sync progress">
+      <div>
+        <dt>Found</dt>
+        <dd>{r.found ?? 0}</dd>
+      </div>
+      <div>
+        <dt>Fetched</dt>
+        <dd>{of(r.fetched, r.fetch_total)}</dd>
+      </div>
+      <div>
+        <dt>Indexed</dt>
+        <dd>{of(r.indexed, r.index_total)}</dd>
+      </div>
+    </dl>
+  );
+}
+
 export const FILE_ACCEPT = ".md,.markdown,.txt,.vtt,.html,.htm,.pdf,text/vtt,text/markdown,text/plain,text/html,application/pdf";
 
 /** A bare domain, a Substack or a feed URL is a whole archive; a deep link is one article. */
@@ -105,7 +128,7 @@ export function AddSource({ onAdded }: { onAdded: (source: Source, job: Job) => 
           aria-label="Blog, newsletter or article link"
         />
         <button className="btn btn-primary" type="submit" disabled={busy || !value.trim()}>
-          {busy ? "Working..." : mode === "feed" ? "Connect" : "Import article"}
+          {busy ? (mode === "feed" ? "Finding posts..." : "Working...") : mode === "feed" ? "Connect" : "Import article"}
         </button>
         <span className="muted small">or</span>
         <button type="button" className="btn" disabled={busy} onClick={() => fileRef.current?.click()}>
@@ -170,6 +193,22 @@ export default function Sources() {
     loadSources();
     loadDocs();
   });
+
+  // The post counts on the cards come from the server, so refresh them, and the posts list under them, while a sync is running:
+  // posts show up as they arrive. (Not while a search is being typed or a "Load more" page is open: that would reset them.)
+  const syncing = Object.values(jobs).some((j) => j.status === "queued" || j.status === "running");
+  const loadDocsRef = useRef(loadDocs);
+  loadDocsRef.current = loadDocs;
+  const paged = useRef(false);
+  paged.current = docs.length > PAGE;
+  useEffect(() => {
+    if (!syncing) return;
+    const t = setInterval(() => {
+      loadSources().catch(() => {});
+      if (!paged.current) loadDocsRef.current(true).catch(() => {});
+    }, 3000);
+    return () => clearInterval(t);
+  }, [syncing, loadSources]);
 
   useEffect(() => {
     loadSources().catch(() => setError("Could not load your sources. Refresh to try again."));
@@ -252,6 +291,7 @@ export default function Sources() {
                 </a>
               )}
               {job && (active || job.status === "failed") && <JobProgress job={job} compact />}
+              {job && active && <SyncStats job={job} />}
               {s.locked_count > 0 && !active && (
                 <div className="welcome-cap locked-cap">
                   <div>
@@ -280,9 +320,11 @@ export default function Sources() {
                     Sync now
                   </button>
                 )}
-                <button className="btn btn-small" onClick={() => setFilter(filter === s.id ? "" : s.id)}>
-                  {filter === s.id ? "Hide posts" : "Show posts"}
-                </button>
+                {sources.length > 1 && (
+                  <button className="btn btn-small" aria-pressed={filter === s.id} onClick={() => setFilter(filter === s.id ? "" : s.id)}>
+                    {filter === s.id ? "Show all posts" : "Only these posts"}
+                  </button>
+                )}
                 <ConfirmButton
                   confirmLabel="Click again to delete"
                   busyLabel="Deleting..."
@@ -317,7 +359,8 @@ export default function Sources() {
         <EmptyState title="No sources yet" body="A lone satellite, waiting for signal. Connect a blog or site above, or upload your markdown files." />
       )}
 
-      {sources && sources.length > 0 && filter && (
+      {/* The posts are here as soon as there are any: every source's posts together, or one source's when its button is on */}
+      {sources && sources.length > 0 && (filter || total > 0) && (
         <section className="card posts-table">
           <div className="row between">
             <h2>

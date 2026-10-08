@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models import Artifact, CalendarItem, Notebook, Source, Subscription, User, VoiceProfile, Workspace
+from app.models import Artifact, CalendarItem, Document, Notebook, Source, Subscription, User, VoiceProfile, Workspace
 from app.services.plans import PLANS, Plan, effective_plan, next_plan, plan_dict
 from app.services.usage import month_usage
 from app.services.video_quota import sync_video_quota, video_usage
@@ -27,13 +27,28 @@ METERS = {
 
 def _meters(plan: Plan, used: dict, sources: int) -> list[dict]:
     rows = []
-    for key, (label, unit) in METERS.items():
+    meters = dict(METERS)
+    if plan.audio_overviews >= 0:  # a count of audio overviews (Free), not minutes
+        meters = {("audio_overviews" if k == "audio_minutes" else k): (("Audio overviews", "") if k == "audio_minutes" else v)
+                  for k, v in METERS.items()}
+    for key, (label, unit) in meters.items():
         limit = getattr(plan, key)
         rows.append({"key": key, "label": label, "unit": unit, "used": used[key], "limit": limit,
                      "pct": 0 if limit < 0 else round(min(1.0, used[key] / max(limit, 1)), 3)})
     rows.append({"key": "sources", "label": "Sources", "unit": "", "used": sources, "limit": plan.sources,
-                 "pct": round(min(1.0, sources / max(plan.sources, 1)), 3)})
+                 "pct": 0 if plan.sources < 0 else round(min(1.0, sources / max(plan.sources, 1)), 3)})
     return rows
+
+
+def _more_meters(db: Session, workspace: Workspace, plan: Plan, used: dict) -> list[dict]:
+    """The rest of the plan's limits, shown when the sidebar card is opened: indexed posts, reports and infographics."""
+    posts = db.scalar(select(func.count()).select_from(Document)
+                      .where(Document.workspace_id == workspace.id, Document.path.is_not(None))) or 0
+    rows = [("indexed_posts", "Posts indexed", posts, plan.indexed_posts),
+            ("reports", "Reports", used["reports"], plan.reports),
+            ("infographics", "Infographics", used["infographics"], plan.infographics)]
+    return [{"key": k, "label": label, "unit": "", "used": u, "limit": limit,
+             "pct": 0 if limit < 0 else round(min(1.0, u / max(limit, 1)), 3)} for k, label, u, limit in rows]
 
 
 def _count(db: Session, model, workspace_id, *where) -> int:
@@ -57,23 +72,20 @@ def build_nudges(db: Session, workspace: Workspace, plan: Plan, meters: list[dic
                 continue
             label = m["label"].lower()
             amount = f"{m['limit']:g} min of {label}" if m["unit"] else f"{m['limit']:g} {label}"
+            when = "" if plan.lifetime else " this month"
             if m["pct"] >= 1:
-                out.append(_nudge(f"empty-{m['key']}-{month}", "limit", f"Out of {label} this month",
+                out.append(_nudge(f"empty-{m['key']}-{month}", "limit", f"Out of {label}{when}",
                                   f"You have used all {amount}. Upgrade to keep launching.", "Refuel now",
                                   priority=100))
             elif m["pct"] >= LOW_FUEL:
                 left = f"{m['limit'] - m['used']:g}" + (" min" if m["unit"] else "")
                 out.append(_nudge(f"low-{m['key']}-{month}", "limit", f"Running low on {label}",
-                                  f"Only {left} left this month. Upgrade before you stall mid launch.",
+                                  f"Only {left} left{when}. Upgrade before you stall mid launch.",
                                   "See plans", priority=90))
         if not plan.voice_cloning:
             out.append(_nudge("perk-voice", "upgrade", "Narrate in your own voice",
                               "Writer unlocks voice cloning, so every audio overview sounds like you.",
                               "Unlock voice", priority=40))
-        if not plan.brand_kit:
-            out.append(_nudge("perk-brand", "upgrade", "Put your brand on every render",
-                              "Your colors and logo on videos, quote cards and carousels.", "Unlock brand kit",
-                              priority=30))
 
     sources = _count(db, Source, ws)
     if sources == 0:
@@ -119,7 +131,7 @@ def build_nudges(db: Session, workspace: Workspace, plan: Plan, meters: list[dic
 
 def billing_status(db: Session, workspace: Workspace) -> dict:
     plan = effective_plan(db, workspace)
-    used = month_usage(db, workspace.id)
+    used = month_usage(db, workspace.id, plan.lifetime)
     videos = video_usage(db, workspace)
     used["videos"] = videos["used"]
     sources = _count(db, Source, workspace.id)
@@ -136,6 +148,7 @@ def billing_status(db: Session, workspace: Workspace) -> dict:
         "has_billing_account": bool(sub and sub.provider_customer_id),
         "period_end": sub.current_period_end.isoformat() if sub and sub.current_period_end else None,
         "meters": meters,
+        "more_meters": _more_meters(db, workspace, plan, used),
         "since": used["since"],
         "videos_resets_at": videos["resets_at"],
         "nudges": build_nudges(db, workspace, plan, meters, can_upgrade),

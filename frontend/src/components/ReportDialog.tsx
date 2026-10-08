@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { reportsApi, type GenerateBody } from "../api/endpoints";
 import type { ChatSummary, ReportTemplate } from "../api/types";
 import { CheckIcon, SparkleIcon } from "./icons/Icons";
+import { suggestTemplates } from "../hooks/reportSuggestions";
 import { SourceFocusFields, type SourceSelection } from "./SourceFocusFields";
 import { Modal } from "./ui";
 
@@ -41,16 +42,29 @@ export function ReportDialog({ notebookId, notebookTitle, chats, currentChatId, 
   const prefilled = useMemo(() => (template ? fill(template.prompt, about) : ""), [template, about]);
 
   // The suggested templates belong to the chosen sources (and topic): asked for once the choice is complete.
-  const requestKey = sel?.ready && !sel.loading ? JSON.stringify(sel.request) : "";
+  // The server reads one kind of source for them: the posts when there are any, else the chats (as for the focus cards).
+  const suggestFor = sel?.ready && !sel.loading
+    ? (sel.request.document_ids?.length ? { ...sel.request, chat_ids: undefined } : { ...sel.request, document_ids: undefined, notebook_id: undefined })
+    : null;
+  const requestKey = suggestFor ? JSON.stringify(suggestFor) : "";
+  const templateIdRef = useRef(templateId);
+  templateIdRef.current = templateId;
+  const haveSuggestions = useRef(false);
+  haveSuggestions.current = suggested !== null;
   useEffect(() => {
-    if (!requestKey || !sel) return;
+    if (!requestKey || !suggestFor) return;
     let live = true;
-    setSuggested(null);
-    reportsApi.suggest(sel.request)
-      .then((r) => live && setSuggested(r.templates))
-      .catch(() => live && setSuggested([]));
+    // Ticking or unticking a post changes the key. The templates already on screen stay put (no blank loader) while the new ones are
+    // fetched, a moment after the last tick so a run of ticks makes one request; a suggested template the reader has picked is not
+    // swapped from under them. Only the very first fetch shows the loader.
+    const t = setTimeout(() => {
+      suggestTemplates(suggestFor)
+        .then((templates) => live && setSuggested((prev) => (prev && templateIdRef.current.startsWith("suggested-") ? prev : templates)))
+        .catch(() => live && setSuggested((prev) => prev ?? []));
+    }, haveSuggestions.current ? 600 : 0);
     return () => {
       live = false;
+      clearTimeout(t);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestKey]);
@@ -127,7 +141,7 @@ export function ReportDialog({ notebookId, notebookTitle, chats, currentChatId, 
         <div className="rp-split" style={{ display: step === 1 ? "grid" : "none" }}>
           <section className="rp-source-row stack vw">
             <SourceFocusFields notebookId={notebookId} notebookTitle={notebookTitle} chats={chats} currentChatId={currentChatId}
-                               what="report" noFocus preselectChat withPosts onChange={setSel} />
+                               what="report" noFocus preselectChat withPosts largeSelection onChange={setSel} />
           </section>
 
           <div className="rp-formats">

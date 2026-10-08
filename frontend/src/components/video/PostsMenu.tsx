@@ -83,7 +83,7 @@ export function PostsMenu({ docs, selected, onChange, max, single = false, loadi
       {single
         ? <DocPicker selected={selected} onChange={onChange} single />
         : <DocPicker docs={docs ?? []} selected={selected} onChange={onChange} max={max} count={false} />}
-      {!single && max && <p className="muted small sp-note">Up to {max} posts. They are combined into one.</p>}
+      {!single && max && Number.isFinite(max) && <p className="muted small sp-note">Up to {max} posts. They are combined into one.</p>}
     </MenuPanel>
   );
 }

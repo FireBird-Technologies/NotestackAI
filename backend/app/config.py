@@ -64,6 +64,25 @@ class Settings(BaseSettings):
     r2_presign_ttl_seconds: int = 3600
     max_upload_bytes: int = 300 * 1024 * 1024
 
+    # Posts an infographic reads, and a report that is not built from themes (REPORT_PLANNER below). A quiz or flashcard set reads up to that many straight from the posts; with more (no limit
+    # on how many are picked) it reads a small sample of the ideas already extracted from them, so its size does not grow.
+    artifact_max_posts: int = 20
+    # Characters of post text a report, quiz or flashcard set may read in all (split evenly between the posts, 1,500 at least each).
+    artifact_passage_budget: int = 120_000
+    # The same for a quiz: it needs less text than a report to ask good questions.
+    artifact_quiz_passage_budget: int = 60_000
+    # Ideas (already extracted from each post) in the evidence of a flashcard set, or of a quiz above ARTIFACT_MAX_POSTS posts.
+    artifact_idea_sample: int = 30
+
+    # Reports. "themes": the posts' stored ideas are grouped into weighted themes, a blueprint plans the report, and each section is
+    # written from its own evidence (pipeline/report_themes.py). "legacy": the posts' text goes straight to the writer, at most
+    # ARTIFACT_MAX_POSTS of them. Chats, small selections and posts without stored ideas always use the legacy way.
+    report_planner: str = "themes"
+    # Posts a themed report reads: 0 = every post picked (the plan's indexed_posts still applies).
+    report_max_posts: int = 0
+    # Posts whose ideas are extracted while the report is made (in parallel); the rest are represented by their opening.
+    report_inline_ideas: int = 25
+
     # LLM (LiteLLM model strings; Z.ai GLM by default)
     llm_model: str = "openai/glm-5.3"
     llm_fast_model: str = "openai/glm-5.3-flash"
@@ -86,6 +105,9 @@ class Settings(BaseSettings):
     llm_temperature: float = 1.0  # Z.ai recommends 1.0 for GLM-5.x
     # Reasoning output counts against max_tokens, so leave headroom for the structured answer.
     llm_max_tokens: int = 10000
+    # The output cap of the fast model: quizzes, flashcards, infographics, idea extraction, template suggestions. A cap, not a target:
+    # only the tokens written are charged, and the thinking counts too, so keep room for it. Measured answers are under 3,000.
+    llm_fast_max_tokens: int = 6000
     # GLM-5.x always reasons (it cannot be disabled); this sets how hard. low | high | max
     llm_reasoning_effort: str = "low"
 

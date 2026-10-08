@@ -49,7 +49,7 @@ from app.pipeline import flashcards, generate, infographic, launchkit, media, qu
 from app.pipeline.generate import NothingToDo
 from app.pipeline.ingest import FeedNotFound, entry_from_upload, extract_article, ingest_source, store_entries
 from app.pipeline.memory import learn_from_message
-from app.services import launchpad, tts, video_quota
+from app.services import launchpad, report_suggestions, tts, video_quota
 from app.services.email import email_service
 from app.services.email_verification import purge_old_codes
 from app.services.jobs import (
@@ -62,7 +62,7 @@ from app.services.jobs import (
     update_job,
 )
 from app.services.notestack_voices import save_notestack_voice
-from app.services.plans import effective_plan
+from app.services.plans import effective_plan, post_room
 from app.services.renderer import PermanentJobError, request_render
 from app.services.social.health import social_health
 from app.services.storage import keys, storage
@@ -102,8 +102,10 @@ def handle_ingest(db: Session, job: Job):
     if not source:
         return Done({"error": "source deleted"}, "Source no longer exists")
     plan = effective_plan(db, db.get(Workspace, source.workspace_id))
+    # The plan limit is one total across every source, link and upload: this source gets what the others leave.
+    room = post_room(db, source.workspace_id, plan, source.id)
     try:
-        result = ingest_source(db, source, job, max_posts=plan.indexed_posts)
+        result = ingest_source(db, source, job, max_posts=room)
     except Exception as exc:
         db.rollback()
         source.sync_status = "error"
@@ -155,6 +157,16 @@ def handle_chat_memory_cleanup(db: Session, job: Job):
     return Done({"removed": removed}, f"Removed {removed} orphaned chats")
 
 
+def _require_room(db: Session, source: Source, url: str) -> None:
+    """Re-reading a post that is already indexed is fine; a new one needs room under the plan's post limit."""
+    known = db.scalar(select(Document.id).where(Document.source_id == source.id, Document.url == url,
+                                                 Document.path.is_not(None)))
+    plan = effective_plan(db, db.get(Workspace, source.workspace_id))
+    if not known and post_room(db, source.workspace_id, plan) <= 0:
+        raise PermanentJobError(f"Your plan indexes up to {plan.indexed_posts} posts, and they are all used. "
+                                "Remove a post or upgrade to add more.")
+
+
 def handle_import_url(db: Session, job: Job):
     source = db.get(Source, uuid.UUID(job.params["source_id"]))
     update_job(db, job, progress=0.1, message="Fetching the article")
@@ -162,6 +174,7 @@ def handle_import_url(db: Session, job: Job):
         entry = extract_article(job.params["url"])
     except FeedNotFound as exc:
         raise PermanentJobError(str(exc)) from exc
+    _require_room(db, source, entry.url)
     indexed, _, changed = store_entries(db, source, [entry])
     _after_import(db, job, source.workspace_id, [str(i) for i in changed])
     return Done({"indexed": indexed, "document_ids": [str(i) for i in changed]}, f"{entry.title[:80]} is in orbit")
@@ -174,6 +187,7 @@ def handle_import_upload(db: Session, job: Job):
     entry = entry_from_upload(upload.filename, upload.content_type, storage.get_bytes(upload.key))
     if not entry.sections and not entry.html:
         raise PermanentJobError("We could not read any text in that file.")
+    _require_room(db, source, entry.url)
     indexed, _, changed = store_entries(db, source, [entry])
     _after_import(db, job, source.workspace_id, [str(i) for i in changed])
     return Done({"indexed": indexed, "document_ids": [str(i) for i in changed]}, f"{entry.title[:80]} is in orbit")
@@ -185,7 +199,14 @@ def handle_topics(db: Session, job: Job):
 
 def handle_ideas(db: Session, job: Job):
     result = generate.extract_ideas(db, job, job.workspace_id, job.params.get("document_ids"))
+    if result["extracted"]:
+        report_suggestions.queue_warmup(db, job.workspace_id)  # their notebooks' suggested report templates are written now
     return Done(result, f"Read {result['extracted']} posts for their ideas")
+
+
+def handle_report_templates(db: Session, job: Job):
+    written = report_suggestions.warm_workspace(db, job.workspace_id)
+    return Done({"written": written}, f"Prepared report templates for {written} notebooks")
 
 
 def handle_voice_profile(db: Session, job: Job):
@@ -282,6 +303,7 @@ HANDLERS: dict[str, Callable[[Session, Job], object]] = {
     "topics": handle_topics,
     "publish_post": handle_publish_post,
     "ideas": handle_ideas,
+    "report_templates": handle_report_templates,
     "memory_update": handle_memory,
     "chat_memory": handle_chat_memory,
     "chat_memory_rebuild": handle_chat_memory_rebuild,

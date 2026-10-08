@@ -2,12 +2,11 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { videosApi, type GenerateBody } from "../api/endpoints";
 import type { ChatSummary, VideoFocusSource, VideoFocusTopic } from "../api/types";
 import { CheckIcon, SparkleIcon } from "./icons/Icons";
+import { useArtifactLimits } from "../hooks/useArtifactLimits";
 import { SourcePicker, type VideoSource } from "./video/SourcePicker";
 
 /** Most chats one generated thing reads (the video wizard's cap too). Posts are capped at MAX_VIDEO_POSTS, as for a video. */
 export const MAX_CHATS = 5;
-/** Most posts a quiz, flashcard set or report reads (the server's cap): the dialogs start with all of them ticked. */
-export const MAX_STUDY_POSTS = 20;
 
 export const LANGUAGES = ["English", "Spanish", "French", "German", "Italian", "Portuguese", "Dutch", "Polish", "Hindi",
   "Arabic", "Japanese", "Korean", "Chinese", "Turkish", "Russian", "Indonesian"];
@@ -38,6 +37,9 @@ export function prefetchFocus(notebookId: string, postIds: string[]) {
   if (!postIds.length) return;
   fetchTopics(`${notebookId}|${focusKey(postIds, [])}`, { document_ids: postIds, notebook_id: notebookId }).catch(() => undefined);
 }
+
+/** Most posts the topic suggestions are asked about (the server reads at most this many; the topics come from a few anyway). */
+const MAX_FOCUS_POSTS = 200;
 
 export type SourceMode = "chats" | "posts" | "mixed";
 
@@ -86,7 +88,7 @@ export function Pills<T extends string>({ label, value, options, onChange }: {
 /** What it is made from (chats, or a notebook's posts, or a single post) and what to focus on (suggested cards or your
  * own topic): the video wizard's first step, shared by the quiz, flashcard and report dialogs. Holds its own state
  * and reports the choice through onChange. */
-export function SourceFocusFields({ notebookId, notebookTitle, chats, currentChatId, preselectChat = false, withPosts = false, what, columns = false, extra, below, noFocus = false, onChange }: {
+export function SourceFocusFields({ notebookId, notebookTitle, chats, currentChatId, preselectChat = false, withPosts = false, largeSelection = false, what, columns = false, extra, below, noFocus = false, onChange }: {
   notebookId: string;
   /** The notebook's name, shown as the fixed source of its posts. */
   notebookTitle?: string;
@@ -97,6 +99,9 @@ export function SourceFocusFields({ notebookId, notebookTitle, chats, currentCha
   preselectChat?: boolean;
   /** With preselectChat: the notebook's first posts are ticked as well, not just the chat. */
   withPosts?: boolean;
+  /** A quiz or flashcard set: as many posts as the plan indexes can be picked (a sample of their extracted ideas is read). A dialog still ticks only
+   * the first few to start with. */
+  largeSelection?: boolean;
   /** What is being made ("quiz", "flashcard set", "report"), for the wording. */
   what: string;
   /** Source and focus side by side, for a wide dialog. */
@@ -109,6 +114,7 @@ export function SourceFocusFields({ notebookId, notebookTitle, chats, currentCha
   noFocus?: boolean;
   onChange: (s: SourceSelection) => void;
 }) {
+  const limits = useArtifactLimits();
   const [source, setSource] = useState<VideoSource | null>({ kind: "notebook", id: notebookId });
   const [postIds, setPostIds] = useState<string[]>([]);
   // Every dialog starts with all of the notebook's posts ticked and no chat; chats are added by choice.
@@ -125,7 +131,7 @@ export function SourceFocusFields({ notebookId, notebookTitle, chats, currentCha
   const sourceReady = chatIds.length > 0 || postIds.length > 0;
   const mode: SourceMode = postIds.length && chatIds.length ? "mixed" : chatIds.length ? "chats" : "posts";
   const sourceFields = (): VideoFocusSource | null => !sourceReady ? null
-    : postIds.length ? { document_ids: postIds, notebook_id: source?.id } // the topics come from the posts
+    : postIds.length ? { document_ids: postIds.slice(0, MAX_FOCUS_POSTS), notebook_id: source?.id } // the topics come from the posts
     : { chat_ids: chatIds };
   const sourceKey = !sourceReady ? "" : `p:${[...postIds].sort().join(",")}|c:${[...chatIds].sort().join(",")}`;
 
@@ -181,7 +187,7 @@ export function SourceFocusFields({ notebookId, notebookTitle, chats, currentCha
     <div className="field">
       <span className="vw-label">Made from</span>
       <SourcePicker source={source} onSource={setSource} postIds={postIds} onPostIds={setPostIds}
-                    max={MAX_STUDY_POSTS} what={what} autoSelect={!chatFirst} compact notebookTitle={notebookTitle}
+                    max={largeSelection ? limits.selectable : limits.posts} autoCount={limits.posts} what={what} autoSelect={!chatFirst} compact notebookTitle={notebookTitle}
                     chats={chats} chatIds={chatIds} onChatIds={setChatIds} />
       <small className="muted vw-hint">
         {!sourceReady ? "Pick at least one post or chat. You can use both together."

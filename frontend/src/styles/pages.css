@@ -152,6 +152,8 @@ select.input {
 /* Dropdown: the themed select (components/Dropdown.tsx) */
 .dropdown {
   position: relative;
+  width: 100%;
+  min-width: 0;
 }
 
 .dropdown-btn {
@@ -446,6 +448,24 @@ select.input option {
   height: 4px;
 }
 
+/* Live found / fetched / indexed counts under a running sync */
+.sync-stats {
+  display: flex;
+  gap: 20px;
+  margin: 10px 0 0;
+  font-size: 0.75rem;
+}
+
+.sync-stats dt {
+  color: var(--text-2);
+}
+
+.sync-stats dd {
+  margin: 2px 0 0;
+  color: var(--white);
+  font-size: 0.95rem;
+}
+
 /* Every loader: the spinner with its label underneath, both centered */
 .loading {
   display: flex;
@@ -565,6 +585,7 @@ select.input option {
   border-color: var(--line-strong);
   box-shadow: var(--glow-lg);
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
 }
 
@@ -957,7 +978,32 @@ select.input option {
 .artifact-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
+}
+
+/* Thumbs sitting among the footer's pill buttons: flatten the feedback wrapper into the row and match the pills. */
+.artifact-actions .afb {
+  display: contents;
+}
+
+.artifact-actions .afb .fb-row {
+  display: contents;
+}
+
+.artifact-actions .afb .fb-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+}
+
+.artifact-actions .afb .fb-btn:hover {
+  border-color: var(--blue-60);
+}
+
+.artifact-actions .afb .fb-why {
+  flex: 0 0 100%;
 }
 
 .player {
@@ -4600,9 +4646,23 @@ details.map-legend[open] summary {
   padding-top: 6px;
 }
 
-/* What was made keeps its own scroll so a long list cannot push the posts far down */
-.nbv-made {
-  max-height: 40vh;
+/* What was made takes all the room under the create buttons and scrolls inside it */
+.nbv-side > .stack {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.nbv-side > .stack > * {
+  flex: none;
+}
+
+.nbv-side > .stack > .nbv-made {
+  flex: 1 1 0;
+  align-content: start;
+  grid-auto-rows: max-content;
+  min-height: 12rem;
   overflow-y: auto;
   scrollbar-width: thin;
 }
@@ -6015,6 +6075,7 @@ details.map-legend[open] summary {
 
 .rp-add-options {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
 }
 
@@ -6420,8 +6481,9 @@ details.map-legend[open] summary {
 .rp-edit {
   grid-row: 1 / 4;
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
-  gap: 32px;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: 20px;
   min-height: 0;
 }
 
@@ -6467,13 +6529,6 @@ details.map-legend[open] summary {
 
 .rp-edit-main .rp-editor {
   height: 100%;
-}
-
-@media (max-width: 900px) {
-  .rp-edit {
-    grid-template-columns: 1fr;
-    grid-row: 1 / 4;
-  }
 }
 
 /* A report on the page: contents on the left, large light headings and roomy text on the right */
@@ -6781,48 +6836,7 @@ details.map-legend[open] summary {
   }
 }
 
-/* Quiz and flashcards open full screen like the Mind Constellation, and can be minimised to a pill */
-.so-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 45; /* under the dialogs (50), so a source opened from a citation shows above it */
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  overflow: auto;
-  color: var(--white);
-  background:
-    radial-gradient(ellipse 60% 50% at 18% 28%, rgba(33, 124, 255, 0.14), transparent 70%),
-    radial-gradient(ellipse 55% 55% at 82% 72%, rgba(33, 124, 255, 0.22), transparent 70%),
-    radial-gradient(ellipse at 50% 45%, #13224a 0%, #0a1430 60%, #060c20 100%);
-  animation: so-open 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.so-overlay[hidden] {
-  display: none;
-}
-
-@keyframes so-open {
-  from {
-    opacity: 0;
-    transform: scale(1.06);
-    filter: blur(6px);
-  }
-
-  to {
-    opacity: 1;
-    transform: none;
-    filter: none;
-  }
-}
-
-.so-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 18px 28px;
-}
-
+/* Quiz and flashcards open in a popup like the other dialogs, and can be minimised to a pill */
 .so-title {
   margin: 0;
   overflow: hidden;
@@ -6834,23 +6848,6 @@ details.map-legend[open] summary {
 .so-actions {
   display: flex;
   gap: 6px;
-}
-
-.so-body {
-  display: grid;
-  align-items: center;
-  justify-items: center;
-  padding: 8px 20px 48px;
-}
-
-.so-card {
-  width: min(860px, 100%);
-  padding: 28px 32px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-lg);
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(10px);
-  box-shadow: var(--glow-lg);
 }
 
 .so-pill {
@@ -6901,7 +6898,6 @@ details.map-legend[open] summary {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .so-overlay,
   .so-pill {
     animation: none;
   }
@@ -6982,9 +6978,155 @@ details.map-legend[open] summary {
   border-top: 1px solid var(--line);
 }
 
-.rp-sources-h {
+/* The prompt and the sources of a report, in a drop-down */
+.rp-sources-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 22px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.rp-sources-toggle:hover {
+  border-color: var(--blue-60);
+}
+
+.rp-sources-toggle svg {
+  transition: transform 0.15s ease;
+}
+
+.rp-sources-toggle.open svg {
+  transform: rotate(180deg);
+}
+
+.rp-sources-panel {
+  display: grid;
+  gap: 22px;
+  margin-top: 14px;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface-1, rgba(255, 255, 255, 0.03));
+}
+
+.rp-sources-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.rp-sources-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font: 500 1rem / 1.3 var(--font-body, inherit);
+}
+
+.rp-sources-head .rp-sources-sub {
   margin: 0;
-  font: 400 clamp(1.6rem, 2.4vw, 2.2rem) / 1.2 var(--font-display);
+}
+
+.rp-sources-count {
+  padding: 1px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text-2);
+  font-size: 0.75rem;
+}
+
+.rp-sources-filter {
+  width: min(260px, 100%);
+}
+
+.rp-sources-prompt {
+  margin: 0;
+  color: var(--text-2);
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+/* The sources: aligned rows in two columns, scrolling when there are many, so titles line up and none is cut off to a stub */
+.rp-sources-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 14px;
+  max-height: 380px;
+  margin: 0;
+  padding: 0 6px 0 0;
+  overflow-y: auto;
+  list-style: none;
+  scrollbar-width: thin;
+}
+
+.rp-src-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.rp-src-main {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 9px 12px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+
+a.rp-src-main:hover {
+  border-color: var(--blue-60);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.rp-src-n {
+  flex: 0 0 auto;
+  min-width: 1.6em;
+  color: var(--text-2);
+  font-size: 0.72rem;
+}
+
+.rp-src-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rp-src-out {
+  flex: 0 0 auto;
+  color: var(--text-2);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+a.rp-src-main:hover .rp-src-out {
+  opacity: 1;
+}
+
+@media (max-width: 720px) {
+  .rp-sources-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rp-sources-head {
+    flex-wrap: wrap;
+  }
 }
 
 /* A suggested visual while it is being built */
@@ -7185,18 +7327,7 @@ details.map-legend[open] summary {
   white-space: nowrap;
 }
 
-/* Infographics: the dialog (source and prompt left, themes right), the theme cards and the full-screen viewer */
-.modal.modal-wide:has(.ig-grid) {
-  width: min(1180px, 100%);
-}
-
-.ig-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
-  gap: 32px;
-  align-items: start;
-}
-
+/* Infographics: the theme cards and the full-screen viewer */
 /* .input is a one-line pill: this is a multi-line box, so it gets a height, padding and a softer corner */
 .ig-prompt.input {
   height: auto;
@@ -7228,7 +7359,7 @@ details.map-legend[open] summary {
 
 .ig-theme img {
   width: 100%;
-  aspect-ratio: 1600 / 1000;
+  aspect-ratio: 2260 / 1600;
   object-fit: cover;
   object-position: top;
   border-radius: 8px;
@@ -7331,10 +7462,6 @@ details.map-legend[open] summary {
 }
 
 @media (max-width: 1000px) {
-  .ig-grid {
-    grid-template-columns: 1fr;
-  }
-
   .ig-themes {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -7527,9 +7654,15 @@ details.map-legend[open] summary {
   width: min(900px, 100%);
 }
 
-/* A source's buttons stay on one row */
+/* A source's buttons stay on one row, labels whole: a little tighter so all three fit a narrow card */
 .source-actions {
   flex-wrap: nowrap;
+  gap: 6px;
+}
+
+.source-actions .btn {
+  flex: none;
+  padding-inline: 14px;
   white-space: nowrap;
 }
 
@@ -8208,6 +8341,7 @@ details.map-legend[open] summary {
 .nbv-starting-text strong {
   font: 500 0.92rem var(--font-body);
 }
+
 
 
 /* ---- Slide decks ------------------------------------------------------------------------------------------------ */
@@ -9278,4 +9412,519 @@ body.nbv-resizing iframe {
   .ao-card {
     transition: none;
   }
+}
+
+
+/* The download going: a strip over the picture in the card, so it can be followed once the viewer has closed */
+.ig-thumb-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 320px;
+}
+
+.ig-thumb-wrap .ig-thumb {
+  max-width: none;
+}
+
+.ig-thumb-status {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border-radius: 10px;
+  background: rgba(3, 5, 10, 0.72);
+  backdrop-filter: blur(2px);
+  color: var(--white);
+  font: 500 0.9rem var(--font-body);
+  pointer-events: none;
+}
+
+.ig-thumb-status.done {
+  background: rgba(3, 5, 10, 0.6);
+  animation: ig-status-out 4s ease forwards;
+}
+
+@keyframes ig-status-out {
+  0%,
+  60% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Thumbs on generated artifacts: a quiet row under the content; "compact" opens the reasons over the page */
+.afb {
+  position: relative;
+  margin-top: 6px;
+}
+
+.afb .fb-row {
+  align-items: center;
+}
+
+.afb-label {
+  margin-right: 4px;
+}
+
+.fb-btn.is-down.is-on {
+  color: #ff8a8a;
+  background: rgba(239, 68, 68, 0.18);
+}
+
+.afb-compact {
+  margin-top: 0;
+  display: inline-flex;
+}
+
+.afb-compact .afb-why {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 8;
+  width: min(360px, 86vw);
+  padding: 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--black);
+  box-shadow: var(--glow-lg);
+}
+
+/* Posts live under the chat history, in the left rail: the chat list and the posts each scroll in their own share of it */
+.nbv-history .nbv-chat-list {
+  flex: 0 1 auto;
+  max-height: 40%;
+}
+
+.nbv-history .nbv-posts {
+  flex: 1 1 0;
+  min-height: 9rem;
+  align-content: start;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+.nbv-history .nbv-posts .nbv-docs {
+  gap: 6px;
+}
+
+.nbv-history .nbv-posts .nbv-doc {
+  display: grid;
+  gap: 2px;
+  font-size: 0.85rem;
+}
+
+/* Chats grouped by date; posts as a quiet, collapsible list with a filter */
+.nbv-chat-group {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 6px;
+}
+
+.nbv-history .nbv-chat-list-label {
+  padding: 10px 9px 4px;
+  color: var(--text-3);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.nbv-posts-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  font: 600 0.72rem var(--font-body);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.nbv-posts-toggle:hover {
+  color: var(--white);
+}
+
+.nbv-posts-chev {
+  transition: transform 0.15s;
+}
+
+.nbv-posts-chev.open {
+  transform: rotate(90deg);
+}
+
+.nbv-posts-count {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  font: 500 0.68rem var(--font-body);
+  letter-spacing: 0;
+}
+
+.nbv-posts-search {
+  padding: 7px 10px;
+  font-size: 0.82rem;
+}
+
+.nbv-history .nbv-posts .nbv-doc {
+  padding: 6px 8px;
+  border-radius: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.nbv-history .nbv-posts .nbv-doc:hover {
+  background: var(--surface-2);
+}
+
+.nbv-history .nbv-posts .nbv-doc .link-btn {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  border-bottom: 0;
+  text-decoration: none;
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
+/* Chats fold like posts: the whole list, and each date heading */
+.nbv-chats-toggle {
+  margin: 4px 0 2px 9px;
+}
+
+.nbv-history .nbv-group-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.nbv-history .nbv-group-toggle:hover {
+  color: var(--white);
+}
+
+.nbv-group-count {
+  margin-left: auto;
+  color: var(--text-3);
+  letter-spacing: 0;
+}
+
+/* The quiz result as a small galaxy: a nebula behind a medal-planet, its ring and moon, and a star per question on an orbit */
+.quiz-hero {
+  --c1: #9cc2ff;
+  --c2: #3d7bff;
+  --c3: #10205a;
+  --neb1: rgba(47, 123, 255, 0.34);
+  --neb2: rgba(40, 180, 230, 0.2);
+  --tint: #8db8ff;
+  position: relative;
+  overflow: hidden;
+  gap: 4px;
+  padding: 10px 20px 24px;
+  border-color: color-mix(in srgb, var(--tint) 30%, transparent);
+  background:
+    radial-gradient(60% 70% at 18% 8%, var(--neb1), transparent 70%),
+    radial-gradient(55% 70% at 86% 0%, var(--neb2), transparent 72%),
+    radial-gradient(90% 60% at 50% 120%, color-mix(in srgb, var(--c2) 22%, transparent), transparent 70%),
+    #060a18;
+}
+
+.quiz-hero.gold {
+  --c1: #fff0b8;
+  --c2: #ffc846;
+  --c3: #8a4a08;
+  --neb1: rgba(255, 170, 60, 0.28);
+  --neb2: rgba(255, 130, 40, 0.16);
+  --tint: #ffc846;
+}
+
+.quiz-hero.silver {
+  --c1: #ffffff;
+  --c2: #b9c8de;
+  --c3: #3c4a66;
+  --neb1: rgba(120, 190, 255, 0.26);
+  --neb2: rgba(90, 200, 230, 0.18);
+  --tint: #cfdcf0;
+}
+
+.quiz-hero.bronze {
+  --c1: #ffd2a4;
+  --c2: #d98a4e;
+  --c3: #5c2c10;
+  --neb1: rgba(230, 120, 60, 0.26);
+  --neb2: rgba(230, 150, 50, 0.16);
+  --tint: #e0955a;
+}
+
+.quiz-hero.low {
+  --c1: #a8cbff;
+  --c2: #2f7bff;
+  --c3: #0c1c4d;
+  --neb1: rgba(47, 123, 255, 0.3);
+  --neb2: rgba(40, 170, 230, 0.18);
+  --tint: #8db8ff;
+}
+
+.quiz-hero > * {
+  position: relative;
+  z-index: 1;
+}
+
+.quiz-hero .quiz-scene {
+  width: min(100%, 470px);
+  height: auto;
+  margin: 0 auto -6px;
+  overflow: visible;
+  z-index: 0;
+}
+
+.quiz-scene .qs-star {
+  fill: #fff;
+  opacity: 0.7;
+  animation: qs-twinkle 3.6s ease-in-out infinite;
+}
+
+.quiz-scene .qs-spark {
+  fill: #fff;
+  opacity: 0.85;
+  animation: qs-twinkle 3s ease-in-out infinite;
+}
+
+.quiz-scene .qs-orbit {
+  fill: none;
+  stroke: var(--tint);
+  stroke-opacity: 0.28;
+  stroke-width: 0.9;
+  stroke-dasharray: 2 5;
+}
+
+.quiz-scene .qs-ring {
+  fill: none;
+  stroke: var(--c2);
+  stroke-width: 5.5;
+  stroke-linecap: round;
+}
+
+.quiz-scene .qs-ring.back {
+  stroke-opacity: 0.45;
+}
+
+.quiz-scene .qs-ring.front {
+  stroke: var(--c1);
+  filter: drop-shadow(0 0 5px var(--c2));
+}
+
+.quiz-scene .qs-bands path {
+  fill: none;
+  stroke: #fff;
+  stroke-opacity: 0.16;
+  stroke-width: 3;
+}
+
+.quiz-scene .qs-shade {
+  fill: #000;
+  fill-opacity: 0.28;
+}
+
+.quiz-scene .qs-emblem path {
+  fill: #fff;
+  fill-opacity: 0.92;
+  stroke: var(--c3);
+  stroke-opacity: 0.35;
+  stroke-width: 0.8;
+}
+
+.quiz-scene .qs-moon {
+  fill: #fff;
+  filter: drop-shadow(0 0 4px #fff);
+}
+
+.quiz-scene .orb circle {
+  fill: var(--tint);
+  fill-opacity: 0.2;
+}
+
+.quiz-scene .orb.lit circle {
+  fill: #fff;
+  fill-opacity: 1;
+  filter: drop-shadow(0 0 5px var(--tint));
+}
+
+.quiz-scene .orb.lit {
+  animation: qs-twinkle 2.6s ease-in-out infinite;
+}
+
+.quiz-scene .orb-halo {
+  fill: var(--tint) !important;
+  fill-opacity: 0.22 !important;
+  filter: none !important;
+}
+
+.quiz-hero.gold::before,
+.quiz-hero.gold::after,
+.quiz-hero.silver::before,
+.quiz-hero.silver::after,
+.quiz-hero.bronze::before,
+.quiz-hero.bronze::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  top: 8%;
+  left: 100%;
+  width: 120px;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #fff, transparent);
+  box-shadow: 0 0 8px var(--tint);
+  transform-origin: left center;
+  opacity: 0;
+  animation: quiz-shoot 4.8s ease-in infinite;
+  pointer-events: none;
+}
+
+.quiz-hero.gold::after,
+.quiz-hero.silver::after,
+.quiz-hero.bronze::after {
+  top: 36%;
+  width: 80px;
+  animation-delay: 2.4s;
+  animation-duration: 6s;
+}
+
+.quiz-hero .quiz-verdict {
+  margin-top: 0;
+  text-shadow: 0 0 24px color-mix(in srgb, var(--tint) 45%, transparent);
+}
+
+.quiz-hero .quiz-score {
+  background: linear-gradient(180deg, #fff 35%, var(--tint));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.quiz-hero .quiz-score span {
+  -webkit-text-fill-color: var(--text-3);
+  font-size: 0.4em;
+}
+
+.quiz-hero .quiz-note {
+  max-width: 34ch;
+  line-height: 1.45;
+}
+
+.quiz-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.quiz-chip {
+  padding: 4px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-2);
+  font: 500 0.78rem var(--font-body);
+}
+
+.quiz-chip.pct {
+  border-color: color-mix(in srgb, var(--tint) 50%, transparent);
+  color: #fff;
+}
+
+.quiz-chip.right {
+  border-color: rgba(60, 200, 120, 0.35);
+  color: #5fe0a0;
+}
+
+.quiz-chip.wrong {
+  border-color: rgba(255, 138, 138, 0.3);
+  color: #ff9a9a;
+}
+
+@keyframes qs-twinkle {
+  50% { opacity: 0.3; }
+}
+
+@keyframes quiz-shoot {
+  0% { opacity: 0; transform: translate(0, 0) rotate(-30deg); }
+  8% { opacity: 1; }
+  35%, 100% { opacity: 0; transform: translate(-130vw, 60vw) rotate(-30deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quiz-hero::before,
+  .quiz-hero::after,
+  .quiz-scene * {
+    animation: none !important;
+  }
+}
+
+/* Quiz and flashcards open in the same dark popup as the other dialogs; hidden while minimised */
+.so-backdrop[hidden] {
+  display: none;
+}
+
+/* One fixed size for every question, answer and result, so the popup never grows or shrinks; the content scrolls inside */
+.modal.modal-wide.so-modal {
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(920px, 100%) !important;
+  height: min(700px, calc(100vh - 32px));
+  overflow: hidden;
+}
+
+.so-content {
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
+}
+
+/* Results: the score card, feedback and buttons stay put; only the per-question list scrolls */
+.so-content > .quiz-result {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.so-content > .quiz-result > * {
+  flex: none;
+}
+
+.so-content > .quiz-result > .quiz-review {
+  flex: 1 1 0;
+  min-height: 3.5rem;
+  align-content: start;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+.so-content > .quiz-result .quiz-hero .quiz-scene {
+  width: min(100%, 400px);
+}
+
+.modal.modal-wide.so-modal {
+  height: min(760px, calc(100vh - 32px));
 }

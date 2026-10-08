@@ -2,14 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { GenerateBody } from "../api/endpoints";
 import type { Artifact, ChatSummary, FlashcardData } from "../api/types";
 import { Pills, SourceFocusFields, sourceSummary, type SourceSelection } from "./SourceFocusFields";
+import { ArtifactFeedback } from "./ArtifactFeedback";
 import { StudyOverlay } from "./StudyOverlay";
 import { Modal } from "./ui";
-
-const COUNTS = [
-  { id: "fewer", label: "Fewer" },
-  { id: "standard", label: "Standard (Default)" },
-  { id: "more", label: "More" },
-] as const;
 
 const LEVELS = [
   { id: "easy", label: "Easy" },
@@ -31,31 +26,25 @@ export function FlashcardsDialog({ notebookId, notebookTitle, chats, currentChat
   onCreate: (body: FlashcardsRequest) => void;
 }) {
   const [sel, setSel] = useState<SourceSelection | null>(null);
-  const [count, setCount] = useState<(typeof COUNTS)[number]["id"]>("standard");
   const [level, setLevel] = useState<(typeof LEVELS)[number]["id"]>("medium");
 
   return (
     <Modal title="Flashcards" onClose={onClose} wide>
       <div className="stack vw-in-modal">
-        <section className="stack vw">
-          <SourceFocusFields notebookId={notebookId} notebookTitle={notebookTitle} chats={chats} currentChatId={currentChatId} what="flashcard set" columns onChange={setSel}
-            below={(
-              <>
-                <div className="field">
-                  <span className="vw-label">Number of cards</span>
-                  <Pills label="Number of cards" value={count} options={COUNTS} onChange={setCount} />
-                </div>
-                <div className="field">
-                  <span className="vw-label">Level of difficulty</span>
-                  <Pills label="Level of difficulty" value={level} options={LEVELS} onChange={setLevel} />
-                </div>
-              </>
-            )} />
-          {!sel?.ready && <p className="muted small">Select at least one post or chat to generate flashcards.</p>}
-          {error && <p className="error-text">{error}</p>}
-          <div className="vw-nav">
+        <section className="stack vw qz-setup">
+          <div className="field">
+            <span className="vw-label">Level of difficulty</span>
+            <Pills label="Level of difficulty" value={level} options={LEVELS} onChange={setLevel} />
+          </div>
+          <SourceFocusFields notebookId={notebookId} notebookTitle={notebookTitle} chats={chats} currentChatId={currentChatId}
+                             preselectChat what="flashcard set" largeSelection onChange={setSel} />
+          <div className="qz-foot">
+            <div>
+              {!sel?.ready && <p className="muted small">Select at least one post or chat to generate flashcards.</p>}
+              {error && <p className="error-text">{error}</p>}
+            </div>
             <button type="button" className="btn btn-primary vw-next" disabled={busy || !sel?.ready || sel.loading}
-                    onClick={() => sel && onCreate({ ...sel.request, count, difficulty: level })}>
+                    onClick={() => sel && onCreate({ ...sel.request, difficulty: level })}>
               {busy ? "Starting..." : "Generate Flashcards"}
             </button>
           </div>
@@ -141,6 +130,7 @@ export function FlashcardsPlayer({ artifact, onClose }: { artifact: Artifact; on
   return (
     <StudyOverlay title={artifact.title} onClose={onClose}>
       <FlashcardDeck cards={(artifact.content.cards ?? []) as FlashcardData[]} />
+      <ArtifactFeedback artifact={artifact} label="How are these cards?" />
     </StudyOverlay>
   );
 }

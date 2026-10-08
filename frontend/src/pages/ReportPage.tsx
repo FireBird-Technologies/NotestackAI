@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { artifactsApi, notebooksApi, reportsApi } from "../api/endpoints";
 import type { Artifact, Citation, ReportSuggestion } from "../api/types";
+import { ArtifactFeedback } from "../components/ArtifactFeedback";
 import { ReportAddDialog } from "../components/ReportAddDialog";
 import { ShareDialog } from "../components/ShareDialog";
 import { Reader } from "../components/Reader";
@@ -17,9 +18,9 @@ export default function ReportPage() {
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState<{ suggestion: ReportSuggestion; existing: Artifact[]; loading: boolean } | null>(null);
   const [sharing, setSharing] = useState(false);
-  const [addBusy, setAddBusy] = useState(false);
-  const [addError, setAddError] = useState<string | null>(null);
+  const [addFailed, setAddFailed] = useState<string | null>(null);
   const [reading, setReading] = useState<{ id: string; start: number; end: number } | null>(null);
+  const [removingId, setRemovingId] = useState<string | null>(null);
 
   const load = useCallback(() => artifactsApi.get(id).then(setArtifact, () => setError("Report not found.")), [id]);
   useEffect(() => {
@@ -31,9 +32,10 @@ export default function ReportPage() {
     setAddingId(null);
   });
 
-  // If the live updates drop, the loader still ends once the job's own state is final.
+  // If the live updates drop, the loader still ends once the job's own state is final. Only the job that adds a visual counts: the
+  // report's own, long finished job is what the page still holds in the moment after Add is clicked.
   useEffect(() => {
-    if (addingId && job && job.id === artifact?.job?.id && (job.status === "done" || job.status === "failed")) {
+    if (addingId && job && job.kind === "report_block" && job.id === artifact?.job?.id && (job.status === "done" || job.status === "failed")) {
       setAddingId(null);
       void load();
     }
@@ -51,6 +53,9 @@ export default function ReportPage() {
   if (error) return <p className="error-text">{error}</p>;
   if (!artifact) return <Loading label="Opening report" />;
   const running = job && (job.status === "queued" || job.status === "running");
+  const adding_ = !!addingId || !!(running && job?.kind === "report_block"); // a visual is being added: one at a time
+  // Which suggestion's card shows the loader: the one just clicked, or, after a reload or a dropped update, the one the running job is adding.
+  const buildingId = addingId ?? (running && job?.kind === "report_block" ? (job.params.suggestion_id as string | undefined) ?? null : null);
   const blockFailed = job?.kind === "report_block" && job.status === "failed" ? job.error : null;
   const back = artifact.notebook_id ? `/app/notebooks/${artifact.notebook_id}` : "/app/archive";
 
@@ -63,7 +68,7 @@ export default function ReportPage() {
     URL.revokeObjectURL(url);
   };
   const startAdd = async (s: ReportSuggestion) => {
-    setAddError(null);
+    setAddFailed(null);
     setAdding({ suggestion: s, existing: [], loading: true });
     // The ones already made from this notebook (or, for a report with no notebook, anywhere), to offer as an alternative
     // to making a new one.
@@ -73,28 +78,31 @@ export default function ReportPage() {
     setAdding((cur) => cur && cur.suggestion.id === s.id
       ? { ...cur, loading: false, existing: all.filter((a) => a.type === s.kind && a.status === "ready") } : cur);
   };
+  // Add closes the dialog at once and the suggestion's own card shows the loader, down in the report where the visual will appear.
   const add = async (existingId: string | null, theme?: string) => {
     if (!adding) return;
-    setAddBusy(true);
-    setAddError(null);
+    const { suggestion } = adding;
+    setAddFailed(null);
+    setAddingId(suggestion.id);
+    setAdding(null);
     try {
       setArtifact(await reportsApi.addBlock(artifact.id, {
-        kind: adding.suggestion.kind, after_block_id: adding.suggestion.after_block_id, suggestion_id: adding.suggestion.id,
-        brief: adding.suggestion.brief, existing_artifact_id: existingId ?? undefined, theme,
+        kind: suggestion.kind, after_block_id: suggestion.after_block_id, suggestion_id: suggestion.id,
+        brief: suggestion.brief, existing_artifact_id: existingId ?? undefined, theme,
       }));
-      setAddingId(adding.suggestion.id);
-      setAdding(null);
     } catch (e) {
-      setAddError(errorMessage(e));
-    } finally {
-      setAddBusy(false);
+      setAddingId(null);
+      setAddFailed(errorMessage(e));
     }
   };
   const remove = async (blockId: string) => {
+    setRemovingId(blockId);
     try {
       setArtifact(await reportsApi.removeBlock(artifact.id, blockId));
     } catch (e) {
       setError(errorMessage(e));
+    } finally {
+      setRemovingId(null);
     }
   };
 
@@ -110,6 +118,7 @@ export default function ReportPage() {
           <div className="row">
             <button type="button" className="btn btn-small btn-primary" onClick={() => setSharing(true)}>Share</button>
             <button type="button" className="btn btn-small" onClick={download}>Download Markdown</button>
+            <ArtifactFeedback artifact={artifact} label="How is this report?" compact />
             <ConfirmButton onConfirm={async () => {
               try {
                 await artifactsApi.remove(artifact.id);
@@ -121,15 +130,16 @@ export default function ReportPage() {
           </div>
         )}
       </header>
-      {running && job && <JobProgress job={job} />}
+      {running && job && job.kind !== "report_block" && <JobProgress job={job} />}
       {artifact.status === "failed" && <p className="error-text">{(artifact.content.error as string | undefined) ?? job?.error ?? "The report could not be made."}</p>}
-      {blockFailed && <p className="error-text">{blockFailed}</p>}
+      {(addFailed ?? blockFailed) && <p className="error-text">{addFailed ?? blockFailed}</p>}
       {artifact.status === "ready" && (
         <ReportView content={artifact.content} artifactId={artifact.id} onCite={cite}
-                    editor={{ onAdd: startAdd, onRemove: remove, busy: !!running || !!addingId, adding: addingId, addingMessage: job?.message }} />
+                    editor={{ onAdd: startAdd, onRemove: remove, busy: adding_, adding: buildingId,
+                             addingMessage: job?.kind === "report_block" ? job.message : null, removing: removingId }} />
       )}
       {sharing && <ShareDialog artifactId={artifact.id} onClose={() => setSharing(false)} />}
-      {adding && <ReportAddDialog suggestion={adding.suggestion} existing={adding.existing} loading={adding.loading} busy={addBusy} error={addError}
+      {adding && <ReportAddDialog suggestion={adding.suggestion} existing={adding.existing} loading={adding.loading} busy={false} error={null}
                                   onClose={() => setAdding(null)} onAdd={add} />}
       {reading && <Reader documentId={reading.id} highlight={{ start: reading.start, end: reading.end }} onClose={() => setReading(null)} />}
     </div>

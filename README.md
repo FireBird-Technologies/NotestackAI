@@ -49,7 +49,7 @@ archive, stays in sync with it, cites the exact lines behind every answer, and t
 | Citations | Exact line ranges, verified before you see them | Passage level citations |
 | Not in your sources | Says so; unverifiable claims are dropped | Grounded, passage citations |
 | Audio | Two hosts on ElevenLabs voices, or your consented voice clone | Two host overviews, Google voices |
-| Video | 9:16 shorts, 16:9 explainers, 1:1 audiograms, quote cards, in your brand | Video overviews |
+| Video | 9:16 shorts, 16:9 explainers, 1:1 audiograms, quote cards | Video overviews |
 | Publishing | Launch Kits (threads, LinkedIn, Notes, Bluesky, SEO, carousels) and auto posting | Not a publishing tool |
 | Your voice | Voice profile learned from your posts, used in every draft | General purpose writing |
 | Seeing your archive | Topic constellation with rising and dormant topics, evergreen resurfacing | Idea Constellations per notebook |
@@ -121,7 +121,7 @@ cd renderer && npm install && npm start                    # only needed for vid
 | Launchpad | Calendar and agenda, auto posting to X, LinkedIn and Bluesky, email reminders, tracked links, engagement |
 | Archive | Every generated artifact with filters, players, downloads, retry and delete |
 | Resurfacing | Evergreen scores and reshare angles for old posts, on this day, straight into a kit or the calendar |
-| Settings | Profile, workspace, brand kit, privacy, plan usage meters, connections, sign out everywhere, delete |
+| Settings | Profile, workspace, privacy, plan usage meters, connections, sign out everywhere, delete |
 
 ## Key choices
 

@@ -7,12 +7,11 @@ from sqlalchemy import select
 
 from app.auth import Ctx, get_ctx
 from app.llm import run
-from app.llm.provider import fast_lm
-from app.llm.signatures import SuggestReportTemplates
 from app.models import Artifact
-from app.pipeline.report import EMBED_KINDS, remove_block
+from app.pipeline.report import EMBED_KINDS, keep_visual, remove_block
 from app.routers.artifacts import get_artifact_or_404
 from app.routers.videos import FocusIn, _focus_material
+from app.services import report_suggestions
 from app.services.artifacts import latest_jobs, serialize_artifact
 from app.services.jobs import create_job
 from app.services.report_templates import INTERACTIVE, TEMPLATES
@@ -20,7 +19,6 @@ from app.services.usage import check_limit
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 
-SUGGEST_ITEMS = 5  # sources the AI reads to suggest templates
 
 
 @router.get("/templates")
@@ -35,25 +33,15 @@ class SuggestIn(FocusIn):
 
 @router.post("/suggest")
 def suggest_templates(body: SuggestIn, ctx: Ctx = Depends(get_ctx)):
-    """Four kinds of report these sources could make, each with its own ready-written instructions. Never an error:
-    when the AI has nothing usable the list is empty and the dialog shows only the fixed templates."""
-    material, _docs = _focus_material(ctx, body)
+    """Four kinds of report these sources could make, each with its own ready-written instructions. The AI reads each post's stored
+    ideas and topics (not its text); the answer is kept, so the same sources get it again at once (and it is prepared in the
+    background as soon as ideas are extracted). Never an error: when there is nothing usable the list is empty and the dialog shows
+    only the fixed templates."""
+    material, docs = _focus_material(ctx, body)
     if not material:
         return {"templates": []}
-    try:
-        out = run.predict(SuggestReportTemplates, db=ctx.db, workspace_id=ctx.workspace.id, lm=fast_lm(),
-                          items=list(material.values())[:SUGGEST_ITEMS], topic=(body.topic or "").strip() or "(none)")
-    except Exception:
-        return {"templates": []}
-    seen, found = set(), []
-    for t in out.get("templates") or []:
-        name, prompt = (t.get("name") or "").strip(), (t.get("prompt") or "").strip()
-        if not name or not prompt or name.lower() in seen:
-            continue
-        seen.add(name.lower())
-        found.append({"id": f"suggested-{len(found) + 1}", "name": name[:60],
-                      "description": (t.get("description") or "").strip()[:200], "prompt": prompt[:1500]})
-    return {"templates": found[:4]}
+    items = report_suggestions.suggestion_items(material, docs)
+    return {"templates": report_suggestions.suggest(ctx.db, ctx.workspace.id, items, (body.topic or "").strip())}
 
 
 class AddBlockIn(BaseModel):
@@ -105,9 +93,11 @@ def add_block(artifact_id: uuid.UUID, body: AddBlockIn, ctx: Ctx = Depends(get_c
 @router.delete("/{artifact_id}/blocks/{block_id}")
 def delete_block(artifact_id: uuid.UUID, block_id: str, ctx: Ctx = Depends(get_ctx)):
     a = _report_or_404(ctx, artifact_id)
+    removed = next((b for b in (a.content_json or {}).get("blocks") or [] if b.get("id") == block_id), None)
     content = remove_block(a.content_json or {}, block_id)
     if content is None:
         raise HTTPException(404, "Visual not found")
+    keep_visual(ctx.db, a, removed)
     a.content_json = content
     ctx.db.commit()
     return serialize_artifact(a, latest_jobs(ctx.db, [a.id]).get(a.id))

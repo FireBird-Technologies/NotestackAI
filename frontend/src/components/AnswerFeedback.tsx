@@ -11,7 +11,7 @@ const REASONS: { id: string; label: string }[] = [
   { id: "other", label: "Something else" },
 ];
 
-const Thumb = ({ down }: { down?: boolean }) => (
+export const Thumb = ({ down }: { down?: boolean }) => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={down ? { transform: "rotate(180deg)" } : undefined}>
     <path d="M7 11v9H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3Zm0 0 4-8a2 2 0 0 1 2 2v4h5.2a2 2 0 0 1 2 2.3l-1 6A2 2 0 0 1 17.2 20H7" />
   </svg>

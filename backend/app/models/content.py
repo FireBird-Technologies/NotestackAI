@@ -155,6 +155,52 @@ class MessageFeedback(IdMixin, TimestampMixin, Base):
     recall: Mapped[dict] = mapped_column(JSON, default=dict)  # copy of Message.recall_json
 
 
+class ArtifactFeedback(IdMixin, TimestampMixin, Base):
+    """A thumbs up or down on one generated report, quiz, flashcard set or infographic, with a snapshot of what it was
+    (title, prompt, sources, options) taken when it was rated, so the ratings stay useful after it is deleted (the link
+    then becomes null). One row per artifact and person: rating again replaces it."""
+
+    __tablename__ = "artifact_feedback"
+    __table_args__ = (UniqueConstraint("artifact_id", "user_id"),)
+
+    workspace_id: Mapped[uuid.UUID] = _ws_fk()
+    artifact_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("artifacts.id", ondelete="SET NULL"), index=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("users.id", ondelete="SET NULL"))
+    artifact_type: Mapped[str] = mapped_column(String(30))
+    rating: Mapped[int] = mapped_column(Integer)  # 1 up, -1 down
+    reasons: Mapped[list] = mapped_column(JSON, default=list)
+    comment: Mapped[str | None] = mapped_column(Text)
+    snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class QuizAttempt(IdMixin, TimestampMixin, Base):
+    """A person's last finished run of a quiz: what they answered and the score, so opening the quiz again shows the result.
+    One row per quiz and person; finishing it again replaces it."""
+
+    __tablename__ = "quiz_attempts"
+    __table_args__ = (UniqueConstraint("artifact_id", "user_id"),)
+
+    workspace_id: Mapped[uuid.UUID] = _ws_fk()
+    artifact_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("artifacts.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"))
+    score: Mapped[int] = mapped_column(Integer)
+    total: Mapped[int] = mapped_column(Integer)
+    answers: Mapped[list] = mapped_column(JSON, default=list)  # per question: choice (indexes), text, correct
+
+
+class ReportTemplateCache(IdMixin, TimestampMixin, Base):
+    """The suggested report templates already written for some sources, found again by a hash of exactly what the AI read (each
+    post's stored ideas and topics, and the topic). The same input gives the same templates at once, so the Create report dialog
+    is instant, and a changed post (its ideas change) gets new ones."""
+
+    __tablename__ = "report_template_cache"
+    __table_args__ = (UniqueConstraint("workspace_id", "key"),)
+
+    workspace_id: Mapped[uuid.UUID] = _ws_fk()
+    key: Mapped[str] = mapped_column(String(64))
+    templates: Mapped[list] = mapped_column(JSON, default=list)
+
+
 class WorkspaceMemory(IdMixin, TimestampMixin, Base):
     """The writer's standing notes, one row per workspace, shared by every notebook and chat.
 

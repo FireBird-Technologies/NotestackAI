@@ -9,15 +9,18 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.corpus import Corpus
-from app.infographics.content import clamp
+from concurrent.futures import ThreadPoolExecutor
+
+from app.infographics.design import LOOKS, STYLES, build_content, render_design
+from app.infographics.image import measure_fit
 from app.infographics.render import build_html
 from app.infographics.themes import theme_id
 from app.llm import run
 from app.llm.provider import fast_lm
-from app.llm.signatures import PlanInfographic
+from app.llm.signatures import DesignInfographic
 from app.models import Artifact, Chat, Document, Job, Notebook
 from app.pipeline.generate import NothingToDo, extract_ideas, ideas_fresh
-from app.pipeline.material import MAX_POSTS, chat_material
+from app.pipeline.material import chat_material, max_posts
 from app.pipeline.passages import notebook_docs, passages_for, workspace_docs
 from app.services.jobs import update_job
 
@@ -67,7 +70,7 @@ def write_content(db: Session, job: Job, artifact: Artifact, params: dict) -> tu
         docs = workspace_docs(db, ws, picked)
     elif not chat_ids and nb:
         docs = notebook_docs(db, nb.id)
-    docs = docs[:MAX_POSTS]
+    docs = docs[:max_posts()]
     chats, chat_blocks = _chat_text(db, ws, chat_ids) if chat_ids else ([], [])
     if not docs and not chat_blocks:
         raise NothingToDo("Pick at least one post or chat for the infographic.")
@@ -76,12 +79,14 @@ def write_content(db: Session, job: Job, artifact: Artifact, params: dict) -> tu
     material = (_ideas_text(db, ws, docs, job) if docs else []) + chat_blocks
     prompt = (params.get("instructions") or "").strip()
     title = docs[0].title if docs else (chats[0].title or "Chat")
-    update_job(db, job, progress=0.35, message="Writing the infographic")
+    update_job(db, job, progress=0.35, message="Designing the infographic")
+    style = params.get("style") if params.get("style") in STYLES else "auto"
     content = None
     for _ in range(2):  # one retry when the model gives too little to draw
-        out = run.predict(PlanInfographic, db=db, workspace_id=ws, job=job, title=title, material=material,
-                          focus=prompt or "(none)", lm=fast_lm())
-        content = clamp(out.get("infographic") or {})
+        out = run.predict(DesignInfographic, db=db, workspace_id=ws, job=job, title=title, material=material,
+                          focus=prompt or "(none)", layout_style=f"{style}: {STYLES[style]}" if style != "auto" else "auto",
+                          lm=fast_lm())
+        content = build_content(out.get("design") or {})
         if content:
             break
     if not content:
@@ -101,6 +106,8 @@ def build_infographic(db: Session, job: Job, artifact: Artifact) -> dict:
     params = job.params
     theme = theme_id(params.get("theme"))
     content, source, _title = write_content(db, job, artifact, params)
+    update_job(db, job, progress=0.8, message="Fitting it to the page")
+    content["fit"] = fit_scales(theme, content)
     artifact.content_json = {**(artifact.content_json or {}), "title": f"Infographic: {content['title']}"[:140],
                              "theme": theme, "prompt": (params.get("instructions") or "").strip(), "source": source,
                              "content": content}
@@ -110,7 +117,22 @@ def build_infographic(db: Session, job: Job, artifact: Artifact) -> dict:
     return {"artifact_id": str(artifact.id)}
 
 
+def fit_scales(theme: str, content: dict) -> dict:
+    """The scale at which the body fits the page, tall and wide (measured in Chrome once, kept with the content)."""
+    look = theme if theme in LOOKS else "midnight"
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        wide, tall = (pool.submit(measure_fit, render_design(look, content, layout, fit=1.0), layout)
+                      for layout in ("landscape", "portrait"))
+        return {"landscape": wide.result(), "portrait": tall.result()}
+
+
 def infographic_html(content: dict, layout: str = "portrait") -> str | None:
-    """The page for a finished infographic's stored text and theme, tall or wide (None when it has none yet)."""
+    """The page for a finished infographic's stored content and look, tall or wide (None when it has none yet). Older
+    infographics (fixed text in a premade theme) still draw in that theme."""
     text = content.get("content")
-    return build_html(theme_id(content.get("theme")), text, layout) if text else None
+    if not text:
+        return None
+    theme = theme_id(content.get("theme"))
+    if "body_html" in text:
+        return render_design(theme if theme in LOOKS else "midnight", text, layout)
+    return build_html(theme, text, layout) if "items" in text else None
