@@ -14,7 +14,7 @@ import type { BlogPost } from "./seoTypes";
 export const missionPosts: BlogPost[] = [
   {
     slug: "notebooklm-alternatives",
-    title: "NotebookLM Alternatives in 2026: Why Notestack Is the Ultimate Pick for Writers",
+    title: "NotebookLM Alternatives in 2026: Free, Open Source and for Writers",
     description:
       "An honest guide to NotebookLM alternatives: which tool to use for grounded research, open source privacy, audio, video and working with your own writing archive.",
     category: "Research",
@@ -26,11 +26,11 @@ export const missionPosts: BlogPost[] = [
       "NotebookLM made source grounded AI mainstream. It is also a bundle, and most people only need part of it. Here is how to pick the part that matters to you.",
     primaryKeyword: "notebooklm alternatives",
     keywordVariant: "alternative to notebooklm",
-    relatedPaths: ["/blogs/notebooklm-vs-chatgpt", "/blogs/best-ai-for-research", "/blogs/ai-tools-for-writers"],
+    relatedPaths: ["/notebooklm-alternative", "/blogs/notebooklm-vs-chatgpt", "/blogs/best-ai-for-research", "/blogs/ai-tools-for-writers"],
     mission: {
       question: "What is the best NotebookLM alternative for my kind of work?",
       answer:
-        "For writers, bloggers and newsletters, Notestack is the ultimate NotebookLM alternative: it syncs your whole archive, cites the exact lines behind every answer, and turns your writing into audio, video and launch posts. If you need open source and self hosted, use Khoj. For academic papers, Elicit or Consensus. For turning documents into video, [PDF2Video](https://pdf2vid.com) or [Blog2Video](https://blog2video.app).",
+        "For writers, bloggers and newsletters, Notestack is the best NotebookLM alternative: it syncs your whole archive, cites the exact lines behind every answer, and turns your writing into audio, video and launch posts. If you need open source and self hosted, use Khoj. For academic papers, Elicit or Consensus. For turning documents into video, [PDF2Video](https://pdf2vid.com) or [Blog2Video](https://blog2video.app).",
     },
     sections: [
       {
@@ -48,16 +48,45 @@ export const missionPosts: BlogPost[] = [
         callout: "The best alternative is the one that does your one job better, not the one that copies every feature.",
       },
       {
-        heading: "The ultimate NotebookLM alternative for writers: Notestack",
+        heading: "The best NotebookLM alternative for writers: Notestack (our product)",
         paragraphs: [
           "If the sources you care about are your own posts, a general notebook makes you upload files by hand and loses track of what you wrote when. Notestack connects to your Substack, Ghost, Medium or any RSS feed, keeps each post as its own file, and answers with citations to the exact lines it read.",
           "The difference shows up in the details. Answers cite line ranges, not whole documents, and anything the tool cannot support from your posts is dropped instead of guessed. The same archive feeds audio overviews, video and Launch Kits written in your voice.",
-          "That combination is why we call it the ultimate NotebookLM alternative for anyone who publishes. See the full [Notestack vs NotebookLM comparison](/notebooklm-alternative) for every difference, side by side.",
+          "That combination is why we call it the best NotebookLM alternative for anyone who publishes. See the full [Notestack vs NotebookLM comparison](/notebooklm-alternative) for every difference, side by side.",
         ],
         bullets: [
           "Syncs a whole publication, including the back catalogue",
           "Line level citations you can open and check",
           "Topic map, voice profile and resurfacing built on the same archive",
+        ],
+      },
+      {
+        heading: "NotebookLM alternatives at a glance",
+        paragraphs: [
+          "The tools people compare most often, grouped by the job they do best. We build Notestack, so it is listed with the rest and we say where it is not the right pick. Features and plans change, so check each product's own site for current details.",
+        ],
+        bullets: [
+          "**Notestack**: syncs a whole blog, newsletter or site and cites the exact lines behind answers. Best for writers working with their own archive. Not the pick for studying other people's papers.",
+          "**Khoj**: open source and self-hostable, indexes notes, markdown and PDFs, and can run with a local model. Best when documents cannot leave your machine.",
+          "**Open Notebook**: an open source, self-hosted take on the NotebookLM idea, aimed at people comfortable running their own setup.",
+          "**Obsidian with an AI plugin**: your own notes on your own disk, with AI layered on. Best for people who already live in Obsidian.",
+          "**ChatGPT Projects and Claude Projects**: upload files and chat over them inside a general assistant. Best when you want one tool for everything and can accept looser grounding.",
+          "**Perplexity Spaces**: source-grounded chat backed by live web search. Best when you need the web as well as your own files.",
+          "**Elicit and Consensus**: built for academic literature, finding and comparing findings across papers. Best for scientific research.",
+          "**Recall and Studr**: marketed toward students, with summaries, quizzes and flashcards. Best for studying rather than writing.",
+        ],
+      },
+      {
+        heading: "Free and open source NotebookLM alternatives",
+        paragraphs: [
+          "If you are searching for a free NotebookLM alternative, there are three honest routes. Open source tools such as Khoj and Open Notebook cost nothing to run apart from your own hardware or hosting, and keep your documents under your control. Most hosted tools have a free tier with limits on sources, chats or audio. And general assistants with project features can do a rough version of the job inside a plan you may already pay for.",
+          "The trade-off is almost always setup effort versus polish. Self-hosting buys privacy and costs time. Hosted free tiers are easier but cap what you can do.",
+        ],
+      },
+      {
+        heading: "Alternatives for students",
+        paragraphs: [
+          "Students usually want something different from what writers want: active recall rather than citations. Tools aimed at studying tend to turn sources into flashcards, quizzes and spaced repetition schedules. If that is your use, look at study-focused tools first, and use a grounded notebook for the reading itself.",
         ],
       },
       {
@@ -112,6 +141,21 @@ export const missionPosts: BlogPost[] = [
         answer:
           "Notestack. It connects to your blog, newsletter or site (or your markdown files) instead of relying on manual uploads, cites exact lines, and turns answers into audio, video and posts in your voice. Compare them in [Notestack vs NotebookLM](/notebooklm-alternative).",
       },
+      {
+        question: "Is there a NotebookLM alternative for students?",
+        answer:
+          "Yes. Some tools are built around studying, turning sources into flashcards, quizzes and spaced repetition. A grounded notebook is still useful for the reading itself. Pick by whether you need recall practice or cited answers.",
+      },
+      {
+        question: "Is there a NotebookLM alternative that runs locally?",
+        answer:
+          "Yes. Khoj and Open Notebook are open source and can be self-hosted, and Khoj can run with a local model so documents stay on your machine. Expect setup work, and note that local models are weaker at long, careful reasoning than the best hosted ones.",
+      },
+      {
+        question: "Can ChatGPT or Claude replace NotebookLM?",
+        answer:
+          "Partly. Project features let you upload files and chat over them, which covers basic document Q&A. They are usually less strict about grounding and do not offer NotebookLM-style audio overviews. See our NotebookLM vs ChatGPT comparison for the details: [NotebookLM vs ChatGPT](/blogs/notebooklm-vs-chatgpt).",
+      },
     ],
     distributionPlan: [
       { channel: "x", angle: "Thread: pick a NotebookLM alternative by the one job you need done" },
@@ -159,7 +203,7 @@ export const missionPosts: BlogPost[] = [
       {
         heading: "Stage two: read deeply with a grounded notebook",
         paragraphs: [
-          "Once you have sources, you want an AI that answers only from them. This is where grounded notebooks shine: NotebookLM for uploaded documents, and Notestack, the ultimate [NotebookLM alternative](/notebooklm-alternative) when the sources are your own writing, synced straight from your blog, newsletter or site.",
+          "Once you have sources, you want an AI that answers only from them. This is where grounded notebooks shine: NotebookLM for uploaded documents, and Notestack, a [NotebookLM alternative](/notebooklm-alternative) when the sources are your own writing, synced straight from your blog, newsletter or site.",
           "The best of these do more than summarize. They search with several phrasings, read around each hit, and cite the line range they used, so you can open the passage and check the context yourself.",
         ],
       },
@@ -256,7 +300,7 @@ export const missionPosts: BlogPost[] = [
         heading: "A memory of everything you have written",
         paragraphs: [
           "Writers with a long archive repeat themselves, contradict themselves and forget their best lines. A grounded notebook over your own posts fixes that. Ask what you have already argued about a topic and get the answer with citations to your past posts.",
-          "Notestack builds this from your publication automatically, then maps the topics you keep returning to and the ones that went dormant. It is the research assistant that has read everything you ever published, and the ultimate [NotebookLM alternative](/notebooklm-alternative) for writers.",
+          "Notestack builds this from your publication automatically, then maps the topics you keep returning to and the ones that went dormant. It is the research assistant that has read everything you ever published, and a [NotebookLM alternative](/notebooklm-alternative) for writers.",
         ],
         bullets: [
           "Find what you already said before you say it again",
@@ -363,7 +407,7 @@ export const missionPosts: BlogPost[] = [
       {
         heading: "What writers need that neither does",
         paragraphs: [
-          "If your main source is your own archive, you need a notebook that syncs your publication, keeps each post intact and cites the exact lines. That is the gap Notestack fills as the ultimate [NotebookLM alternative for writers](/notebooklm-alternative), and our list of [NotebookLM alternatives](/blogs/notebooklm-alternatives) covers the other options.",
+          "If your main source is your own archive, you need a notebook that syncs your publication, keeps each post intact and cites the exact lines. That is the gap Notestack fills as a [NotebookLM alternative for writers](/notebooklm-alternative), and our list of [NotebookLM alternatives](/blogs/notebooklm-alternatives) covers the other options.",
           "Writers also need to ship. Turn a PDF or report into a narrated explainer with [PDF2Video](https://pdf2vid.com), or turn a post into video with [Blog2Video](https://blog2video.app), so the research ends up in front of people.",
         ],
       },
@@ -397,7 +441,7 @@ export const missionPosts: BlogPost[] = [
       {
         question: "What is the best alternative to both for writers?",
         answer:
-          "Notestack, the ultimate NotebookLM alternative for writers: a grounded notebook built from your own blog, newsletter, site or markdown that cites exact lines and turns answers into audio, video and posts.",
+          "Notestack, a NotebookLM alternative for writers: a grounded notebook built from your own blog, newsletter, site or markdown that cites exact lines and turns answers into audio, video and posts.",
       },
     ],
     distributionPlan: [
@@ -462,7 +506,7 @@ export const missionPosts: BlogPost[] = [
       {
         heading: "Setting one up in ten minutes",
         paragraphs: [
-          "Paste your blog, newsletter or site URL into Notestack (the ultimate [NotebookLM alternative](/notebooklm-alternative) for writers), or upload your markdown, and let it index your posts. Ask it what you have written about your favourite topic, open the topic map, and check which ideas you have not touched in a year.",
+          "Paste your blog, newsletter or site URL into Notestack (a [NotebookLM alternative](/notebooklm-alternative) for writers), or upload your markdown, and let it index your posts. Ask it what you have written about your favourite topic, open the topic map, and check which ideas you have not touched in a year.",
           "If you keep PDFs, research papers or slides alongside your writing, [PDF2Video](https://pdf2vid.com) can turn the best of them into narrated videos, so your second brain produces as well as remembers.",
         ],
       },
