@@ -132,9 +132,9 @@ def check_style(ctx: Ctx, style: str) -> None:
 
 
 def check_voice(voice_id: str) -> None:
-    """A free built-in voice (blog2video marks the paid ones)."""
+    """Any built-in voice (blog2video and NoteStack share one ElevenLabs account)."""
     voice = next((v for v in b2v.prebuilt_voices() if v.get("voice_id") == voice_id), None)
-    if not voice or voice.get("plan") == "paid":
+    if not voice:
         raise not_found("Voice not found")
 
 

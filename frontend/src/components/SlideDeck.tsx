@@ -39,9 +39,8 @@ type DeckFormat = "detailed" | "presenter";
 type DeckLength = "short" | "default" | "long";
 
 /** The slide deck settings: a visual style on top, then the format, language, length, sources and what it should say. */
-export function SlideDeckDialog({ notebookId, notebookTitle, chats, currentChatId, onClose, onCreate }: {
+export function SlideDeckDialog({ notebookId, chats, currentChatId, onClose, onCreate }: {
   notebookId: string;
-  notebookTitle?: string;
   chats: ChatSummary[];
   currentChatId?: string | null;
   onClose: () => void;
@@ -91,7 +90,7 @@ export function SlideDeckDialog({ notebookId, notebookTitle, chats, currentChatI
           </div>
         </section>
 
-        <SourceFocusFields notebookId={notebookId} notebookTitle={notebookTitle} chats={chats} currentChatId={currentChatId}
+        <SourceFocusFields notebookId={notebookId} chats={chats} currentChatId={currentChatId}
                            what="slide deck" noFocus onChange={setSel} />
 
         <label className="field">

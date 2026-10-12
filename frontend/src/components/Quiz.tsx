@@ -22,9 +22,8 @@ export type QuizRequest = Omit<GenerateBody, "type">;
 
 /** The quiz settings, laid out like the video wizard's first step: what it is made from, what it should focus on, then
  * how it is asked. */
-export function QuizDialog({ notebookId, notebookTitle, chats, currentChatId, busy, error, onClose, onCreate }: {
+export function QuizDialog({ notebookId, chats, currentChatId, busy, error, onClose, onCreate }: {
   notebookId: string;
-  notebookTitle?: string;
   chats: ChatSummary[];
   /** The chat open beside the dialog, ticked to start with. */
   currentChatId: string | null;
@@ -71,7 +70,7 @@ export function QuizDialog({ notebookId, notebookTitle, chats, currentChatId, bu
               ))}
             </div>
           </div>
-          <SourceFocusFields notebookId={notebookId} notebookTitle={notebookTitle} chats={chats} currentChatId={currentChatId}
+          <SourceFocusFields notebookId={notebookId} chats={chats} currentChatId={currentChatId}
                              preselectChat what="quiz" largeSelection onChange={setSel} />
           <div className="qz-foot">
             <div>

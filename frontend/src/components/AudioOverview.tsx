@@ -25,10 +25,12 @@ const LENGTHS = [
 
 export type AudioOverviewRequest = Omit<GenerateBody, "type">;
 
-/** The workspace's voices, asked for once (the list takes a few seconds): the notebook asks ahead of time, so the
- * pickers are ready when the settings open. A failure is forgotten, so the next open asks again. */
+/** The workspace's voices (the list takes a few seconds): the notebook asks ahead of time, so the pickers are ready
+ * when the settings open. `fresh` asks again (voices may have been added since); a failure is forgotten, so the next
+ * open asks again. */
 let voicesAsked: Promise<VideoSavedVoice[]> | null = null;
-export function prefetchVoices(): Promise<VideoSavedVoice[]> {
+export function prefetchVoices(fresh = false): Promise<VideoSavedVoice[]> {
+  if (fresh) voicesAsked = null;
   voicesAsked ??= videoVoicesApi.list().then((r) => r.saved).catch((e) => {
     voicesAsked = null;
     throw e;
@@ -38,9 +40,8 @@ export function prefetchVoices(): Promise<VideoSavedVoice[]> {
 
 /** The audio overview settings: a style, one or two hosts and their voices, length, language, the sources, and what
  * the hosts should focus on. */
-export function AudioOverviewDialog({ notebookId, notebookTitle, chats, currentChatId, onClose, onCreate }: {
+export function AudioOverviewDialog({ notebookId, chats, currentChatId, onClose, onCreate }: {
   notebookId: string;
-  notebookTitle?: string;
   chats: ChatSummary[];
   currentChatId?: string | null;
   onClose: () => void;
@@ -56,13 +57,22 @@ export function AudioOverviewDialog({ notebookId, notebookTitle, chats, currentC
   const [voices, setVoices] = useState<VideoSavedVoice[] | null>(null);
   const [voice, setVoice] = useState<[string, string]>(["", ""]);
 
+  // The list asked for ahead of time shows at once; a fresh one then replaces it, so voices saved since are listed.
+  // The hosts' picks are kept while their voices are still there.
   useEffect(() => {
     let live = true;
-    prefetchVoices().then((saved) => {
+    const show = (saved: VideoSavedVoice[]) => {
       if (!live) return;
       setVoices(saved);
-      setVoice([saved[0]?.voice_id ?? "", (saved[1] ?? saved[0])?.voice_id ?? ""]);
-    }).catch(() => live && setVoices([]));
+      setVoice((cur) => {
+        const has = (id: string) => saved.some((v) => v.voice_id === id);
+        const first = has(cur[0]) ? cur[0] : saved[0]?.voice_id ?? "";
+        const second = has(cur[1]) ? cur[1] : (saved.find((v) => v.voice_id !== first) ?? saved[0])?.voice_id ?? "";
+        return [first, second];
+      });
+    };
+    prefetchVoices().then(show).catch(() => live && setVoices((v) => v ?? []))
+      .finally(() => prefetchVoices(true).then(show).catch(() => undefined));
     return () => {
       live = false;
     };
@@ -120,7 +130,7 @@ export function AudioOverviewDialog({ notebookId, notebookTitle, chats, currentC
           <div className="field">
             <span className="vw-label">Hosts</span>
             <Pills<"1" | "2"> label="Hosts" value={hosts} onChange={setHosts}
-              options={[{ id: "1", label: "One host" }, { id: "2", label: "Two hosts" }]} />
+              options={[{ id: "2", label: "Two hosts" }, { id: "1", label: "One host" }]} />
           </div>
           <div className="field">
             <span className="vw-label">Length</span>
@@ -133,11 +143,8 @@ export function AudioOverviewDialog({ notebookId, notebookTitle, chats, currentC
           </div>
         </section>
 
-        <section className="ao-voices">
-          {voices === null && <p className="muted small">Loading your voices...</p>}
-          {voices !== null && voices.length === 0 && (
-            <p className="muted small">Your voices could not load, so the default {two ? "voices are" : "voice is"} used.</p>
-          )}
+        {/* The hosts' voices and what the episode is made from, side by side */}
+        <section className="ao-opts ao-voices-row">
           {voices !== null && voices.length > 0 && ([0, 1] as const).filter((i) => i === 0 || two).map((i) => (
             <div key={i} className="field">
               <span className="vw-label">{two ? `Host ${i + 1} voice` : "Host voice"}</span>
@@ -145,14 +152,17 @@ export function AudioOverviewDialog({ notebookId, notebookTitle, chats, currentC
                 options={voiceOptions} />
             </div>
           ))}
+          <SourceFocusFields notebookId={notebookId} chats={chats} currentChatId={currentChatId}
+                             what="audio overview" noFocus onChange={setSel} />
         </section>
-
-        <SourceFocusFields notebookId={notebookId} notebookTitle={notebookTitle} chats={chats} currentChatId={currentChatId}
-                           what="audio overview" noFocus onChange={setSel} />
+        {voices === null && <p className="muted small ao-voices-note">Loading your voices...</p>}
+        {voices !== null && voices.length === 0 && (
+          <p className="muted small ao-voices-note">Your voices could not load, so the default {two ? "voices are" : "voice is"} used.</p>
+        )}
 
         <label className="field">
           <span className="vw-label">What should the AI {two ? "hosts" : "host"} focus on in this episode? <span className="muted">(optional)</span></span>
-          <textarea className="input sd-prompt" rows={4} maxLength={4000} value={focus} onChange={(e) => setFocus(e.target.value)}
+          <textarea className="input sd-prompt ao-prompt" rows={5} maxLength={4000} value={focus} onChange={(e) => setFocus(e.target.value)}
                     placeholder={"- List the core ideas worth remembering\n- Explain how the pieces connect"} />
         </label>
         {!sel?.ready && <p className="muted small">Select at least one post or chat to make an audio overview.</p>}

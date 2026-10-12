@@ -12,6 +12,7 @@ from app.pipeline.ingest import IMPORTS_FEED, FeedNotFound, discover_feed, impor
 from app.services.jobs import create_job, serialize_job
 from app.services.plans import effective_plan, plan_limit_error, post_room
 from app.services.storage import storage
+from app.services.url_policy import classify_url
 
 router = APIRouter(prefix="/api/sources", tags=["sources"])
 
@@ -53,12 +54,20 @@ def _enqueue_sync(ctx: Ctx, source: Source) -> Job:
     return create_job(ctx.db, ctx.workspace.id, "ingest", {"source_id": str(source.id)})
 
 
+def _check_url(url: str) -> None:
+    """A link that can't be added (a social home page, an adult site) is refused before anything is fetched."""
+    verdict = classify_url(url)
+    if verdict.kind == "blocked":
+        raise HTTPException(422, {"code": "source_blocked", "message": verdict.message})
+
+
 def _doc_count(ctx: Ctx, source: Source) -> int:
     return ctx.db.scalar(select(func.count()).select_from(Document).where(Document.source_id == source.id)) or 0
 
 
 @router.post("")
 async def create_source(body: SourceIn, ctx: Ctx = Depends(get_ctx)):
+    _check_url(body.url)
     try:
         found = await run_in_threadpool(discover_feed, body.url)
     except FeedNotFound as exc:
@@ -145,6 +154,7 @@ def _require_room(ctx: Ctx) -> None:
 
 @router.post("/url")
 def import_url(body: SourceIn, ctx: Ctx = Depends(get_ctx)):
+    _check_url(body.url)
     _require_room(ctx)
     source = imports_source(ctx.db, ctx.workspace.id)
     ctx.db.commit()

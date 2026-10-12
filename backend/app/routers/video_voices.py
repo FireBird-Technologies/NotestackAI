@@ -1,4 +1,4 @@
-"""Voices for videos: the workspace's saved voices, the free built-in library, and its Notestack voices (made on the Voice
+"""Voices for videos: the workspace's saved voices, the built-in library (every blog2video voice), and its Notestack voices (made on the Voice
 page; they speak audio overviews, not videos).
 
 "Your voices" (user_saved_voices, as many as wanted) is the one list for audio overviews and videos, and lives only
@@ -53,18 +53,18 @@ def _save_builtin(ctx: Ctx, v: dict) -> UserSavedVoice:
 
 
 def _saved(ctx: Ctx, ours: set[str] = frozenset()) -> list[UserSavedVoice]:
-    """The saved voices that can still be used: free built-in voices and the workspace's Notestack voices. Voices that
-    were designed or cloned for videos, and paid built-in ones, are gone."""
+    """The saved voices that can still be used: built-in voices (all of them: blog2video and NoteStack share one ElevenLabs
+    account) and the workspace's Notestack voices. Voices that were designed or cloned for videos are gone."""
     rows = ctx.db.scalars(select(UserSavedVoice).where(UserSavedVoice.workspace_id == ctx.workspace.id)
                           .order_by(UserSavedVoice.created_at))
-    return [v for v in rows if v.voice_id in ours or not (v.is_custom or v.premium)]
+    return [v for v in rows if v.voice_id in ours or not v.is_custom]
 
 
 @router.get("")
 def voices(ctx: Ctx = Depends(get_ctx), _: None = Depends(b2v_ready)):
-    """Your voices (audio overviews and videos), the free built-in library (to save from) and your Notestack voices."""
+    """Your voices (audio overviews and videos), the built-in library (to save from) and your Notestack voices."""
     with upstream():
-        library = [v for v in b2v.prebuilt_voices() if v.get("plan") != "paid"]
+        library = b2v.prebuilt_voices()
     mine = notestack_voices(ctx.db, ctx.workspace.id)
     ours = {v["voice_id"] for v in mine}
     saved = _saved(ctx, ours)
@@ -95,7 +95,7 @@ def save_voice(body: SaveIn, ctx: Ctx = Depends(get_ctx), _: None = Depends(b2v_
         return _voice_out(row, {row.voice_id})
     with upstream():
         v = next((v for v in b2v.prebuilt_voices() if v.get("voice_id") == body.voice_id), None)
-    if not v or v.get("plan") == "paid":
+    if not v:
         raise HTTPException(404, "Voice not found")
     row = _save_builtin(ctx, v)
     ctx.db.commit()

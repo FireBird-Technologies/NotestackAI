@@ -3,6 +3,7 @@ import { NavLink } from "react-router-dom";
 import { docsApi, jobsApi, sourcesApi } from "../api/endpoints";
 import type { Doc, Job, Source } from "../api/types";
 import { Reader } from "../components/Reader";
+import { SourceUrlHint, useSourceUrlCheck } from "../components/SourceUrlCheck";
 import { ConfirmButton, EmptyState, errorMessage, formatDate, JobProgress, Loading, PageHeader, StatusPill } from "../components/ui";
 import { useJobMap } from "../hooks/useJob";
 import { useUpgrade } from "../hooks/useUpgrade";
@@ -85,10 +86,11 @@ export function AddSource({ onAdded }: { onAdded: (source: Source, job: Job) => 
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const mode = override ?? (looksLikeArticle(value) ? "url" : "feed");
+  const { check, modal } = useSourceUrlCheck();
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!value.trim()) return;
+    if (!value.trim() || !(await check(value))) return;
     setError(null);
     setBusy(true);
     try {
@@ -155,11 +157,13 @@ export function AddSource({ onAdded }: { onAdded: (source: Source, job: Job) => 
           </>
         )}
       </p>
+      <SourceUrlHint url={value} />
       {error && (
         <p className="error-text" role="alert">
           {error}
         </p>
       )}
+      {modal}
     </div>
   );
 }

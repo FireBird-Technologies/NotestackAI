@@ -139,9 +139,8 @@ export function ThemePicker({ value, onChange, disabled = false }: { value: stri
 }
 
 /** The infographic settings: what it is made from (posts and/or chats), what it should show, and a theme. */
-export function InfographicDialog({ notebookId, notebookTitle, chats, currentChatId, busy, error, onClose, onCreate, title = "Infographic" }: {
+export function InfographicDialog({ notebookId, chats, currentChatId, busy, error, onClose, onCreate, title = "Infographic" }: {
   notebookId: string;
-  notebookTitle?: string;
   chats: ChatSummary[];
   currentChatId?: string | null;
   busy: boolean;
@@ -175,7 +174,7 @@ export function InfographicDialog({ notebookId, notebookTitle, chats, currentCha
             <span className="vw-label">Look</span>
             <ThemePicker value={theme} onChange={setTheme} />
           </div>
-          <SourceFocusFields notebookId={notebookId} notebookTitle={notebookTitle} chats={chats} currentChatId={currentChatId}
+          <SourceFocusFields notebookId={notebookId} chats={chats} currentChatId={currentChatId}
                              what="infographic" noFocus onChange={setSel} />
           <label className="field">
             <span className="vw-label">What should it show? <span className="muted">(optional)</span></span>

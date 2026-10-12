@@ -6259,6 +6259,19 @@ details.map-legend[open] summary {
   margin: 0;
 }
 
+/* The kind of a source ("Post", "Chat") before its title */
+.picker-tag {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 1px 8px;
+  border: 1px solid var(--blue-35);
+  border-radius: 999px;
+  background: var(--blue-10);
+  font: 500 0.65rem var(--font-mono);
+  letter-spacing: 0.06em;
+  vertical-align: 1px;
+}
+
 .modal.modal-wide:has(.sf-3) {
   width: min(1360px, 100%);
 }
@@ -6698,42 +6711,10 @@ details.map-legend[open] summary {
   white-space: nowrap;
 }
 
-/* The fixed notebook and its posts dropdown, one under the other */
+/* The posts-and-chats dropdown and the count under it */
 .sp-fixed {
   display: grid;
   gap: 10px;
-}
-
-.sp-notebook {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 46px;
-  padding: 0 18px;
-  border: 1px solid var(--blue-60);
-  border-radius: 999px;
-  background: var(--blue-10);
-  min-width: 0;
-}
-
-.sp-notebook strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 600;
-}
-
-.sp-notebook-label {
-  flex-shrink: 0;
-  font: 0.7rem var(--font-mono);
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--text-2);
-}
-
-.sp-notebook .muted {
-  margin-left: auto;
-  flex-shrink: 0;
 }
 
 /* Quiz and flashcards layout: source and its settings, then the focus, then the rest. */
@@ -6924,8 +6905,6 @@ details.map-legend[open] summary {
 
 .rp-source-row .sp-fixed {
   flex: 1 1 560px;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  align-items: center;
 }
 
 .rp-source-row .vw-label {
@@ -6962,13 +6941,6 @@ details.map-legend[open] summary {
 
 .rp-dialog {
   height: min(680px, calc(100vh - 100px));
-}
-
-/* Posts and chats: two matching dropdowns side by side under the notebook bar */
-.sp-menus {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
 }
 
 /* The sources at the end of a report */
@@ -9202,15 +9174,64 @@ body.nbv-resizing iframe {
 }
 
 /* Hosts pills share the slide deck's pill look (.sd-opts); the two voice pickers sit side by side */
-.ao-voices {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+/* Hosts, length, language and the hosts' voices in one row, a size smaller than the other dialogs' settings */
+.ao-opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 12px;
 }
 
-.ao-voices > p {
-  grid-column: 1 / -1;
-  margin: 0;
+.ao-opts > .field {
+  flex: 1 1 0;
+  min-width: 120px;
+  align-content: start; /* a field beside a taller one (Made from has its count under it) keeps its label tight */
+  gap: 8px;
+}
+
+.ao-opts > .field:first-child {
+  flex: 0 0 auto;
+}
+
+/* Second row: the voices share it with "Made from", which takes the most room */
+.ao-voices-row > .field:first-child {
+  flex: 1 1 0;
+}
+
+.ao-voices-row > .field:last-child {
+  flex: 2 1 0;
+  min-width: 220px;
+}
+
+.ao-opts .sp-trigger {
+  min-height: 40px;
+  padding: 0 12px 0 14px;
+  font-size: 0.875rem;
+}
+
+.ao-opts .vw-chips {
+  gap: 6px;
+}
+
+.ao-opts .vw-chip,
+.ao-opts .dropdown-btn {
+  height: 40px;
+  font-size: 0.875rem;
+}
+
+.ao-opts .vw-chip {
+  padding: 0 14px;
+}
+
+.ao-opts .dropdown-btn {
+  padding: 0 12px 0 14px;
+}
+
+.ao-voices-note {
+  margin: -8px 0 0;
+}
+
+.ao-prompt {
+  min-height: 128px;
 }
 
 @media (max-width: 760px) {
@@ -9218,8 +9239,8 @@ body.nbv-resizing iframe {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .ao-voices {
-    grid-template-columns: 1fr;
+  .ao-opts > .field {
+    flex-basis: 40%;
   }
 }
 

@@ -899,7 +899,7 @@ a.mc-action {
   line-height: 1.35;
 }
 
-/* The topic's description: two lines at most */
+/* The topic's description: two lines at most (the full text is in the tooltip) */
 .vw-focus-desc {
   display: -webkit-box;
   overflow: hidden;
@@ -938,7 +938,7 @@ a.mc-action {
 /* A multi-line box, not the site's pill-shaped one-line .input */
 .vw-focus-custom textarea {
   width: 100%;
-  min-height: 72px;
+  min-height: 96px;
   padding: 10px 12px;
   border: 1px solid var(--line-strong);
   border-radius: 10px;

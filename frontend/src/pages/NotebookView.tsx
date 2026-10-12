@@ -67,9 +67,8 @@ function readChatRailOpen(): boolean {
 }
 
 /** Create: one click per format with sensible defaults, options folded away; then what was made from this notebook. */
-function StudioPanel({ notebookId, notebookTitle, docs, chats, currentChatId, disabled, quizOpen, onQuizClose, onCreateQuiz, cardsOpen, onCardsClose, onCreateCards, infographicOpen, onInfographicClose, onCreateInfographic, audioOpen, onAudioClose, onCreateAudio, slidesOpen, onSlidesClose, onCreateSlides, reportOpen, onReportClose, onCreateReport, onCreateVideo }: {
+function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, quizOpen, onQuizClose, onCreateQuiz, cardsOpen, onCardsClose, onCreateCards, infographicOpen, onInfographicClose, onCreateInfographic, audioOpen, onAudioClose, onCreateAudio, slidesOpen, onSlidesClose, onCreateSlides, reportOpen, onReportClose, onCreateReport, onCreateVideo }: {
   notebookId: string;
-  notebookTitle: string;
   docs: { id: string; title: string; locked?: boolean }[];
   chats: ChatSummary[];
   currentChatId: string | null;
@@ -258,17 +257,17 @@ function StudioPanel({ notebookId, notebookTitle, docs, chats, currentChatId, di
         ))}
       </div>}
       {reading && <Reader documentId={reading.id} highlight={{ start: reading.start, end: reading.end }} onClose={() => setReading(null)} />}
-      {quizOpen && <QuizDialog notebookId={notebookId} notebookTitle={notebookTitle} chats={chats} currentChatId={currentChatId} busy={false} error={null}
+      {quizOpen && <QuizDialog notebookId={notebookId} chats={chats} currentChatId={currentChatId} busy={false} error={null}
                                onClose={onQuizClose} onCreate={makeQuiz} />}
-      {reportOpen && <ReportDialog notebookId={notebookId} notebookTitle={notebookTitle} chats={chats} currentChatId={currentChatId} busy={false}
+      {reportOpen && <ReportDialog notebookId={notebookId} chats={chats} currentChatId={currentChatId} busy={false}
                                    error={null} onClose={onReportClose} onCreate={makeReport} />}
-      {infographicOpen && <InfographicDialog notebookId={notebookId} notebookTitle={notebookTitle} chats={chats} currentChatId={currentChatId}
+      {infographicOpen && <InfographicDialog notebookId={notebookId} chats={chats} currentChatId={currentChatId}
                                              busy={false} error={null} onClose={onInfographicClose} onCreate={makeInfographic} />}
-      {audioOpen && <AudioOverviewDialog notebookId={notebookId} notebookTitle={notebookTitle} chats={chats} currentChatId={currentChatId}
+      {audioOpen && <AudioOverviewDialog notebookId={notebookId} chats={chats} currentChatId={currentChatId}
                                          onClose={onAudioClose} onCreate={makeAudio} />}
-      {slidesOpen && <SlideDeckDialog notebookId={notebookId} notebookTitle={notebookTitle} chats={chats} currentChatId={currentChatId}
+      {slidesOpen && <SlideDeckDialog notebookId={notebookId} chats={chats} currentChatId={currentChatId}
                                       onClose={onSlidesClose} onCreate={makeSlides} />}
-      {cardsOpen && <FlashcardsDialog notebookId={notebookId} notebookTitle={notebookTitle} chats={chats} currentChatId={currentChatId} busy={false}
+      {cardsOpen && <FlashcardsDialog notebookId={notebookId} chats={chats} currentChatId={currentChatId} busy={false}
                                       error={null} onClose={onCardsClose} onCreate={makeCards} />}
       {mapDialog && <MindMapDialog docs={docs} busy={false} error={null} onClose={() => setMapDialog(false)} onCreate={makeMap} />}
       {exploring && <MindMapExplorer artifact={exploring} onClose={() => setExploring(null)} />}
@@ -796,7 +795,7 @@ export default function NotebookView() {
       </section>
 
       <aside className="card nbv-pane nbv-side" aria-label="Notebook tools">
-        <StudioPanel notebookId={nb.id} notebookTitle={nb.title} docs={nb.documents.map((d) => ({ id: d.id, title: d.title, locked: d.locked }))}
+        <StudioPanel notebookId={nb.id} docs={nb.documents.map((d) => ({ id: d.id, title: d.title, locked: d.locked }))}
                      chats={chats} currentChatId={chatId} quizOpen={makingQuiz}
                      onQuizClose={() => setMakingQuiz(false)} onCreateQuiz={openQuiz}
                      reportOpen={makingReport} onReportClose={() => setMakingReport(false)} onCreateReport={openReport}

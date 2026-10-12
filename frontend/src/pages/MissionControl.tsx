@@ -7,6 +7,7 @@ import { LaunchWindowIcon, PlanetIcon, RocketIcon, TelescopeIcon } from "../comp
 import { errorMessage, formatDate, JobProgress, StatusPill } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import { useJobMap } from "../hooks/useJob";
+import { classifyUrl } from "../lib/urlScrapability";
 import { AddSource } from "./Sources";
 import { PENDING_SOURCE_KEY } from "./Landing";
 import { ONBOARDED_KEY } from "./Welcome";
@@ -92,7 +93,9 @@ export default function MissionControl() {
     } catch {
       /* ignore */
     }
-    if (pending) {
+    const verdict = pending ? classifyUrl(pending) : null;
+    if (verdict?.kind === "blocked") setError(verdict.message);
+    else if (pending) {
       sourcesApi.connect(pending).then(
         (res) => {
           watch(res.job.id, res.job);

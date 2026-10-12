@@ -15,9 +15,8 @@ const LEVELS = [
 export type FlashcardsRequest = Omit<GenerateBody, "type">;
 
 /** The flashcard settings: the same source and focus fields as the quiz and the video wizard, then how many cards. */
-export function FlashcardsDialog({ notebookId, notebookTitle, chats, currentChatId, busy, error, onClose, onCreate }: {
+export function FlashcardsDialog({ notebookId, chats, currentChatId, busy, error, onClose, onCreate }: {
   notebookId: string;
-  notebookTitle?: string;
   chats: ChatSummary[];
   currentChatId: string | null;
   busy: boolean;
@@ -36,7 +35,7 @@ export function FlashcardsDialog({ notebookId, notebookTitle, chats, currentChat
             <span className="vw-label">Level of difficulty</span>
             <Pills label="Level of difficulty" value={level} options={LEVELS} onChange={setLevel} />
           </div>
-          <SourceFocusFields notebookId={notebookId} notebookTitle={notebookTitle} chats={chats} currentChatId={currentChatId}
+          <SourceFocusFields notebookId={notebookId} chats={chats} currentChatId={currentChatId}
                              preselectChat what="flashcard set" largeSelection onChange={setSel} />
           <div className="qz-foot">
             <div>

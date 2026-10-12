@@ -176,6 +176,22 @@ p {
   font-size: 0.875rem;
 }
 
+/* Under a source link field: red when the link can't be added, amber when it comes with a warning */
+.url-hint {
+  margin: 8px 0 0;
+  padding-left: 10px;
+  border-left: 2px solid currentColor;
+  font-size: 0.875rem;
+}
+
+.url-hint.blocked {
+  color: #f2786b;
+}
+
+.url-hint.warn {
+  color: #e3a648;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

@@ -911,7 +911,7 @@ def test_chat_with_a_focus_keeps_the_chat_context_first(client, b2v, owner, hous
 
 
 @pytest.mark.parametrize("body", [{"video_length": "detailed"}, {"video_length": "more_detailed"},
-                                  {"custom_voice_id": BELLA}, {"template": "crafted_neon"}])
+                                  {"custom_voice_id": "not_a_voice"}, {"template": "crafted_neon"}])
 def test_options_that_are_not_offered_are_refused_on_every_plan(client, b2v, owner, body):
     headers, ws = owner
     r = client.post("/api/videos", json={"url": "https://a.test/x", **body}, headers=headers)
@@ -1124,15 +1124,23 @@ def test_capacity_alert(b2v, caplog):
 
 def test_new_workspace_gets_starter_voices_and_library(client, b2v, owner):
     got = client.get("/api/video-voices", headers=owner[0]).json()
-    assert [v["voice_id"] for v in got["saved"]] == [SARAH]  # free voices only
-    assert [v["voice_id"] for v in got["library"]] == [SARAH]  # the paid voice is not offered
+    assert [v["voice_id"] for v in got["saved"]] == [SARAH, BELLA]  # the first built-in voices, any of them
+    assert [v["voice_id"] for v in got["library"]] == [SARAH, BELLA]  # every voice offered, none marked premium
     assert "custom" not in got and all("premium" not in v for v in got["saved"] + got["library"])
 
 
-def test_a_paid_voice_cannot_be_saved_or_used_on_any_plan(client, b2v, owner):
-    assert client.post("/api/video-voices/saved", json={"voice_id": BELLA}, headers=owner[0]).status_code == 404
-    r = client.post("/api/videos", json={"url": "https://a.test/x", "custom_voice_id": BELLA}, headers=owner[0])
-    assert r.status_code == 404 and not creates(b2v)
+def test_a_paid_voice_can_be_saved_and_used(client, b2v, owner):
+    """blog2video and NoteStack share one ElevenLabs account, so any built-in voice works."""
+    headers, _ = owner
+    assert client.post("/api/video-voices/saved", json={"voice_id": BELLA}, headers=headers).status_code == 201
+    got = client.get("/api/video-voices", headers=headers).json()
+    assert BELLA in [v["voice_id"] for v in got["saved"]]
+    assert next(v for v in got["library"] if v["voice_id"] == BELLA)["saved"]
+    make_video(client, headers, custom_voice_id=BELLA)
+
+
+def test_an_unknown_voice_cannot_be_saved(client, b2v, owner):
+    assert client.post("/api/video-voices/saved", json={"voice_id": "not_a_voice"}, headers=owner[0]).status_code == 404
 
 
 def test_saved_voices_never_touch_blog2video_saved_list(client, b2v, owner, db_session):
@@ -1150,13 +1158,13 @@ def notestack_voice(db, ws, voice_id="nv_narrator", name="Narrator") -> None:
 
 def test_any_number_of_voices_can_be_saved(client, b2v, owner, db_session):
     headers, ws = owner
-    client.get("/api/video-voices", headers=headers)  # the starter voice
+    client.get("/api/video-voices", headers=headers)  # the starter voices (both built-in ones)
     for i in range(7):
         db_session.add(UserSavedVoice(workspace_id=ws.id, voice_id=f"v{i}", name=f"V{i}"))
     db_session.commit()
     assert client.post("/api/video-voices/saved", json={"voice_id": SARAH}, headers=headers).status_code in (200, 201)
     got = client.get("/api/video-voices", headers=headers).json()
-    assert len(got["saved"]) == 8 and "max_saved" not in got
+    assert len(got["saved"]) == 9 and "max_saved" not in got
 
 
 def test_notestack_voices_are_saved_for_audio_but_not_used_in_videos(client, b2v, owner, other, db_session):

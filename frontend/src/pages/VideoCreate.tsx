@@ -332,7 +332,7 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
                         const on = focus?.title === t.title;
                         return (
                           <button key={t.title} type="button" className={`vw-focus-card${on ? " on" : ""}`}
-                                  aria-pressed={on} onClick={() => {
+                                  aria-pressed={on} title={t.description ? `${t.title}: ${t.description}` : t.title} onClick={() => {
                                     setFocus(on ? null : t);
                                     setCustom("");
                                   }}>
