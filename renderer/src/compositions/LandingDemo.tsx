@@ -4,41 +4,53 @@ import { theme } from "../theme";
 import { DEMO_VO_SECONDS } from "./demoVo";
 import { Lockup } from "./Lockup";
 
-/** Landing page product demo: a trip through the Notestack galaxy. 1920x1080, 30 fps, ~32 s.
- * Scenes: warp in, paste URL, posts enter orbit, cited research, audio overview, Launch Kit,
- * Launchpad, outro. Strict palette: black, #217cff, white. */
+/** Landing page product demo: the real app, one feature at a time. 1920x1080, 30 fps, ~47 s.
+ * Scenes: intro, sync, ask, map, audio, video, edit, launch kit, outro. Each product scene is a
+ * window with a cursor that does the thing; the narrator adds a sparse journey-of-discovery line here and there.
+ * Strict palette: black, #217cff, white. */
 
 export const DEMO_FPS = 30;
 const S = (seconds: number) => Math.round(seconds * DEMO_FPS);
 
-// Narration (public/demo-vo/*.mp3, voiced by "Nora Vale, Mission Control"): each line starts `vo`
-// seconds into its scene. Scenes keep their minimum length for the animation and stretch when a line
-// needs more room, so it always ends with a breath before the next scene's line.
+// Narration (public/demo-vo/*.mp3, voiced by "Nora Vale, Mission Control"): a few scenes (intro, sync, map,
+// launch kit, outro) speak, starting `vo` seconds in. Scenes keep their minimum length for the animation and stretch when a
+// line needs more room, so it always ends with a breath before the scene changes.
 const BASE_SCENES = [
   { id: "warp", len: 5.2, vo: 0.6 },
-  { id: "paste", len: 9.4, vo: 0.4 },
-  { id: "orbit", len: 7.6, vo: 0.4 },
-  { id: "research", len: 5.6, vo: 0.4 },
-  { id: "audio", len: 5.1, vo: 0.4 },
-  { id: "launchkit", len: 7.8, vo: 0.4 },
-  { id: "launchpad", len: 4.6, vo: 0.4 },
+  { id: "sync", len: 5.0, vo: 0.5 },
+  { id: "ask", len: 6.0 },
+  { id: "map", len: 6.5, vo: 0.6 },
+  { id: "audio", len: 5.5 },
+  { id: "video", len: 6.5 },
+  { id: "edit", len: 6.0 },
+  { id: "kit", len: 5.5, vo: 0.5 },
   { id: "outro", len: 4.2, vo: 0.5 },
 ] as const;
+type SceneId = (typeof BASE_SCENES)[number]["id"];
 const XFADE = 0.5; // seconds of overlap between scenes
-const BREATH = 0.8; // gap between the end of one line and the next scene's line (includes the crossfade)
+const BREATH = 0.8; // gap between the end of a line and the scene change (includes the crossfade)
 
 // Narration clip lengths, written by scripts/make_demo_vo.py; the music ducks under them.
-const VO_SECONDS: Record<(typeof BASE_SCENES)[number]["id"], number> = DEMO_VO_SECONDS;
-const SCENES = BASE_SCENES.map((s) => ({ ...s, len: Math.max(s.len, s.vo + VO_SECONDS[s.id] + BREATH) }));
+const VO_SECONDS: Partial<Record<SceneId, number>> = DEMO_VO_SECONDS;
+const SCENES = BASE_SCENES.map((s) => {
+  const vo = "vo" in s ? s.vo : undefined;
+  const line = VO_SECONDS[s.id];
+  return { id: s.id, vo, len: vo !== undefined && line ? Math.max(s.len, vo + line + BREATH) : s.len };
+});
 
 /** Frame ranges where the narrator is speaking, in composition time. */
 const VO_WINDOWS: [number, number][] = (() => {
   let cursor = 0;
-  return SCENES.map((scene) => {
-    const start = cursor + scene.vo;
+  const windows: [number, number][] = [];
+  for (const scene of SCENES) {
+    const line = VO_SECONDS[scene.id];
+    if (scene.vo !== undefined && line) {
+      const start = cursor + scene.vo;
+      windows.push([Math.round(start * DEMO_FPS), Math.round((start + line) * DEMO_FPS)]);
+    }
     cursor += scene.len - XFADE;
-    return [Math.round(start * 30), Math.round((start + VO_SECONDS[scene.id]) * 30)] as [number, number];
-  });
+  }
+  return windows;
 })();
 
 const MUSIC = 0.5;
@@ -158,9 +170,9 @@ function Caption({ eyebrow, title, delay = 0 }: { eyebrow: string; title: string
   const { fps } = useVideoConfig();
   const s = spring({ frame: frame - delay, fps, config: { damping: 18 } });
   return (
-    <div style={{ position: "absolute", left: 140, top: 110, opacity: s, transform: `translateY(${(1 - s) * 24}px)` }}>
+    <div style={{ position: "absolute", left: 140, top: 96, opacity: s, transform: `translateY(${(1 - s) * 24}px)` }}>
       <p style={{ margin: 0, fontFamily: theme.mono, fontSize: 24, letterSpacing: 6, textTransform: "uppercase", color: BLUE }}>{eyebrow}</p>
-      <h2 style={{ margin: "14px 0 0", fontFamily: theme.display, fontSize: 64, lineHeight: 1.05, color: theme.white, maxWidth: 900 }}>{title}</h2>
+      <h2 style={{ margin: "14px 0 0", fontFamily: theme.display, fontSize: 64, lineHeight: 1.05, color: theme.white, maxWidth: 1400 }}>{title}</h2>
     </div>
   );
 }
@@ -175,6 +187,83 @@ const panel: CSSProperties = {
 function typed(text: string, frame: number, start: number, cps = 26): string {
   const n = Math.max(0, Math.floor(((frame - start) / DEMO_FPS) * cps));
   return text.slice(0, n);
+}
+
+const clamp01 = (frame: number, a: number, b: number) => interpolate(frame, [a, b], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+/** 0 to 1 and back over 10 frames from `at`: the press of a clicked control. */
+const pulse = (frame: number, at: number) => Math.sin(clamp01(frame, at, at + 10) * Math.PI);
+
+// App window and cursor
+
+/** Where a window's content area starts in scene coordinates, so cursor targets can be written in window space. */
+const WX = 141;
+const WY = 303;
+const at = (x: number, y: number) => ({ x: WX + x, y: WY + y });
+
+/** A browser-style app window: 1640 x 668 of content under a 52 px title bar. */
+function Win({ children }: { children: ReactNode }) {
+  return (
+    <div style={{ ...panel, position: "absolute", left: 140, top: 250, width: 1640, height: 720, overflow: "hidden", background: "rgba(3,7,16,0.9)" }}>
+      <div style={{ height: 52, display: "flex", alignItems: "center", gap: 10, padding: "0 22px", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+        {[0, 1, 2].map((i) => (
+          <span key={i} style={{ width: 13, height: 13, borderRadius: "50%", background: "rgba(255,255,255,0.22)" }} />
+        ))}
+        <span style={{ marginLeft: 22, padding: "5px 22px", borderRadius: 999, background: "rgba(255,255,255,0.08)", fontFamily: theme.mono, fontSize: 18, color: "rgba(255,255,255,0.6)" }}>notestack.ai/app</span>
+      </div>
+      <div style={{ position: "absolute", left: 0, top: 52, right: 0, bottom: 0 }}>{children}</div>
+    </div>
+  );
+}
+
+function Chip({ children, on = false, press = 0, style }: { children: ReactNode; on?: boolean; press?: number; style?: CSSProperties }) {
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        borderRadius: 999,
+        border: `1px solid ${on ? BLUE : "rgba(255,255,255,0.2)"}`,
+        background: on ? `${BLUE}33` : "rgba(255,255,255,0.04)",
+        boxShadow: on ? `0 0 22px ${BLUE}77` : "none",
+        fontFamily: theme.body,
+        fontSize: 26,
+        color: theme.white,
+        transform: `scale(${1 - 0.06 * press})`,
+        ...style,
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function Label({ children, style }: { children: ReactNode; style?: CSSProperties }) {
+  return <span style={{ position: "absolute", fontFamily: theme.mono, fontSize: 20, letterSpacing: 3, textTransform: "uppercase", color: "rgba(255,255,255,0.55)", ...style }}>{children}</span>;
+}
+
+type Key = { f: number; x: number; y: number };
+
+/** A mouse cursor that glides through `keys` (scene coordinates) and ripples on each frame in `clicks`. */
+function Cursor({ keys, clicks = [] }: { keys: Key[]; clicks?: number[] }) {
+  const frame = useCurrentFrame();
+  const fs = keys.map((k) => k.f);
+  const opts = { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: ease } as const;
+  const x = interpolate(frame, fs, keys.map((k) => k.x), opts);
+  const y = interpolate(frame, fs, keys.map((k) => k.y), opts);
+  const down = clicks.reduce((m, c) => Math.max(m, pulse(frame, c)), 0);
+  return (
+    <>
+      {clicks.map((c) => {
+        const p = clamp01(frame, c, c + 16);
+        if (p <= 0 || p >= 1) return null;
+        return <div key={c} style={{ position: "absolute", left: x - 36 * p, top: y - 36 * p, width: 72 * p, height: 72 * p, borderRadius: "50%", border: `3px solid ${BLUE}`, opacity: 1 - p }} />;
+      })}
+      <svg width={40} height={44} viewBox="0 0 24 34" style={{ position: "absolute", left: x, top: y, transform: `scale(${1 - 0.12 * down})`, transformOrigin: "0 0", filter: `drop-shadow(0 0 10px ${BLUE})`, zIndex: 50 }}>
+        <path d="M1 1 L1 26 L7.5 20.5 L12 31 L16.5 29 L12 18.5 L21 18.5 Z" fill="#ffffff" stroke="#000000" strokeWidth={1.6} strokeLinejoin="round" />
+      </svg>
+    </>
+  );
 }
 
 // Scenes
@@ -204,207 +293,126 @@ function Warp() {
   );
 }
 
-const SOURCES = ["Substack", "Ghost", "WordPress", "Medium", "Any RSS feed", "Your site", "Markdown files"];
+const SOURCES = ["Substack", "Ghost", "WordPress", "Medium", "RSS", "Markdown"];
 
-/** Step one: any blog, newsletter or site by URL, or markdown files dropped straight in. */
-function Paste() {
+const POSTS = [
+  "Why Things Fall", "Curved Space", "Notes on Orbits", "What Is Entropy?",
+  "The Quantum Leap", "Light as a Wave", "Time Is Strange", "Black Hole Basics",
+];
+const POST_DATES = ["Mar 12", "Mar 04", "Feb 21", "Feb 09", "Jan 30", "Jan 18", "Jan 03", "Dec 20"];
+
+/** 01: paste a link, the archive syncs in. */
+function Sync() {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const url = typed("yourblog.com", frame, 14, 12);
-  const drop = spring({ frame: frame - S(5.4), fps, config: { damping: 12 } });
-  const press = spring({ frame: frame - S(7.6), fps, config: { damping: 10, mass: 0.5 } });
-  const ring = interpolate(frame, [S(7.7), S(8.9)], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const url = typed("yourblog.com", frame, 8, 14);
+  const press = pulse(frame, 52);
+  const count = Math.round(142 * ease(clamp01(frame, 58, 120)));
+  const bar = clamp01(frame, 54, 84);
   return (
     <AbsoluteFill>
-      <WarpField speed={1.2} />
-      <Caption eyebrow="Step 01" title="Feel the pull of something new" />
-      <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", flexDirection: "column", gap: 44, paddingTop: 120 }}>
-        <div style={{ ...panel, display: "flex", alignItems: "center", gap: 18, padding: 14, width: 1100, borderRadius: 999 }}>
-          <div style={{ flex: 1, fontFamily: theme.body, fontSize: 40, color: url ? theme.white : "rgba(255,255,255,0.4)", paddingLeft: 30 }}>
-            {url || "yourblog.com"}
-            <span style={{ opacity: frame % 30 < 15 ? 1 : 0, color: BLUE }}>|</span>
-          </div>
-          <div
-            style={{
-              position: "relative",
-              padding: "24px 44px",
-              borderRadius: 999,
-              background: BLUE,
-              color: theme.white,
-              fontFamily: theme.body,
-              fontWeight: 600,
-              fontSize: 32,
-              transform: `scale(${1 - 0.06 * Math.sin(press * Math.PI)})`,
-              boxShadow: `0 0 ${30 + press * 40}px ${BLUE}`,
-            }}
-          >
-            Start Exploring
-            <div style={{ position: "absolute", inset: -ring * 60, borderRadius: 999, border: `2px solid ${BLUE}`, opacity: 1 - ring }} />
-          </div>
+      <WarpField speed={1} />
+      <Caption eyebrow="01 · Sync" title="Point it at your writing." />
+      <Win>
+        <div style={{ position: "absolute", left: 80, top: 56, width: 1060, height: 84, borderRadius: 999, border: `1px solid ${BLUE}88`, background: "rgba(255,255,255,0.05)", display: "flex", alignItems: "center", paddingLeft: 38, fontFamily: theme.body, fontSize: 38, color: url ? theme.white : "rgba(255,255,255,0.4)" }}>
+          {url || "yourblog.com"}
+          <span style={{ opacity: frame % 30 < 15 ? 1 : 0, color: BLUE }}>|</span>
         </div>
-
-        <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 14, maxWidth: 1300 }}>
+        <div style={{ position: "absolute", left: 1160, top: 56, width: 220, height: 84, borderRadius: 999, background: BLUE, display: "grid", placeItems: "center", fontFamily: theme.body, fontWeight: 600, fontSize: 32, color: theme.white, transform: `scale(${1 - 0.06 * press})`, boxShadow: `0 0 ${24 + press * 40}px ${BLUE}` }}>
+          Sync
+        </div>
+        <div style={{ position: "absolute", left: 80, top: 158, width: 1060 * bar, height: 4, borderRadius: 2, background: BLUE, boxShadow: `0 0 14px ${BLUE}`, opacity: bar > 0 && bar < 1 ? 1 : 0 }} />
+        <div style={{ position: "absolute", left: 80, top: 186, display: "flex", gap: 12 }}>
           {SOURCES.map((name, i) => {
-            const on = spring({ frame: frame - S(1.8) - i * 7, fps, config: { damping: 16 } });
+            const on = spring({ frame: frame - 14 - i * 5, fps, config: { damping: 16 } });
             return (
-              <span
-                key={name}
-                style={{
-                  padding: "12px 24px",
-                  borderRadius: 999,
-                  border: `1px solid ${on > 0.5 ? BLUE : "rgba(255,255,255,0.18)"}`,
-                  background: on > 0.5 ? `${BLUE}26` : "rgba(0,0,0,0.5)",
-                  boxShadow: on > 0.5 ? `0 0 18px ${BLUE}66` : "none",
-                  fontFamily: theme.mono,
-                  fontSize: 24,
-                  letterSpacing: 1,
-                  color: theme.white,
-                  opacity: 0.25 + on * 0.75,
-                  transform: `translateY(${(1 - on) * 16}px)`,
-                }}
-              >
+              <Chip key={name} on={on > 0.5} style={{ padding: "8px 20px", fontSize: 21, fontFamily: theme.mono, opacity: 0.3 + on * 0.7 }}>
                 {name}
-              </span>
+              </Chip>
             );
           })}
         </div>
-
-        <div
-          style={{
-            ...panel,
-            display: "flex",
-            alignItems: "center",
-            gap: 22,
-            padding: "18px 28px",
-            borderRadius: 16,
-            opacity: drop,
-            transform: `translateY(${(1 - drop) * -120}px) rotate(${(1 - drop) * -6}deg)`,
-          }}
-        >
-          <div style={{ width: 54, height: 66, borderRadius: 8, border: `2px solid ${BLUE}`, display: "grid", placeItems: "center", fontFamily: theme.mono, fontSize: 18, color: BLUE }}>
-            .md
-          </div>
-          <div style={{ display: "grid", gap: 4 }}>
-            <span style={{ fontFamily: theme.body, fontSize: 30, color: theme.white }}>notes.md, essays.md, drafts.md</span>
-            <span style={{ fontFamily: theme.mono, fontSize: 20, color: "rgba(255,255,255,0.6)" }}>No feed? Drop in markdown, text, HTML or PDF</span>
-          </div>
+        <div style={{ position: "absolute", right: 80, top: 176, fontFamily: theme.mono, color: theme.white, display: "flex", alignItems: "baseline", gap: 14 }}>
+          <span style={{ fontFamily: theme.display, fontSize: 56, textShadow: `0 0 24px ${BLUE}` }}>{count}</span>
+          <span style={{ fontSize: 20, letterSpacing: 3, color: "rgba(255,255,255,0.6)" }}>POSTS SYNCED</span>
         </div>
-      </AbsoluteFill>
+        <div style={{ position: "absolute", left: 80, top: 280, width: 1480, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
+          {POSTS.map((title, i) => {
+            const s = spring({ frame: frame - 60 - i * 5, fps, config: { damping: 14 } });
+            return (
+              <div key={title} style={{ display: "flex", alignItems: "center", gap: 20, height: 74, padding: "0 26px", borderRadius: 14, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.04)", opacity: s, transform: `translateY(${(1 - s) * 30}px)`, fontFamily: theme.body, fontSize: 28, color: theme.white }}>
+                <span style={{ width: 30, height: 30, borderRadius: "50%", background: BLUE, display: "grid", placeItems: "center", fontSize: 18, boxShadow: `0 0 14px ${BLUE}` }}>✓</span>
+                <span style={{ flex: 1 }}>{title}</span>
+                <span style={{ fontFamily: theme.mono, fontSize: 20, color: "rgba(255,255,255,0.5)" }}>{POST_DATES[i]}</span>
+              </div>
+            );
+          })}
+        </div>
+      </Win>
+      <Cursor
+        keys={[{ f: 0, x: 1560, y: 880 }, { f: 42, ...at(1270, 98) }, { f: 74, ...at(1270, 98) }, { f: 100, ...at(1100, 470) }]}
+        clicks={[52]}
+      />
     </AbsoluteFill>
   );
 }
 
-const POSTS = [
-  "On Pricing", "Writing Every Day", "The Paid Tier", "Why I Quit Twitter", "Notes on Craft", "Letters to Readers",
-  "The Long Game", "Small Audiences", "Habits Beat Talent", "Editing Myself", "A Year of Essays", "What Readers Want",
-];
-
-function Orbit() {
-  const frame = useCurrentFrame();
-  const { width, height, fps } = useVideoConfig();
-  const cx = width / 2 + 180;
-  const cy = height / 2 + 60;
-  const count = Math.floor(interpolate(frame, [20, 110], [0, 142], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }));
-  const planet = spring({ frame, fps, config: { damping: 20 } });
-  return (
-    <AbsoluteFill>
-      <WarpField speed={0.8} />
-      <Caption eyebrow="Step 02" title="Shimmering. Impossible to look away." />
-      <svg width={width} height={height} style={{ position: "absolute" }}>
-        <defs>
-          <radialGradient id="planet" cx="40%" cy="35%" r="70%">
-            <stop offset="0%" stopColor="#ffffff" stopOpacity="0.95" />
-            <stop offset="35%" stopColor={BLUE} />
-            <stop offset="100%" stopColor="#000000" />
-          </radialGradient>
-        </defs>
-        <circle cx={cx} cy={cy} r={150 * planet} fill="url(#planet)" style={{ filter: `drop-shadow(0 0 60px ${BLUE})` }} />
-        {[260, 360].map((r, i) => (
-          <ellipse key={r} cx={cx} cy={cy} rx={r * 1.6} ry={r * 0.45} fill="none" stroke={i ? "#ffffff" : BLUE} strokeOpacity={0.25} strokeWidth={2} />
-        ))}
-      </svg>
-      {POSTS.map((title, i) => {
-        const start = 8 + i * 6;
-        const p = interpolate(frame, [start, start + 36], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: ease });
-        const ring = i % 2 ? 360 : 260;
-        const angle = (i / POSTS.length) * Math.PI * 2 + frame * 0.012 * (i % 2 ? 1 : -1);
-        const tx = cx + Math.cos(angle) * ring * 1.6;
-        const ty = cy + Math.sin(angle) * ring * 0.45;
-        const fromX = width + 200;
-        const fromY = random(`py${i}`) * height;
-        const x = interpolate(p, [0, 1], [fromX, tx]);
-        const y = interpolate(p, [0, 1], [fromY, ty]);
-        const front = Math.sin(angle) > 0;
-        return (
-          <div
-            key={title}
-            style={{
-              ...panel,
-              position: "absolute",
-              left: x,
-              top: y,
-              transform: `translate(-50%, -50%) scale(${front ? 1 : 0.8})`,
-              padding: "12px 20px",
-              borderRadius: 12,
-              fontFamily: theme.body,
-              fontSize: 22,
-              color: theme.white,
-              opacity: p * (front ? 1 : 0.55),
-              zIndex: front ? 2 : 0,
-              whiteSpace: "nowrap",
-            }}
-          >
-            {title}
-          </div>
-        );
-      })}
-      <div style={{ position: "absolute", left: 140, bottom: 120, fontFamily: theme.mono, color: theme.white }}>
-        <span style={{ fontSize: 96, fontFamily: theme.display, textShadow: `0 0 30px ${BLUE}` }}>{count}</span>
-        <span style={{ fontSize: 28, marginLeft: 20, color: "rgba(255,255,255,0.7)", letterSpacing: 3 }}>POSTS IN ORBIT</span>
-      </div>
-    </AbsoluteFill>
-  );
-}
-
-function Research() {
+/** 02: ask a question, click the citation, see the exact lines. */
+function Ask() {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const q = typed("What have I written about pricing?", frame, 10, 30);
-  const answer = spring({ frame: frame - 52, fps, config: { damping: 18 } });
+  const q = typed("What have I written about gravity?", frame, 8, 30);
+  const answer = spring({ frame: frame - 66, fps, config: { damping: 18 } });
   const cite = spring({ frame: frame - 92, fps, config: { damping: 16 } });
-  const steps = ["Searching for pric(e|ing)|paid tier", "Reading On Pricing, lines 12 to 20", "Reading The Paid Tier, lines 4 to 9"];
+  const open = spring({ frame: frame - 114, fps, config: { damping: 18 } });
+  const steps = ["Searching for gravity|spacetime", "Reading Why Things Fall, lines 12 to 20", "Reading Curved Space, lines 4 to 9"];
+  const context = ["Newton called it a force pulling things down.", "Einstein saw something different: gravity is", "the curvature of spacetime itself.", "Mass tells space how to bend.", "Objects follow the straightest path."];
   return (
     <AbsoluteFill>
-      <WarpField speed={0.6} count={260} />
-      <Caption eyebrow="Research" title="A spark. Suddenly, wide awake." />
-      <div style={{ position: "absolute", left: 140, right: 140, top: 360, display: "grid", gridTemplateColumns: "1.25fr 1fr", gap: 40 }}>
-        <div style={{ ...panel, padding: 36, display: "grid", gap: 22, alignContent: "start" }}>
-          <div style={{ justifySelf: "end", padding: "14px 22px", borderRadius: "18px 18px 4px 18px", background: `${BLUE}22`, border: `1px solid ${BLUE}66`, fontFamily: theme.body, fontSize: 30, color: theme.white }}>
+      <WarpField speed={0.7} count={300} />
+      <Caption eyebrow="02 · Ask" title="Every answer, cited to the line." />
+      <Win>
+        <div style={{ position: "absolute", left: 80, top: 36, width: 880, display: "grid", gap: 20 }}>
+          <div style={{ justifySelf: "end", padding: "14px 24px", borderRadius: "18px 18px 4px 18px", background: `${BLUE}22`, border: `1px solid ${BLUE}66`, fontFamily: theme.body, fontSize: 30, color: theme.white, minWidth: 40, minHeight: 46 }}>
             {q || " "}
           </div>
           <div style={{ fontFamily: theme.mono, fontSize: 20, color: BLUE, display: "grid", gap: 6 }}>
             {steps.map((s, i) => (
-              <span key={s} style={{ opacity: interpolate(frame, [26 + i * 8, 34 + i * 8], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }) }}>
+              <span key={s} style={{ opacity: clamp01(frame, 40 + i * 8, 48 + i * 8) }}>
                 {s}
               </span>
             ))}
           </div>
-          <p style={{ margin: 0, fontFamily: theme.body, fontSize: 30, lineHeight: 1.5, color: theme.white, opacity: answer, transform: `translateY(${(1 - answer) * 16}px)` }}>
-            You raised prices twice and the <b>paid tier doubled</b>{" "}
-            <Marker n={1} glow={cite} /> because readers took the work more seriously{" "}
-            <Marker n={2} glow={cite} />.
+          <p style={{ margin: 0, fontFamily: theme.body, fontSize: 32, lineHeight: 1.5, color: theme.white, opacity: answer, transform: `translateY(${(1 - answer) * 16}px)` }}>
+            You wrote that <b>gravity is the curvature of spacetime</b> <Marker n={1} glow={cite} /> and that orbits are objects falling around that curve <Marker n={2} glow={cite} />.
           </p>
         </div>
-        <div style={{ ...panel, padding: 30, opacity: cite, transform: `translateX(${(1 - cite) * 60}px)`, alignSelf: "start" }}>
-          <p style={{ margin: 0, fontFamily: theme.mono, fontSize: 20, color: BLUE, letterSpacing: 2 }}>[1] ON PRICING · LINES 12 TO 14</p>
-          {["The paid tier doubled after I", "raised the price to ten dollars.", "Readers took the work seriously."].map((l, i) => (
-            <div key={l} style={{ display: "flex", gap: 18, marginTop: 14, fontFamily: theme.body, fontSize: 26, color: theme.white, background: `${BLUE}26`, boxShadow: `inset 4px 0 0 ${BLUE}`, padding: "6px 12px", borderRadius: 8 }}>
-              <span style={{ fontFamily: theme.mono, fontSize: 18, color: "rgba(255,255,255,0.5)", paddingTop: 5 }}>{12 + i}</span>
-              {l}
-            </div>
-          ))}
+        {[
+          { n: 1, label: "Why Things Fall · L12 to 14" },
+          { n: 2, label: "Curved Space · L4 to 9" },
+        ].map((c, i) => (
+          <Chip key={c.n} on={cite > 0.5 && (i === 0 ? frame >= 112 : false)} press={i === 0 ? pulse(frame, 112) : 0} style={{ position: "absolute", left: 80 + i * 450, top: 460, width: 420, height: 60, fontFamily: theme.mono, fontSize: 21, opacity: cite, gap: 10 }}>
+            <span style={{ color: BLUE }}>[{c.n}]</span> {c.label}
+          </Chip>
+        ))}
+        <div style={{ ...panel, position: "absolute", left: 1010, top: 36, width: 560, padding: 30, opacity: open, transform: `translateX(${(1 - open) * 60}px)` }}>
+          <p style={{ margin: 0, fontFamily: theme.mono, fontSize: 20, color: BLUE, letterSpacing: 2 }}>[1] WHY THINGS FALL · L12 TO 14</p>
+          {context.map((l, i) => {
+            const hit = i >= 1 && i <= 3;
+            return (
+              <div key={l} style={{ display: "flex", gap: 18, marginTop: 12, fontFamily: theme.body, fontSize: 25, color: hit ? theme.white : "rgba(255,255,255,0.45)", background: hit ? `${BLUE}26` : "transparent", boxShadow: hit ? `inset 4px 0 0 ${BLUE}` : "none", padding: "6px 12px", borderRadius: 8 }}>
+                <span style={{ fontFamily: theme.mono, fontSize: 18, color: "rgba(255,255,255,0.5)", paddingTop: 4 }}>{11 + i}</span>
+                {l}
+              </div>
+            );
+          })}
+          <p style={{ margin: "22px 0 0", fontFamily: theme.mono, fontSize: 19, color: BLUE }}>✓ Line range verified</p>
         </div>
-      </div>
+      </Win>
+      <Cursor
+        keys={[{ f: 0, x: 1560, y: 880 }, { f: 100, ...at(260, 490) }, { f: 126, ...at(260, 490) }, { f: 160, ...at(1250, 560) }]}
+        clicks={[112]}
+      />
     </AbsoluteFill>
   );
 }
@@ -417,142 +425,410 @@ function Marker({ n, glow }: { n: number; glow: number }) {
   );
 }
 
+const TOPICS = [
+  "Gravity", "Spacetime", "Black holes", "Orbits", "Relativity", "Quantum", "Entropy", "Optics",
+  "Waves", "Energy", "Chaos", "Cosmology", "Fields", "Symmetry", "Time",
+];
+const MAP_SHAPES = ["Orbit", "Spiral", "Figure", "Cluster"];
+type Shape = "orbit" | "spiral" | "figure" | "cluster";
+
+/** Where topic `i` sits in each shape of the Mind Constellation (window coordinates). */
+function place(shape: Shape, i: number): { x: number; y: number } {
+  const cx = 620;
+  const cy = 350;
+  const n = TOPICS.length;
+  if (shape === "orbit") {
+    if (i === 0) return { x: cx, y: cy };
+    const r = [170, 270, 360][(i - 1) % 3];
+    const a = i * 2.4;
+    return { x: cx + Math.cos(a) * r * 1.5, y: cy + Math.sin(a) * r * 0.58 };
+  }
+  if (shape === "spiral") {
+    const t = i / (n - 1);
+    const a = t * Math.PI * 2.4 + 0.4;
+    const r = 110 + t * 260;
+    return { x: cx + Math.cos(a) * r * 1.5, y: cy + Math.sin(a) * r * 0.58 };
+  }
+  if (shape === "figure") {
+    // A constellation figure: one long wave of stars across the sky.
+    return { x: 140 + i * 78, y: cy + (i % 2 ? -1 : 1) * (90 + (i % 3) * 30) };
+  }
+  const centers = [{ x: 330, y: 250 }, { x: 800, y: 220 }, { x: 640, y: 490 }];
+  const c = centers[i % 3];
+  const k = Math.floor(i / 3);
+  const a = k * 1.25 + (i % 3);
+  const r = 36 + k * 24;
+  return { x: c.x + Math.cos(a) * r * 1.3, y: c.y + Math.sin(a) * r };
+}
+
+/** Frame windows in which the layout morphs to the next shape (after each pill click). */
+const MORPHS: [Shape, number, number][] = [["spiral", 58, 82], ["figure", 94, 118], ["cluster", 126, 150]];
+
+function mapPos(i: number, frame: number): { x: number; y: number } {
+  let { x, y } = place("orbit", i);
+  for (const [shape, from, to] of MORPHS) {
+    const t = ease(clamp01(frame, from, to));
+    const next = place(shape, i);
+    x += (next.x - x) * t;
+    y += (next.y - y) * t;
+  }
+  return { x, y };
+}
+
+/** 03: the Mind Constellation, switching shapes and diving into a topic. */
+function MindMap() {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const activeShape = frame < 56 ? 0 : frame < 92 ? 1 : frame < 124 ? 2 : 3;
+  const panelIn = spring({ frame: frame - 158, fps, config: { damping: 18 } });
+  const hubWin = place("cluster", 0);
+  const hub = at(hubWin.x, hubWin.y);
+  const selected = frame >= 158;
+  const ring = clamp01(frame, 4, 40);
+  const dive = 1 + 0.14 * ease(clamp01(frame, 158, 195)); // the camera drifts in on the picked star
+  const burst = ease(clamp01(frame, 158, 182));
+  return (
+    <AbsoluteFill>
+      <WarpField speed={0.6} count={260} />
+      <Caption eyebrow="03 · Map" title="See your whole archive." />
+      <Win>
+        <svg width={1640} height={668} style={{ position: "absolute", inset: 0 }}>
+          <g transform={`translate(${hubWin.x} ${hubWin.y}) scale(${dive}) translate(${-hubWin.x} ${-hubWin.y})`}>
+            {/* Orbit rings draw in, then fade as the stars leave them. */}
+            {[170, 270, 360].map((r, i) => (
+              <ellipse key={r} cx={620} cy={350} rx={r * 1.5} ry={r * 0.58} fill="none" stroke={i % 2 ? "#ffffff" : BLUE} strokeOpacity={0.22 * ring * (1 - ease(clamp01(frame, 58, 82)))} strokeWidth={1.5} strokeDasharray="6 10" />
+            ))}
+            {TOPICS.map((_, i) => {
+              if (i === 0) return null;
+              const parent = i < 4 ? 0 : i - 3;
+              const from = mapPos(i, frame);
+              const to = mapPos(parent, frame);
+              const on = clamp01(frame, 6 + i * 3, 24 + i * 3);
+              const lit = !selected || parent === 0;
+              const t = (frame * 0.018 + i * 0.37) % 1; // a pulse of light travelling toward the hub
+              return (
+                <g key={i} opacity={lit ? 1 : 0.25}>
+                  <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} pathLength={1} stroke={i % 2 ? BLUE : "#ffffff"} strokeOpacity={selected && parent === 0 ? 0.8 : 0.3} strokeWidth={selected && parent === 0 ? 2.5 : 1.5} strokeDasharray={1} strokeDashoffset={1 - on} />
+                  {on >= 1 && <circle cx={from.x + (to.x - from.x) * t} cy={from.y + (to.y - from.y) * t} r={3.5} fill="#ffffff" opacity={Math.sin(t * Math.PI)} style={{ filter: `drop-shadow(0 0 6px ${BLUE})` }} />}
+                </g>
+              );
+            })}
+            {TOPICS.map((name, i) => {
+              const base = mapPos(i, frame);
+              const p = { x: base.x + Math.sin(frame * 0.03 + i * 1.9) * 5, y: base.y + Math.cos(frame * 0.025 + i * 1.3) * 5 };
+              const born = spring({ frame: frame - 2 - i * 3, fps, config: { damping: 12 } });
+              const r = (i === 0 ? 17 : 7 + ((i * 7) % 5)) * born;
+              const twinkle = 1 + 0.25 * Math.sin(frame * 0.14 + i * 1.7);
+              const near = i === 0 || (i >= 1 && i <= 3);
+              const dim = selected && !near ? 0.3 : 1;
+              return (
+                <g key={name} opacity={dim}>
+                  <circle cx={p.x} cy={p.y} r={r * 2.6 * twinkle} fill={BLUE} opacity={0.18 * born} style={{ filter: "blur(8px)" }} />
+                  <circle cx={p.x} cy={p.y} r={r} fill="#ffffff" style={{ filter: `drop-shadow(0 0 10px ${BLUE})` }} />
+                  {i === 0 && selected && <circle cx={p.x} cy={p.y} r={r + 14 + 22 * burst} fill="none" stroke={BLUE} strokeWidth={3} opacity={1 - 0.6 * burst} />}
+                  <text x={p.x} y={p.y + r + 26} textAnchor="middle" fontFamily={theme.body} fontSize={i === 0 ? 26 : 21} fill="#ffffff" opacity={0.85 * born}>
+                    {name}
+                  </text>
+                </g>
+              );
+            })}
+          </g>
+        </svg>
+        <div style={{ position: "absolute", left: 40, top: 26, display: "flex", gap: 10 }}>
+          {MAP_SHAPES.map((name, i) => (
+            <Chip key={name} on={i === activeShape} press={i === 0 ? 0 : pulse(frame, [0, 56, 92, 124][i])} style={{ width: 120, height: 48, fontSize: 22 }}>
+              {name}
+            </Chip>
+          ))}
+        </div>
+        <p style={{ position: "absolute", left: 40, bottom: 20, margin: 0, fontFamily: theme.mono, fontSize: 18, color: "rgba(255,255,255,0.5)", opacity: 1 - clamp01(frame, 150, 165) }}>Scroll to dive in. Drag to move. Click a star to fly to it.</p>
+        <div style={{ ...panel, position: "absolute", right: 40, top: 26, width: 380, padding: 28, opacity: panelIn, transform: `translateX(${(1 - panelIn) * 60}px)` }}>
+          <p style={{ margin: 0, fontFamily: theme.display, fontSize: 40, color: theme.white }}>Gravity</p>
+          <Label style={{ position: "static", display: "block", marginTop: 22, fontSize: 16 }}>Orbiting here</Label>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+            {["Spacetime", "Black holes", "Orbits"].map((t) => (
+              <Chip key={t} on style={{ padding: "4px 16px", fontSize: 20 }}>{t}</Chip>
+            ))}
+          </div>
+          <Label style={{ position: "static", display: "block", marginTop: 22, fontSize: 16 }}>From your posts</Label>
+          {["Why Things Fall", "Curved Space", "Notes on Orbits"].map((t) => (
+            <p key={t} style={{ margin: "10px 0 0", fontFamily: theme.body, fontSize: 24, color: theme.white }}>{t}</p>
+          ))}
+        </div>
+      </Win>
+      <Cursor
+        keys={[
+          { f: 0, x: 1560, y: 880 },
+          { f: 42, ...at(230, 50) },
+          { f: 58, ...at(230, 50) },
+          { f: 84, ...at(360, 50) },
+          { f: 94, ...at(360, 50) },
+          { f: 114, ...at(490, 50) },
+          { f: 126, ...at(490, 50) },
+          { f: 152, x: hub.x, y: hub.y },
+          { f: 172, x: hub.x + 30, y: hub.y + 120 },
+        ]}
+        clicks={[56, 92, 124, 156]}
+      />
+    </AbsoluteFill>
+  );
+}
+
+/** 04: pick a format, create, play. */
 function Audio() {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
+  const formats = ["Deep dive", "Brief", "Debate"];
+  const picked = frame >= 22 ? 2 : 0;
+  const bar = clamp01(frame, 52, 84);
+  const playing = clamp01(frame, 84, 96);
   const lines = [
-    { who: "A", text: "So the big idea here is that price is a signal." },
-    { who: "B", text: "Right, and she has the numbers: the paid tier doubled." },
-    { who: "A", text: "Which she wrote about back in March, in On Pricing." },
+    { who: "A", text: "So the big idea here is that gravity is curved spacetime." },
+    { who: "B", text: "Right, and orbits are just objects falling around the curve." },
+    { who: "A", text: "Which she wrote about back in March, in Curved Space." },
   ];
-  const active = Math.min(lines.length - 1, Math.floor(Math.max(0, frame - 20) / 34));
+  const active = Math.min(lines.length - 1, Math.floor(Math.max(0, frame - 92) / 24));
   return (
     <AbsoluteFill>
       <WarpField speed={0.7} count={260} />
-      <Caption eyebrow="Audio overview" title="Lean back. Let it wash over you." />
-      <div style={{ position: "absolute", left: 140, right: 140, top: 380, display: "grid", gap: 40 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, height: 220 }}>
+      <Caption eyebrow="04 · Listen" title="Turn it into a conversation." />
+      <Win>
+        <Label style={{ left: 80, top: 36 }}>Format</Label>
+        {formats.map((f, i) => (
+          <Chip key={f} on={i === picked} press={i === 2 ? pulse(frame, 22) : 0} style={{ position: "absolute", left: 80 + i * 210, top: 80, width: 190, height: 56 }}>
+            {f}
+          </Chip>
+        ))}
+        <div style={{ position: "absolute", left: 80, top: 170, width: 300, height: 72, borderRadius: 999, background: BLUE, display: "grid", placeItems: "center", fontFamily: theme.body, fontWeight: 600, fontSize: 30, color: theme.white, transform: `scale(${1 - 0.06 * pulse(frame, 50)})`, boxShadow: `0 0 ${24 + pulse(frame, 50) * 40}px ${BLUE}` }}>
+          {bar > 0 && bar < 1 ? "Recording..." : "Create audio"}
+        </div>
+        <div style={{ position: "absolute", left: 420, top: 202, width: 900 * bar, height: 6, borderRadius: 3, background: BLUE, boxShadow: `0 0 14px ${BLUE}`, opacity: bar > 0 && bar < 1 ? 1 : 0 }} />
+        <div style={{ position: "absolute", left: 80, top: 290, width: 1480, height: 170, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, opacity: playing }}>
           {Array.from({ length: 64 }).map((_, i) => {
             const v = Math.abs(Math.sin(frame * 0.35 + i * 0.55) * Math.cos(frame * 0.11 + i * 0.21));
-            const env = spring({ frame: frame - 6, fps, config: { damping: 20 } });
-            return <div key={i} style={{ width: 14, height: 12 + v * 200 * env, borderRadius: 7, background: i % 2 ? theme.white : BLUE, boxShadow: `0 0 18px ${BLUE}` }} />;
+            const env = spring({ frame: frame - 90, fps, config: { damping: 20 } });
+            return <div key={i} style={{ width: 14, height: 12 + v * 150 * env, borderRadius: 7, background: i % 2 ? theme.white : BLUE, boxShadow: `0 0 18px ${BLUE}` }} />;
           })}
         </div>
-        <div style={{ display: "grid", gap: 14 }}>
+        <div style={{ position: "absolute", left: 80, top: 480, display: "grid", gap: 12 }}>
           {lines.map((l, i) => {
             const on = i === active;
-            const seen = i <= active;
             return (
-              <div key={i} style={{ display: "flex", gap: 22, alignItems: "center", opacity: seen ? (on ? 1 : 0.45) : 0, fontFamily: theme.body, fontSize: 34, color: theme.white }}>
-                <span style={{ width: 52, height: 52, borderRadius: "50%", display: "grid", placeItems: "center", fontFamily: theme.mono, fontSize: 22, background: l.who === "A" ? BLUE : theme.white, color: l.who === "A" ? theme.white : theme.black, boxShadow: on ? `0 0 26px ${BLUE}` : "none" }}>
-                  {l.who}
-                </span>
+              <div key={i} style={{ display: "flex", gap: 22, alignItems: "center", opacity: frame >= 92 + i * 24 ? (on ? 1 : 0.45) : 0, fontFamily: theme.body, fontSize: 32, color: theme.white }}>
+                <span style={{ width: 46, height: 46, borderRadius: "50%", display: "grid", placeItems: "center", fontFamily: theme.mono, fontSize: 20, background: l.who === "A" ? BLUE : theme.white, color: l.who === "A" ? theme.white : theme.black, boxShadow: on ? `0 0 26px ${BLUE}` : "none" }}>{l.who}</span>
                 {l.text}
               </div>
             );
           })}
         </div>
-      </div>
+      </Win>
+      <Cursor
+        keys={[{ f: 0, x: 1560, y: 880 }, { f: 18, ...at(595, 108) }, { f: 30, ...at(595, 108) }, { f: 46, ...at(230, 206) }, { f: 60, ...at(230, 206) }, { f: 100, ...at(900, 560) }]}
+        clicks={[22, 50]}
+      />
     </AbsoluteFill>
   );
 }
 
+const VIDEO_STYLES = ["16:9 Explainer", "9:16 Short", "1:1 Square"];
+const TEMPLATE_LOOKS: CSSProperties[] = [
+  { background: "linear-gradient(135deg, #000, #0b1730)" },
+  { background: `linear-gradient(135deg, ${BLUE}, #0a2a66)` },
+  { background: "linear-gradient(135deg, #ffffff, #cfe0ff)" },
+  { background: "linear-gradient(135deg, #0b1730, #217cff55)" },
+];
+const TEMPLATE_NAMES = ["Night", "Signal", "Paper", "Studio"];
+const VOICES = ["Nora Vale", "Your voice (clone)", "+ Create a voice"];
+
+/** 05: wizard: pick a style, a template and a voice, create. */
+function VideoCreate() {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const style = frame >= 34 ? 1 : 0;
+  const tpl = frame >= 74 ? 1 : 0;
+  const voice = frame >= 114 ? 1 : 0;
+  const go = pulse(frame, 162);
+  const busy = clamp01(frame, 164, 194);
+  return (
+    <AbsoluteFill>
+      <WarpField speed={0.8} count={260} />
+      <Caption eyebrow="05 · Make" title="Pick a look. Pick a voice." />
+      <Win>
+        <Label style={{ left: 80, top: 30 }}>Video style</Label>
+        {VIDEO_STYLES.map((t, i) => (
+          <Chip key={t} on={i === style} press={i === 1 ? pulse(frame, 34) : 0} style={{ position: "absolute", left: 80 + i * 250, top: 70, width: 230, height: 56 }}>
+            {t}
+          </Chip>
+        ))}
+        <Label style={{ left: 80, top: 160 }}>Template</Label>
+        {TEMPLATE_NAMES.map((name, i) => {
+          const s = spring({ frame: frame - 6 - i * 5, fps, config: { damping: 16 } });
+          const sel = i === tpl;
+          return (
+            <div key={name} style={{ position: "absolute", left: 80 + i * 300, top: 200, width: 270, height: 190, borderRadius: 16, border: `2px solid ${sel ? BLUE : "rgba(255,255,255,0.14)"}`, boxShadow: sel ? `0 0 30px ${BLUE}88` : "none", overflow: "hidden", opacity: s, transform: `scale(${(0.9 + 0.1 * s) * (i === 1 ? 1 - 0.04 * pulse(frame, 74) : 1)})`, ...TEMPLATE_LOOKS[i] }}>
+              <div style={{ position: "absolute", left: 20, top: 24, width: 120, height: 12, borderRadius: 6, background: i === 2 ? "#000" : "#fff", opacity: 0.9 }} />
+              <div style={{ position: "absolute", left: 20, top: 52, width: 190, height: 8, borderRadius: 4, background: i === 2 ? "#000" : "#fff", opacity: 0.4 }} />
+              <div style={{ position: "absolute", left: 20, bottom: 16, fontFamily: theme.body, fontSize: 22, color: i === 2 ? "#000" : "#fff" }}>{name}</div>
+            </div>
+          );
+        })}
+        <Label style={{ left: 80, top: 430 }}>Narration voice</Label>
+        {VOICES.map((v, i) => (
+          <Chip key={v} on={i === voice} press={i === 1 ? pulse(frame, 114) : 0} style={{ position: "absolute", left: 80 + i * 370, top: 470, width: 340, height: 64 }}>
+            {i < 2 && <span style={{ marginRight: 12, color: BLUE }}>▶</span>}
+            {v}
+          </Chip>
+        ))}
+        <div style={{ position: "absolute", left: 1240, top: 560, width: 340, height: 76, borderRadius: 999, background: BLUE, display: "grid", placeItems: "center", fontFamily: theme.body, fontWeight: 600, fontSize: 30, color: theme.white, overflow: "hidden", transform: `scale(${1 - 0.06 * go})`, boxShadow: `0 0 ${24 + go * 40}px ${BLUE}` }}>
+          <div style={{ position: "absolute", left: 0, bottom: 0, height: 6, width: `${busy * 100}%`, background: "#fff" }} />
+          {busy > 0 ? "Making your video..." : "Create video"}
+        </div>
+      </Win>
+      <Cursor
+        keys={[
+          { f: 0, x: 1560, y: 880 },
+          { f: 30, ...at(450, 98) },
+          { f: 38, ...at(450, 98) },
+          { f: 70, ...at(515, 295) },
+          { f: 78, ...at(515, 295) },
+          { f: 110, ...at(630, 502) },
+          { f: 118, ...at(630, 502) },
+          { f: 158, ...at(1410, 598) },
+          { f: 190, ...at(1410, 598) },
+        ]}
+        clicks={[34, 74, 114, 162]}
+      />
+    </AbsoluteFill>
+  );
+}
+
+const SCENE_TITLES = ["Gravity is geometry", "Inverse square", "Orbits", "Try it yourself"];
+
+/** 06: the scene editor, then render the MP4. */
+function VideoEdit() {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const active = frame >= 32 ? 1 : 0;
+  const since = frame >= 32 ? frame - 32 : frame;
+  const pop = spring({ frame: since, fps, config: { damping: 16 } });
+  const render = clamp01(frame, 110, 164);
+  const ready = frame >= 166;
+  const tabs = ["Edit Scenes", "Images/footage", "Audio", "Settings"];
+  return (
+    <AbsoluteFill>
+      <WarpField speed={0.7} count={260} />
+      <Caption eyebrow="06 · Edit" title="Tweak any scene, then render." />
+      <Win>
+        {tabs.map((t, i) => (
+          <span key={t} style={{ position: "absolute", left: 80 + i * 210, top: 12, width: 190, height: 48, display: "grid", placeItems: "center", borderRadius: 12, fontFamily: theme.body, fontSize: 23, color: theme.white, background: i === 0 ? `${BLUE}33` : "transparent", border: `1px solid ${i === 0 ? BLUE : "rgba(255,255,255,0.14)"}` }}>
+            {t}
+          </span>
+        ))}
+        <div style={{ position: "absolute", left: 1340, top: 10, width: 220, height: 52, borderRadius: 999, background: BLUE, display: "grid", placeItems: "center", fontFamily: theme.body, fontWeight: 600, fontSize: 24, color: theme.white, transform: `scale(${1 - 0.06 * pulse(frame, 108)})`, boxShadow: `0 0 ${20 + pulse(frame, 108) * 40}px ${BLUE}` }}>
+          Download MP4
+        </div>
+        {SCENE_TITLES.map((t, i) => {
+          const s = spring({ frame: frame - 4 - i * 5, fps, config: { damping: 16 } });
+          const on = i === active;
+          return (
+            <div key={t} style={{ position: "absolute", left: 80, top: 80 + i * 120, width: 400, height: 106, borderRadius: 14, border: `1px solid ${on ? BLUE : "rgba(255,255,255,0.14)"}`, background: on ? `${BLUE}26` : "rgba(255,255,255,0.04)", boxShadow: on ? `0 0 24px ${BLUE}66` : "none", display: "flex", alignItems: "center", gap: 18, padding: "0 20px", opacity: s, transform: `translateX(${(1 - s) * -40}px) scale(${i === 1 ? 1 - 0.03 * pulse(frame, 32) : 1})` }}>
+              <span style={{ fontFamily: theme.mono, fontSize: 22, color: BLUE }}>{i + 1}</span>
+              <div style={{ width: 96, height: 60, borderRadius: 8, background: i % 2 ? `linear-gradient(135deg, ${BLUE}, #0a2a66)` : "linear-gradient(135deg, #000, #0b1730)", border: "1px solid rgba(255,255,255,0.2)" }} />
+              <span style={{ fontFamily: theme.body, fontSize: 25, color: theme.white }}>{t}</span>
+            </div>
+          );
+        })}
+        <div style={{ position: "absolute", left: 520, top: 80, width: 1040, height: 560, borderRadius: 18, overflow: "hidden", border: "1px solid rgba(255,255,255,0.18)", background: `radial-gradient(70% 70% at 30% 20%, ${BLUE}33, #000 70%)`, boxShadow: `0 0 50px ${BLUE}33` }}>
+          {active === 0 ? (
+            <div style={{ position: "absolute", left: 70, top: 160, opacity: pop, transform: `translateY(${(1 - pop) * 30}px)` }}>
+              <p style={{ margin: 0, fontFamily: theme.mono, fontSize: 22, letterSpacing: 5, color: BLUE }}>SCENE 1</p>
+              <p style={{ margin: "14px 0 0", fontFamily: theme.display, fontSize: 86, lineHeight: 1.05, color: theme.white, textShadow: `0 0 30px ${BLUE}` }}>Gravity is<br />a curve.</p>
+            </div>
+          ) : (
+            <>
+              <p style={{ position: "absolute", left: 70, top: 56, margin: 0, fontFamily: theme.display, fontSize: 52, color: theme.white, opacity: pop }}>Gravity fades with distance</p>
+              {[1, 0.25, 0.11].map((h, i) => (
+                <div key={i} style={{ position: "absolute", left: 90 + i * 250, bottom: 90, width: 170, height: 340 * h * ease(clamp01(since, 8 + i * 7, 34 + i * 7)), borderRadius: "12px 12px 0 0", background: i === 0 ? "#ffffff" : BLUE, boxShadow: `0 0 30px ${BLUE}` }} />
+              ))}
+              <p style={{ position: "absolute", left: 70, bottom: 30, margin: 0, fontFamily: theme.body, fontSize: 26, color: "rgba(255,255,255,0.85)", opacity: pop }}>Double the distance and gravity drops to a quarter.</p>
+            </>
+          )}
+          {render > 0 && (
+            <div style={{ ...panel, position: "absolute", left: 270, top: 190, width: 500, padding: "28px 32px", background: "rgba(0,0,0,0.92)", opacity: clamp01(frame, 110, 118) }}>
+              <p style={{ margin: 0, fontFamily: theme.body, fontSize: 30, color: theme.white }}>{ready ? "✓ Your MP4 is ready" : "Rendering MP4"}</p>
+              <div style={{ marginTop: 20, height: 10, borderRadius: 5, background: "rgba(255,255,255,0.14)" }}>
+                <div style={{ width: `${(ready ? 1 : render) * 100}%`, height: "100%", borderRadius: 5, background: BLUE, boxShadow: `0 0 16px ${BLUE}` }} />
+              </div>
+            </div>
+          )}
+        </div>
+      </Win>
+      <Cursor
+        keys={[
+          { f: 0, x: 1560, y: 880 },
+          { f: 26, ...at(280, 373) },
+          { f: 38, ...at(280, 373) },
+          { f: 100, ...at(1450, 36) },
+          { f: 124, ...at(1450, 36) },
+          { f: 150, ...at(1250, 480) },
+        ]}
+        clicks={[32, 108]}
+      />
+    </AbsoluteFill>
+  );
+}
+
+/** 07: the Launch Kit appears, then Launchpad schedules it across the week. */
 function LaunchKit() {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const cards = [
-    { label: "X THREAD", body: "I doubled my price. My paid tier doubled too. Here is what I learned." },
-    { label: "LINKEDIN", body: "Most writers underprice. I did for two years. Then I ran an experiment." },
-    { label: "SUBSTACK NOTES", body: "Price is a signal. Readers told me so, with their wallets." },
-    { label: "BLUESKY", body: "Raised my price to $10. Paid readers went up, not down." },
+    { label: "X THREAD", body: "Gravity is not a force. It is geometry. A thread on how Einstein changed everything." },
+    { label: "LINKEDIN", body: "Most of us learned gravity wrong. Here is the picture physicists actually use." },
+    { label: "SUBSTACK NOTES", body: "Mass tells space how to bend. Space tells mass how to move." },
+    { label: "BLUESKY", body: "Orbits are just falling, forever, around a curve." },
   ];
+  const days = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
+  const slots: Record<number, string> = { 0: "X", 1: "LinkedIn", 2: "Notes", 3: "Bluesky", 4: "X", 5: "LinkedIn", 6: "Notes" };
   return (
     <AbsoluteFill>
       <WarpField speed={0.9} count={260} />
-      <Caption eyebrow="Launch Kit" title="Your pulse quickens." />
-      <div style={{ position: "absolute", left: 140, right: 140, top: 380, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 28 }}>
+      <Caption eyebrow="07 · Launch" title="A week of posts, scheduled." />
+      <Win>
         {cards.map((c, i) => {
-          const s = spring({ frame: frame - 10 - i * 7, fps, config: { damping: 14 } });
-          const rot = interpolate(s, [0, 1], [(i - 1.5) * 14, 0]);
+          const s = spring({ frame: frame - 8 - i * 7, fps, config: { damping: 14 } });
           return (
-            <div key={c.label} style={{ ...panel, padding: 28, minHeight: 300, opacity: s, transform: `translateY(${(1 - s) * 180}px) rotate(${rot}deg)`, display: "grid", alignContent: "start", gap: 18 }}>
+            <div key={c.label} style={{ position: "absolute", left: 80 + i * 390, top: 30, width: 350, height: 230, padding: 26, borderRadius: 18, border: "1px solid rgba(255,255,255,0.14)", background: "rgba(255,255,255,0.04)", opacity: s, transform: `translateY(${(1 - s) * 140}px) rotate(${interpolate(s, [0, 1], [(i - 1.5) * 10, 0])}deg)`, display: "grid", alignContent: "start", gap: 14 }}>
               <span style={{ fontFamily: theme.mono, fontSize: 20, letterSpacing: 3, color: BLUE }}>{c.label}</span>
-              <span style={{ fontFamily: theme.body, fontSize: 28, lineHeight: 1.4, color: theme.white }}>{c.body}</span>
+              <span style={{ fontFamily: theme.body, fontSize: 26, lineHeight: 1.4, color: theme.white }}>{c.body}</span>
             </div>
           );
         })}
-      </div>
-      <div style={{ position: "absolute", left: 140, bottom: 90, display: "flex", gap: 16, fontFamily: theme.mono, fontSize: 22, color: "rgba(255,255,255,0.7)", letterSpacing: 2 }}>
-        {["HOOKS", "SEO PACK", "CAROUSEL", "QUOTE CARDS"].map((t, i) => (
-          <span key={t} style={{ padding: "10px 18px", border: `1px solid ${BLUE}88`, borderRadius: 999, opacity: interpolate(frame, [50 + i * 6, 60 + i * 6], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }) }}>
-            {t}
-          </span>
-        ))}
-      </div>
-    </AbsoluteFill>
-  );
-}
-
-function Launchpad() {
-  const frame = useCurrentFrame();
-  const { width, height } = useVideoConfig();
-  const lit = [2, 5, 9, 12, 16, 19, 23, 26];
-  const rocket = interpolate(frame, [70, 112], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: Easing.in(Easing.cubic) });
-  return (
-    <AbsoluteFill>
-      <WarpField speed={0.8} count={260} />
-      <Caption eyebrow="Launchpad" title="Three, two, one. Flying." />
-      <div style={{ position: "absolute", left: 140, top: 360, display: "grid", gridTemplateColumns: "repeat(7, 120px)", gap: 12 }}>
-        {Array.from({ length: 28 }).map((_, i) => {
-          const on = lit.includes(i) && frame > 8 + lit.indexOf(i) * 6;
+        <Label style={{ left: 80, top: 300 }}>Launchpad</Label>
+        {days.map((d, i) => {
+          const lit = frame >= 76 + i * 6;
+          const s = spring({ frame: frame - 76 - i * 6, fps, config: { damping: 12 } });
           return (
-            <div key={i} style={{ height: 88, borderRadius: 12, border: `1px solid ${on ? BLUE : "rgba(255,255,255,0.14)"}`, background: on ? `${BLUE}33` : "rgba(0,0,0,0.5)", boxShadow: on ? `0 0 22px ${BLUE}88` : "none", padding: 10, fontFamily: theme.mono, fontSize: 16, color: "rgba(255,255,255,0.6)" }}>
-              {i + 1}
-              {on && <div style={{ marginTop: 18, height: 10, borderRadius: 5, background: theme.white, boxShadow: `0 0 12px ${BLUE}` }} />}
-            </div>
-          );
-        })}
-      </div>
-      <svg width={width} height={height} style={{ position: "absolute" }}>
-        <defs>
-          <linearGradient id="trail" x1="0" y1="1" x2="0" y2="0">
-            <stop offset="0%" stopColor={BLUE} stopOpacity="0" />
-            <stop offset="70%" stopColor={BLUE} stopOpacity="0.8" />
-            <stop offset="100%" stopColor="#ffffff" stopOpacity="1" />
-          </linearGradient>
-        </defs>
-        {(() => {
-          // A launch arc from the lower right: curved trail, hot head, exhaust sparks.
-          const pt = (u: number) => ({ x: 1360 + 300 * u + 120 * u * u, y: 1000 - 1050 * u + 120 * u * (1 - u) });
-          const head = pt(rocket);
-          const tail = pt(Math.max(0, rocket - 0.35));
-          const path = Array.from({ length: 24 }, (_, i) => pt(Math.max(0, rocket - 0.35) + ((rocket - Math.max(0, rocket - 0.35)) * i) / 23));
-          return (
-            <>
-              <circle cx={1360} cy={1000} r={140 * Math.min(1, rocket * 4)} fill={BLUE} opacity={0.25 * (1 - rocket)} style={{ filter: "blur(30px)" }} />
-              {rocket > 0 && (
-                <polyline points={path.map((q) => `${q.x},${q.y}`).join(" ")} fill="none" stroke="url(#trail)" strokeWidth={10} strokeLinecap="round" style={{ filter: `drop-shadow(0 0 18px ${BLUE})` }} />
+            <div key={d} style={{ position: "absolute", left: 80 + i * 215, top: 345, width: 195, height: 130, borderRadius: 14, border: `1px solid ${lit ? BLUE : "rgba(255,255,255,0.14)"}`, background: lit ? `${BLUE}33` : "rgba(255,255,255,0.03)", boxShadow: lit ? `0 0 22px ${BLUE}88` : "none", padding: 14, fontFamily: theme.mono, fontSize: 18, color: "rgba(255,255,255,0.6)" }}>
+              {d}
+              {lit && (
+                <div style={{ marginTop: 22, padding: "8px 0", textAlign: "center", borderRadius: 999, background: theme.white, color: theme.black, fontFamily: theme.body, fontWeight: 600, fontSize: 21, transform: `scale(${0.6 + 0.4 * s})`, boxShadow: `0 0 14px ${BLUE}` }}>{slots[i]}</div>
               )}
-              {rocket > 0 &&
-                Array.from({ length: 16 }).map((_, i) => {
-                  const u = Math.max(0, rocket - random(`s${i}`) * 0.3);
-                  const q = pt(u);
-                  const jitter = (random(`j${i}`) - 0.5) * 60;
-                  return <circle key={i} cx={q.x + jitter} cy={q.y + 20} r={2 + random(`k${i}`) * 3} fill="#ffffff" opacity={0.3 + 0.5 * random(`o${i}`)} />;
-                })}
-              {rocket > 0 && <circle cx={head.x} cy={head.y} r={16} fill="#ffffff" style={{ filter: `drop-shadow(0 0 28px ${BLUE}) drop-shadow(0 0 8px #ffffff)` }} />}
-              {rocket === 0 && <circle cx={tail.x} cy={tail.y} r={10} fill="#ffffff" opacity={interpolate(frame, [30, 60], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" })} style={{ filter: `drop-shadow(0 0 16px ${BLUE})` }} />}
-            </>
+            </div>
           );
-        })()}
-      </svg>
-      <div style={{ position: "absolute", left: 1180, top: 400, fontFamily: theme.mono, color: theme.white, opacity: interpolate(frame, [20, 40], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }) }}>
-        <p style={{ margin: 0, fontSize: 22, letterSpacing: 4, color: BLUE }}>NEXT LAUNCH</p>
-        <p style={{ margin: "10px 0 0", fontFamily: theme.display, fontSize: 88, textShadow: `0 0 30px ${BLUE}` }}>
-          T-{String(Math.max(0, 10 - Math.floor(frame / 7))).padStart(2, "0")}
-        </p>
-        <p style={{ margin: "6px 0 0", fontSize: 22, color: "rgba(255,255,255,0.7)", letterSpacing: 2 }}>X · LINKEDIN · BLUESKY</p>
-      </div>
+        })}
+        <div style={{ position: "absolute", left: 80, top: 540, display: "flex", gap: 14 }}>
+          {["HOOKS", "SEO PACK", "CAROUSEL", "QUOTE CARDS"].map((t, i) => (
+            <span key={t} style={{ padding: "10px 18px", border: `1px solid ${BLUE}88`, borderRadius: 999, fontFamily: theme.mono, fontSize: 20, letterSpacing: 2, color: "rgba(255,255,255,0.75)", opacity: clamp01(frame, 40 + i * 6, 50 + i * 6) }}>
+              {t}
+            </span>
+          ))}
+        </div>
+        <div style={{ position: "absolute", left: 1300, top: 530, width: 280, height: 70, borderRadius: 999, background: BLUE, display: "grid", placeItems: "center", fontFamily: theme.body, fontWeight: 600, fontSize: 28, color: theme.white, transform: `scale(${1 - 0.06 * pulse(frame, 68)})`, boxShadow: `0 0 ${24 + pulse(frame, 68) * 40}px ${BLUE}` }}>
+          Schedule all
+        </div>
+      </Win>
+      <Cursor keys={[{ f: 0, x: 1560, y: 880 }, { f: 62, ...at(1440, 566) }, { f: 100, ...at(1440, 566) }, { f: 140, ...at(1100, 600) }]} clicks={[68]} />
     </AbsoluteFill>
   );
 }
@@ -580,14 +856,15 @@ function Outro() {
   );
 }
 
-const RENDER: Record<(typeof SCENES)[number]["id"], () => JSX.Element> = {
+const RENDER: Record<SceneId, () => JSX.Element> = {
   warp: Warp,
-  paste: Paste,
-  orbit: Orbit,
-  research: Research,
+  sync: Sync,
+  ask: Ask,
+  map: MindMap,
   audio: Audio,
-  launchkit: LaunchKit,
-  launchpad: Launchpad,
+  video: VideoCreate,
+  edit: VideoEdit,
+  kit: LaunchKit,
   outro: Outro,
 };
 
@@ -596,7 +873,7 @@ export function LandingDemo() {
   return (
     <AbsoluteFill style={{ backgroundColor: theme.black }}>
       <SoundTrack src={staticFile("demo-vo/music.wav")} volume={musicVolume} />
-      {SCENES.map((scene, i) => {
+      {SCENES.map((scene) => {
         const from = cursor;
         cursor += S(scene.len - XFADE);
         const Scene = RENDER[scene.id];
@@ -605,10 +882,11 @@ export function LandingDemo() {
             <FadeScene len={scene.len}>
               <Scene />
             </FadeScene>
-            <Sequence from={S(scene.vo)} name={`vo-${scene.id}`}>
-              <SoundTrack src={staticFile(`demo-vo/${scene.id}.mp3`)} volume={1} />
-            </Sequence>
-            {i === 0 && null}
+            {scene.vo !== undefined && (
+              <Sequence from={S(scene.vo)} name={`vo-${scene.id}`}>
+                <SoundTrack src={staticFile(`demo-vo/${scene.id}.mp3`)} volume={1} />
+              </Sequence>
+            )}
           </Sequence>
         );
       })}

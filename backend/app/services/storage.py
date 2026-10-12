@@ -93,6 +93,10 @@ class Storage:
     def get_bytes(self, key: str) -> bytes:
         return self.client.get_object(Bucket=self.bucket, Key=self._k(key))["Body"].read()
 
+    def download_to(self, key: str, fileobj) -> None:
+        """Stream an object into an open binary file (large files, e.g. a video to post, never fully in memory)."""
+        self.client.download_fileobj(self.bucket, self._k(key), fileobj)
+
     def head(self, key: str) -> dict | None:
         try:
             return self.client.head_object(Bucket=self.bucket, Key=self._k(key))
@@ -106,6 +110,14 @@ class Storage:
 
     def delete(self, key: str) -> None:
         self.client.delete_object(Bucket=self.bucket, Key=self._k(key))
+
+    def list_keys(self, prefix: str) -> list[tuple[str, float]]:
+        """(key, last modified epoch seconds) of every object under the prefix."""
+        out = []
+        paginator = self.client.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=self.bucket, Prefix=self._k(prefix)):
+            out += [(o["Key"][len(self.prefix):], o["LastModified"].timestamp()) for o in page.get("Contents", [])]
+        return out
 
     def delete_prefix(self, prefix: str) -> int:
         deleted = 0
@@ -177,6 +189,13 @@ class LocalStorage:
             raise FileNotFoundError(key)
         return path.read_bytes()
 
+    def download_to(self, key: str, fileobj) -> None:
+        path = self.path(key)
+        if not path.is_file():
+            raise FileNotFoundError(key)
+        with path.open("rb") as src:
+            shutil.copyfileobj(src, fileobj)
+
     def head(self, key: str) -> dict | None:
         path = self.path(key)
         if not path.is_file():
@@ -188,6 +207,13 @@ class LocalStorage:
 
     def delete(self, key: str) -> None:
         self.path(key).unlink(missing_ok=True)
+
+    def list_keys(self, prefix: str) -> list[tuple[str, float]]:
+        base = self.path(prefix.rstrip("/"))
+        if not base.is_dir():
+            return []
+        return [(f"{prefix.rstrip('/')}/{f.relative_to(base).as_posix()}", f.stat().st_mtime)
+                for f in base.rglob("*") if f.is_file()]
 
     def delete_prefix(self, prefix: str) -> int:
         base = self.path(prefix.rstrip("/"))

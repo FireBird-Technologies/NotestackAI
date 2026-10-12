@@ -1,0 +1,47 @@
+{% extends "base.html.j2" %}
+{% set eyebrow = "Station blueprint" %}
+{% set pal = {"bg1":"#13263a","bg2":"#1f3d57","ink":"#e6eef2","mute":"#b3c5d0","a":"#8fb8c9","b":"#d9a441","card":"rgba(143,184,201,.08)","line":"rgba(143,184,201,.35)","paper":"#e6eef2","paperink":"#13263a","r":4} %}
+{% set fonts = {"h":"Jost","b":"Outfit","m":"Space Mono","hw":700,"ht":"uppercase","bt":"uppercase"} %}
+{% set cycle = ["#8fb8c9","#d9a441","#9cc4a6","#d68f7a","#8fb8c9"] %}
+{% block bg %}
+<g stroke="#8fb8c9" stroke-opacity=".1" stroke-width="1">{% for x in range(0, 1601, 80) %}<line x1="{{ x }}" y1="0" x2="{{ x }}" y2="2260"/>{% endfor %}{% for y in range(0, 2261, 80) %}<line x1="0" y1="{{ y }}" x2="1600" y2="{{ y }}"/>{% endfor %}</g>
+<rect x="60" y="60" width="1480" height="2140" fill="none" stroke="#8fb8c9" stroke-opacity=".5" stroke-width="2"/>
+{% endblock %}
+{% block hero %}
+<g fill="none" stroke="#8fb8c9" stroke-width="3">
+<rect x="190" y="130" width="100" height="140" rx="10" fill="#1f3d57"/><rect x="215" y="60" width="50" height="70"/><rect x="215" y="270" width="50" height="70"/>
+<circle cx="240" cy="200" r="30" stroke="#d9a441"/>
+<rect x="20" y="170" width="150" height="60" fill="#1f3d57"/><rect x="310" y="170" width="150" height="60" fill="#1f3d57"/>
+<path d="M60 170V230M100 170V230M140 170V230M350 170V230M390 170V230M430 170V230" stroke-width="2"/>
+<path d="M170 200H190M290 200H310" stroke="#d9a441"/>
+<path d="M10 360H470M10 350V370M470 350V370" stroke-dasharray="6 6" stroke-width="2"/>
+</g>
+{% endblock %}
+{% block css %}
+.ig h1{font-size:66px}
+.sg{display:grid;grid-template-columns:1fr 1fr;gap:16px;flex:none}
+.sg .mod{position:relative;padding:44px 26px 22px;background:var(--card);border:1px dashed var(--line)}
+.sg .mod:last-child:nth-child(odd){grid-column:span 2}
+.sg .mod:before,.sg .mod:after{content:"";position:absolute;width:26px;height:26px;border:3px solid var(--c)}
+.sg .mod:before{left:-2px;top:-2px;border-right:0;border-bottom:0}
+.sg .mod:after{right:-2px;bottom:-2px;border-left:0;border-top:0}
+.sg .tag{position:absolute;left:26px;top:12px;font-family:var(--fm);font-size:18px;letter-spacing:.2em;color:var(--c);text-transform:uppercase}
+.sg .tag em{font-style:normal;color:var(--mute)}
+.sg b{display:block;font-family:var(--fh);font-weight:700;font-size:32px;letter-spacing:.03em;text-transform:uppercase;margin-bottom:6px}
+.sg p{font-size:24px;line-height:1.34;color:var(--mute)}
+.lg{display:grid;grid-template-columns:1fr 1fr;gap:0 40px;flex:none;border-top:2px solid var(--line)}
+.lg .row{display:grid;grid-template-columns:96px 1fr;grid-template-rows:auto 1fr;align-content:start;gap:6px 18px;padding:12px 0;border-bottom:1px dashed var(--line)}
+.lg .row small{grid-row:span 2;font-family:var(--fm);font-size:20px;color:var(--c);letter-spacing:.08em;padding-top:5px}
+.lg .row b{font-family:var(--fh);font-weight:700;font-size:28px;letter-spacing:.04em;text-transform:uppercase}
+.lg .row p{font-size:22px;line-height:1.3;color:var(--mute)}
+.ig .band{border:3px double var(--a)}
+{% endblock %}
+{% block body %}<section><div class="lab">{{ c.items_label }}</div>
+<div class="sg">
+  {% for e in c["items"] %}<div class="mod" style="--c:{{ cycle[loop.index0 % cycle|length] }}"><span class="tag">Module <em>{{ 'ABCDE'[loop.index0] }}-{{ '%02d'|format(loop.index) }}</em></span><b>{{ e.name }}</b><p>{{ e.text }}</p></div>{% endfor %}
+</div></section>
+<section><div class="lab">{{ c.steps_label }}</div>
+<div class="lg">
+  {% for e in c.steps %}<div class="row" style="--c:{{ cycle[loop.index0 % cycle|length] }}"><small>SEQ {{ '%02d'|format(loop.index) }}</small><b>{{ e.name }}</b><p>{{ e.text }}</p></div>{% endfor %}
+</div></section>
+{% endblock %}

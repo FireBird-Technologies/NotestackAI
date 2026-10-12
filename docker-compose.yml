@@ -62,6 +62,7 @@ services:
     working_dir: /app
     command: sh -c "npm install && npx vite --host 0.0.0.0"
     environment:
+      # The browser calls /api on :5173 and Vite proxies it to the api service (in-network name).
       VITE_API_PROXY: http://api:8000
       VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
     volumes: ["./frontend:/app", "/app/node_modules"]

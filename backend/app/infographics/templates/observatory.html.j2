@@ -1,0 +1,45 @@
+{% extends "base.html.j2" %}
+{% set eyebrow = "Observation log" %}
+{% set pal = {"bg1":"#102427","bg2":"#1d4144","ink":"#ece8da","mute":"#b9c9c4","a":"#8fc2b4","b":"#d6b66a","card":"rgba(236,232,218,.06)","line":"rgba(143,194,180,.3)","paper":"#ece8da","paperink":"#102427","r":14} %}
+{% set fonts = {"h":"Playfair Display","b":"Outfit","m":"Space Mono","hw":700,"ht":"none","bt":"none"} %}
+{% set cycle = ["#8fc2b4","#d6b66a","#a9b9d6","#d68f7a","#8fc2b4"] %}
+{% block bg %}
+<g fill="none" stroke="#8fc2b4" stroke-opacity=".14" stroke-width="2"><circle cx="1500" cy="300" r="260"/><circle cx="1500" cy="300" r="380"/><circle cx="1500" cy="300" r="500"/><path d="M1500 -200V800M1000 300H2000"/></g>
+<g stroke="#d6b66a" stroke-opacity=".35" stroke-width="2" fill="#d6b66a"><path d="M1090 190L1180 260L1260 220L1330 330" fill="none"/><circle cx="1090" cy="190" r="6"/><circle cx="1180" cy="260" r="8"/><circle cx="1260" cy="220" r="6"/><circle cx="1330" cy="330" r="7"/></g>
+{% endblock %}
+{% block hero %}
+<g transform="translate(240 240) rotate(-32)"><rect x="-130" y="-34" width="250" height="68" rx="8" fill="#d6b66a"/><rect x="-170" y="-26" width="46" height="52" rx="6" fill="#8fc2b4"/><rect x="100" y="-46" width="40" height="92" rx="6" fill="#ece8da"/><path d="M-60 -34V34M0 -34V34M60 -34V34" stroke="#102427" stroke-width="3"/></g>
+<path d="M240 250L170 390M240 250L320 390M240 250V392" stroke="#ece8da" stroke-width="7" stroke-linecap="round"/>
+<circle cx="380" cy="70" r="30" fill="#ece8da" opacity=".9"/><circle cx="392" cy="62" r="26" fill="#102427"/>
+<g fill="#d6b66a"><path d="M70 90l6 -16 6 16 16 6 -16 6 -6 16 -6 -16 -16 -6z"/><path d="M430 200l4 -11 4 11 11 4 -11 4 -4 11 -4 -11 -11 -4z"/></g>
+{% endblock %}
+{% block css %}
+.ig h1{font-size:68px}
+.ob{display:grid;grid-template-columns:1fr 1fr;gap:14px;flex:none}
+.ob .pl{position:relative;padding:20px 26px 22px;border-radius:var(--r);background:var(--card);border:1px solid var(--line)}
+.ob .pl:last-child:nth-child(even){grid-column:span 2}
+.ob .pl small{font-family:var(--fm);font-size:18px;letter-spacing:.2em;color:var(--c);text-transform:uppercase}
+.ob .pl b{display:block;font-family:var(--fh);font-weight:700;font-style:italic;font-size:32px;margin:4px 0 6px}
+.ob .pl p{font-size:23px;line-height:1.34;color:var(--mute)}
+.ob .feat{grid-column:span 2;display:grid;grid-template-columns:130px 1fr;gap:6px 28px;align-items:center;padding:26px 34px;background:linear-gradient(100deg,rgba(143,194,180,.18),rgba(143,194,180,.04));border-color:var(--c)}
+.ob .feat .big{grid-row:span 3;font-family:var(--fh);font-weight:700;font-size:118px;line-height:1;color:var(--c);opacity:.9}
+.ob .feat b{font-size:42px;margin:0}.ob .feat p{font-size:26px}
+.ed{display:grid;grid-template-columns:1fr 1fr;gap:0 56px;flex:none}
+.ed .li{display:grid;grid-template-columns:80px 1fr;gap:0 16px;padding:12px 0 14px;border-bottom:1px solid var(--line)}
+.ed .li .n{grid-row:span 2;font-family:var(--fh);font-weight:700;font-size:58px;line-height:.95;color:var(--c)}
+.ed .li b{font-family:var(--fh);font-weight:700;font-size:29px}
+.ed .li p{font-size:22px;line-height:1.3;color:var(--mute)}
+{% endblock %}
+{% block body %}<section><div class="lab">{{ c.items_label }}</div>
+<div class="ob">
+  {% for e in c["items"] %}{% if loop.first %}
+  <div class="pl feat" style="--c:{{ cycle[0] }}"><div class="big">1</div><small>The main idea</small><b>{{ e.name }}</b><p>{{ e.text }}</p></div>
+  {% else %}
+  <div class="pl" style="--c:{{ cycle[loop.index0 % cycle|length] }}"><small>Plate {{ loop.index }}</small><b>{{ e.name }}</b><p>{{ e.text }}</p></div>
+  {% endif %}{% endfor %}
+</div></section>
+<section><div class="lab">{{ c.steps_label }}</div>
+<div class="ed">
+  {% for e in c.steps %}<div class="li" style="--c:{{ cycle[loop.index0 % cycle|length] }}"><div class="n">{{ loop.index }}</div><b>{{ e.name }}</b><p>{{ e.text }}</p></div>{% endfor %}
+</div></section>
+{% endblock %}

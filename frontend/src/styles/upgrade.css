@@ -482,11 +482,55 @@
     color: var(--blue);
   }
 
+  .fuel-head-end {
+    gap: 6px;
+    align-items: center;
+  }
+
+  /* The small chevron that opens the rest of the plan: it points down, and turns up when open */
+  .fuel-toggle {
+    width: 24px;
+    height: 24px;
+    padding: 0;
+  }
+
+  .fuel-toggle svg {
+    transition: transform 0.2s;
+  }
+
+  .fuel-toggle.open svg {
+    transform: rotate(180deg);
+  }
+
   .fuel-row {
     display: grid;
     gap: 4px;
     font-size: 0.7rem;
     color: var(--text-2);
+  }
+
+  /* Label on the left, what is left on the right */
+  .fuel-label {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .fuel-left {
+    flex: none;
+    color: var(--text-3);
+  }
+
+  .fuel-left.hot {
+    color: var(--text);
+  }
+
+  /* Invisible padding around the thin bar, so it is easy to hover */
+  .fuel-hit {
+    padding: 5px 0;
+    margin: -5px 0;
+    cursor: default;
   }
 
   .fuel-track {

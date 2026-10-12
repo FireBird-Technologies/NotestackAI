@@ -1,9 +1,10 @@
 """Publishing to X, LinkedIn and Bluesky. Each platform module exposes:
 
-    publish(db, account, posts: list[str]) -> (external_id, external_url)
+    publish(db, account, posts: list[str], media: list[Media] | None) -> (external_id, external_url)
     metrics(db, account, external_id) -> dict
 
-A list with more than one post is published as a thread (reply chain) where the platform supports it.
+A list with more than one post is published as a thread (reply chain) where the platform supports it. Media (images or
+one video, from social.media) goes on the first post; only X and LinkedIn take it.
 """
 
 from datetime import UTC, datetime
@@ -15,9 +16,13 @@ from app.services.crypto import decrypt, encrypt
 
 
 class SocialError(RuntimeError):
-    def __init__(self, message: str, permanent: bool = False):
+    """permanent: don't retry this post. reconnect: the account's connection is gone (expired, revoked, refused):
+    the account is marked down and its scheduled posts pause until it is reconnected."""
+
+    def __init__(self, message: str, permanent: bool = False, reconnect: bool = False):
         super().__init__(message)
-        self.permanent = permanent
+        self.permanent = permanent or reconnect
+        self.reconnect = reconnect
 
 
 PLATFORM_LABELS = {"x": "X", "linkedin": "LinkedIn", "bluesky": "Bluesky", "substack_notes": "Substack Notes"}
@@ -47,6 +52,11 @@ def expired(account: SocialAccount) -> bool:
         return False
     exp = account.expires_at if account.expires_at.tzinfo else account.expires_at.replace(tzinfo=UTC)
     return exp.timestamp() - 120 < datetime.now(UTC).timestamp()
+
+
+def scope_set(scopes: str | None) -> set[str]:
+    """Granted scopes, whether the platform listed them with spaces or commas."""
+    return {s for s in (scopes or "").replace(",", " ").split() if s}
 
 
 def module(platform: str):

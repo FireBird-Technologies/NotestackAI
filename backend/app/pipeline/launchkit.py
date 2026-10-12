@@ -1,15 +1,21 @@
 """Launch Kit: one post in, everything needed to launch it out, in the writer's voice and grounded in
 the post's own claims."""
 
+import logging
+
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.corpus import INDEX, Corpus
 from app.llm import run
 from app.llm.signatures import CarouselSlides, ExtractClaims, HookGenerator, PickQuotes, PlatformAdapter, SeoPack
 from app.models import Artifact, Document, Job
 from app.pipeline.generate import NothingToDo
 from app.pipeline.passages import passages_for, tools_for, verify_refs, voice_text
+from app.services import renderer
 from app.services.jobs import create_job, update_job
+
+log = logging.getLogger(__name__)
 
 PLATFORMS = {
     "x_thread": ("X thread", "5 to 9 posts, each under 270 characters. Post 1 is the hook and stands alone. "
@@ -94,8 +100,13 @@ def build_launch_kit(db: Session, job: Job, artifact: Artifact) -> dict:
     artifact.status = "ready"
     db.commit()
 
-    # Quote cards render as their own artifacts, so a missing renderer does not sink the kit.
+    # Quote cards render as their own artifacts, so a missing renderer does not sink the kit. With the renderer
+    # down they would only fail, so skip them: the kit keeps its quotes as text either way.
     card_ids = []
+    if quotes and not renderer.available():
+        log.warning("Renderer unreachable at %s: launch kit %s made without quote cards",
+                    settings.renderer_url, artifact.id)
+        quotes = []
     for q in quotes:
         card = Artifact(workspace_id=ws, document_id=doc.id, type="quote_card", status="pending",
                         content_json={"title": f"Quote: {doc.title}", "parent_id": str(artifact.id), **q})

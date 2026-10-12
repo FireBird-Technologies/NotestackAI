@@ -199,3 +199,37 @@ def test_upgrade_needing_3ds_sends_user_to_invoice(client, stripe_on, owner, db_
     r = client.post("/api/billing/checkout", json={"plan": "studio", "cycle": "monthly"}, headers=headers)
     assert r.json()["url"] == "https://invoice.stripe.test/i_1"
     assert plan_of(db_session, ws) == "writer"  # switches only once the payment succeeds
+
+
+def videos_used(db, ws) -> int:
+    db.expire_all()
+    return db.scalar(select(Subscription).where(Subscription.workspace_id == ws.id)).videos_used
+
+
+def set_videos_used(db, ws, n: int) -> None:
+    db.scalar(select(Subscription).where(Subscription.workspace_id == ws.id)).videos_used = n
+    db.commit()
+
+
+@pytest.mark.parametrize("reason,resets", [("subscription_cycle", True), ("subscription_create", True),
+                                           ("subscription_update", False)])
+def test_invoice_paid_resets_videos(client, stripe_on, owner, db_session, reason, resets):
+    _, ws = owner
+    stripe_on.add_sub("sub_v", ws.id, plan="writer")
+    set_videos_used(db_session, ws, 7)
+    paid = event("invoice.paid", {"subscription": "sub_v", "customer": "cus_1", "billing_reason": reason})
+    send(client, paid)
+    assert videos_used(db_session, ws) == (0 if resets else 7)
+    # A retried delivery of the same event must not wipe videos made since.
+    set_videos_used(db_session, ws, 3)
+    send(client, paid)
+    assert videos_used(db_session, ws) == 3
+
+
+def test_subscription_sync_sets_video_limit(client, stripe_on, owner, db_session):
+    _, ws = owner
+    stripe_on.add_sub("sub_l", ws.id, plan="studio")
+    send(client, event("customer.subscription.created", stripe_on.subs["sub_l"]))
+    db_session.expire_all()
+    sub = db_session.scalar(select(Subscription).where(Subscription.workspace_id == ws.id))
+    assert (sub.video_plan, sub.video_limit) == ("studio", 20)

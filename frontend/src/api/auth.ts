@@ -34,6 +34,8 @@ export const authApi = {
   forgotStart: (email: string) => post<{ ok: true }>("/api/auth/password/forgot/start", { email }),
   forgotComplete: (email: string, code: string, password: string) =>
     post<LoginResult>("/api/auth/password/forgot/complete", { email, code, password }),
-  logout: () => post<{ ok: true }>("/api/auth/logout"),
+  /** Takes the token explicitly: sign out clears local tokens before revoking on the server. */
+  logout: (access: string) =>
+    api<{ ok: true }>("/api/auth/logout", { method: "POST", headers: { Authorization: `Bearer ${access}` } }, false),
   deleteAccount: () => post<{ ok: true }>("/api/auth/delete-account"),
 };

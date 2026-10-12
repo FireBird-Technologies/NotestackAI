@@ -1,0 +1,22 @@
+{#- The frame of an AI-composed infographic. `body` is sanitised markup (design.sanitize_body); every other value is autoescaped. -#}
+<link rel="stylesheet" href="{{ fonts }}">
+<style>{{ css }}</style>
+<div class="ig2 look-{{ look }} {{ layout }}" style="--w:{{ w }}px;--h:{{ h }}px;--fit:{{ fit }};{{ vars_css }}">
+  <svg class="ig-bg" width="{{ w }}" height="{{ h }}" viewBox="0 0 {{ w }} {{ h }}">{{ stars }}</svg>
+  <div class="ig-main">
+    <div class="ig-left">
+      <header class="ig-head">
+        <div class="ig-eyebrow">{{ c.eyebrow }}</div>
+        <h1>{{ c.title }}</h1>
+        <p class="ig-sub">{{ c.subtitle }}</p>
+        {% if c.key_figures %}<div class="ig-figs">{% for f in c.key_figures %}<div class="fig"><span class="fig-v">{{ f.value }}</span><span class="fig-l">{{ f.label }}</span></div>{% endfor %}</div>{% endif %}
+      </header>
+      <div class="ig-take">
+        <div class="q">{{ c.rule }}</div>
+        <ul>{% for n in c.notes %}<li>{{ n }}</li>{% endfor %}</ul>
+      </div>
+    </div>
+    <div class="ig-body"><div class="ig-inner">{{ body }}</div></div>
+  </div>
+  <div class="ig-mark">{{ logo }}<span>notestack.ai</span></div>
+</div>

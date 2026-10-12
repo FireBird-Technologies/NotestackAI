@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import AuthProvider, Subscription, User, Workspace, WorkspaceMember
+from app.services.plans import PLANS
 
 
 class IdentityError(Exception):
@@ -65,7 +66,9 @@ def _bootstrap_workspace(db: Session, user: User) -> None:
     db.add(workspace)
     db.flush()
     db.add(WorkspaceMember(workspace_id=workspace.id, user_id=user.id, role="owner"))
-    db.add(Subscription(workspace_id=workspace.id, plan="free"))
+    free = PLANS["free"]
+    db.add(Subscription(workspace_id=workspace.id, plan="free", video_plan=free.id, video_limit=free.videos,
+                        videos_period_start=datetime.now(UTC)))
 
 
 def resolve_or_create_google_user(

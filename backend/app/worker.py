@@ -25,11 +25,15 @@ import httpx
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
+from app.chat_memory.organize import forget_orphans, organize_chat, rebuild_chat
 from app.config import settings
 from app.db import SessionLocal, engine
 from app.models import (
     Artifact,
+    Chat,
+    Document,
     Job,
+    Message,
     Source,
     Subscription,
     UpdateEmail,
@@ -41,16 +45,28 @@ from app.models import (
     Workspace,
     WorkspaceMember,
 )
-from app.pipeline import generate, launchkit, media
+from app.pipeline import flashcards, generate, infographic, launchkit, media, quiz, report, slides
 from app.pipeline.generate import NothingToDo
 from app.pipeline.ingest import FeedNotFound, entry_from_upload, extract_article, ingest_source, store_entries
-from app.services import launchpad, tts
+from app.pipeline.memory import learn_from_message
+from app.services import launchpad, report_suggestions, tts, video_quota
 from app.services.email import email_service
 from app.services.email_verification import purge_old_codes
-from app.services.jobs import claim_next, create_job, record_usage, retry_or_fail, stale_jobs, update_job
-from app.services.plans import effective_plan
+from app.services.jobs import (
+    claim_next,
+    create_job,
+    pending_job,
+    record_usage,
+    retry_or_fail,
+    stale_jobs,
+    update_job,
+)
+from app.services.notestack_voices import save_notestack_voice
+from app.services.plans import effective_plan, post_room
 from app.services.renderer import PermanentJobError, request_render
+from app.services.social.health import social_health
 from app.services.storage import keys, storage
+from app.services.uploads import sweep_orphan_uploads
 
 log = logging.getLogger("notestack.worker")
 
@@ -67,21 +83,17 @@ HANDED_OFF = object()  # the job continues elsewhere (renderer) and reports back
 # Handlers: (db, job) -> Done | HANDED_OFF. Raise to trigger a retry.
 
 
-def _pending(db: Session, workspace_id: uuid.UUID, kind: str) -> bool:
-    return db.scalar(select(Job.id).where(Job.workspace_id == workspace_id, Job.kind == kind,
-                                          Job.status.in_(("queued", "running"))).limit(1)) is not None
-
-
 def _after_import(db: Session, job: Job, workspace_id: uuid.UUID, changed: list[str]) -> None:
     """New or changed posts are mapped into the topic constellation and scored for resurfacing, and the
     first import builds the writing voice, so none of these need a button press."""
     if not changed or not settings.llm_api_key:
         return
     create_job(db, workspace_id, "topics", {"document_ids": changed}, max_attempts=2)
-    if not _pending(db, workspace_id, "resurface_scan"):
+    create_job(db, workspace_id, "ideas", {"document_ids": changed}, max_attempts=2)
+    if not pending_job(db, workspace_id, "resurface_scan"):
         create_job(db, workspace_id, "resurface_scan", {}, max_attempts=2)
     vp = db.scalar(select(VoiceProfile).where(VoiceProfile.workspace_id == workspace_id))
-    if not (vp and vp.profile_json) and not _pending(db, workspace_id, "voice_profile"):
+    if not (vp and vp.profile_json) and not pending_job(db, workspace_id, "voice_profile"):
         create_job(db, workspace_id, "voice_profile", {"document_ids": []}, max_attempts=2)
 
 
@@ -90,8 +102,10 @@ def handle_ingest(db: Session, job: Job):
     if not source:
         return Done({"error": "source deleted"}, "Source no longer exists")
     plan = effective_plan(db, db.get(Workspace, source.workspace_id))
+    # The plan limit is one total across every source, link and upload: this source gets what the others leave.
+    room = post_room(db, source.workspace_id, plan, source.id)
     try:
-        result = ingest_source(db, source, job, max_posts=plan.indexed_posts)
+        result = ingest_source(db, source, job, max_posts=room)
     except Exception as exc:
         db.rollback()
         source.sync_status = "error"
@@ -109,6 +123,50 @@ def handle_ingest(db: Session, job: Job):
     return Done(result, f"All posts in orbit: {result['indexed']} new or updated")
 
 
+def handle_memory(db: Session, job: Job):
+    """Decide whether the writer's chat message holds a lasting note, and update their memory."""
+    msg = db.get(Message, uuid.UUID(job.params["message_id"]))
+    chat = db.get(Chat, msg.chat_id) if msg else None
+    if not msg or msg.role != "user" or not chat or chat.workspace_id != job.workspace_id:
+        return Done({"saved": []}, "Message no longer exists")
+    result = learn_from_message(db, job, job.workspace_id, msg.content)
+    return Done(result, "Notes updated" if result["saved"] else "Nothing to save")
+
+
+def handle_chat_memory(db: Session, job: Job):
+    """File a chat's new rounds under topics (summary, keywords, exact quotes) in the notebook's chat memory."""
+    chat = db.get(Chat, uuid.UUID(job.params["chat_id"]))
+    if not chat or chat.workspace_id != job.workspace_id:
+        return Done({"rounds": 0}, "Chat no longer exists")
+    result = organize_chat(db, job, chat)
+    return Done(result, f"Filed {result['rounds']} rounds" if result["rounds"] else "Nothing new to file")
+
+
+def handle_chat_memory_rebuild(db: Session, job: Job):
+    """Rebuild chat memory from the messages. Params: notebook_id, and optionally chat_id for just one chat."""
+    notebook_id = uuid.UUID(job.params["notebook_id"])
+    chats = db.scalars(select(Chat).where(Chat.notebook_id == notebook_id, Chat.workspace_id == job.workspace_id))
+    only = job.params.get("chat_id")
+    done = [rebuild_chat(db, job, c) for c in chats if not only or str(c.id) == only]
+    return Done({"chats": len(done), "rounds": sum(d["rounds"] for d in done)}, f"Rebuilt {len(done)} chats")
+
+
+def handle_chat_memory_cleanup(db: Session, job: Job):
+    """Remove chat memory whose chat is gone. Params: notebook_id."""
+    removed = forget_orphans(db, job.workspace_id, uuid.UUID(job.params["notebook_id"]))
+    return Done({"removed": removed}, f"Removed {removed} orphaned chats")
+
+
+def _require_room(db: Session, source: Source, url: str) -> None:
+    """Re-reading a post that is already indexed is fine; a new one needs room under the plan's post limit."""
+    known = db.scalar(select(Document.id).where(Document.source_id == source.id, Document.url == url,
+                                                 Document.path.is_not(None)))
+    plan = effective_plan(db, db.get(Workspace, source.workspace_id))
+    if not known and post_room(db, source.workspace_id, plan) <= 0:
+        raise PermanentJobError(f"Your plan indexes up to {plan.indexed_posts} posts, and they are all used. "
+                                "Remove a post or upgrade to add more.")
+
+
 def handle_import_url(db: Session, job: Job):
     source = db.get(Source, uuid.UUID(job.params["source_id"]))
     update_job(db, job, progress=0.1, message="Fetching the article")
@@ -116,6 +174,7 @@ def handle_import_url(db: Session, job: Job):
         entry = extract_article(job.params["url"])
     except FeedNotFound as exc:
         raise PermanentJobError(str(exc)) from exc
+    _require_room(db, source, entry.url)
     indexed, _, changed = store_entries(db, source, [entry])
     _after_import(db, job, source.workspace_id, [str(i) for i in changed])
     return Done({"indexed": indexed, "document_ids": [str(i) for i in changed]}, f"{entry.title[:80]} is in orbit")
@@ -128,6 +187,7 @@ def handle_import_upload(db: Session, job: Job):
     entry = entry_from_upload(upload.filename, upload.content_type, storage.get_bytes(upload.key))
     if not entry.sections and not entry.html:
         raise PermanentJobError("We could not read any text in that file.")
+    _require_room(db, source, entry.url)
     indexed, _, changed = store_entries(db, source, [entry])
     _after_import(db, job, source.workspace_id, [str(i) for i in changed])
     return Done({"indexed": indexed, "document_ids": [str(i) for i in changed]}, f"{entry.title[:80]} is in orbit")
@@ -135,6 +195,18 @@ def handle_import_upload(db: Session, job: Job):
 
 def handle_topics(db: Session, job: Job):
     return Done(generate.extract_topics(db, job, job.workspace_id, job.params.get("document_ids")), "Topic map ready")
+
+
+def handle_ideas(db: Session, job: Job):
+    result = generate.extract_ideas(db, job, job.workspace_id, job.params.get("document_ids"))
+    if result["extracted"]:
+        report_suggestions.queue_warmup(db, job.workspace_id)  # their notebooks' suggested report templates are written now
+    return Done(result, f"Read {result['extracted']} posts for their ideas")
+
+
+def handle_report_templates(db: Session, job: Job):
+    written = report_suggestions.warm_workspace(db, job.workspace_id)
+    return Done({"written": written}, f"Prepared report templates for {written} notebooks")
 
 
 def handle_voice_profile(db: Session, job: Job):
@@ -164,13 +236,15 @@ def handle_voice_clone(db: Session, job: Job):
     consent.elevenlabs_voice_id = voice_id
     db.commit()
 
-    # Make the new voice host A and record a short preview so the writer can judge it straight away.
+    # Save the new voice to the workspace's voices (and keep it as the default host A), then record a short preview
+    # so the writer can judge it straight away.
     update_job(db, job, progress=0.7, message="Recording a preview in your voice")
     vp = db.scalar(select(VoiceProfile).where(VoiceProfile.workspace_id == consent.workspace_id))
     if not vp:
         vp = VoiceProfile(workspace_id=consent.workspace_id)
         db.add(vp)
     vp.host_voices = {**(vp.host_voices or {}), "host_a": voice_id}
+    save_notestack_voice(db, consent.workspace_id, voice_id, "My voice")
     db.commit()
     preview_text = job.params.get("preview_text") or (
         "Hi, this is my Notestack voice. From now on, my audio overviews and videos can sound like me.")
@@ -216,17 +290,37 @@ def handle_render(db: Session, job: Job):
     return HANDED_OFF
 
 
+def handle_publish_post(db: Session, job: Job):
+    item = launchpad.publish_job(db, job.params["item_id"])
+    return Done({"status": item.status if item else "gone"}, "Published" if item and item.status == "posted"
+                else f"Post {item.status}" if item else "Post deleted")
+
+
 HANDLERS: dict[str, Callable[[Session, Job], object]] = {
     "ingest": handle_ingest,
     "import_url": handle_import_url,
     "import_upload": handle_import_upload,
     "topics": handle_topics,
+    "publish_post": handle_publish_post,
+    "ideas": handle_ideas,
+    "report_templates": handle_report_templates,
+    "memory_update": handle_memory,
+    "chat_memory": handle_chat_memory,
+    "chat_memory_rebuild": handle_chat_memory_rebuild,
+    "chat_memory_cleanup": handle_chat_memory_cleanup,
     "voice_profile": handle_voice_profile,
     "voice_clone": handle_voice_clone,
     "resurface_scan": handle_resurface,
     "summary": _artifact_handler(generate.summarize_notebook, "Summary ready"),
+    "mind_map": _artifact_handler(generate.build_mind_map, "Mind Constellation ready"),
+    "quiz": _artifact_handler(quiz.build_quiz, "Quiz ready"),
+    "flashcards": _artifact_handler(flashcards.build_flashcards, "Flashcards ready"),
+    "report": _artifact_handler(report.build_report, "Report ready"),
+    "infographic": _artifact_handler(infographic.build_infographic, "Infographic ready"),
+    "slide_deck": _artifact_handler(slides.build_slide_deck, "Slide deck ready"),
+    "report_block": report.handle_report_block,
     "audio_overview": _artifact_handler(media.audio_overview, "Audio overview ready"),
-    "video": _artifact_handler(media.make_video, "Video ready"),
+    "video": _artifact_handler(media.make_video, "Audiogram ready"),  # audiograms; videos come from blog2video
     "quote_card": _artifact_handler(media.make_quote_card, "Quote card ready"),
     "carousel": _artifact_handler(media.render_carousel, "Carousel ready"),
     "launch_kit": _artifact_handler(launchkit.build_launch_kit, "Launch Kit ready"),
@@ -235,7 +329,8 @@ HANDLERS: dict[str, Callable[[Session, Job], object]] = {
 
 
 def mark_artifact_failed(db: Session, job: Job, error: str) -> None:
-    if job.artifact_id:
+    # A failed "add a visual" job leaves the report as it was; the job's own error tells the page what went wrong.
+    if job.artifact_id and job.kind != "report_block":
         artifact = db.get(Artifact, job.artifact_id)
         if artifact:
             artifact.status = "failed"
@@ -266,9 +361,10 @@ def run_job(
             mark_artifact_failed(db, job, str(exc))
             return
         except Exception as exc:
-            log.exception("job %s (%s) attempt %s failed", job.id, job.kind, job.attempts)
+            # Roll back first: after a failed flush, touching `job` raises PendingRollbackError.
             db.rollback()
             job = db.get(Job, job_id)
+            log.exception("job %s (%s) attempt %s failed", job_id, job.kind, job.attempts)
             if not retry_or_fail(db, job, f"{type(exc).__name__}: {exc}"):
                 mark_artifact_failed(db, job, f"{type(exc).__name__}: {exc}")
             return
@@ -305,6 +401,19 @@ def single_flight(name: str):
             if got:
                 conn.execute(text("SELECT pg_advisory_unlock(hashtext(:n))"), {"n": name})
                 conn.commit()
+
+
+def topics_backfill(session_factory: Callable[[], Session] = SessionLocal) -> None:
+    """Every indexed post gets topics: one whose tagging failed (the model timed out, rate limited, answered nothing)
+    or that came before posts were tagged on import is asked for again here, one topics job per workspace that has
+    some, unless one is already queued. A post that keeps failing stops being asked (generate.MAX_TAG_FAILURES)."""
+    if not settings.llm_api_key:
+        return
+    with session_factory() as db:
+        rows = db.execute(select(Document.workspace_id, Document.metadata_json).where(Document.path.is_not(None)))
+        for workspace_id in {ws for ws, meta in rows if generate.needs_topics(meta)}:
+            if not pending_job(db, workspace_id, "topics"):
+                create_job(db, workspace_id, "topics", {}, max_attempts=2)
 
 
 def update_email_batch(session_factory: Callable[[], Session] = SessionLocal) -> None:
@@ -348,6 +457,7 @@ def update_email_batch(session_factory: Callable[[], Session] = SessionLocal) ->
 def daily_cleanup(session_factory: Callable[[], Session] = SessionLocal) -> None:
     with session_factory() as db:
         purge_old_codes(db)
+    sweep_orphan_uploads(session_factory)  # upload files whose record was deleted, and unfinished uploads
 
 
 @dataclass
@@ -356,14 +466,34 @@ class Periodic:
     every_seconds: float
     fn: Callable[[], object]
     next_at: float = 0.0
+    # Run on the wall clock's multiples of every_seconds (1800: at :00 and :30 UTC), not every_seconds after the last
+    # run. The first run is still at start-up, to catch up on anything already due.
+    align: bool = False
 
+    def schedule_next(self, now: float, wall: float | None = None) -> None:
+        if not self.align:
+            self.next_at = now + self.every_seconds
+            return
+        wall = time.time() if wall is None else wall
+        # A couple of seconds past the boundary, so a post scheduled exactly on it is already due.
+        self.next_at = now + (self.every_seconds - wall % self.every_seconds) + ALIGN_GRACE_SECONDS
+
+
+ALIGN_GRACE_SECONDS = 2
 
 PERIODIC = [
     Periodic("recover_stale", 60, recover_stale),
-    Periodic("publish_due", 30, launchpad.publish_due),
+    # Posts are scheduled on half hours (in the user's zone), so they go out on the :00 / :30 run. Zones on a :45
+    # offset (Nepal) get slots between runs: those go out at the next run, up to 15 minutes late.
+    Periodic("publish_due", 1800, launchpad.publish_due, align=True),
+    Periodic("social_health", 600, social_health),
     Periodic("sync_engagement", 3600, launchpad.sync_engagement),
     Periodic("update_email_batch", 300, update_email_batch),
+    Periodic("topics_backfill", 900, topics_backfill),
     Periodic("daily_cleanup", 24 * 3600, daily_cleanup),
+    Periodic("video_period_reset", 3600, video_quota.reset_due_video_periods),
+    Periodic("video_refund_sweep", 600, video_quota.sweep_failed_videos),
+    Periodic("video_capacity_check", 3600, video_quota.check_capacity),
 ]
 
 
@@ -371,7 +501,7 @@ def run_periodic(now: float) -> None:
     for task in PERIODIC:
         if now < task.next_at:
             continue
-        task.next_at = now + task.every_seconds
+        task.schedule_next(now)
         try:
             with single_flight(task.name) as got:
                 if got:
@@ -381,6 +511,15 @@ def run_periodic(now: float) -> None:
 
 
 # Main loop
+
+
+def _log_crash(job_id: uuid.UUID) -> Callable[[Future], None]:
+    """run_job handles job errors itself; anything escaping it would otherwise vanish inside the Future and leave
+    the job 'running' until recover_stale."""
+    def callback(future: Future) -> None:
+        if exc := future.exception():
+            log.error("job %s crashed outside its error handling", job_id, exc_info=exc)
+    return callback
 
 
 def run_loop(stop: threading.Event, worker_id: str | None = None) -> None:
@@ -403,7 +542,9 @@ def run_loop(stop: threading.Event, worker_id: str | None = None) -> None:
                 break
             if not job_id:
                 break
-            running.add(pool.submit(run_job, job_id))
+            future = pool.submit(run_job, job_id)
+            future.add_done_callback(_log_crash(job_id))
+            running.add(future)
             claimed = True
         if not claimed:
             stop.wait(settings.worker_poll_seconds)

@@ -6,10 +6,11 @@ from types import SimpleNamespace
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.corpus import Corpus, CorpusError, ScopedTools
 from app.models import Document, NotebookDocument, VoiceProfile
 
-DEFAULT_BUDGET = 120_000  # characters across all passages; GLM-5.3 has room, this keeps cost sane
+DEFAULT_BUDGET = 120_000  # the default of ARTIFACT_PASSAGE_BUDGET: characters across all passages; this keeps cost sane
 
 
 def notebook_docs(db: Session, notebook_id: uuid.UUID) -> list[Document]:
@@ -28,10 +29,26 @@ def workspace_docs(db: Session, workspace_id: uuid.UUID, ids: list[uuid.UUID] | 
     return list(db.scalars(q.order_by(Document.published_at.desc())).all())
 
 
-def passages_for(corpus: Corpus, docs: list[Document], budget_chars: int = DEFAULT_BUDGET) -> list[str]:
+def _body_start(lines: list[str]) -> int:
+    """The index of the first line after the post file's header (the `---` block of title, url, date and source, and the repeated
+    `# Title`): none of it is worth sending, the `FILE path (title)` line already names the post."""
+    i = 0
+    if lines and lines[0].strip() == "---":
+        end = next((k for k in range(1, min(len(lines), 12)) if lines[k].strip() == "---"), None)
+        if end is not None:
+            i = end + 1
+    while i < len(lines) and not lines[i].strip():
+        i += 1
+    if i < len(lines) and lines[i].startswith("# "):
+        i += 1
+    return i
+
+
+def passages_for(corpus: Corpus, docs: list[Document], budget_chars: int | None = None) -> list[str]:
     """One string per post: a header line then `n| text` numbered lines (same numbering as read()).
     The budget is split evenly, so one long post cannot crowd out the rest."""
     corpus.sync()
+    budget_chars = budget_chars or settings.artifact_passage_budget
     per_doc = max(budget_chars // max(len(docs), 1), 1500)
     out = []
     for d in docs:
@@ -40,8 +57,9 @@ def passages_for(corpus: Corpus, docs: list[Document], budget_chars: int = DEFAU
         except CorpusError:
             continue
         body, used = [], 0
+        first = _body_start(lines)  # lines keep their number in the file, so a cited line is still the right one
         for n, line in enumerate(lines, start=1):
-            if not line.strip():
+            if n <= first or not line.strip():
                 continue
             entry = f"{n}| {line}"
             if used + len(entry) > per_doc:

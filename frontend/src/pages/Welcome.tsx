@@ -14,12 +14,12 @@ type Goal = "ask" | "audio" | "launch";
 type Mode = "feed" | "url" | "file";
 
 const MODES: { id: Mode; label: string }[] = [
-  { id: "feed", label: "Blog or newsletter" },
+  { id: "feed", label: "Blog or website" },
   { id: "url", label: "One article" },
   { id: "file", label: "Upload files" },
 ];
 
-const FILE_ACCEPT = ".md,.markdown,.txt,.html,.htm,.pdf,text/markdown,text/plain,text/html,application/pdf";
+const FILE_ACCEPT = ".md,.markdown,.txt,.vtt,.html,.htm,.pdf,text/vtt,text/markdown,text/plain,text/html,application/pdf";
 
 const EXAMPLES = ["yourblog.com", "yourname.substack.com", "medium.com/@you"];
 
@@ -177,7 +177,7 @@ export default function Welcome() {
   const finish = async (chosen: Goal | null) => {
     markOnboarded();
     if (!chosen || posts === 0) return navigate("/app", { replace: true });
-    if (chosen === "launch") return navigate("/app/launch-kit", { replace: true });
+    if (chosen === "launch") return navigate("/app/launchpad/kits", { replace: true });
     setBusy(true);
     try {
       const docs = await docsApi.list({ limit: 5000 });
@@ -210,7 +210,10 @@ export default function Welcome() {
           {["Connect", "Index", "Choose", "Launch"].map((label, i) => (
             <li key={label} className={i < stepIndex ? "done" : i === stepIndex ? "current" : ""}>
               <span className="welcome-dot" />
-              {label}
+              <span>
+                <span className="welcome-step-num">{i + 1}</span>
+                {label}
+              </span>
             </li>
           ))}
         </ol>
@@ -231,7 +234,7 @@ export default function Welcome() {
             <p className="muted small">
               {mode === "feed" && "Substack, Ghost, WordPress, Medium or anything with a feed. We find the feed, pull in your archive and keep it in sync."}
               {mode === "url" && "Any single article on the web. Add more later from Sources."}
-              {mode === "file" && "Markdown, text, HTML or PDF: drafts, exports and posts that never had a feed. Add as many as you like."}
+              {mode === "file" && "Markdown, text, VTT transcripts, HTML or PDF: drafts, exports and posts that never had a feed. Add as many as you like."}
             </p>
             <form onSubmit={submit} className="welcome-form">
               {mode === "file" ? (

@@ -1,7 +1,7 @@
 """Narration for the landing page demo (Nora Vale, Mission Control). Writes public/demo-vo/*.mp3 + durations.json.
 
-The screens show the product; the voice never explains it, it only says how it feels: exploring,
-excited, mesmerized. Also writes src/compositions/demoVo.ts; scenes stretch to fit their lines.
+The screens show the product, one feature at a time; the voice stays sparse and frames the film as a
+journey of knowledge and discovery. Also writes src/compositions/demoVo.ts; scenes stretch to fit their lines.
 make_demo_music.py writes a 47.5 s score; raise its TOTAL and rerun it if the demo grows past that.
 
     cd backend && PYTHONPATH=. .venv/Scripts/python ../renderer/scripts/make_demo_vo.py
@@ -17,18 +17,15 @@ OUT = Path(__file__).resolve().parents[1] / "public" / "demo-vo"
 OUT.mkdir(parents=True, exist_ok=True)
 
 LINES = {
-    "warp": "Captain's log. Something wonderful is on the horizon.",
-    "paste": "Take a breath. That flutter of excitement? That's how every great expedition begins.",
-    "orbit": "And there it is. Everything you've made, shimmering... impossible to look away.",
-    "research": "A question sparks, and suddenly you're wide awake.",
-    "audio": "Lean back. Let it wash over you.",
-    "launchkit": "Your pulse quickens. You can't wait to share this.",
-    "launchpad": "Three, two, one... and you're flying.",
-    "outro": "Notestack. Clear skies ahead.",
+    "warp": "Every great journey begins with a single question.",
+    "sync": "Gather everything you know.",
+    "map": "Somewhere in all you have written, a whole world is waiting to be discovered.",
+    "kit": "Knowledge was always meant to travel further.",
+    "outro": "Notestack. Begin your journey.",
 }
 
 voice_id = next(v["voice_id"] for v in tts.list_voices() if v["name"].startswith("Nora Vale"))
-vs = tts.VoiceSettings(stability=0.55, similarity_boost=0.8, style=0.3, speed=0.93)
+vs = tts.VoiceSettings(stability=0.6, similarity_boost=0.8, style=0.2, speed=0.9)
 ws = uuid.UUID(int=0)
 keys = list(LINES)
 durations = {}

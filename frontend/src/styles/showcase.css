@@ -185,8 +185,8 @@
   stroke: var(--white);
   stroke-opacity: 0.3;
   stroke-width: 0.4;
-  stroke-dasharray: 60;
-  stroke-dashoffset: 60;
+  stroke-dasharray: 150;
+  stroke-dashoffset: 150;
   transition-delay: var(--d);
 }
 
@@ -216,6 +216,141 @@
 
 .showcase-row.arrived .fx-halo {
   animation: pulse-halo 4s ease-in-out infinite;
+  animation-delay: var(--t, 0s);
+}
+
+/* Depth: the camera dives into Gravity, the other topics fall back, its sub-topics and posts light up,
+   then it pulls back out. One 14 s loop, started once the row has arrived. */
+.fx-cam {
+  transform-origin: 38px 52px;
+  transform-box: view-box;
+}
+
+.fx-deep,
+.fx-panel,
+.fx-crumb-deep {
+  opacity: 0;
+}
+
+.showcase-row.arrived .fx-cam {
+  animation: fx-dive 14s ease-in-out 2.5s infinite;
+}
+
+.showcase-row.arrived .fx-dim {
+  animation: fx-dim 14s ease-in-out 2.5s infinite;
+}
+
+.showcase-row.arrived .fx-deep,
+.showcase-row.arrived .fx-panel,
+.showcase-row.arrived .fx-crumb-deep {
+  animation: fx-in 14s ease-in-out 2.5s infinite;
+}
+
+@keyframes fx-dive {
+  0%,
+  26%,
+  86%,
+  100% {
+    transform: none;
+  }
+  40%,
+  72% {
+    transform: translate(-4px, -2px) scale(2.1);
+  }
+}
+
+@keyframes fx-dim {
+  0%,
+  26%,
+  86%,
+  100% {
+    opacity: 1;
+  }
+  40%,
+  72% {
+    opacity: 0.1;
+  }
+}
+
+@keyframes fx-in {
+  0%,
+  32%,
+  80%,
+  100% {
+    opacity: 0;
+  }
+  42%,
+  70% {
+    opacity: 1;
+  }
+}
+
+.fx-sat {
+  fill: var(--white);
+  opacity: 0.5;
+}
+
+.fx-ring {
+  fill: none;
+  stroke: var(--blue);
+  stroke-opacity: 0.5;
+  stroke-width: 0.25;
+  stroke-dasharray: 1.2 1.6;
+}
+
+.fx-deep-edge {
+  stroke: var(--white);
+  stroke-opacity: 0.35;
+  stroke-width: 0.2;
+}
+
+.fx-post {
+  fill: var(--white);
+}
+
+.fx-sub {
+  fill: var(--white);
+  font: 500 2.4px var(--font-body);
+}
+
+.fx-panel rect {
+  fill: rgba(0, 0, 0, 0.88);
+  stroke: var(--blue);
+  stroke-opacity: 0.5;
+  stroke-width: 0.25;
+}
+
+.fx-panel text {
+  fill: var(--white);
+}
+
+.fx-panel-h {
+  font: 600 3.8px var(--font-display);
+}
+
+.fx-panel-k {
+  fill: var(--blue) !important;
+  font: 500 1.9px var(--font-mono);
+  letter-spacing: 0.2px;
+}
+
+.fx-panel-t {
+  font: 500 2.7px var(--font-body);
+}
+
+.fx-crumb {
+  display: flex;
+  min-height: 1.2em;
+}
+
+.fx-pulse {
+  opacity: 0;
+  filter: drop-shadow(0 0 1.5px var(--blue));
+  transition: opacity 1s ease 1.5s;
+}
+
+.showcase-row.arrived .fx-pulse {
+  opacity: 0.9;
 }
 
 @keyframes pulse-halo {
@@ -290,8 +425,29 @@
 
 /* Video */
 .fx-video {
-  grid-template-columns: 0.55fr 1.2fr 0.8fr;
+  grid-template-columns: 0.8fr 1.3fr;
   align-items: center;
+}
+
+.fx-scenes {
+  display: grid;
+  gap: 8px;
+}
+
+.fx-scenes span {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line-strong);
+  font-size: 0.8rem;
+}
+
+.fx-scenes span.on {
+  border-color: var(--blue);
+  background: var(--blue-10);
+  box-shadow: 0 0 18px var(--blue-20);
 }
 
 .fx-frame {
@@ -311,22 +467,51 @@
   line-height: 1.2;
 }
 
-.v916 {
-  aspect-ratio: 9 / 16;
-}
-
 .v169 {
   aspect-ratio: 16 / 9;
 }
 
-.v11 {
-  aspect-ratio: 1;
+.fx-render {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 6px;
 }
 
-.fx-mini-wave {
+.fx-render i {
   display: block;
-  height: 18px;
-  background: repeating-linear-gradient(90deg, var(--blue) 0 3px, transparent 3px 6px);
+  height: 4px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--blue) 70%, var(--surface-2) 70%);
+}
+
+/* Mind Constellation shapes */
+.fx-pills {
+  display: flex;
+  gap: 6px;
+}
+
+.fx-pills button {
+  padding: 3px 10px;
+  border-radius: 99px;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  cursor: pointer;
+  transition:
+    border-color 0.3s ease,
+    background 0.3s ease,
+    color 0.3s ease;
+}
+
+.fx-pills button:hover {
+  color: var(--white);
+}
+
+.fx-pills button.on {
+  border-color: var(--blue);
+  background: var(--blue-10);
+  color: var(--white);
 }
 
 /* Launch Kit */
@@ -469,9 +654,19 @@
 
   .fx-wave span,
   .fx-halo,
+  .fx-cam,
+  .fx-dim,
+  .fx-deep,
+  .fx-panel,
+  .fx-crumb-deep,
   .fx-rec {
     animation: none !important;
   }
+
+  .fx-pulse {
+    display: none;
+  }
+
 }
 
 /* Demo video sound controls */

@@ -7,8 +7,6 @@ from app.models import Artifact, Job
 from app.services.storage import keys, storage
 
 COMPOSITIONS = {
-    "ShortVertical": "mp4",
-    "ExplainerLong": "mp4",
     "AudiogramSquare": "mp4",
     "QuoteCard": "png",
     "CarouselSlide": "png",
@@ -17,6 +15,14 @@ COMPOSITIONS = {
 
 class PermanentJobError(RuntimeError):
     """Fail the job now; retrying will not help."""
+
+
+def available() -> bool:
+    """Whether the render service answers right now (a quick health check, not a promise for later)."""
+    try:
+        return httpx.get(f"{settings.renderer_url}/health", timeout=2).status_code == 200
+    except httpx.HTTPError:
+        return False
 
 
 def request_render(job: Job, artifact: Artifact, composition: str, props: dict | None = None,
@@ -51,15 +57,3 @@ def request_render(job: Job, artifact: Artifact, composition: str, props: dict |
     if resp.status_code == 400:
         raise PermanentJobError(f"Renderer rejected the props: {resp.text[:400]}")
     resp.raise_for_status()
-
-
-def brand_props(workspace, *, ttl: int = 6 * 3600) -> dict:
-    brand = workspace.brand_json or {}
-    out: dict = {}
-    if brand.get("accent"):
-        out["accent"] = brand["accent"]
-    if brand.get("name"):
-        out["name"] = brand["name"]
-    if brand.get("logo_key"):
-        out["logoUrl"] = storage.presign_get(brand["logo_key"], ttl=ttl)
-    return out

@@ -1,3 +1,13 @@
+---
+title: NoteStack Test
+emoji: 📚
+colorFrom: indigo
+colorTo: purple
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="marketing/logo/notestack-logo.svg">
@@ -39,10 +49,10 @@ archive, stays in sync with it, cites the exact lines behind every answer, and t
 | Citations | Exact line ranges, verified before you see them | Passage level citations |
 | Not in your sources | Says so; unverifiable claims are dropped | Grounded, passage citations |
 | Audio | Two hosts on ElevenLabs voices, or your consented voice clone | Two host overviews, Google voices |
-| Video | 9:16 shorts, 16:9 explainers, 1:1 audiograms, quote cards, in your brand | Video overviews |
+| Video | 9:16 shorts, 16:9 explainers, 1:1 audiograms, quote cards | Video overviews |
 | Publishing | Launch Kits (threads, LinkedIn, Notes, Bluesky, SEO, carousels) and auto posting | Not a publishing tool |
 | Your voice | Voice profile learned from your posts, used in every draft | General purpose writing |
-| Seeing your archive | Topic constellation with rising and dormant topics, evergreen resurfacing | Mind maps per notebook |
+| Seeing your archive | Topic constellation with rising and dormant topics, evergreen resurfacing | Idea Constellations per notebook |
 
 The full comparison lives at [notestack.ai/notebooklm-alternative](https://notestack.ai/notebooklm-alternative).
 
@@ -71,7 +81,7 @@ docker compose up --build
 Without Docker (one API process does everything):
 
 ```bash
-cd backend && python -m venv .venv && .venv/Scripts/pip install -r requirements-dev.txt
+cd backend && python -m venv .venv && .venv/Scripts/pip install -r requirements.txt
 alembic upgrade head && uvicorn app.main:app --reload     # SQLite at backend/notestack.db
 cd frontend && npm install && npm run dev
 cd renderer && npm install && npm start                    # only needed for videos, quote cards, carousels
@@ -83,9 +93,19 @@ cd renderer && npm install && npm start                    # only needed for vid
 - With no R2 settings, files live on local disk under `backend/.storage` and are served through
   signed `/api/storage/local/...` URLs (range requests supported for audio and video seeking).
 - Audio needs `ELEVENLABS_API_KEY`; everything text based needs `LLM_API_KEY`.
-- Launchpad: Bluesky connects with an app password. X and LinkedIn need developer apps; the
-  redirect URIs are listed in `.env.example` and on the Launchpad page. Substack Notes has no API,
-  so those posts (and any post without a connected account) arrive as an email reminder at send time.
+- Launchpad: posts (text, images, videos from your Library; not audio) go to X and LinkedIn at their
+  scheduled time through a `publish_post` job. Set up the developer apps and keys as described in
+  `backend/.env.example`:
+  - `X_CLIENT_ID` / `X_CLIENT_SECRET`: the X app's **OAuth 2.0 Client ID and Client Secret** (Read and write,
+    Web App, callback `{API_URL}/api/social/x/callback`, scopes incl. `media.write`).
+  - `LINKEDIN_CLIENT_ID` / `LINKEDIN_CLIENT_SECRET`: products "Sign In with LinkedIn using OpenID Connect" and
+    "Share on LinkedIn", redirect `{API_URL}/api/social/linkedin/callback`.
+  - `API_URL` must be reachable from the internet for the callbacks (an https tunnel locally).
+  X and LinkedIn posts need a connected account. X tokens are refreshed automatically; LinkedIn connections
+  last about 60 days. If a connection goes down (expired, revoked on the platform, or disconnected here) its
+  scheduled posts are **paused** and never attempted; reconnecting the same account resumes the ones still
+  ahead, and missed ones wait for a new time. Bluesky connects with an app password; Substack Notes has no API,
+  so those posts arrive as an email reminder at send time.
 
 ## What is in the app
 
@@ -101,7 +121,7 @@ cd renderer && npm install && npm start                    # only needed for vid
 | Launchpad | Calendar and agenda, auto posting to X, LinkedIn and Bluesky, email reminders, tracked links, engagement |
 | Archive | Every generated artifact with filters, players, downloads, retry and delete |
 | Resurfacing | Evergreen scores and reshare angles for old posts, on this day, straight into a kit or the calendar |
-| Settings | Profile, workspace, brand kit, privacy, plan usage meters, connections, sign out everywhere, delete |
+| Settings | Profile, workspace, privacy, plan usage meters, connections, sign out everywhere, delete |
 
 ## Key choices
 

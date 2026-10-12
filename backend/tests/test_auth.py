@@ -35,6 +35,42 @@ def test_wrong_code_and_attempt_limit(client):
     assert r.json()["detail"]["code"] == "too_many_attempts"
 
 
+def test_wrong_code_counts_down_and_lockout_allows_resend(client):
+    client.post("/api/auth/email/register/start", json={"email": "e@f.co", "password": "longenough"})
+    if last_code() == "000000":
+        return
+    r = client.post("/api/auth/email/register/verify", json={"email": "e@f.co", "code": "000000"})
+    assert r.json()["detail"]["message"].endswith("4 tries left.")
+    for _ in range(4):
+        r = client.post("/api/auth/email/register/verify", json={"email": "e@f.co", "code": "000000"})
+    assert r.json()["detail"]["code"] == "too_many_attempts"
+    # A dead code does not hold up a new one, and the pending sign up survives the lockout.
+    assert client.post("/api/auth/email/register/resend", json={"email": "e@f.co"}).status_code == 200
+    r = client.post("/api/auth/email/register/verify", json={"email": "e@f.co", "code": last_code()})
+    assert r.status_code == 200
+
+
+def test_email_send_failure_is_reported(client, monkeypatch):
+    from app.services.email import email_service
+
+    monkeypatch.setattr(email_service, "send_verification_code", lambda to, code: False)
+    r = client.post("/api/auth/email/register/start", json={"email": "f@g.co", "password": "longenough"})
+    assert r.status_code == 502
+    assert r.json()["detail"]["code"] == "email_failed"
+
+
+def test_forgot_password_unknown_and_google(client, db_session):
+    from app.services.auth_identity import resolve_or_create_google_user
+
+    r = client.post("/api/auth/password/forgot/start", json={"email": "nobody@example.com"})
+    assert r.status_code == 404
+    resolve_or_create_google_user(db_session, email="g2@example.com", google_id="456", name="G", avatar_url=None)
+    db_session.commit()
+    r = client.post("/api/auth/password/forgot/start", json={"email": "g2@example.com"})
+    assert r.status_code == 409
+    assert r.json()["detail"]["code"] == "wrong_provider"
+
+
 def test_resend_cooldown(client):
     client.post("/api/auth/email/register/start", json={"email": "c@d.co", "password": "longenough"})
     r = client.post("/api/auth/email/register/resend", json={"email": "c@d.co"})
@@ -141,3 +177,29 @@ def test_safe_next():
     assert _safe_next("/app/notebooks/1?x=1") == "/app/notebooks/1?x=1"
     for bad in (None, "", "https://evil.example", "//evil.example", r"/\evil.example"):
         assert _safe_next(bad) == "/app"
+
+
+def test_google_id_token_check_allows_for_a_laptop_clock_that_runs_behind(monkeypatch):
+    """Seen on a dev machine whose clock was 2 seconds behind Google: google-auth refused the fresh ID token ("Token
+    used too early") and the writer only saw "Google sign in failed". Both Google flows now allow some drift."""
+    from app.config import settings
+    from app.routers import auth as auth_router
+
+    seen = []
+
+    class Reply:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"id_token": "t"}
+
+    def verify(token, request, audience=None, clock_skew_in_seconds=0):
+        seen.append(clock_skew_in_seconds)
+        return {"email": "a@b.co"}
+
+    monkeypatch.setattr(settings, "google_client_id", "cid")
+    monkeypatch.setattr(auth_router.httpx, "post", lambda *a, **k: Reply())
+    monkeypatch.setattr(auth_router.google_id_token, "verify_oauth2_token", verify)
+    auth_router.exchange_google_code("code")
+    assert seen == [auth_router.GOOGLE_CLOCK_SKEW_SECONDS] and seen[0] >= 5

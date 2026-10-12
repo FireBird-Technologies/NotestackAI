@@ -382,6 +382,14 @@
   place-items: center;
 }
 
+/* Covers the app while sign out revokes the session. */
+.signout-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: var(--black);
+}
+
 /* ---------- Pricing ---------- */
 .pricing-note {
   display: flex;
@@ -696,6 +704,22 @@
   border-radius: var(--radius-sm);
 }
 
+.password-field {
+  position: relative;
+}
+
+.password-field .input {
+  width: 100%;
+  padding-right: 48px;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+}
+
 .code-input {
   font-family: var(--font-mono);
   letter-spacing: 0.4em;
@@ -770,6 +794,15 @@
 .shell {
   display: grid;
   grid-template-columns: 1fr;
+}
+
+/* A notebook is already a complete three-pane workspace; avoid stacking a second app sidebar beside its chat rail. */
+.shell.notebook-focus {
+  grid-template-columns: 1fr;
+}
+
+.shell.notebook-focus > .sidebar {
+  display: none;
 }
 
 .sidebar {
@@ -964,6 +997,19 @@
   font-size: 0.75rem;
 }
 
+/* A long message wraps inside its own column; the percentage keeps its width and never breaks across lines ("80%" as 8, 0, %). */
+.ascent-meta > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ascent-meta > :last-child:not(:first-child) {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Notebook view: sources | chat | artifacts */
 .nbv {
   display: grid;
@@ -972,7 +1018,7 @@
 
 @media (min-width: 1100px) {
   .nbv {
-    grid-template-columns: 260px 1fr 280px;
+    grid-template-columns: 280px 1fr 240px;
     height: calc(100vh - 96px);
   }
 }
@@ -1039,6 +1085,13 @@
 
 .cite-span {
   font-size: 0.8125rem;
+}
+.chat-quote {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border-left: 3px solid var(--accent, currentColor);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 /* Empty states */
@@ -1264,3 +1317,4 @@
     filter: none;
   }
 }
+

@@ -264,7 +264,12 @@ function renderItems(items: ListItem[], ordered: boolean, cite: Cite, key: strin
   );
 }
 
-export function Markdown({ text, citations, onCite, className = "" }: { text: string; className?: string } & Cite) {
+export function Markdown({ text, citations, onCite, className = "", reportHeadings = false }: {
+  text: string;
+  className?: string;
+  /** A report page: "#" and "##" are page sections (h2), not the chat's small headings. */
+  reportHeadings?: boolean;
+} & Cite) {
   const cite = { citations, onCite };
   return (
     <div className={`md ${className}`}>
@@ -272,7 +277,7 @@ export function Markdown({ text, citations, onCite, className = "" }: { text: st
         const key = `b${i}`;
         switch (b.kind) {
           case "h": {
-            const Tag = (["h3", "h3", "h4", "h5", "h5", "h5"] as const)[b.level - 1];
+            const Tag = (reportHeadings ? (["h2", "h2", "h3", "h4", "h5", "h5"] as const) : (["h3", "h3", "h4", "h5", "h5", "h5"] as const))[b.level - 1];
             return <Tag key={key}>{inline(b.text, cite, key)}</Tag>;
           }
           case "p":

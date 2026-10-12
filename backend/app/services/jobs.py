@@ -46,6 +46,12 @@ def serialize_job(job: Job) -> dict:
 # Producer side
 
 
+def pending_job(db: Session, workspace_id: uuid.UUID, kind: str) -> bool:
+    """A job of this kind is already queued or running for the workspace."""
+    return db.scalar(select(Job.id).where(Job.workspace_id == workspace_id, Job.kind == kind,
+                                          Job.status.in_(("queued", "running"))).limit(1)) is not None
+
+
 def create_job(
     db: Session,
     workspace_id: uuid.UUID,
@@ -54,8 +60,9 @@ def create_job(
     *,
     artifact_id: uuid.UUID | None = None,
     max_attempts: int = 3,
+    run_after: datetime | None = None,
 ) -> Job:
-    """Enqueue. The worker picks it up within WORKER_POLL_SECONDS."""
+    """Enqueue. The worker picks it up within WORKER_POLL_SECONDS, or after `run_after` when that is set."""
     job = Job(
         workspace_id=workspace_id,
         kind=kind,
@@ -63,6 +70,7 @@ def create_job(
         artifact_id=artifact_id,
         status="queued",
         max_attempts=max_attempts,
+        run_after=run_after,
     )
     db.add(job)
     db.commit()

@@ -1,0 +1,126 @@
+/* The infographic design system: black, blue and white, thin lines, flow charts. The page frame (head, takeaway, mark, the
+   background) is ours; the body is composed by the AI from the components below, and only these class names survive the
+   sanitiser (design.ALLOWED_CLASSES). */
+.ig2,.ig2 *{box-sizing:border-box;margin:0;padding:0}
+.ig2{position:relative;width:var(--w);height:var(--h);overflow:hidden;color:var(--ink);font-family:'Inter',sans-serif;
+  background:radial-gradient(1300px 900px at 82% 6%,var(--bg2),var(--bg) 68%)}
+.ig2 .ig-bg{position:absolute;inset:0;pointer-events:none}
+.ig2 .ig-main{position:absolute;left:110px;right:110px;top:84px;bottom:132px;display:flex;flex-direction:column;gap:34px}
+.ig2 .ig-left{display:contents}
+.ig2 .ig-head{order:1;position:relative;flex:none;min-height:286px}
+.ig2 .ig-body{order:2;flex:1;min-height:0;overflow:hidden;display:flex}
+.ig2 .ig-take{order:3;flex:none}
+
+.ig2 .ig-eyebrow{display:flex;align-items:center;gap:16px;font:500 20px 'JetBrains Mono',monospace;letter-spacing:.24em;text-transform:uppercase;color:var(--acc2);margin-bottom:20px}
+.ig2 .ig-eyebrow:before{content:"";width:44px;height:2px;background:var(--acc)}
+.ig2 h1{font:600 74px/1.04 'Space Grotesk',sans-serif;letter-spacing:-.02em;max-width:850px;margin-bottom:20px}
+.ig2 .ig-sub{font-size:30px;line-height:1.38;color:var(--mute);max-width:850px}
+/* The key figures: the few numbers or short facts that matter most, beside the title (or under it when wide) */
+.ig2 .ig-figs{position:absolute;right:0;top:0;width:430px;display:flex;flex-direction:column;gap:16px}
+.ig2 .fig{padding:6px 0 6px 24px;border-left:3px solid var(--acc)}
+.ig2 .fig-v{display:block;font:600 56px/1.02 'Space Grotesk',sans-serif;letter-spacing:-.02em;overflow-wrap:anywhere}
+.ig2 .fig-l{display:block;margin-top:6px;font:500 19px 'JetBrains Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
+
+.ig2 .ig-take{display:grid;grid-template-columns:1.05fr 1fr;gap:48px;align-items:center;padding:32px 46px;border-radius:16px;background:var(--paper);color:var(--paperink)}
+.ig2 .ig-take .q{font:600 38px/1.16 'Space Grotesk',sans-serif;letter-spacing:-.01em}
+.ig2 .ig-take ul{list-style:none;font-size:24px;line-height:1.38}
+.ig2 .ig-take li{position:relative;padding-left:28px;margin:8px 0}
+.ig2 .ig-take li:before{content:"";position:absolute;left:0;top:12px;width:11px;height:11px;border-radius:50%;background:var(--acc)}
+
+.ig2 .ig-mark{position:absolute;right:44px;bottom:34px;display:flex;align-items:center;gap:16px;padding:8px 26px 8px 10px;border-radius:999px;
+  background:var(--markbg);border:1px solid var(--markline);font:700 30px 'JetBrains Mono',monospace;letter-spacing:.04em;color:var(--markink)}
+.ig2 .ig-mark svg{width:52px;height:52px;display:block}
+
+/* The body: fitted by scaling when the AI wrote more than a poster holds (the scale is measured once, when it is made) */
+.ig2 .ig-inner{display:flex;flex-direction:column;justify-content:space-evenly;gap:34px;min-height:calc(100% / var(--fit,1));flex:none;width:calc(1380px / var(--fit,1));transform:scale(var(--fit,1));transform-origin:0 0}
+.ig2 .sec{display:flex;flex-direction:column;gap:20px}
+.ig2 .sec-t{display:flex;align-items:center;gap:18px;font:500 20px 'JetBrains Mono',monospace;letter-spacing:.22em;text-transform:uppercase;color:var(--acc2)}
+.ig2 .sec-t:after{content:"";flex:1;height:1.5px;background:var(--line)}
+.ig2 .lead{font-size:28px;line-height:1.4;color:var(--ink)}
+.ig2 .ig-inner p{font-size:24px;line-height:1.4;color:var(--mute)}
+.ig2 .ig-inner strong,.ig2 .ig-inner b{color:var(--ink);font-weight:600}
+.ig2 .ig-inner em,.ig2 .ig-inner i{color:var(--acc2);font-style:normal}
+.ig2 .mono{font-family:'JetBrains Mono',monospace}
+.ig2 .small{font-size:20px}
+
+/* A box in a flow: a small number, a title, a line of text */
+.ig2 .node{position:relative;padding:24px 26px;border:1.5px solid var(--line);border-radius:14px;background:linear-gradient(var(--card),var(--card)),linear-gradient(var(--bg),var(--bg))}
+.ig2 .node.hl{background:linear-gradient(var(--hl),var(--hl)),linear-gradient(var(--bg),var(--bg));border-color:var(--acc)}
+.ig2 .n-no{display:block;font:500 19px 'JetBrains Mono',monospace;letter-spacing:.14em;color:var(--acc2);margin-bottom:10px}
+.ig2 .n-t{display:block;font:600 31px/1.15 'Space Grotesk',sans-serif;margin-bottom:8px}
+.ig2 .n-d{display:block;font-size:23px;line-height:1.38;color:var(--mute)}
+
+/* Flow chart: boxes in a row (or a column) joined by arrows */
+.ig2 .flow{display:flex;gap:58px;align-items:stretch}
+.ig2 .flow>.node{flex:1;min-width:0}
+.ig2 .flow>.node+.node:before{content:"";position:absolute;left:-48px;top:50%;width:34px;height:2px;background:var(--acc)}
+.ig2 .flow>.node+.node:after{content:"";position:absolute;left:-15px;top:50%;margin-top:-7px;border-style:solid;border-width:7px 0 7px 11px;border-color:transparent transparent transparent var(--acc)}
+.ig2 .flow.col{flex-direction:column;gap:50px}
+.ig2 .flow.col>.node+.node:before{left:50%;top:-40px;width:2px;height:28px;margin-left:-1px}
+.ig2 .flow.col>.node+.node:after{left:50%;top:-13px;margin:0 0 0 -7px;border-width:11px 7px 0 7px;border-color:var(--acc) transparent transparent transparent}
+
+/* Cards in a grid */
+.ig2 .grid{display:grid;gap:22px}
+.ig2 .c2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.ig2 .c3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.ig2 .c4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.ig2 .card{padding:24px 26px 26px;border:1.5px solid var(--line);border-top:3px solid var(--acc);border-radius:14px;background:linear-gradient(var(--card),var(--card)),linear-gradient(var(--bg),var(--bg))}
+.ig2 .card.hl{background:linear-gradient(var(--hl),var(--hl)),linear-gradient(var(--bg),var(--bg));border-color:var(--acc)}
+.ig2 .c-k{display:block;font:500 19px 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--acc2);margin-bottom:10px}
+.ig2 .c-t{display:block;font:600 29px/1.15 'Space Grotesk',sans-serif;margin-bottom:8px}
+.ig2 .c-d{display:block;font-size:22px;line-height:1.38;color:var(--mute)}
+
+/* A timeline: a line with a dot for each moment */
+.ig2 .timeline{position:relative;display:flex;flex-direction:column;gap:28px;padding-left:46px}
+.ig2 .timeline:before{content:"";position:absolute;left:10px;top:8px;bottom:8px;width:2px;background:var(--line)}
+.ig2 .t-item{position:relative}
+.ig2 .t-item:before{content:"";position:absolute;left:-46px;top:6px;width:16px;height:16px;border-radius:50%;background:var(--bg);border:3px solid var(--acc)}
+.ig2 .t-when{display:block;font:500 19px 'JetBrains Mono',monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--acc2);margin-bottom:6px}
+.ig2 .t-t{display:block;font:600 30px/1.15 'Space Grotesk',sans-serif;margin-bottom:6px}
+.ig2 .t-d{display:block;font-size:23px;line-height:1.38;color:var(--mute)}
+
+/* A hierarchy: one box over the boxes it leads to, joined by lines */
+.ig2 .tree{display:flex;flex-direction:column;align-items:center}
+.ig2 .t-root{width:560px;max-width:100%;text-align:center;position:relative}
+.ig2 .t-root:after{content:"";position:absolute;left:50%;top:100%;width:2px;height:28px;margin-left:-1px;background:var(--acc)}
+.ig2 .t-kids{display:flex;gap:24px;width:100%;margin-top:28px}
+.ig2 .t-kids>*{flex:1;min-width:0;position:relative;margin-top:28px}
+.ig2 .t-kids>*:before{content:"";position:absolute;left:50%;top:-28px;width:2px;height:28px;margin-left:-1px;background:var(--acc)}
+.ig2 .t-kids>*:after{content:"";position:absolute;top:-28px;left:-12px;right:-12px;height:2px;background:var(--acc)}
+.ig2 .t-kids>*:first-child:after{left:50%}
+.ig2 .t-kids>*:last-child:after{right:50%}
+.ig2 .t-kids>*:only-child:after{display:none}
+
+/* Two sides compared */
+.ig2 .compare{display:grid;grid-template-columns:1fr 1fr;border:1.5px solid var(--line);border-radius:14px;overflow:hidden}
+.ig2 .side{padding:26px 32px 22px;background:linear-gradient(var(--card),var(--card)),linear-gradient(var(--bg),var(--bg))}
+.ig2 .side+.side{border-left:1.5px solid var(--line)}
+.ig2 .side.hl{background:linear-gradient(var(--hl),var(--hl)),linear-gradient(var(--bg),var(--bg))}
+.ig2 .s-h{display:block;font:600 32px/1.15 'Space Grotesk',sans-serif;margin-bottom:14px}
+.ig2 .side ul{list-style:none}
+.ig2 .side li{position:relative;padding:13px 0 13px 30px;border-top:1px solid var(--line);font-size:23px;line-height:1.35;color:var(--mute)}
+.ig2 .side li:before{content:"";position:absolute;left:2px;top:23px;width:10px;height:10px;border-radius:50%;background:var(--acc)}
+
+/* Big numbers */
+.ig2 .stats{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:22px}
+.ig2 .stat{padding:20px 26px 22px;border-left:3px solid var(--acc);background:linear-gradient(var(--card),var(--card)),linear-gradient(var(--bg),var(--bg));border-radius:0 12px 12px 0}
+.ig2 .s-n{display:block;font:600 62px/1 'Space Grotesk',sans-serif;letter-spacing:-.02em}
+.ig2 .s-l{display:block;font-size:22px;line-height:1.35;color:var(--mute);margin-top:8px}
+
+.ig2 .cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:40px}
+.ig2 .pills{display:flex;flex-wrap:wrap;gap:12px}
+.ig2 .pill{padding:10px 22px;border:1.5px solid var(--line);border-radius:999px;font-size:22px;background:linear-gradient(var(--card),var(--card)),linear-gradient(var(--bg),var(--bg))}
+.ig2 .callout{padding:24px 30px;border-left:4px solid var(--acc);background:linear-gradient(var(--hl),var(--hl)),linear-gradient(var(--bg),var(--bg));border-radius:0 12px 12px 0;font-size:27px;line-height:1.38}
+
+/* Wide: the title and the takeaway in a column, the body beside them */
+.ig2.landscape .ig-main{top:70px;bottom:104px;flex-direction:row;gap:60px}
+.ig2.landscape .ig-left{display:flex;flex-direction:column;justify-content:space-between;gap:28px;width:600px;flex:none;min-height:0}
+.ig2.landscape .ig-head{min-height:0}
+.ig2.landscape h1{font-size:58px;max-width:none}
+.ig2.landscape .ig-sub{font-size:27px;max-width:none}
+.ig2.landscape .ig-figs{position:static;width:100%;margin-top:34px;gap:14px}
+.ig2.landscape .fig-v{font-size:50px}
+.ig2.landscape .ig-body{order:0;width:1380px;flex:none}
+.ig2.landscape .ig-take{grid-template-columns:1fr;gap:18px;padding:30px 34px}
+.ig2.landscape .ig-take .q{font-size:35px}
+.ig2.landscape .ig-take ul{font-size:22px}

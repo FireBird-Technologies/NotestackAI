@@ -13,8 +13,16 @@ requests==2.*
 boto3==1.35.*
 resend==2.*
 httpx==0.28.*
+python-multipart==0.0.*
 dspy==2.6.*
+rank-bm25==0.2.*
 feedparser==6.*
 beautifulsoup4==4.*
 pypdf==5.*
+python-pptx==1.*
 stripe==13.*
+jinja2==3.*
+
+# Dev tools (tests, lint)
+pytest==8.*
+ruff==0.8.*

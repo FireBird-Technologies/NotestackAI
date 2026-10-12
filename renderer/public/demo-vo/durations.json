@@ -1,10 +1,7 @@
 {
-  "warp": 3.92,
-  "paste": 6.95,
-  "orbit": 6.61,
-  "research": 3.74,
-  "audio": 2.67,
-  "launchkit": 3.32,
-  "launchpad": 4.05,
-  "outro": 2.48
+  "warp": 3.61,
+  "sync": 2.25,
+  "map": 5.17,
+  "kit": 2.95,
+  "outro": 2.8
 }

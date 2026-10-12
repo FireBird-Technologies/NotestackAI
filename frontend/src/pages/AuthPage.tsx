@@ -6,6 +6,9 @@ import Logo from "../components/Logo";
 import SkyCanvas from "../components/SkyCanvas";
 import { useAuth } from "../hooks/useAuth";
 
+/** Mirrors validate_password on the backend. */
+const MIN_PASSWORD = 8;
+
 type Mode = "signin" | "signup" | "verify" | "forgot" | "reset";
 
 declare global {
@@ -75,6 +78,9 @@ export default function AuthPage() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  // The current code is out of tries or expired: the only ways forward are a new code or a new email.
+  const [codeDead, setCodeDead] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -115,9 +121,34 @@ export default function AuthPage() {
       }
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Something went wrong. Try again.");
+      if (!(e instanceof ApiError)) return;
+      // A dead code cannot be retried; clear it so the next step is clearly "Resend code".
+      if (e.code === "too_many_attempts" || e.code === "expired") {
+        setCode("");
+        setCodeDead(true);
+      }
+      // Registered with the other method: back to sign in, where the Google button sits.
+      if (e.code === "wrong_provider") setMode("signin");
     } finally {
       setBusy(false);
     }
+  };
+
+  useEffect(() => setCodeDead(false), [mode]);
+
+  const resend = () =>
+    run(async () => {
+      if (mode === "verify") await authApi.registerResend(email);
+      else await authApi.forgotStart(email);
+      setCodeDead(false);
+      setNotice("New code sent.");
+    });
+
+  const tryAnotherEmail = () => {
+    setCode("");
+    setError(null);
+    setNotice(null);
+    setMode(mode === "verify" ? "signup" : "forgot");
   };
 
   const onGoogle = (credential: string) => run(() => authApi.google(credential));
@@ -136,10 +167,13 @@ export default function AuthPage() {
       return run(async () => {
         await authApi.forgotStart(email);
         setMode("reset");
-        setNotice(`If ${email} has an account, a reset code is on its way.`);
+        setNotice(`We sent a reset code to ${email}.`);
       });
     return run(() => authApi.forgotComplete(email, code, password));
   };
+
+  // New passwords (sign up, reset) must meet the length rule before the form can be sent.
+  const passwordTooShort = (mode === "signup" || mode === "reset") && password.length < MIN_PASSWORD;
 
   const titles: Record<Mode, string> = {
     signin: "Welcome back",
@@ -216,15 +250,32 @@ export default function AuthPage() {
             {(mode === "signin" || mode === "signup" || mode === "reset") && (
               <label>
                 <span>{mode === "reset" ? "New password" : "Password"}</span>
-                <input
-                  className="input"
-                  type="password"
-                  required
-                  minLength={8}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoComplete={mode === "signin" ? "current-password" : "new-password"}
-                />
+                <div className="password-field">
+                  <input
+                    className="input"
+                    type={showPassword ? "text" : "password"}
+                    required
+                    minLength={MIN_PASSWORD}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    autoComplete={mode === "signin" ? "current-password" : "new-password"}
+                  />
+                  <button
+                    type="button"
+                    className="icon-btn password-toggle"
+                    onClick={() => setShowPassword((v) => !v)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-pressed={showPassword}
+                    title={showPassword ? "Hide password" : "Show password"}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z" />
+                      <circle cx="12" cy="12" r="3" />
+                      {showPassword && <path d="M4 20L20 4" />}
+                    </svg>
+                  </button>
+                </div>
+                {mode !== "signin" && <span className="muted small">At least {MIN_PASSWORD} characters.</span>}
               </label>
             )}
             {error && (
@@ -232,9 +283,15 @@ export default function AuthPage() {
                 {error}
               </p>
             )}
-            <button type="submit" className="btn btn-primary" disabled={busy}>
-              {busy ? "Working..." : cta[mode]}
-            </button>
+            {codeDead ? (
+              <button type="button" className="btn btn-primary" disabled={busy} onClick={resend}>
+                {busy ? "Working..." : "Resend code"}
+              </button>
+            ) : (
+              <button type="submit" className="btn btn-primary" disabled={busy || passwordTooShort}>
+                {busy ? "Working..." : cta[mode]}
+              </button>
+            )}
           </form>
 
           <div className="auth-switch muted">
@@ -259,20 +316,16 @@ export default function AuthPage() {
                 </button>
               </span>
             )}
-            {mode === "verify" && (
-              <button
-                type="button"
-                className="link-btn"
-                onClick={() =>
-                  run(async () => {
-                    await authApi.registerResend(email);
-                    setNotice("New code sent.");
-                  })
-                }
-              >
-                Resend code
-              </button>
-            )}
+            {(mode === "verify" || mode === "reset") &&
+              (codeDead ? (
+                <button type="button" className="link-btn" onClick={tryAnotherEmail}>
+                  Try with another email
+                </button>
+              ) : (
+                <button type="button" className="link-btn" onClick={resend}>
+                  Resend code
+                </button>
+              ))}
             {(mode === "forgot" || mode === "reset") && (
               <button type="button" className="link-btn" onClick={() => setMode("signin")}>
                 Back to sign in

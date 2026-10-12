@@ -148,3 +148,37 @@ from contextlib import contextmanager  # noqa: E402
 @contextmanager
 def _no_usage(lm):
     yield _Usage()
+
+
+def test_long_messages_keep_their_start_and_end():
+    from app.pipeline.research import HISTORY_CHARS, Turn, conversation_text, shorten
+
+    assert shorten("short and sweet") == "short and sweet"
+    text = "OPENING " + "middle words " * 200 + "CLOSING?"
+    out = shorten(text)
+    assert out.startswith("OPENING") and out.endswith("CLOSING?") and " ... " in out
+    assert "middle words" in out and len(out) < len(text) and len(out) <= HISTORY_CHARS + 5
+    assert shorten("x" * 5000).count("...") == 1  # no spaces to cut on: still bounded
+    assert len(shorten("x" * 5000)) <= HISTORY_CHARS + 5
+
+    long_answer = "First [1] " + "point " * 300 + "Want more?"
+    history = [Turn("user", "Compare my pricing posts"), Turn("assistant", long_answer)]
+    lines = conversation_text(history).splitlines()
+    assert lines[0] == "Writer: Compare my pricing posts"  # short messages are untouched
+    assert lines[1].startswith("Assistant: First") and lines[1].endswith("Want more?") and "[1]" not in lines[1]
+    assert "..." not in lines[1]  # the newest two messages are kept whole
+
+
+def test_only_the_newest_two_messages_stay_whole():
+    from app.pipeline.research import HISTORY_CHARS, RECENT_CHARS, Turn, conversation_text
+
+    body = "start " + "filler " * 300 + "end"
+    history = [Turn("user" if i % 2 == 0 else "assistant", f"m{i} {body}") for i in range(6)]
+    lines = conversation_text(history).splitlines()
+    assert len(lines) == 6
+    assert all("..." in line and len(line) <= HISTORY_CHARS + 20 for line in lines[:4])  # older: head and tail
+    assert all("..." not in line and line.endswith("end") for line in lines[4:])  # newest two: whole
+    assert len(conversation_text(history, limit=3).splitlines()) == 3  # the window still applies
+
+    huge = [Turn("user", "q"), Turn("assistant", "word " * 5000)]
+    assert len(conversation_text(huge).splitlines()[1]) <= RECENT_CHARS + 30  # even the newest are bounded

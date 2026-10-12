@@ -1,90 +1,61 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { launchpadApi } from "../api/endpoints";
-import type { CalendarItem, SocialAccounts } from "../api/types";
-import { PLATFORMS, ScheduleModal, toLocalInput } from "../components/ScheduleModal";
-import { ConfirmButton, CopyButton, errorMessage, formatDate, Loading, Modal, PageHeader, StatusPill, Tabs } from "../components/ui";
-import { ResurfaceIdeas } from "./Resurface";
+import type { CalendarItem, PostableArtifact, SocialAccounts } from "../api/types";
+import { FilmIcon } from "../components/icons/Icons";
+import { AttachmentChip, AttachPicker, LibraryPicker } from "../components/launchpad/Attachment";
+import { PLATFORMS, ScheduleModal } from "../components/ScheduleModal";
+import { monthGrid, SlotPicker, toWall, userTimeZone, wallToDate } from "../components/launchpad/SlotPicker";
+import { BackArrow, ConfirmButton, CopyButton, errorMessage, formatDate, Loading, Modal, PageHeader, StatusPill, Tabs } from "../components/ui";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-function monthGrid(month: Date): Date[] {
-  const first = new Date(month.getFullYear(), month.getMonth(), 1);
-  const offset = (first.getDay() + 6) % 7; // weeks start on Monday
-  const start = new Date(first);
-  start.setDate(first.getDate() - offset);
-  return Array.from({ length: 42 }, (_, i) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + i));
+/** A small mark on a calendar item that carries a video or images. */
+function MediaMark({ item }: { item: CalendarItem }) {
+  if (!item.artifact || item.artifact.media === "text") return null;
+  return (
+    <span className="cal-media" title={item.artifact.media === "video" ? "With a video" : "With images"}>
+      {item.artifact.media === "video" ? <FilmIcon size={12} /> : (
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+          <rect x="3" y="4" width="18" height="16" rx="2.5" /><path d="M3 16l5-5 4 4 3-3 6 6" />
+        </svg>
+      )}
+    </span>
+  );
 }
 
 const sameDay = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-
-function BlueskyModal({ onClose, onConnected }: { onClose: () => void; onConnected: (a: SocialAccounts) => void }) {
-  const [handle, setHandle] = useState("");
-  const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      onConnected(await launchpadApi.connectBluesky(handle.trim(), password.trim()));
-      onClose();
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <Modal title="Connect Bluesky" onClose={onClose}>
-      <form className="stack" onSubmit={submit}>
-        <p className="muted">
-          Create an app password in Bluesky under Settings, Privacy and security, App passwords. Never use your main password.
-        </p>
-        <label className="field">
-          <span>Handle</span>
-          <input className="input input-sm" required placeholder="you.bsky.social" value={handle} onChange={(e) => setHandle(e.target.value)} />
-        </label>
-        <label className="field">
-          <span>App password</span>
-          <input className="input input-sm" required type="password" placeholder="xxxx-xxxx-xxxx-xxxx" value={password} onChange={(e) => setPassword(e.target.value)} />
-        </label>
-        {error && <p className="error-text">{error}</p>}
-        <div className="row end">
-          <button type="button" className="btn" onClick={onClose}>
-            Cancel
-          </button>
-          <button className="btn btn-primary" disabled={busy}>
-            {busy ? "Checking..." : "Connect"}
-          </button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
 
 function ItemModal({
   item,
   accounts,
   onClose,
   onChanged,
+  onReconnect,
 }: {
   item: CalendarItem;
   accounts: SocialAccounts | null;
   onClose: () => void;
   onChanged: (item: CalendarItem | null) => void;
+  onReconnect: (platform: "x" | "linkedin") => void;
 }) {
   const [posts, setPosts] = useState([item.content, ...item.thread]);
-  const [when, setWhen] = useState(toLocalInput(new Date(item.scheduled_at)));
+  // Its time on the user's clock; one made before half-hour slots stays as it is until a new slot is picked.
+  const [when, setWhen] = useState(() => toWall(new Date(item.scheduled_at)));
+  const moved = when !== toWall(new Date(item.scheduled_at));
   const [accountId, setAccountId] = useState(item.social_account_id ?? "");
+  const [attached, setAttached] = useState<PostableArtifact | null>(item.artifact);
+  const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const meta = PLATFORMS.find((p) => p.id === item.platform)!;
   const locked = item.status === "posted" || item.status === "publishing";
   const options = (accounts?.accounts ?? []).filter((a) => a.platform === item.platform);
 
+  // Not on the calendar to go out (a draft, failed, reminded or paused post): Save puts it back, at the time shown.
+  const reschedules = item.status !== "scheduled";
   const save = async () => {
+    if ((moved || reschedules) && wallToDate(when) <= new Date()) return setError("Pick a time that is still ahead.");
     setBusy(true);
     setError(null);
     try {
@@ -93,8 +64,10 @@ function ItemModal({
         await launchpadApi.update(item.id, {
           content: clean[0],
           thread: clean.slice(1),
-          scheduled_at: new Date(when).toISOString(),
+          ...(moved || reschedules ? { local_time: when, timezone: userTimeZone() } : {}),
+          ...(reschedules ? { status: "scheduled" as const } : {}),
           social_account_id: accountId || null,
+          ...((attached?.id ?? null) !== item.artifact_id ? { artifact_id: attached?.id ?? null } : {}),
         }),
       );
       onClose();
@@ -114,7 +87,21 @@ function ItemModal({
           </span>
           <StatusPill status={item.status} />
         </div>
-        {item.error && <p className="error-text">{item.error}</p>}
+        {item.kit_id && (
+          <p className="muted small lp-from-kit">Written from the launch kit: {item.kit_title ?? "a launch kit"}</p>
+        )}
+        {item.status === "paused" ? (
+          <div className="lp-paused">
+            <span>{item.error ?? "Paused: it won't go out until resumed."}</span>
+            {(item.platform === "x" || item.platform === "linkedin")
+              && accounts?.accounts.some((a) => a.platform === item.platform && a.needs_reconnect) && (
+              <button className="btn btn-small btn-primary" onClick={() => onReconnect(item.platform as "x" | "linkedin")}>
+                Reconnect {item.platform_label}
+              </button>
+            )}
+            <span className="muted small">Pick a time still ahead and Save to resume it.</span>
+          </div>
+        ) : item.error && <p className="error-text">{item.error}</p>}
         {item.external_url && (
           <p>
             <a href={item.external_url} target="_blank" rel="noreferrer">
@@ -134,6 +121,19 @@ function ItemModal({
             <span>{item.clicks} link clicks</span>
           </div>
         )}
+        {(attached || !locked) && (
+          <div className="field">
+            <span className="vw-label">Attachment</span>
+            {attached ? (
+              <AttachmentChip a={attached} onChange={locked ? undefined : () => setPicking(true)}
+                              onRemove={locked ? undefined : () => setAttached(null)} />
+            ) : (
+              <button type="button" className="btn lp-attach-btn" onClick={() => setPicking(true)}>
+                + Attach from your Library
+              </button>
+            )}
+          </div>
+        )}
         {posts.map((p, i) => (
           <label key={i} className="field">
             <span className="field-row">
@@ -146,11 +146,11 @@ function ItemModal({
           </label>
         ))}
         {!locked && (
-          <div className="row">
-            <label className="field">
+          <div className="lp-edit-when">
+            <div className="field">
               <span>When</span>
-              <input className="input input-sm" type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} />
-            </label>
+              <SlotPicker value={when} onChange={setWhen} />
+            </div>
             {meta.auto && (
               <label className="field">
                 <span>Account</span>
@@ -167,7 +167,7 @@ function ItemModal({
           </div>
         )}
         {error && <p className="error-text">{error}</p>}
-        <div className="row between">
+        <div className="row between lp-edit-actions">
           <div className="row">
             <CopyButton text={posts.join("\n\n")} />
             <ConfirmButton
@@ -191,8 +191,10 @@ function ItemModal({
                   try {
                     const next = await launchpadApi.publishNow(item.id);
                     onChanged(next);
-                    if (next.status === "failed" || next.error) setError(next.error ?? "Publishing failed.");
-                    else onClose();
+                    // With a video or images it uploads in the background; the calendar follows it.
+                    if (next.status === "failed" || (next.error && next.status !== "publishing")) {
+                      setError(next.error ?? "Publishing failed.");
+                    } else onClose();
                   } catch (e) {
                     setError(errorMessage(e));
                   } finally {
@@ -202,14 +204,124 @@ function ItemModal({
               >
                 {item.auto_post ? "Publish now" : "Send reminder now"}
               </button>
-              <button className="btn btn-primary" disabled={busy} onClick={save}>
-                Save
+              <button className="btn btn-primary" disabled={busy} onClick={save}
+                      title={reschedules ? "Save it and put it back on the calendar at this time" : undefined}>
+                {reschedules ? "Reschedule" : "Save"}
               </button>
             </div>
           )}
         </div>
       </div>
+      {picking && (
+        <AttachPicker onClose={() => setPicking(false)} onPick={(a) => {
+          setAttached(a);
+          setPicking(false);
+        }} />
+      )}
     </Modal>
+  );
+}
+
+const CONNECT: { id: "x" | "linkedin"; label: string; blurb: string }[] = [
+  { id: "linkedin", label: "LinkedIn", blurb: "Post and schedule to LinkedIn from your Library." },
+];
+
+/** The right column: LinkedIn (X is switched off for now), connected (who, status, expiry, Reconnect / Disconnect) or a Connect button. */
+function ConnectionsPanel({ accounts, onConnect, onChanged }: {
+  accounts: SocialAccounts | null;
+  onConnect: (platform: "x" | "linkedin") => void;
+  onChanged: () => void;
+}) {
+  const [disconnecting, setDisconnecting] = useState<SocialAccounts["accounts"][number] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const closeDisconnect = () => {
+    setDisconnecting(null);
+    setError(null);
+  };
+  const disconnect = async () => {
+    if (!disconnecting) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await launchpadApi.disconnect(disconnecting.id);
+      closeDisconnect();
+      onChanged();
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <aside className="card stack lp-connections" aria-label="Connected accounts">
+      <h2>Connections</h2>
+      <p className="muted small">Posts go out through these accounts at their scheduled time.</p>
+      {!accounts && <div className="loading-center inline"><Loading label="Loading your connections" /></div>}
+      {accounts && CONNECT.map((c) => {
+        const a = accounts.accounts.find((x) => x.platform === c.id);
+        const days = a?.expires_at ? Math.max(0, Math.ceil((new Date(a.expires_at).getTime() - Date.now()) / 864e5)) : null;
+        return (
+          <section key={c.id} className="lp-conn">
+            <div className="lp-conn-head">
+              <strong>{c.label}</strong>
+              {a && <StatusPill status={a.status === "active" ? "connected" : a.status === "revoked" ? "disconnected" : a.status} />}
+            </div>
+            {a ? (
+              <>
+                <div className="lp-conn-who">
+                  {a.avatar_url ? <img src={a.avatar_url} alt="" width={32} height={32} /> : <span className="lp-conn-dot" aria-hidden="true" />}
+                  <span className="lp-attach-text">
+                    <strong>{a.handle}</strong>
+                    <span className="muted small">
+                      {a.connected_at ? `Connected since ${formatDate(a.connected_at)}` : "Connected"}
+                      {a.status === "active" && a.expires_soon && days !== null ? ` · expires in ${days} days` : ""}
+                    </span>
+                  </span>
+                </div>
+                {a.status === "active" && !a.can_post_media && (
+                  <p className="small lp-warn">Can't post images and videos yet: reconnect to allow it.</p>
+                )}
+                {a.status !== "active" && (
+                  <p className="small lp-warn">Its scheduled posts are paused until you reconnect.</p>
+                )}
+                <div className="row end">
+                  {a.needs_reconnect && (
+                    <button className="btn btn-small btn-primary" onClick={() => onConnect(c.id)}>Reconnect</button>
+                  )}
+                  {a.status === "active" && (
+                    <button className="btn btn-small" onClick={() => setDisconnecting(a)}>Disconnect</button>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="muted small">{c.blurb}</p>
+                <button className="btn btn-primary" disabled={!accounts.available[c.id]} onClick={() => onConnect(c.id)}>
+                  Connect with {c.label}
+                </button>
+              </>
+            )}
+          </section>
+        );
+      })}
+      {disconnecting && (
+        <Modal title={`Disconnect ${PLATFORMS.find((p) => p.id === disconnecting.platform)?.label ?? "account"}?`} onClose={closeDisconnect}>
+          <div className="stack">
+            <p>
+              <strong>{disconnecting.handle}</strong> will be disconnected. Its scheduled posts pause until you reconnect.
+            </p>
+            {error && <p className="error-text">{error}</p>}
+            <div className="row end">
+              <button type="button" className="btn" onClick={closeDisconnect} disabled={busy}>Cancel</button>
+              <button type="button" className="btn btn-danger" onClick={disconnect} disabled={busy}>
+                {busy ? "Disconnecting..." : "Disconnect"}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </aside>
   );
 }
 
@@ -223,10 +335,15 @@ export default function Launchpad() {
   const [items, setItems] = useState<CalendarItem[] | null>(null);
   const [accounts, setAccounts] = useState<SocialAccounts | null>(null);
   const [open, setOpen] = useState<CalendarItem | null>(null);
-  const [composing, setComposing] = useState(false);
-  const [bluesky, setBluesky] = useState(false);
+  const navigate = useNavigate();
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Success notices ("LinkedIn connected.") clear themselves after 3 seconds.
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(null), 3000);
+    return () => clearTimeout(t);
+  }, [notice]);
 
   const days = useMemo(() => monthGrid(month), [month]);
   const load = useCallback(() => {
@@ -238,8 +355,15 @@ export default function Launchpad() {
   useEffect(() => {
     load();
   }, [load]);
+  // Posts with a video or images upload in the background: check back until they are posted (or failed).
+  const publishing = (items ?? []).some((i) => i.status === "publishing");
   useEffect(() => {
-    launchpadApi.accounts().then(setAccounts);
+    if (!publishing) return;
+    const t = setTimeout(() => load(), 5000);
+    return () => clearTimeout(t);
+  }, [publishing, items, load]);
+  useEffect(() => {
+    launchpadApi.accounts().then(setAccounts, (e) => setError(errorMessage(e)));
   }, []);
 
   // OAuth return: ?link=<ticket> finishes the connection as the signed in user.
@@ -283,47 +407,13 @@ export default function Launchpad() {
   return (
     <div className="page-wrap">
       <PageHeader eyebrow="Launchpad" title="Launch calendar">
-        <button className="btn btn-primary" onClick={() => setComposing(true)}>
-          New post
+        <button className="btn btn-primary" onClick={() => navigate("/app/launchpad/new")}>
+          Schedule a launch
         </button>
       </PageHeader>
       {notice && <p className="notice">{notice}</p>}
       {error && <p className="error-text">{error}</p>}
 
-      <section className="lp-accounts" aria-label="Connected accounts">
-        {accounts?.accounts.map((a) => (
-          <span key={a.id} className={`lp-chip${a.status !== "active" ? " warn" : ""}`}>
-            {a.avatar_url && <img src={a.avatar_url} alt="" width={18} height={18} />}
-            <strong>{a.platform_label}</strong> <span className="mono muted">{a.handle}</span>
-            {a.status !== "active" && <StatusPill status={a.status === "expired" ? "failed" : a.status} />}
-            <ConfirmButton
-              className="link-btn small"
-              onConfirm={async () => {
-                await launchpadApi.disconnect(a.id);
-                setAccounts(await launchpadApi.accounts());
-              }}
-            >
-              ×
-            </ConfirmButton>
-          </span>
-        ))}
-        {accounts?.available.x && !accounts.accounts.some((a) => a.platform === "x") && (
-          <button className="lp-chip add" onClick={() => connect("x")}>
-            + X
-          </button>
-        )}
-        {accounts?.available.linkedin && !accounts.accounts.some((a) => a.platform === "linkedin") && (
-          <button className="lp-chip add" onClick={() => connect("linkedin")}>
-            + LinkedIn
-          </button>
-        )}
-        {!accounts?.accounts.some((a) => a.platform === "bluesky") && (
-          <button className="lp-chip add" onClick={() => setBluesky(true)}>
-            + Bluesky
-          </button>
-        )}
-        {accounts && accounts.accounts.length === 0 && <span className="muted small">Not connected? Posts arrive as email reminders instead.</span>}
-      </section>
 
       <div className="lp-layout">
       <section className="card">
@@ -339,13 +429,10 @@ export default function Launchpad() {
           </div>
           <Tabs tabs={[{ id: "month", label: "Month" }, { id: "agenda", label: "Agenda" }]} value={view} onChange={setView} />
         </div>
-        {!items && <Loading />}
+        {!items && <div className="loading-center lp-cal-loading"><Loading label="Loading your calendar" /></div>}
         {items && items.length === 0 && (
           <div className="lp-empty">
             <p className="muted">Nothing scheduled this month.</p>
-            <Link className="btn btn-small" to="/app/launch-kit">
-              Schedule your latest Launch Kit
-            </Link>
           </div>
         )}
         {items && view === "month" && (
@@ -362,10 +449,14 @@ export default function Launchpad() {
                   <span className="cal-date mono">{d.getDate()}</span>
                   {dayItems.map((i) => (
                     <button key={i.id} className={`cal-item cal-${i.status}`} onClick={() => setOpen(i)} title={i.content}>
-                      <span className="mono">
+                      {/* Its time, then what it is ("LinkedIn post"), each on its own line */}
+                      <span className="mono cal-item-time">
                         {new Date(i.scheduled_at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
-                      </span>{" "}
-                      {i.platform_label}
+                      </span>
+                      <span className="cal-item-title">
+                        {i.platform_label} post
+                        <MediaMark item={i} />
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -380,6 +471,7 @@ export default function Launchpad() {
                 <button className="agenda-row" onClick={() => setOpen(i)}>
                   <span className="mono muted">{formatDate(i.scheduled_at, true)}</span>
                   <strong>{i.platform_label}</strong>
+                  <MediaMark item={i} />
                   <span className="agenda-text">{i.content}</span>
                   <StatusPill status={i.status} />
                   {i.clicks > 0 && <span className="mono muted">{i.clicks} clicks</span>}
@@ -389,18 +481,99 @@ export default function Launchpad() {
             {items.length === 0 && <li className="muted">Nothing scheduled. Quiet moon tonight.</li>}
           </ul>
         )}
-        {items && <p className="mono muted small">{upcoming.length} upcoming in view</p>}
+        {items && (
+          <div className="lp-cal-foot">
+            <p className="mono muted small">{upcoming.length} upcoming in view</p>
+            <p className="muted small lp-cal-hint">
+              Click a post on the calendar to edit it: change its words or time, reschedule it, or publish it now.
+            </p>
+          </div>
+        )}
       </section>
 
-        <aside className="card stack lp-ideas" id="ideas">
-          <h2>Ideas worth resharing</h2>
-          <ResurfaceIdeas onScheduled={() => load()} />
-        </aside>
+        <ConnectionsPanel accounts={accounts} onConnect={connect} onChanged={async () => {
+          setAccounts(await launchpadApi.accounts());
+          load();
+        }} />
       </div>
 
-      {open && <ItemModal item={open} accounts={accounts} onClose={() => setOpen(null)} onChanged={changed} />}
-      {composing && <ScheduleModal platform="x" posts={[""]} onClose={() => setComposing(false)} onScheduled={() => load()} />}
-      {bluesky && <BlueskyModal onClose={() => setBluesky(false)} onConnected={setAccounts} />}
+      {open && <ItemModal item={open} accounts={accounts} onClose={() => setOpen(null)} onChanged={changed}
+                          onReconnect={connect} />}
+    </div>
+  );
+}
+
+/** /app/launchpad/new: what to launch. Something from the Library opens the composer with it attached; Create a
+ * launch kit goes to the kit pages (and is scheduled from the kit). */
+/** Schedule a launch: pick something from the Library to post. Something already scheduled says Reschedule and opens
+ * that post (the calendar's editor), and its menu can schedule it once more, starting from a copy of that post. */
+export function ScheduleLaunch() {
+  const navigate = useNavigate();
+  const [picked, setPicked] = useState<PostableArtifact | null>(null);
+  // A post already on the calendar: opened to edit (rescheduled), or copied into a new one (a duplicate schedule).
+  const [editing, setEditing] = useState<CalendarItem | null>(null);
+  const [copying, setCopying] = useState<{ a: PostableArtifact; item: CalendarItem } | null>(null);
+  const [accounts, setAccounts] = useState<SocialAccounts | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [openingId, setOpeningId] = useState<string | null>(null); // the row whose post is loading
+  // The accounts the editor needs, loaded once with the page rather than on every click.
+  useEffect(() => {
+    launchpadApi.accounts().then(setAccounts, () => undefined);
+  }, []);
+  const scheduledItem = async (artifactId: string, id: string) => {
+    setError(null);
+    setOpeningId(artifactId);
+    try {
+      const [all, acc] = await Promise.all([launchpadApi.items({ status: "scheduled" }),
+                                            accounts ? Promise.resolve(accounts) : launchpadApi.accounts()]);
+      setAccounts(acc);
+      const found = all.find((i) => i.id === id);
+      if (!found) {
+        setError("That post isn't scheduled anymore.");
+        setRefreshKey((k) => k + 1);
+      }
+      return found ?? null;
+    } catch (e) {
+      setError(errorMessage(e));
+      return null;
+    } finally {
+      setOpeningId(null);
+    }
+  };
+  return (
+    <div className="page-wrap">
+      <BackArrow fallback="/app/launchpad" />
+      <PageHeader eyebrow="Launchpad" title="Schedule a launch" />
+      {error && <p className="error-text">{error}</p>}
+      <section className="card">
+        <LibraryPicker fill onPick={setPicked} onPickKit={(k) => navigate(`/app/launchpad/kits/${k.id}`)}
+                       onCreateKit={() => navigate("/app/launchpad/kits")} refreshKey={refreshKey} openingId={openingId}
+                       onReschedule={async (a, id) => setEditing(await scheduledItem(a.id, id))}
+                       onDuplicate={async (a, id) => {
+                         const item = await scheduledItem(a.id, id);
+                         if (item) setCopying({ a, item });
+                       }} />
+      </section>
+      {picked && (
+        <ScheduleModal platform="linkedin" posts={[]} artifact={picked} artifactId={picked.id}
+                       onClose={() => setPicked(null)}
+                       onScheduled={() => navigate("/app/launchpad")} />
+      )}
+      {copying && (
+        <ScheduleModal platform={copying.item.platform} posts={[copying.item.content, ...copying.item.thread]}
+                       artifact={copying.a} artifactId={copying.a.id}
+                       onClose={() => setCopying(null)}
+                       onScheduled={() => {
+                         setCopying(null);
+                         setRefreshKey((k) => k + 1);
+                       }} />
+      )}
+      {editing && (
+        <ItemModal item={editing} accounts={accounts} onClose={() => setEditing(null)}
+                   onChanged={() => setRefreshKey((k) => k + 1)}
+                   onReconnect={() => navigate("/app/launchpad")} />
+      )}
     </div>
   );
 }
