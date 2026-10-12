@@ -157,7 +157,7 @@ function routes(): Rendered[] {
           name: "Notestack",
           applicationCategory: "BusinessApplication",
           operatingSystem: "Web",
-          description: "The NotebookLM alternative for writers: a grounded research notebook built from your own archive.",
+          description: "Notestack vs NotebookLM for writers: a grounded research notebook built from your own archive.",
           offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
           publisher: { "@type": "Organization", name: "Firebird Technologies" },
         },
@@ -168,9 +168,9 @@ function routes(): Rendered[] {
       title: NOTEBOOKLM_ALT_META.title,
       description: NOTEBOOKLM_ALT_META.description,
       body: page(
-        `<article><p>NotebookLM alternative</p><h1>Notestack vs NotebookLM: the NotebookLM alternative for writers</h1><p>NotebookLM is great for a pile of documents. Notestack is built for a body of work: it syncs your blog, newsletter, site or markdown, answers with citations to the exact lines you wrote, and turns your knowledge into audio, video and launch posts.</p><p><a href="/auth?mode=signup">Start free</a></p><section><h2>Notestack vs NotebookLM</h2><table><thead><tr><th></th><th>Notestack</th><th>NotebookLM</th></tr></thead><tbody>${NOTEBOOKLM_ALT_ROWS.map(
+        `<article><p>Notestack vs NotebookLM</p><h1>Notestack vs NotebookLM: which fits a writer's archive?</h1><p>NotebookLM is great for a pile of documents. Notestack is built for a body of work: it syncs your blog, newsletter, site or markdown, answers with citations to the exact lines you wrote, and turns your knowledge into audio, video and launch posts.</p><p><a href="/auth?mode=signup">Start free</a></p><section><h2>Notestack vs NotebookLM</h2><table><thead><tr><th></th><th>Notestack</th><th>NotebookLM</th></tr></thead><tbody>${NOTEBOOKLM_ALT_ROWS.map(
           (r) => `<tr><th>${esc(r.feature)}</th><td>${esc(r.notestack)}</td><td>${esc(r.notebooklm)}</td></tr>`,
-        ).join("")}</tbody></table></section><section><h2>When NotebookLM is still the right call</h2><p>If you are studying someone else's documents for a one off project, want a free tool from Google, or live in Google Drive, NotebookLM is excellent. Notestack is the NotebookLM alternative when the sources are your own writing and the goal is to reuse and publish it.</p></section><section><h2>Pair it with the right publishing tool</h2><ul><li><a href="https://blog2video.app/blog-to-video">Blog2Video</a>: turn blog posts, URLs and scripts into finished videos.</li><li><a href="https://pdf2vid.com">PDF2Video</a>: turn any PDF, report, paper or deck into a narrated video.</li><li><a href="https://bloghub.app/submit-your-newsletter">BlogHub</a>: list your blog or newsletter in a free directory.</li></ul></section>${faqHtml(
+        ).join("")}</tbody></table></section><section><h2>When NotebookLM is still the right call</h2><p>If you are studying someone else's documents for a one off project, want a free tool from Google, or live in Google Drive, NotebookLM is excellent. Notestack is the better fit when the sources are your own writing and the goal is to reuse and publish it.</p></section><section><h2>Pair it with the right publishing tool</h2><ul><li><a href="https://blog2video.app/blog-to-video">Blog2Video</a>: turn blog posts, URLs and scripts into finished videos.</li><li><a href="https://pdf2vid.com">PDF2Video</a>: turn any PDF, report, paper or deck into a narrated video.</li><li><a href="https://bloghub.app/submit-your-newsletter">BlogHub</a>: list your blog or newsletter in a free directory.</li></ul></section>${faqHtml(
           altFaq,
         )}<p>Comparing more tools? Read our guide to <a href="/blogs/notebooklm-alternatives">NotebookLM alternatives</a> and <a href="/blogs/notebooklm-vs-chatgpt">NotebookLM vs ChatGPT</a>.</p></article>`,
       ),
