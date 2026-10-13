@@ -78,12 +78,15 @@ def test_copy_block_rejects_an_infographic_with_no_content():
 
 
 def test_copy_block_reuses_mind_map_quiz_and_flashcards():
-    assert copy_block("mind_map", _artifact({"title": "Map", "root": {"id": "root"}, "node_count": 3, "post_count": 2})) == \
-        {"title": "Map", "root": {"id": "root"}, "node_count": 3, "post_count": 2}
-    assert copy_block("quiz", _artifact({"title": "Q", "questions": [{"question": "?"}]})) == \
-        {"title": "Q", "questions": [{"question": "?"}]}
-    assert copy_block("flashcards", _artifact({"title": "C", "cards": [{"front": "f", "back": "b"}]})) == \
-        {"title": "C", "cards": [{"front": "f", "back": "b"}]}
+    mind_map = _artifact({"title": "Map", "root": {"id": "root"}, "node_count": 3, "post_count": 2})
+    quiz = _artifact({"title": "Q", "questions": [{"question": "?"}]})
+    cards = _artifact({"title": "C", "cards": [{"front": "f", "back": "b"}]})
+    assert copy_block("mind_map", mind_map) == \
+        {"title": "Map", "artifact_id": str(mind_map.id), "root": {"id": "root"}, "node_count": 3, "post_count": 2}
+    assert copy_block("quiz", quiz) == \
+        {"title": "Q", "artifact_id": str(quiz.id), "questions": [{"question": "?"}]}
+    assert copy_block("flashcards", cards) == \
+        {"title": "C", "artifact_id": str(cards.id), "cards": [{"front": "f", "back": "b"}]}
 
 
 def test_copy_block_rejects_a_kind_with_nothing_to_reuse():

@@ -3,6 +3,7 @@ import { authApi } from "../api/auth";
 import { tokens } from "../api/client";
 import { settingsApi, type SettingsPatch } from "../api/endpoints";
 import type { Settings as SettingsData } from "../api/types";
+import { ConnectedApps } from "../components/ConnectedApps";
 import { MemoryNotes } from "../components/MemoryNotes";
 import { ConfirmButton, errorMessage, formatDate, Loading, PageHeader } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
@@ -99,6 +100,10 @@ export default function Settings() {
 
           <Section title="What the assistant should know">
             <MemoryNotes />
+          </Section>
+
+          <Section title="Connected apps">
+            <ConnectedApps />
           </Section>
 
           <Section title="Privacy and email">

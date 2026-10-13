@@ -92,7 +92,7 @@ export default function AuthPage() {
 
   useEffect(() => {
     // New accounts get onboarding, except people who signed up to use a free tool: send them straight back to it.
-    if (user) navigate(isNew && !next.startsWith("/tools/") ? "/welcome" : next, { replace: true });
+    if (user) navigate(isNew && !next.startsWith("/tools/") && !next.startsWith("/connect") ? "/welcome" : next, { replace: true });
   }, [user, navigate, next, isNew]);
 
   useEffect(() => {

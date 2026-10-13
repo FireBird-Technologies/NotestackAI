@@ -20,20 +20,22 @@ from collections.abc import Callable
 from contextlib import contextmanager
 from typing import Literal
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Response, UploadFile
 from pydantic import BaseModel, Field, ValidationError, model_validator
 from sqlalchemy import select
 
-from app.auth import Ctx, get_ctx
+from app.auth import Ctx, decode_token_full, get_ctx
 from app.config import settings
+from app.db import get_db
 from app.llm import run
 from app.llm.provider import focus_lm
 from app.llm.signatures import VideoFocusAngles
-from app.models import Artifact, B2VVideo, Chat, Document, Message, Notebook, Upload
+from app.models import Artifact, B2VVideo, Chat, Document, Message, Notebook, Upload, User, Workspace, WorkspaceMember
 from app.routers.sources import is_locked
 from app.services import b2v_access, video_focus, video_limits, video_quota
 from app.services import blog2video as b2v
 from app.services.artifacts import serialize_artifact
+from app.services.notebook_titles import visible_notebook_title
 from app.services.plans import Plan, plan_limit_error
 from app.services.storage import storage
 from app.services.video_quota import sync_video_quota, video_usage
@@ -120,6 +122,9 @@ def store(ctx: Ctx, a: Artifact, row: B2VVideo | None = None, **fields) -> None:
 
 def sync_status(ctx: Ctx, a: Artifact, row: B2VVideo, s: dict) -> None:
     raw = str(s.get("status") or "")
+    # The v1 status endpoint calls this `video_url`; some project/job responses use
+    # `r2_video_url`. Treat both as the same finished MP4 so every caller sees it.
+    video_url = s.get("video_url") or s.get("r2_video_url")
     video_quota.record_status(ctx.db, row, "failed" if s.get("error") and raw not in STATUS_MAP else raw)
     if s.get("error") or raw in STATUS_MAP:
         status = STATUS_MAP.get(raw, "failed")
@@ -129,7 +134,7 @@ def sync_status(ctx: Ctx, a: Artifact, row: B2VVideo, s: dict) -> None:
         status = "ready"
     else:
         status = "generating"
-    store(ctx, a, row, status=status, b2v_status=raw or None, step=s.get("step"), video_url=s.get("video_url"),
+    store(ctx, a, row, status=status, b2v_status=raw or None, step=s.get("step"), video_url=video_url,
           error=s.get("error"))
 
 
@@ -241,7 +246,7 @@ def _combined(ctx: Ctx, body: FocusIn | VideoCreateIn, limit: int) -> tuple[str,
     text = "\n\n".join(f"# {d.title}\n\n{(d.clean_text or '').strip()}"[:share] for d in docs)
     nb = ctx.db.scalar(select(Notebook).where(Notebook.id == body.notebook_id,
                                               Notebook.workspace_id == ctx.workspace.id)) if body.notebook_id else None
-    return (nb.title if nb else f"{docs[0].title} + {len(docs) - 1} more"), text
+    return (visible_notebook_title(nb.title) if nb else f"{docs[0].title} + {len(docs) - 1} more"), text
 
 
 def _cite_free(text: str) -> str:
@@ -735,7 +740,58 @@ def _legacy(a: Artifact) -> dict:
     content = a.content_json or {}
     return {"legacy": True, "status": content.get("b2v_status"), "ready": bool(content.get("video_url")),
             "video_url": content.get("video_url"), "preview_url": content.get("preview_url"),
-            "artifact_status": a.status, "artifact": serialize_artifact(a)}
+            "artifact_status": a.status, "title": content.get("title") or "Video",
+            "artifact": serialize_artifact(a)}
+
+
+@router.post("/widget-status")
+def widget_video_status(response: Response, ticket: str = Body(media_type="text/plain"), db=Depends(get_db)):
+    """Short-lived, read-only polling for sandboxed MCP widgets whose host does not support nested tool calls."""
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Cache-Control"] = "no-store"
+    saved = decode_token_full(ticket, expected_type="mcp_video_widget")
+    try:
+        user_id, artifact_id = uuid.UUID(saved["sub"]), uuid.UUID(saved["aid"])
+    except (KeyError, ValueError) as exc:
+        raise HTTPException(401, "Invalid or expired token") from exc
+    user = db.get(User, user_id)
+    if not user or not user.is_active or user.deleted_at or user.token_version != saved.get("tv"):
+        raise HTTPException(401, "Invalid or expired token")
+    workspace = db.scalar(
+        select(Workspace).join(WorkspaceMember, WorkspaceMember.workspace_id == Workspace.id)
+        .where(WorkspaceMember.user_id == user.id).order_by(WorkspaceMember.created_at).limit(1)
+    )
+    if not workspace:
+        raise HTTPException(404, "Not found")
+    ctx = Ctx(user=user, workspace=workspace, db=db)
+    info = video_status(artifact_id, ctx, None)
+    a, vid, row = b2v_access.owned_video(ctx, artifact_id)
+    video_url = info.get("video_url")
+    live_preview = info.get("preview_url")
+    content = a.content_json or {}
+    raw = str(info.get("status") or "")
+    # ChatGPT and Claude block blog2video.app as a nested third-party preview.
+    # Render one real MP4 for MCP instead; subsequent polls wait for its R2 URL.
+    if not video_url and raw in {"generated", "done"} and not content.get("mcp_render_requested"):
+        with upstream():
+            started = b2v.project_call("POST", vid, "render", params={"resolution": "1080p"})
+        video_url = started.get("video_url") or started.get("r2_video_url")
+        store(ctx, a, row, status="rendering", mcp_render_requested=True, video_url=video_url)
+    elif not video_url and content.get("mcp_render_requested"):
+        with upstream():
+            rendered = b2v.project_call("GET", vid, "render-status")
+        video_url = rendered.get("video_url") or rendered.get("r2_video_url")
+        if video_url:
+            store(ctx, a, row, status="ready", video_url=video_url)
+        elif rendered.get("error") or str(rendered.get("status") or "") in {"failed", "error"}:
+            store(ctx, a, row, status="failed", error=rendered.get("error") or "Video rendering failed.")
+            info = {**info, "error": rendered.get("error") or "Video rendering failed."}
+    ready = bool(video_url)
+    status = "ready" if ready else "failed" if raw in {"failed", "error"} or info.get("error") else "rendering"
+    return {"kind": "video", "artifact_id": str(artifact_id),
+            "status": status, "ready": ready, "title": info.get("title") or "Video",
+            "video_url": video_url, "preview_url": live_preview,
+            "open_url": f"{settings.frontend_url.rstrip('/')}/app/videos/{artifact_id}"}
 
 
 @router.get("/{artifact_id}/status")
@@ -751,7 +807,19 @@ def video_status(artifact_id: uuid.UUID, ctx: Ctx = Depends(get_ctx), _: None = 
             raise
         s = {"status": "failed", "error": "The video service lost this video."}
     sync_status(ctx, a, row, s)
-    return {**s, "video_id": vid, "artifact_status": a.status}
+    # Return the persisted URL as a fallback. It may have been learned by an
+    # earlier status poll even when a later upstream response omits it.
+    video_url = s.get("video_url") or s.get("r2_video_url") or row.video_url or (a.content_json or {}).get("video_url")
+    live_preview = row.preview_url or (a.content_json or {}).get("preview_url")
+    # `generated` means the editable live preview is ready. An MP4 only exists
+    # after the writer explicitly renders/downloads it, so chat clients must not
+    # wait for video_url before showing the finished video.
+    if (s.get("ready") or str(s.get("status") or "") in {"generated", "done"}) and not live_preview:
+        live_preview = preview_url(ctx, a, vid, row)
+    return {**s, "video_id": vid, "artifact_status": a.status,
+            "title": row.title or (a.content_json or {}).get("title") or "Video",
+            "ready": bool(video_url or live_preview) or bool(s.get("ready")),
+            "video_url": video_url, "preview_url": live_preview}
 
 
 def preview_url(ctx: Ctx, a: Artifact, vid: int, row: B2VVideo | None = None) -> str | None:
@@ -829,9 +897,10 @@ def get_video(artifact_id: uuid.UUID, ctx: Ctx = Depends(get_ctx), _: None = Dep
         project = b2v.get_project(vid)
     if row is not None:
         _set_title(ctx, row, a, project.get("name"))
-    store(ctx, a, row, video_url=project.get("r2_video_url"), scenes=len(project.get("scenes") or []) or None)
+    rendered_url = project.get("r2_video_url") or row.video_url or (a.content_json or {}).get("video_url")
+    store(ctx, a, row, video_url=rendered_url, scenes=len(project.get("scenes") or []) or None)
     return {"video_id": vid, "status": project.get("status"), "project": _enrich(project),
-            "preview_url": preview_url(ctx, a, vid, row), "video_url": project.get("r2_video_url"),
+            "preview_url": preview_url(ctx, a, vid, row), "video_url": rendered_url,
             "artifact": serialize_artifact(a)}
 
 

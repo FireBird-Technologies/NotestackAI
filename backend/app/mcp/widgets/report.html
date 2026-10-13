@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Report</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: transparent; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  #box { padding: 18px 20px; border-radius: 14px; color: #fff; border: 1px solid rgba(255,255,255,.1); background-color: #000;
+    background-image: radial-gradient(1.5px 1.5px at 8% 14%,rgba(255,255,255,.75),transparent),radial-gradient(1px 1px at 19% 72%,rgba(33,124,255,.9),transparent),radial-gradient(1.5px 1.5px at 36% 31%,rgba(255,255,255,.55),transparent),radial-gradient(1px 1px at 54% 83%,rgba(255,255,255,.7),transparent),radial-gradient(1.5px 1.5px at 71% 18%,rgba(33,124,255,.7),transparent),radial-gradient(1px 1px at 87% 64%,rgba(255,255,255,.65),transparent),radial-gradient(ellipse at 50% 0%,rgba(33,124,255,.07),transparent 55%); }
+  #top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
+  #meta { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: #8fa6e6; }
+  h1 { margin: 2px 0 14px; font-size: 22px; line-height: 1.25; color: #fff; }
+  #body { max-height: 560px; overflow: auto; padding-right: 6px; }
+  h2.s { margin: 20px 0 6px; font-size: 17px; color: #fff; } h3.s { margin: 14px 0 4px; font-size: 15px; color: rgba(255,255,255,.82); }
+  p.s { margin: 0 0 10px; font-size: 14.5px; line-height: 1.6; color: rgba(255,255,255,.72); }
+  ul.s, ol.s { margin: 0 0 10px; padding-left: 22px; font-size: 14.5px; line-height: 1.55; color: rgba(255,255,255,.72); }
+  .card { margin: 12px 0; padding: 12px 14px; border-radius: 10px; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.1); }
+  .card h4 { margin: 0 0 6px; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: rgba(255,255,255,.72); }
+  .card.player-card { padding: 0; border: 0; background: transparent; }
+  .card.player-card h4 { margin: 0 0 8px; }
+  .visual-player { display: block; width: 100%; min-height: 340px; border: 0; border-radius: 14px; background: transparent; }
+  .callout { border-left: 3px solid #5b86ff; }
+  dt { font-weight: 600; color: #fff; margin-top: 8px; font-size: 14px; } dd { margin: 2px 0 0; color: rgba(255,255,255,.72); font-size: 13.5px; line-height: 1.5; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; } th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,.1); vertical-align: top; } th { color: #fff; }
+  .tl { margin: 0; padding: 0; list-style: none; } .tl li { padding: 6px 0 6px 12px; border-left: 2px solid #3a63e0; margin-left: 4px; font-size: 13.5px; } .tl b { color: #fff; } .tl span { color: #8fa6e6; font-size: 12px; display: block; }
+  .map ul { margin: 2px 0; padding-left: 18px; font-size: 13.5px; color: #dbe5ff; line-height: 1.5; } .map > ul { padding-left: 4px; list-style: none; }
+  .fc { display: block; width: 100%; text-align: left; margin: 0 0 6px; padding: 9px 11px; border-radius: 8px; font: inherit; font-size: 13.5px; color: #fff; background: #0b1230; border: 1px solid rgba(157,184,255,.3); cursor: pointer; }
+  .fc em { display: none; font-style: normal; margin-top: 6px; color: #aee9c9; } .fc.open em { display: block; }
+  .q { margin: 0 0 12px; font-size: 14px; } .q b { display: block; margin-bottom: 4px; color: #fff; } .q li { color: #cdd9ff; margin: 2px 0; } .q li.right { color: #5fd39a; font-weight: 600; } .q .why { display: none; color: #8fa6e6; font-size: 12.5px; margin-top: 3px; }
+  button.small { font: inherit; font-size: 12.5px; color: #fff; background: rgba(10,17,40,.7); border: 1px solid rgba(157,184,255,.5); border-radius: 8px; padding: 5px 11px; cursor: pointer; }
+  button.small:hover { background: rgba(58,99,224,.55); }
+  button.small:disabled { opacity: .55; cursor: wait; }
+  .suggestion { display: flex; align-items: center; gap: 14px; margin: 14px 0 18px; padding: 13px 14px; border: 1px dashed rgba(33,124,255,.75); border-radius: 12px; background: rgba(5,12,28,.72); }
+  .suggestion > div { flex: 1; min-width: 0; } .suggestion strong { display: block; color: #fff; font-size: 14px; }
+  .suggestion p { margin: 4px 0 0; color: #cdd4e6; font-size: 13px; line-height: 1.45; }
+  .suggestion .why { color: #8f9bb6; font-size: 12px; } .suggestion .error { color: #ff9c9c; }
+  .spin { display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: -2px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: turn .8s linear infinite; }
+  @keyframes turn { to { transform: rotate(360deg); } }
+  .note { font-size: 13px; color: #aebdf0; } #wait, #msg { padding: 46px 16px; text-align: center; color: #cfe0ff; font-size: 15px; line-height: 1.5; }
+  @media (max-width: 520px) { .suggestion { align-items: flex-start; flex-direction: column; } }
+</style>
+</head>
+<body>
+<div id="box">
+  <div id="msg">Loading your report...</div>
+  <div id="main" hidden>
+    <div id="top"><div><div id="meta"></div><h1 id="title"></h1></div><button class="small" id="open" type="button" hidden>Open in Notestack</button></div>
+    <div id="body"></div>
+  </div>
+</div>
+<script>
+(function () {
+  "use strict";
+  var PLAYERS = /*__PLAYERS__*/{};
+  var $ = function (id) { return document.getElementById(id); };
+  var data = null, timer = null, seen = [], got = false, embeds = [];
+
+  /* ---- talking to the host: JSON-RPC 2.0 over postMessage (MCP Apps) ---- */
+  var pending = {}, rid = 1;
+  function send(m) { m.jsonrpc = "2.0"; window.parent.postMessage(m, "*"); }
+  function request(method, params) {
+    return new Promise(function (resolve, reject) { var id = rid++; pending[id] = { resolve: resolve, reject: reject }; send({ id: id, method: method, params: params || {} }); });
+  }
+  function notify(method, params) { send({ method: method, params: params || {} }); }
+  function find(o, d) {
+    if (!o || d > 6) return null;
+    if (typeof o === "string") { try { return find(JSON.parse(o), d + 1); } catch (e) { return null; } }
+    if (typeof o !== "object") return null;
+    if (o.kind === "report") return o;
+    for (var k in o) { var f = find(o[k], d + 1); if (f) return f; }
+    return null;
+  }
+  function embedded(source) {
+    for (var i = 0; i < embeds.length; i++) if (embeds[i].frame.contentWindow === source) return embeds[i];
+    return null;
+  }
+  function deliver(embed) {
+    if (!embed.ready || !embed.payload) return;
+    embed.frame.contentWindow.postMessage({ jsonrpc: "2.0", method: "ui/notifications/tool-result",
+      params: { structuredContent: embed.payload } }, "*");
+  }
+  function fromPlayer(embed, m) {
+    var w = embed.frame.contentWindow;
+    if (m.method === "ui/initialize" && m.id !== undefined) {
+      w.postMessage({ jsonrpc: "2.0", id: m.id, result: { protocolVersion: "2026-01-26",
+        hostInfo: { name: "notestack-report", version: "1" }, hostCapabilities: {} } }, "*"); return;
+    }
+    if (m.method === "ui/notifications/initialized") { embed.ready = true; deliver(embed); return; }
+    if (m.method === "ui/notifications/size-changed" && m.params && m.params.height) {
+      embed.frame.style.height = Math.min(900, Math.max(300, Math.ceil(m.params.height) + 4)) + "px"; reportSize(); return;
+    }
+    if (m.method === "tools/call" && m.id !== undefined) {
+      request("tools/call", m.params).then(function (r) { w.postMessage({ jsonrpc: "2.0", id: m.id, result: r || {} }, "*"); },
+        function (er) { w.postMessage({ jsonrpc: "2.0", id: m.id, error: er }, "*"); }); return;
+    }
+    if (m.method === "ui/open-link" && m.id !== undefined) {
+      request("ui/open-link", m.params).then(function (r) { w.postMessage({ jsonrpc: "2.0", id: m.id, result: r || {} }, "*"); },
+        function (er) { w.postMessage({ jsonrpc: "2.0", id: m.id, error: er }, "*"); }); return;
+    }
+    if (m.method && m.id !== undefined) w.postMessage({ jsonrpc: "2.0", id: m.id, result: {} }, "*");
+  }
+  window.addEventListener("message", function (e) {
+    var m = e.data;
+    if (!m || m.jsonrpc !== "2.0") return;
+    var child = embedded(e.source); if (child) return fromPlayer(child, m);
+    if (e.source !== window.parent) return;
+    if (m.method) seen.push(m.method);
+    if (m.method === undefined && m.id !== undefined) {
+      var p = pending[m.id]; if (!p) return; delete pending[m.id];
+      if (m.error) p.reject(m.error); else p.resolve(m.result);
+    } else if (m.method && m.params && find(m.params, 0)) {
+      show(find(m.params, 0));
+    } else if ((m.method === "ui/resource-teardown" || m.method === "ping") && m.id !== undefined) {
+      send({ id: m.id, result: {} });
+    }
+  });
+  function reportSize() { notify("ui/notifications/size-changed", { width: Math.ceil(document.documentElement.scrollWidth), height: Math.ceil(document.documentElement.scrollHeight) }); }
+  if (window.ResizeObserver) new ResizeObserver(reportSize).observe(document.documentElement);
+
+  /* ---- drawing: every piece of text goes in as text, never as HTML ---- */
+  function el(tag, cls, text, parent) { var n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined && text !== null) n.textContent = text; if (parent) parent.appendChild(n); return n; }
+  function plain(s) { return String(s || "").replace(/\*\*([^*]+)\*\*/g, "$1").replace(/(^|[^*])\*([^*]+)\*/g, "$1$2").replace(/`([^`]+)`/g, "$1").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1"); }
+  function markdown(text, into) {
+    var lines = String(text || "").split("\n"), list = null, para = [];
+    function flush() { if (para.length) { el("p", "s", plain(para.join(" ")), into); para = []; } }
+    lines.forEach(function (raw) {
+      var line = raw.replace(/\s+$/, ""), m;
+      if (!line.trim()) { flush(); list = null; return; }
+      if ((m = /^(#{1,3})\s+(.*)$/.exec(line))) { flush(); list = null; el(m[1].length === 1 || m[1].length === 2 ? "h2" : "h3", "s", plain(m[2]), into); return; }
+      if ((m = /^\s*(?:[-*]|\d+[.)])\s+(.*)$/.exec(line))) {
+        flush(); var ordered = /^\s*\d/.test(line);
+        if (!list || list.ordered !== ordered) { list = el(ordered ? "ol" : "ul", "s", null, into); list.ordered = ordered; }
+        el("li", "", plain(m[1]), list); return;
+      }
+      list = null; para.push(line.trim());
+    });
+    flush();
+  }
+  function outline(node, into) {
+    var ul = el("ul", "", null, into), li = el("li", "", node.label, ul);
+    (node.children || []).forEach(function (c) { outline(c, li); });
+  }
+  var SHOW = { mind_map: "show_mind_map", flashcards: "show_flashcards", quiz: "show_quiz", infographic: "show_infographic" };
+  function mountPlayer(b, card) {
+    if (!b.artifact_id || !PLAYERS[b.type] || !SHOW[b.type]) return false;
+    card.classList.add("player-card");
+    var frame = el("iframe", "visual-player", null, card); frame.title = b.title || LABEL[b.type] || "Notestack visual";
+    frame.setAttribute("sandbox", "allow-scripts");
+    var embed = { frame: frame, payload: null, ready: false }; embeds.push(embed); frame.srcdoc = PLAYERS[b.type];
+    request("tools/call", { name: SHOW[b.type], arguments: { artifact_id: b.artifact_id } }).then(function (r) {
+      embed.payload = r && r.structuredContent; deliver(embed);
+    }, function () {
+      var note = el("div", "note", "This could not be loaded here. Open the report in Notestack to view it.", card);
+      note.setAttribute("role", "status");
+    });
+    return true;
+  }
+  function block(b, into) {
+    var t = b.type;
+    if (t === "prose") return markdown(b.text, into);
+    var card = el("div", "card" + (t === "callout" ? " callout" : ""), null, into);
+    if (b.title || t !== "callout") el("h4", "", b.title || ({ key_terms: "Key terms", table: "Table", timeline: "Timeline", mind_map: "Mind map", flashcards: "Flashcards", quiz: "Quiz", infographic: "Infographic" }[t] || ""), card);
+    if (t === "callout") { markdown(b.text, card); return; }
+    if ((t === "mind_map" || t === "flashcards" || t === "quiz" || t === "infographic") && mountPlayer(b, card)) return;
+    if (t === "key_terms") { var dl = el("dl", "", null, card); (b.terms || []).forEach(function (x) { el("dt", "", x.term, dl); el("dd", "", x.definition, dl); }); return; }
+    if (t === "table") {
+      var tb = el("table", "", null, card), hd = el("tr", "", null, el("thead", "", null, tb));
+      (b.headers || []).forEach(function (h) { el("th", "", h, hd); });
+      var body = el("tbody", "", null, tb); (b.rows || []).forEach(function (r) { var tr = el("tr", "", null, body); r.forEach(function (c) { el("td", "", c, tr); }); });
+      return;
+    }
+    if (t === "timeline") { var tl = el("ul", "tl", null, card); (b.events || []).forEach(function (x) { var li = el("li", "", null, tl); el("span", "", x.when, li); el("b", "", x.title, li); if (x.detail) li.appendChild(document.createTextNode(" " + x.detail)); }); return; }
+    if (t === "mind_map") { var mm = el("div", "map", null, card); if (b.root) outline(b.root, mm); return; }
+    if (t === "flashcards") {
+      (b.cards || []).forEach(function (c) { var f = el("button", "fc", c.front, card); f.type = "button"; el("em", "", c.back, f); f.addEventListener("click", function () { f.classList.toggle("open"); reportSize(); }); });
+      el("div", "note", "Click a card to see its answer.", card); return;
+    }
+    if (t === "quiz") {
+      (b.questions || []).forEach(function (q, i) {
+        var d = el("div", "q", null, card); el("b", "", (i + 1) + ". " + q.question, d);
+        if (q.options) { var ol = el("ol", "", null, d); q.options.forEach(function (o, k) { var li = el("li", "", o, ol); li.setAttribute("data-k", k); if ((q.correct || []).indexOf(k) >= 0) li.setAttribute("data-right", "1"); }); }
+        else { var a = el("div", "note", "Answer: " + (q.answer || ""), d); a.style.display = "none"; a.className = "note ans"; }
+        if (q.explanation) el("div", "why", q.explanation, d);
+      });
+      var rv = el("button", "small", "Show answers", card); rv.type = "button";
+      rv.addEventListener("click", function () {
+        Array.prototype.forEach.call(card.querySelectorAll("li[data-right]"), function (li) { li.classList.add("right"); });
+        Array.prototype.forEach.call(card.querySelectorAll(".why, .ans"), function (x) { x.style.display = "block"; });
+        rv.hidden = true; reportSize();
+      });
+      return;
+    }
+    if (t === "infographic") { el("div", "note", "This infographic is a picture. Open the report in Notestack to see it.", card); return; }
+  }
+  var LABEL = { mind_map: "Mind Constellation", flashcards: "Flashcards", quiz: "Quiz", infographic: "Infographic" };
+  function addingFor(id) { return (data.adding || []).filter(function (a) { return a.suggestion_id === id; })[0]; }
+  function suggestion(s, into) {
+    var state = addingFor(s.id), busy = state && (state.status === "queued" || state.status === "running");
+    var card = el("div", "suggestion", null, into), copy = el("div", "", null, card);
+    el("strong", "", "Suggested: " + (LABEL[s.kind] || s.kind), copy);
+    if (s.brief) el("p", "", s.brief, copy);
+    if (state && state.status === "failed") el("p", "error", state.error || "This could not be added. Try again.", copy);
+    else if (busy) el("p", "", state.message || "Building it...", copy);
+    else if (s.why) el("p", "why", s.why, copy);
+    var add = el("button", "small", busy ? "Adding..." : "Add", card); add.type = "button"; add.disabled = !!busy;
+    add.addEventListener("click", function () {
+      add.disabled = true; add.textContent = "Adding...";
+      data.adding = (data.adding || []).filter(function (a) { return a.suggestion_id !== s.id; });
+      data.adding.push({ suggestion_id: s.id, status: "queued", kind: s.kind, message: "Starting..." });
+      show(data);
+      request("tools/call", { name: "add_report_block", arguments: {
+        artifact_id: data.artifact_id, kind: s.kind, brief: s.brief || "", after_block_id: s.after_block_id,
+        suggestion_id: s.id, theme: s.kind === "infographic" ? "midnight" : undefined
+      }}).then(function () { poll(); refresh(); }, function () {
+        data.adding = data.adding.filter(function (a) { return a.suggestion_id !== s.id; });
+        data.adding.push({ suggestion_id: s.id, status: "failed", error: "This could not be added. Try again." }); show(data);
+      });
+    });
+  }
+  function waiting(text) { $("msg").hidden = false; $("main").hidden = true; $("msg").textContent = text; }
+  function refresh() {
+    if (!data || !data.artifact_id) return;
+    request("tools/call", { name: "view_report", arguments: { artifact_id: data.artifact_id } }).then(function (r) {
+      var d = find(r, 0); if (d) show(d);
+    }, function () {});
+  }
+  function poll() {
+    if (timer || !data || !data.artifact_id) return;
+    timer = setInterval(refresh, 2500);
+  }
+  function show(d) {
+    got = true; data = d;
+    if (!d.blocks || !d.blocks.length) {
+      if (d.status === "failed") return waiting("Notestack could not make this report. Open it in Notestack for details.");
+      waiting("Your report is being written. It will appear here when it is ready."); poll(); return;
+    }
+    var busy = (d.adding || []).some(function (a) { return a.status === "queued" || a.status === "running"; });
+    if (busy) poll(); else if (timer) { clearInterval(timer); timer = null; }
+    $("msg").hidden = true; $("main").hidden = false;
+    $("meta").textContent = (d.format === "interactive" ? "Interactive report" : "Report") + " from Notestack";
+    $("title").textContent = d.title || "Report"; $("open").hidden = !d.open_url;
+    var body = $("body"); body.textContent = ""; embeds = [];
+    d.blocks.forEach(function (b) {
+      var slot = el("div", "", null, body); block(b, slot);
+      (d.suggestions || []).filter(function (s) { return s.after_block_id === b.id; }).forEach(function (s) { suggestion(s, slot); });
+    });
+    reportSize();
+  }
+  $("open").addEventListener("click", function () { if (data && data.open_url) request("ui/open-link", { url: data.open_url }).catch(function () {}); });
+  setTimeout(function () {
+    if (got) return;
+    $("msg").textContent = "Still waiting for the report. The host has sent: " + (seen.length ? seen.join(", ") : "nothing") + ". Ask Claude to show it again, or open it in Notestack.";
+  }, 20000);
+  setTimeout(function () { notify("ui/notifications/initialized", {}); reportSize(); }, 1500);
+  request("ui/initialize", { protocolVersion: "2026-01-26", appInfo: { name: "notestack-report", version: "1.0.0" }, appCapabilities: {} })
+    .then(function () { notify("ui/notifications/initialized", {}); reportSize(); })
+    .catch(function () { $("msg").textContent = "This view needs an app that supports interactive results."; });
+})();
+</script>
+</body>
+</html>

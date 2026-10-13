@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mind Constellation</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: transparent; font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif; }
+  #sky { position: relative; width: 100%; height: 560px; overflow: hidden; border-radius: 14px; color: #fff; touch-action: pan-y; user-select: none; -webkit-user-select: none;
+         background-color: #000; background-image: radial-gradient(1.5px 1.5px at 59% 74%,rgba(255,255,255,0.86),transparent),radial-gradient(2px 2px at 26% 26%,rgba(255,255,255,0.72),transparent),radial-gradient(1.5px 1.5px at 25% 15%,rgba(255,255,255,0.4),transparent),radial-gradient(1px 1px at 90% 84%,rgba(255,255,255,0.59),transparent),radial-gradient(2px 2px at 59% 86%,rgba(255,255,255,0.72),transparent),radial-gradient(1px 1px at 69% 11%,rgba(33,124,255,0.98),transparent),radial-gradient(1.5px 1.5px at 78% 6%,rgba(255,255,255,0.7),transparent),radial-gradient(1px 1px at 27% 69%,rgba(255,255,255,0.65),transparent),radial-gradient(1.5px 1.5px at 86% 13%,rgba(255,255,255,0.59),transparent),radial-gradient(1px 1px at 72% 13%,rgba(255,255,255,0.49),transparent),radial-gradient(1px 1px at 38% 6%,rgba(255,255,255,0.41),transparent),radial-gradient(1.5px 1.5px at 15% 40%,rgba(33,124,255,0.45999999999999996),transparent),radial-gradient(1px 1px at 89% 3%,rgba(33,124,255,1),transparent),radial-gradient(1.5px 1.5px at 62% 51%,rgba(255,255,255,0.69),transparent),radial-gradient(1px 1px at 27% 89%,rgba(255,255,255,0.54),transparent),radial-gradient(1px 1px at 3% 55%,rgba(33,124,255,0.87),transparent),radial-gradient(1.5px 1.5px at 3% 10%,rgba(255,255,255,0.46),transparent),radial-gradient(1.5px 1.5px at 73% 27%,rgba(255,255,255,0.94),transparent),radial-gradient(1.5px 1.5px at 18% 56%,rgba(33,124,255,0.7),transparent),radial-gradient(1px 1px at 29% 3%,rgba(255,255,255,0.93),transparent),radial-gradient(1px 1px at 77% 41%,rgba(33,124,255,0.69),transparent),radial-gradient(2px 2px at 79% 85%,rgba(33,124,255,1),transparent),radial-gradient(1px 1px at 29% 59%,rgba(33,124,255,0.82),transparent),radial-gradient(1px 1px at 39% 52%,rgba(33,124,255,0.58),transparent),radial-gradient(1px 1px at 83% 34%,rgba(255,255,255,0.57),transparent),radial-gradient(2px 2px at 60% 19%,rgba(255,255,255,0.69),transparent),radial-gradient(1px 1px at 51% 26%,rgba(255,255,255,0.49),transparent),radial-gradient(1px 1px at 80% 34%,rgba(33,124,255,0.83),transparent),radial-gradient(1.5px 1.5px at 72% 28%,rgba(255,255,255,0.71),transparent),radial-gradient(1px 1px at 55% 9%,rgba(33,124,255,0.76),transparent),radial-gradient(1.5px 1.5px at 34% 33%,rgba(255,255,255,0.84),transparent),radial-gradient(1px 1px at 78% 65%,rgba(255,255,255,0.91),transparent),radial-gradient(1px 1px at 10% 19%,rgba(255,255,255,0.74),transparent),radial-gradient(1px 1px at 80% 81%,rgba(255,255,255,0.9),transparent),radial-gradient(ellipse at 50% 0%,rgba(33,124,255,.07),transparent 55%); border: 1px solid rgba(255,255,255,.1); }
+  html[data-mode=fullscreen] #sky { touch-action: none; }
+  svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #svg { cursor: grab; } #svg.drag { cursor: grabbing; }
+  .bgstar { fill: #fff; } .tw { animation: tw 4.5s ease-in-out infinite; }
+  @keyframes tw { 0%,100% { opacity: var(--o, .6); } 50% { opacity: calc(var(--o, .6) * .35); } }
+  @media (prefers-reduced-motion: reduce) { .tw { animation: none; } }
+  .edge { fill: none; stroke-linecap: round; transition: opacity .25s; }
+  .node { cursor: pointer; transition: opacity .25s; outline: none; }
+  .node .hit { fill: transparent; }
+  .node .ring { stroke: #fff; stroke-width: 1.6; vector-effect: non-scaling-stroke; }
+  .node .core { fill: #fff; }
+  .node .spike { stroke: #fff; stroke-opacity: .45; stroke-width: 1; vector-effect: non-scaling-stroke; }
+  .node:hover .ring, .node:focus-visible .ring { stroke-width: 2.6; }
+  .node:hover .halo { opacity: 1; }
+  .node.sel .focusring { opacity: 1; }
+  .focusring { fill: none; stroke: #fff; stroke-opacity: .85; stroke-width: 1.4; vector-effect: non-scaling-stroke; opacity: 0; transition: opacity .2s; }
+  .lbl { fill: #fff; text-anchor: middle; paint-order: stroke; stroke: #000; stroke-linejoin: round; pointer-events: none; font-family: "Inter", system-ui, sans-serif; }
+  .badge { fill: rgba(255,255,255,.72); font-size: 10.5px; font-weight: 600; pointer-events: none; paint-order: stroke; stroke: #000; stroke-width: 3px; }
+  #bar { position: absolute; top: 10px; right: 10px; display: flex; gap: 8px; z-index: 2; }
+  #shape { width: 96px; font: inherit; font-size: 13px; font-weight: 600; color: #fff; color-scheme: dark; background: rgba(0,0,0,.72); border: 1px solid rgba(255,255,255,.22); border-radius: 999px; padding: 6px 22px 6px 12px; cursor: pointer; }
+  #shape:hover, #shape:focus-visible { border-color: rgba(33,124,255,.7); outline: none; box-shadow: 0 0 12px rgba(33,124,255,.3); }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+  #zoom { position: absolute; left: 10px; bottom: 10px; display: flex; gap: 6px; z-index: 2; }
+  #zoom button { width: 32px; height: 32px; padding: 0; font-size: 16px; line-height: 1; background: rgba(0,0,0,.55); }
+  button { font: inherit; font-size: 13px; color: #fff; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.18);
+           border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  #hint { position: absolute; left: 14px; top: 12px; font-size: 12.5px; line-height: 1.4; color: rgba(255,255,255,.72); z-index: 2; max-width: calc(100% - 300px); pointer-events: none; }
+  #hint small { display: block; font-size: 11.5px; color: rgba(255,255,255,.45); }
+  #card { margin-top: 8px; max-height: 210px; overflow: auto; padding: 12px 14px; color: #fff;
+          border-radius: 14px; background: rgba(0,0,0,.72); border: 1px solid rgba(255,255,255,.18); display: none; backdrop-filter: blur(6px); }
+  html[data-mode=fullscreen] #card { position: fixed; left: 14px; bottom: 54px; width: min(380px, calc(100% - 28px)); max-height: 40vh; z-index: 20; }
+  #card .eye { font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.5); margin-bottom: 2px; }
+  #card h3 { margin: 0 0 4px; font-size: 15px; text-transform: none; letter-spacing: -.01em; color: #fff; font-family: "Space Grotesk", "Inter", sans-serif; }
+  #card p { margin: 0 0 8px; font-size: 13.5px; line-height: 1.45; color: rgba(255,255,255,.78); }
+  #card blockquote { margin: 0 0 8px; padding-left: 10px; border-left: 2px solid #217cff; font-size: 12.5px; color: rgba(255,255,255,.72); line-height: 1.45; }
+  #card cite { display: block; margin-top: 2px; font-style: normal; color: rgba(255,255,255,.56); font-size: 11.5px; }
+  #card .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 8px; }
+  #card .chip { font-size: 12px; padding: 4px 10px; border-radius: 999px; background: rgba(255,255,255,.04); font-weight: 500; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #card .back { font-size: 12px; padding: 4px 12px; }
+  #msg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 24px;
+         color: rgba(255,255,255,.72); font-size: 15px; z-index: 3; }
+
+  /* The app's own look: black, starry, pill buttons, blue only for the main action and for selection. */
+  button { border-radius: 999px; background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.18); color: #fff; font-weight: 600; transition: box-shadow .2s, border-color .2s, background .2s; }
+  button:hover:not(:disabled) { border-color: rgba(33,124,255,.6); box-shadow: 0 0 12px rgba(33,124,255,.35); }
+  button:disabled { opacity: .5; }
+  .chip:hover { border-color: rgba(33,124,255,.6); }
+  @media (max-width: 560px) { #hint small { display: none; } #hint { max-width: calc(100% - 290px); font-size: 12px; } #bar button { padding: 5px 10px; font-size: 12px; } #bar { gap: 6px; } #shape { width: 88px; padding: 5px 20px 5px 10px; font-size: 12px; } }
+</style>
+</head>
+<body>
+<div id="sky">
+  <div id="hint"></div>
+  <div id="bar">
+    <label class="sr-only" for="shape">Constellation layout</label>
+    <select id="shape" aria-label="Constellation layout" hidden>
+      <option value="orbit">Orbit</option>
+      <option value="spiral">Spiral</option>
+      <option value="constellation">Figure</option>
+      <option value="cluster">Cluster</option>
+    </select>
+    <button id="reset" type="button" hidden>Reset</button><button id="open" type="button" hidden>Open in Notestack</button>
+  </div>
+  <svg id="svg" role="img" aria-label="Mind Constellation"></svg>
+  <div id="zoom" hidden><button id="zin" type="button" aria-label="Zoom in">+</button><button id="zout" type="button" aria-label="Zoom out">&minus;</button></div>
+  <div id="msg">Loading your Mind Constellation...</div>
+</div>
+<div id="card"></div>
+<script>
+(function () {
+  "use strict";
+  var NS = "http://www.w3.org/2000/svg";
+  var svg = document.getElementById("svg"), sky = document.getElementById("sky"), card = document.getElementById("card"), msg = document.getElementById("msg");
+  var hint = document.getElementById("hint"), openBtn = document.getElementById("open"), resetBtn = document.getElementById("reset"), zoomBox = document.getElementById("zoom"), shapeSelect = document.getElementById("shape");
+  var data = null, shape = "constellation", shapeSeed = 1, topRadius = 260;
+
+  /* ---- talking to the host: JSON-RPC 2.0 over postMessage (MCP Apps) ---- */
+  var pending = {}, rid = 1;
+  function send(m) { m.jsonrpc = "2.0"; window.parent.postMessage(m, "*"); }
+  function request(method, params) {
+    return new Promise(function (resolve, reject) { var id = rid++; pending[id] = { resolve: resolve, reject: reject }; send({ id: id, method: method, params: params || {} }); });
+  }
+  function notify(method, params) { send({ method: method, params: params || {} }); }
+  window.addEventListener("message", function (e) {
+    if (e.source !== window.parent) return;
+    var m = e.data;
+    if (!m || m.jsonrpc !== "2.0") return;
+    if (m.method) seen.push(m.method);
+    if (m.method && m.method.indexOf("tool-result") < 0 && m.params && find(m.params, 0)) { show(unwrap(m.params)); return; }
+    if (m.method === undefined && m.id !== undefined) {
+      var p = pending[m.id]; if (!p) return; delete pending[m.id];
+      if (m.error) p.reject(m.error); else p.resolve(m.result);
+    } else if (m.method === "ui/notifications/tool-result") {
+      show(unwrap(m.params || {}));
+    } else if (m.method === "ui/resource-teardown" && m.id !== undefined) {
+      send({ id: m.id, result: {} });
+    } else if (m.method === "ping" && m.id !== undefined) {
+      send({ id: m.id, result: {} });
+    }
+  });
+  /* Find the payload wherever the host put it (any depth, or as JSON text), and remember what the host sent so a stuck
+     view can say what it saw. */
+  var seen = [], got = false;
+  function find(o, d) {
+    if (!o || d > 6) return null;
+    if (typeof o === "string") { try { return find(JSON.parse(o), d + 1); } catch (e) { return null; } }
+    if (typeof o !== "object") return null;
+    if (o.kind === "mind_map" && "open_url" in o) return o; /* not the job record, which also has a kind */
+    for (var k in o) { var f = find(o[k], d + 1); if (f) return f; }
+    return null;
+  }
+  function unwrap(p) {
+    var f = find(p, 0); if (f) return { structuredContent: f };
+    if (p.structuredContent) return p;
+    if (p.result && p.result.structuredContent) return p.result;
+    return p;
+  }
+  function reportSize() { notify("ui/notifications/size-changed", { width: Math.ceil(document.documentElement.scrollWidth), height: Math.ceil(document.documentElement.scrollHeight) }); }
+  if (window.ResizeObserver) new ResizeObserver(reportSize).observe(document.documentElement);
+
+  /* ---- the galaxy: every star is drawn, laid out once, then the camera pans and zooms over it ---- */
+  var ACCENTS = ["#217cff", "#4a96ff", "#2f6fe0", "#6fb0ff", "#1f5fd0", "#8cc0ff", "#3b86f0"], CORE = "#bcd6ff";
+  var RAD = [17, 11.5, 8, 6.5, 5.5];          /* star radius by depth, in world units */
+  var GAP = [0, 0, 112, 66, 46];           /* how far a depth's stars sit from their parent */
+  var LBL = [13.5, 13.5, 12, 11, 11];        /* label size in screen px by depth */
+  var nodes = [], byNode = null, selected = null, W = 0, H = 0, cam = { x: 0, y: 0, s: 1 }, fit = { x: 0, y: 0, s: 1 };
+  var world = null, labelLayer = null, bgLayer = null, userMoved = false, anim = 0, drag = null;
+
+  function el(name, attrs, parent) {
+    var n = document.createElementNS(NS, name);
+    for (var k in attrs) n.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(n);
+    return n;
+  }
+  function rng(seed) { var s = seed >>> 0; return function () { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+  function hashText(value) { var h = 0, s = String(value || "mind-map"); for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h || 1; }
+  function seeded(k) { var x = Math.sin((shapeSeed + k) * 12.9898) * 43758.5453; return x - Math.floor(x); }
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+  function accent(p) { return p.branch < 0 ? CORE : ACCENTS[p.branch % ACCENTS.length]; }
+  function subtree(p, out) { out = out || []; out.push(p); p.kids.forEach(function (k) { subtree(k, out); }); return out; }
+  function inFocus(p) {
+    if (!selected || selected.level === 0) return true;
+    for (var c = p; c; c = c.parent) if (c === selected) return true;     /* inside the chosen star's orbit */
+    for (var u = selected; u; u = u.parent) if (u === p) return true;     /* or on the way back to the centre */
+    return false;
+  }
+
+  function build(root) {
+    nodes = [];
+    (function walk(n, parent, level, branch) {
+      var p = { n: n, parent: parent, level: Math.min(level, 4), depth: level, branch: branch, kids: [], x: 0, y: 0, a: 0, rr: 0 };
+      nodes.push(p); if (parent) parent.kids.push(p);
+      (n.children || []).forEach(function (c, i) { walk(c, p, level + 1, level === 0 ? i : branch); });
+    })(root, null, 0, -1);
+    layout();
+  }
+
+  /* Branches on a wide ring; each star's children fan out around it in rings that fit them; then every pair is pushed
+     apart until nothing touches, with a light spring keeping each star near its parent. */
+  function ringFor(br) {
+    var need = 0;
+    br.forEach(function (b) { var m = b.kids.length; need += 2 * (GAP[2] * (1 + 0.62 * Math.max(0, Math.ceil(m / 6) - 1)) + 62) + 40; });
+    return clamp((need / (2 * Math.PI)) * 1.05, 230, 540);
+  }
+  function branchPoints(kind, n, radius) {
+    var pts = [], start = kind === "orbit" ? -Math.PI / 2 : seeded(1) * Math.PI * 2, i;
+    if (kind === "orbit") {
+      for (i = 0; i < n; i++) { var oa = start + (i * 2 * Math.PI) / Math.max(n, 1); pts.push({ x: Math.cos(oa) * radius * 1.25, y: Math.sin(oa) * radius }); }
+    } else if (kind === "spiral") {
+      var dir = seeded(2) > .5 ? 1 : -1;
+      for (i = 0; i < n; i++) { var sa = start + dir * i * .95, sr = radius * (.7 + (n > 1 ? i * .65 / (n - 1) : 0)); pts.push({ x: Math.cos(sa) * sr, y: Math.sin(sa) * sr }); }
+    } else if (kind === "constellation") {
+      if (shapeSeed % 2 === 0) {
+        for (i = 0; i < n; i++) pts.push({ x: (i - (n - 1) / 2) * radius * .9, y: (i % 2 ? 1 : -1) * radius * (.35 + seeded(10 + i) * .3) });
+      } else {
+        for (i = 0; i < n; i++) { var t = n > 1 ? -1.15 + 2.3 * i / (n - 1) : 0, cr = radius * (.9 + seeded(10 + i) * .45); pts.push({ x: Math.sin(t) * cr, y: -Math.cos(t) * cr + radius * .65 }); }
+      }
+      var cx = 0, cy = 0; pts.forEach(function (q) { cx += q.x; cy += q.y; }); cx /= Math.max(n, 1); cy /= Math.max(n, 1);
+      pts = pts.map(function (q) { var x = q.x - cx, y = q.y - cy; return { x: x * Math.cos(start) - y * Math.sin(start), y: x * Math.sin(start) + y * Math.cos(start) }; });
+    } else {
+      for (i = 0; i < n; i++) { var ca = seeded(100 + i * 2) * Math.PI * 2, cd = radius * (.75 + seeded(101 + i * 2) * .75); pts.push({ x: Math.cos(ca) * cd, y: Math.sin(ca) * cd }); }
+    }
+    return pts;
+  }
+  function layout() {
+    var rp = nodes[0], br = rp.kids, n = br.length, R1 = ringFor(br), off = n > 1 ? 0.2 : 0;
+    var pts = branchPoints(shape, n, R1); topRadius = R1;
+    br.forEach(function (b, i) {
+      b.x = pts[i].x; b.y = pts[i].y; b.a = Math.atan2(b.y, b.x) + off; b.rr = Math.sqrt(b.x * b.x + b.y * b.y) || R1;
+    });
+    function fan(p) {
+      var m = p.kids.length, placed = 0, ring = 0;
+      while (placed < m) {
+        var rr = GAP[Math.min(p.depth + 1, 4)] * (1 + ring * 0.62);
+        var cap = Math.max(3, Math.floor((Math.PI * 1.3 * rr) / 44)), take = Math.min(cap, m - placed);
+        for (var j = 0; j < take; j++) {
+          var k = p.kids[placed + j], span = Math.min(Math.PI * 1.3, (take * 44) / rr);
+          k.a = p.a + (take === 1 ? 0 : (j / (take - 1) - 0.5) * span) + ring * 0.09; k.rr = rr;
+          k.x = p.x + Math.cos(k.a) * rr; k.y = p.y + Math.sin(k.a) * rr;
+        }
+        placed += take; ring++;
+      }
+      p.kids.forEach(fan);
+    }
+    br.forEach(fan);
+    var N = nodes.length, ITER = 320;
+    for (var it = 0; it < ITER; it++) {
+      var al = 1 - it / ITER;
+      for (var i = 0; i < N; i++) for (var j = i + 1; j < N; j++) {
+        var a = nodes[i], b = nodes[j], dx = b.x - a.x, dy = b.y - a.y, d = Math.sqrt(dx * dx + dy * dy) || 0.01;
+        var pad = (a.level < 2 || b.level < 2) ? 58 : 34, min = RAD[a.level] + RAD[b.level] + pad;
+        if (d < min) {
+          var push = ((min - d) / 2) * 0.7, ux = dx / d, uy = dy / d;
+          if (i === 0) { b.x += ux * push * 2; b.y += uy * push * 2; } else { a.x -= ux * push; a.y -= uy * push; b.x += ux * push; b.y += uy * push; }
+        }
+      }
+      for (var q = 1; q < N; q++) {
+        var p = nodes[q], par = p.parent, ddx = p.x - par.x, ddy = p.y - par.y, dd = Math.sqrt(ddx * ddx + ddy * ddy) || 0.01;
+        var f = (dd - p.rr * (p.level === 1 ? 1.15 : 1.35)) * 0.035 * (0.3 + al), wp = par.level === 0 ? 1 : 0.7;
+        if (f > 0 || p.level === 1) {          /* only pull a star in when it has drifted too far out (or a branch, either way) */
+          p.x -= (ddx / dd) * f * wp; p.y -= (ddy / dd) * f * wp;
+          if (par.level !== 0) { par.x += (ddx / dd) * f * (1 - wp); par.y += (ddy / dd) * f * (1 - wp); }
+        }
+      }
+    }
+  }
+
+  function bounds(list) {
+    var x1 = 1e9, y1 = 1e9, x2 = -1e9, y2 = -1e9;
+    list.forEach(function (p) { var r = RAD[p.level] * 2.2; x1 = Math.min(x1, p.x - r); x2 = Math.max(x2, p.x + r); y1 = Math.min(y1, p.y - r); y2 = Math.max(y2, p.y + r); });
+    return { x1: x1, y1: y1, x2: x2, y2: y2 };
+  }
+  /* Where the camera should sit to show a set of stars with room for their labels. */
+  function frame(list, padPx, maxS) {
+    var b = bounds(list), pw = padPx || 56;
+    var s = Math.min((W - pw * 2) / Math.max(b.x2 - b.x1, 40), (H - pw * 2 - 18) / Math.max(b.y2 - b.y1, 40));
+    s = clamp(s, 0.05, maxS || 2.2);
+    return { x: (b.x1 + b.x2) / 2, y: (b.y1 + b.y2) / 2, s: s };
+  }
+
+  /* ---- drawing ---- */
+  function backdrop() {
+    while (bgLayer.firstChild) bgLayer.removeChild(bgLayer.firstChild);
+    var r = rng(7);
+    for (var i = 0; i < 90; i++) {
+      var o = (0.25 + r() * 0.6).toFixed(2);
+      var c = el("circle", { cx: (r() * W).toFixed(1), cy: (r() * H).toFixed(1), r: (r() * 1.2 + 0.3).toFixed(2), class: "bgstar" + (i % 6 === 0 ? " tw" : ""), opacity: o }, bgLayer);
+      if (i % 6 === 0) { c.style.setProperty("--o", o); c.style.animationDelay = (r() * 4).toFixed(1) + "s"; }
+    }
+  }
+  function draw() {
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    var defs = el("defs", {}, svg);
+    ACCENTS.concat([CORE]).forEach(function (c, i) {
+      var g = el("radialGradient", { id: "g" + i }, defs);
+      el("stop", { offset: "0%", "stop-color": c, "stop-opacity": ".85" }, g); el("stop", { offset: "35%", "stop-color": c, "stop-opacity": ".32" }, g); el("stop", { offset: "100%", "stop-color": c, "stop-opacity": "0" }, g);
+    });
+    bgLayer = el("g", { "aria-hidden": "true" }, svg); backdrop();
+    world = el("g", {}, svg);
+    var edges = el("g", {}, world), nodeLayer = el("g", {}, world);
+    labelLayer = el("g", {}, svg);
+    var br = nodes[0].kids;
+    if (shape === "orbit" && br.length) {
+      var orbit = el("ellipse", { cx: 0, cy: 0, rx: topRadius * 1.25, ry: topRadius, fill: "none", stroke: "#8fbaff", "stroke-width": 1, "stroke-dasharray": "3 7", "vector-effect": "non-scaling-stroke", class: "edge" }, edges);
+      orbit.dataset.base = ".3"; orbit.style.opacity = ".3";
+    }
+    nodes.forEach(function (p) {
+      if (!p.parent) return;
+      p.edge = el("line", { x1: p.parent.x, y1: p.parent.y, x2: p.x, y2: p.y, stroke: accent(p), "stroke-width": p.level === 1 ? 1.4 : 1, "vector-effect": "non-scaling-stroke", class: "edge" }, edges);
+      p.edge.dataset.base = p.level === 1 ? ".6" : p.level === 2 ? ".42" : ".3";
+    });
+    function thread(a, b, opacity) { var l = el("line", { x1: a.x, y1: a.y, x2: b.x, y2: b.y, stroke: "#217cff", "vector-effect": "non-scaling-stroke", class: "edge" }, edges); l.dataset.base = String(opacity); l.style.opacity = String(opacity); }
+    if ((shape === "spiral" || shape === "constellation") && br.length > 1) {
+      for (var bi = 1; bi < br.length; bi++) thread(br[bi - 1], br[bi], .38);
+      if (shape === "constellation" && shapeSeed % 3 === 0 && br.length > 3) thread(br[br.length - 1], br[0], .24);
+    } else if (shape === "cluster" && br.length) {
+      var tree = [nodes[0]], rest = br.slice();
+      while (rest.length) {
+        var best = null;
+        tree.forEach(function (a) { rest.forEach(function (b) { var dd = Math.hypot(a.x - b.x, a.y - b.y); if (!best || dd < best.d) best = { a: a, b: b, d: dd }; }); });
+        thread(best.a, best.b, .36); tree.push(best.b); rest.splice(rest.indexOf(best.b), 1);
+      }
+    }
+    var order = nodes.slice().sort(function (a, b) { return b.level - a.level; });   /* deepest first, so the big stars sit on top */
+    order.forEach(function (p) {
+      var r = RAD[p.level], gi = p.branch < 0 ? 7 : p.branch % ACCENTS.length, c = accent(p);
+      var g = el("g", { class: "node", tabindex: 0, role: "button", "aria-label": p.n.label, transform: "translate(" + p.x.toFixed(1) + " " + p.y.toFixed(1) + ")" }, nodeLayer);
+      el("circle", { r: r * (p.level === 0 ? 4.2 : 3.4), fill: "url(#g" + gi + ")", class: "halo", opacity: p.level < 2 ? 1 : .85 }, g);
+      if (p.level < 2) { var sp = r * (p.level === 0 ? 4.4 : 3.2); el("path", { d: "M" + -sp + " 0H" + sp + "M0 " + -sp + "V" + sp, class: "spike" }, g); }
+      el("circle", { r: r * 2.1, class: "hit" }, g);
+      el("circle", { r: r, fill: p.level === 0 ? "#dbe8ff" : c, class: "ring" }, g);
+      el("circle", { r: r * 0.46, class: "core" }, g);
+      el("circle", { r: r * 2.1, class: "focusring" }, g);
+      p.g = g;
+      g.addEventListener("click", function () { if (drag && drag.moved) return; select(p); });
+      g.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(p); } });
+      var t = el("text", { class: "lbl" }, labelLayer);
+      p.lines = wrap(p.level === 0 ? p.n.label.toUpperCase() : p.n.label, p.level === 0 ? 26 : p.level === 1 ? 13 : 18, p.level < 2 ? 3 : 2);
+      p.lines.forEach(function (ln) { var s = el("tspan", { x: 0, dy: 0 }, t); s.textContent = ln; });
+      p.t = t;
+    });
+    apply();
+  }
+  function wrap(s, max, maxLines) {
+    var out = [], line = "";
+    String(s).split(/\s+/).filter(Boolean).forEach(function (w) { if ((line + " " + w).trim().length > max && line) { out.push(line); line = w; } else line = (line + " " + w).trim(); });
+    if (line) out.push(line);
+    if (out.length > maxLines) { out = out.slice(0, maxLines); out[maxLines - 1] = out[maxLines - 1].replace(/[\s.,;:]*$/, "") + "…"; }
+    return out;
+  }
+
+  /* Camera and labels. Labels live in screen space at a steady size; the greedy pass below keeps the most important ones that
+     fit without sitting on a star or on each other, and zooming in lets more of them appear. */
+  function apply() {
+    if (!world) return;
+    var s = cam.s, tx = W / 2 - cam.x * s, ty = H / 2 - cam.y * s;
+    world.setAttribute("transform", "translate(" + tx.toFixed(2) + " " + ty.toFixed(2) + ") scale(" + s.toFixed(4) + ")");
+    var cand = [], taken = [];
+    function hit(a, b) { return a.x1 < b.x2 && a.x2 > b.x1 && a.y1 < b.y2 && a.y2 > b.y1; }
+    nodes.forEach(function (p) {
+      p.sx = tx + p.x * s; p.sy = ty + p.y * s; p.sr = RAD[p.level] * s;
+      var dim = !inFocus(p);
+      p.g.style.opacity = dim ? 0.3 : 1;
+      if (p.edge) p.edge.style.opacity = (parseFloat(p.edge.dataset.base) * (dim ? 0.35 : (selected && selected.level > 0 ? 1.4 : 1))).toFixed(2);
+      var rr = p.sr * 1.15 + 2;
+      taken.push({ x1: p.sx - rr, x2: p.sx + rr, y1: p.sy - rr, y2: p.sy + rr, id: p });
+      p.t.style.display = "none";
+    });
+    nodes.forEach(function (p) {
+      var fs = LBL[p.level], w = 0; p.lines.forEach(function (l) { w = Math.max(w, l.length); });
+      w = w * fs * (p.level === 0 ? 0.76 : 0.57) + 8; var h = p.lines.length * fs * 1.15 + 4, g = p.sr * 1.4 + 3;
+      /* the spots to try, in order. A theme's children fan outward, so its label goes on the side facing the centre. */
+      var spots = [{ cx: p.sx, top: p.sy + g }, { cx: p.sx, top: p.sy - g - h }];
+      if (p.level === 1) {
+        var ia = Math.atan2(-p.y, -p.x);
+        spots.push({ cx: p.sx + (g + w / 2) * 0.9, top: p.sy - h / 2 }, { cx: p.sx - (g + w / 2) * 0.9, top: p.sy - h / 2 });
+        [0, 0.6, -0.6, 1.2, -1.2].forEach(function (d) {
+          var ux = Math.cos(ia + d), uy = Math.sin(ia + d), dist = g + Math.abs(ux) * w / 2 + Math.abs(uy) * h / 2 + 2;
+          spots.push({ cx: p.sx + ux * dist, top: p.sy + uy * dist - h / 2 });
+        });
+      }
+      var pri = p === selected ? 0 : p.level === 0 ? 1 : p.level === 1 ? 2 : (inFocus(p) ? 3 + p.level : 20 + p.level);
+      cand.push({ p: p, fs: fs, w: w, h: h, spots: spots, pri: pri, dc: Math.abs(p.sx - W / 2) + Math.abs(p.sy - H / 2) });
+    });
+    cand.sort(function (a, b) { return a.pri - b.pri || a.dc - b.dc; });
+    var kept = [], sr = sky.getBoundingClientRect();
+    [hint, document.getElementById("bar"), zoomBox].forEach(function (u) {
+      if (!u || u.hidden) return; var r = u.getBoundingClientRect(); if (r.width) kept.push({ x1: r.left - sr.left - 6, x2: r.right - sr.left + 6, y1: r.top - sr.top - 4, y2: r.bottom - sr.top + 4 });
+    });
+    cand.forEach(function (c) {
+      var p = c.p, onScreen = p.sx > 8 && p.sx < W - 8 && p.sy > 8 && p.sy < H - 8, must = onScreen && (p === selected || p.level <= 1), pick = null;
+      var zr = s / fit.s, sub = false;
+      for (var u = p; u && selected && selected.level > 0; u = u.parent) if (u === selected) { sub = true; break; }
+      if (p.level === 2 && !sub && zr < (nodes.length <= 90 ? 0.95 : 1.7)) return;     /* the whole sky names the themes; deeper names appear as you zoom or choose a star */
+      if (p.level >= 3 && !sub && zr < 3) return;
+      if (p.level >= 2 && !sub && !inFocus(p) && zr < 4) return;
+      for (var i = 0; i < c.spots.length && !pick; i++) {
+        var sp = c.spots[i], b = { x1: sp.cx - c.w / 2, x2: sp.cx + c.w / 2, y1: sp.top, y2: sp.top + c.h };
+        if (b.x1 < 4 || b.x2 > W - 4 || b.y1 < 4 || b.y2 > H - 4) continue;
+        if (kept.every(function (k) { return !hit(b, k); }) && taken.every(function (t) { return t.id === p || !hit(b, t); })) pick = { sp: sp, b: b };
+      }
+      if (!pick && must) {              /* the centre and the themes always get a name: take the spot that overlaps least */
+        var best = 1e18;
+        c.spots.forEach(function (sp) {
+          var fx = clamp(sp.cx, c.w / 2 + 4, W - c.w / 2 - 4), ty = clamp(sp.top, 4, H - c.h - 4), b = { x1: fx - c.w / 2, x2: fx + c.w / 2, y1: ty, y2: ty + c.h }, cost = 0;
+          function area(o) { return Math.max(0, Math.min(b.x2, o.x2) - Math.max(b.x1, o.x1)) * Math.max(0, Math.min(b.y2, o.y2) - Math.max(b.y1, o.y1)); }
+          kept.forEach(function (k) { cost += area(k) * 3; }); taken.forEach(function (t) { if (t.id !== p) cost += area(t); });
+          if (cost < best) { best = cost; pick = { sp: { cx: fx, top: ty }, b: b }; }
+        });
+      }
+      if (!pick) return;
+      kept.push(pick.b);
+      p.t.style.display = ""; p.t.setAttribute("transform", "translate(" + pick.sp.cx.toFixed(1) + " " + (pick.sp.top + c.fs).toFixed(1) + ")");
+      p.t.style.fontSize = c.fs + "px"; p.t.style.fontWeight = p.level === 0 ? 700 : p.level === 1 ? 600 : p.level === 2 ? 500 : 400;
+      p.t.style.strokeWidth = "3.5px"; p.t.style.letterSpacing = p.level === 0 ? ".12em" : "0"; p.t.style.opacity = inFocus(p) ? 1 : 0.55;
+      p.t.childNodes.forEach(function (ts, i) { ts.setAttribute("dy", i === 0 ? 0 : (c.fs * 1.15).toFixed(1)); });
+    });
+  }
+  function flyTo(to, ms) {
+    cancelAnimationFrame(anim);
+    var from = { x: cam.x, y: cam.y, s: cam.s }, t0 = performance.now(); ms = ms == null ? 650 : ms;
+    if (!ms) { cam = { x: to.x, y: to.y, s: to.s }; apply(); return; }
+    (function step(now) {
+      var t = clamp((now - t0) / ms, 0, 1), e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      cam.s = from.s * Math.pow(to.s / from.s, e); cam.x = from.x + (to.x - from.x) * e; cam.y = from.y + (to.y - from.y) * e;
+      apply(); if (t < 1) anim = requestAnimationFrame(step);
+    })(t0);
+  }
+  function zoomAt(f, sx, sy) {
+    cancelAnimationFrame(anim); userMoved = true;
+    var s = clamp(cam.s * f, fit.s * 0.6, fit.s * 9), wx = cam.x + (sx - W / 2) / cam.s, wy = cam.y + (sy - H / 2) / cam.s;
+    cam.s = s; cam.x = wx - (sx - W / 2) / s; cam.y = wy - (sy - H / 2) / s; apply();
+  }
+
+  /* ---- the card under the sky ---- */
+  var LEVEL = ["Centre", "Theme", "Sub-theme", "Point", "Detail"];
+  function select(p, quiet) {
+    selected = p;
+    card.textContent = "";
+    var e = document.createElement("div"); e.className = "eye"; e.textContent = LEVEL[p.level]; card.appendChild(e);
+    var h = document.createElement("h3"); h.textContent = p.n.label; card.appendChild(h);
+    if (p.n.note) { var np = document.createElement("p"); np.textContent = p.n.note; card.appendChild(np); }
+    if (p.kids.length) {
+      var ch = document.createElement("div"); ch.className = "chips";
+      p.kids.forEach(function (k) { var b = document.createElement("button"); b.type = "button"; b.className = "chip"; b.textContent = k.n.label; b.addEventListener("click", function () { select(k); }); ch.appendChild(b); });
+      card.appendChild(ch);
+    }
+    (p.n.sources || []).slice(0, 3).forEach(function (s) {
+      var b = document.createElement("blockquote"); b.textContent = "“" + s.quote + "”";
+      var c = document.createElement("cite"); c.textContent = s.title; b.appendChild(c); card.appendChild(b);
+    });
+    if (p.parent) { var back = document.createElement("button"); back.type = "button"; back.className = "back"; back.textContent = "← " + p.parent.n.label; back.addEventListener("click", function () { select(p.parent); }); card.appendChild(back); }
+    card.style.display = "block"; card.scrollTop = 0;
+    nodes.forEach(function (q) { if (q.g) q.g.classList.toggle("sel", q === p); });
+    if (!quiet) { userMoved = true; flyTo(p.level === 0 ? fit : frame(subtree(p), 90, 2.6)); }
+    else apply();
+  }
+  function reset() { selected = null; card.style.display = "none"; nodes.forEach(function (q) { if (q.g) q.g.classList.remove("sel"); }); userMoved = false; fit = frame(nodes); flyTo(fit); }
+  function shapeKey() { return "ns_mindmap_shape_" + hashText(data && (data.open_url || data.title)); }
+  function savedShape() {
+    var allowed = ["orbit", "spiral", "constellation", "cluster"], value = null;
+    try { var ws = window.openai && window.openai.widgetState; if (ws && ws.mind_map_url === data.open_url) value = ws.mind_map_shape; } catch (e) { /* other hosts */ }
+    try { value = value || localStorage.getItem(shapeKey()); } catch (e) { /* sandbox storage can be unavailable */ }
+    return allowed.indexOf(value) >= 0 ? value : "constellation";
+  }
+  function saveShape() {
+    try { localStorage.setItem(shapeKey(), shape); } catch (e) { /* sandbox storage can be unavailable */ }
+    try {
+      if (window.openai && typeof window.openai.setWidgetState === "function") {
+        var old = window.openai.widgetState || {};
+        window.openai.setWidgetState(Object.assign({}, old, { mind_map_url: data.open_url, mind_map_shape: shape }));
+      }
+    } catch (e) { /* only ChatGPT provides this extension */ }
+  }
+  function changeShape(next) {
+    if (["orbit", "spiral", "constellation", "cluster"].indexOf(next) < 0 || next === shape || !nodes.length) return;
+    shape = next; saveShape(); cancelAnimationFrame(anim); layout(); draw(); fit = frame(nodes); userMoved = false;
+    if (selected && selected.level > 0) { apply(); flyTo(frame(subtree(selected), 90, 2.6), 500); }
+    else { selected = null; card.style.display = "none"; cam = { x: fit.x, y: fit.y, s: fit.s * .86 }; apply(); flyTo(fit, 500); }
+  }
+
+  function measure() {
+    var r = sky.getBoundingClientRect(); if (r.width < 20 || r.height < 20) return false;
+    var changed = Math.abs(r.width - W) > 1 || Math.abs(r.height - H) > 1; W = r.width; H = r.height;
+    svg.setAttribute("width", W); svg.setAttribute("height", H);
+    return changed;
+  }
+  function onResize() {
+    if (!data || !nodes.length) return;
+    if (!measure()) return;
+    backdrop();
+    fit = frame(nodes);
+    if (!userMoved) { cam = { x: fit.x, y: fit.y, s: fit.s }; }
+    apply();
+  }
+  if (window.ResizeObserver) new ResizeObserver(onResize).observe(sky);
+
+  /* pan with a drag, zoom with Ctrl/Cmd + scroll (or the pinch gesture), double-click to zoom in */
+  svg.addEventListener("pointerdown", function (e) { if (e.button) return; cancelAnimationFrame(anim); drag = { px: e.clientX, py: e.clientY, x: cam.x, y: cam.y, moved: false, id: e.pointerId }; });
+  svg.addEventListener("pointermove", function (e) {
+    if (!drag) return;
+    var dx = e.clientX - drag.px, dy = e.clientY - drag.py;
+    if (!drag.moved && Math.abs(dx) + Math.abs(dy) > 5) { drag.moved = true; userMoved = true; svg.classList.add("drag"); try { svg.setPointerCapture(drag.id); } catch (x) { /* fine */ } }
+    if (drag.moved) { cam.x = drag.x - dx / cam.s; cam.y = drag.y - dy / cam.s; apply(); }
+  });
+  function endDrag(e) { svg.classList.remove("drag"); try { svg.releasePointerCapture(e.pointerId); } catch (x) { /* fine */ } setTimeout(function () { drag = null; }, 0); }
+  svg.addEventListener("pointerup", endDrag); svg.addEventListener("pointercancel", endDrag);
+  svg.addEventListener("wheel", function (e) {
+    var full = document.documentElement.getAttribute("data-mode") === "fullscreen";
+    if (!(full || e.ctrlKey || e.metaKey)) return;       /* inline in the chat the wheel still scrolls the page past the map */
+    e.preventDefault();
+    var r = svg.getBoundingClientRect();
+    zoomAt(Math.exp(clamp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0018), -0.35, 0.35)), e.clientX - r.left, e.clientY - r.top);
+  }, { passive: false });
+  svg.addEventListener("dblclick", function (e) { var r = svg.getBoundingClientRect(); zoomAt(1.8, e.clientX - r.left, e.clientY - r.top); });
+  document.getElementById("zin").addEventListener("click", function () { zoomAt(1.5, W / 2, H / 2); });
+  document.getElementById("zout").addEventListener("click", function () { zoomAt(1 / 1.5, W / 2, H / 2); });
+
+  function show(result) {
+    got = true;
+    var d = result && result.structuredContent;
+    if (!d || d.kind !== "mind_map") { msg.style.display = "flex"; msg.textContent = "There is no Mind Constellation to show yet."; return; }
+    if (!d.root) {
+      msg.style.display = "flex";
+      msg.textContent = d.message || "Your Mind Constellation is still being made. Ask Claude to show it again in a moment.";
+      return;
+    }
+    data = d; selected = null; userMoved = false; cancelAnimationFrame(anim);
+    shapeSeed = hashText(d.open_url || d.title); shape = savedShape(); shapeSelect.value = shape; shapeSelect.hidden = false;
+    msg.style.display = "none"; card.style.display = "none";
+    build(d.root);
+    var hh = document.createElement("span"); hh.textContent = (d.title || "Mind Constellation") + " · " + nodes.length + " stars";
+    var sm = document.createElement("small"); sm.textContent = "Click a star to fly to it. Drag to pan. Ctrl or ⌘ + scroll to zoom.";
+    hint.textContent = ""; hint.appendChild(hh); hint.appendChild(sm);
+    if (d.open_url) openBtn.hidden = false;
+    resetBtn.hidden = false; zoomBox.hidden = false;
+    measure(); draw(); fit = frame(nodes); cam = { x: fit.x, y: fit.y, s: fit.s * 0.8 }; apply(); flyTo(fit, 700);
+    reportSize();
+  }
+  openBtn.addEventListener("click", function () { if (data && data.open_url) request("ui/open-link", { url: data.open_url }).catch(function () {}); });
+  resetBtn.addEventListener("click", reset);
+  shapeSelect.addEventListener("change", function () { changeShape(shapeSelect.value); });
+
+  setTimeout(function () {
+    if (got) return;
+    var m = document.getElementById("msg"); if (!m || m.hidden) return;
+    m.hidden = false; m.textContent = "Still waiting for Notestack's result. The host has sent: " + (seen.length ? seen.join(", ") : "nothing") + ". Ask Claude to show it again, or open it in Notestack.";
+  }, 20000);
+  /*expand*/
+  /* Expand: ask the host for fullscreen (and back). A host that says no, or has no such mode, just keeps the view as it is. */
+  var dispMode = "inline", dispModes = null, expandBtn = null;
+  (function () {
+    var st = document.createElement("style");
+    st.textContent = "#expand{position:fixed;right:10px;bottom:10px;z-index:50;font:inherit;font-size:12px;color:#fff;background:rgba(10,17,40,.82);border:1px solid rgba(157,184,255,.5);border-radius:999px;padding:5px 12px;cursor:pointer}" +
+      "#expand:hover{background:rgba(58,99,224,.7)}" +
+      "html[data-mode=fullscreen] #sky{height:calc(100vh - 24px)!important}html[data-mode=fullscreen] video{max-height:calc(100vh - 90px)!important}" +
+      "html[data-mode=fullscreen] #player iframe{min-height:calc(100vh - 140px)!important}";
+    document.head.appendChild(st);
+  })();
+  function setMode(m) {
+    dispMode = m === "fullscreen" ? "fullscreen" : "inline";
+    document.documentElement.setAttribute("data-mode", dispMode);
+    if (expandBtn) expandBtn.textContent = dispMode === "fullscreen" ? "Close" : "Expand";
+    if (typeof reportSize === "function") reportSize();
+  }
+  function expandInit(res) {
+    var ctx = res && res.hostContext;
+    dispModes = ctx && ctx.availableDisplayModes;
+    if (ctx && ctx.displayMode) setMode(ctx.displayMode);
+    if (!dispModes || dispModes.indexOf("fullscreen") < 0) return; /* only when the host says it has a bigger view */
+    expandBtn = document.createElement("button"); expandBtn.id = "expand"; expandBtn.type = "button"; expandBtn.textContent = dispMode === "fullscreen" ? "Close" : "Expand";
+    expandBtn.addEventListener("click", function () {
+      request("ui/request-display-mode", { mode: dispMode === "fullscreen" ? "inline" : "fullscreen" }).then(function (r) { if (r && r.mode) setMode(r.mode); }, function () { expandBtn.hidden = true; });
+    });
+    document.body.appendChild(expandBtn);
+  }
+  window.addEventListener("message", function (e) {
+    if (e.source !== window.parent) return;
+    var m = e.data;
+    if (m && m.jsonrpc === "2.0" && m.method === "ui/notifications/host-context-changed" && m.params && m.params.displayMode) setMode(m.params.displayMode);
+  });
+  request("ui/initialize", { protocolVersion: "2026-01-26", appInfo: { name: "notestack-mind-constellation", version: "1.0.0" }, appCapabilities: { availableDisplayModes: ["inline", "fullscreen"] } })
+    .then(function (r) { notify("ui/notifications/initialized", {}); reportSize(); expandInit(r); })
+    .catch(function () { msg.textContent = "This view needs an app that supports interactive results."; });
+})();
+</script>
+</body>
+</html>

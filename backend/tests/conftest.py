@@ -24,6 +24,10 @@ os.environ["B2V_API_KEY"] = ""
 os.environ.setdefault("EMAIL_PROVIDER", "console")
 os.environ.setdefault("JWT_SECRET", "test-secret-that-is-at-least-32-bytes-long")
 os.environ.setdefault("BILLING_ENABLED", "false")
+os.environ.setdefault("MCP_ENABLED", "true")
+# The addresses tests assume, whatever the developer's own .env says (it may point at an ngrok tunnel).
+os.environ["API_URL"] = "http://localhost:8000"
+os.environ["FRONTEND_URL"] = "http://localhost:5173"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
@@ -83,6 +87,23 @@ def never_reach_stripe(monkeypatch):
         raise RuntimeError("A test tried to create a real Stripe client. Use a fake one (see tests/test_stripe_billing.py).")
 
     monkeypatch.setattr(stripe, "StripeClient", blocked)
+
+
+@pytest.fixture(autouse=True)
+def offline_dns(monkeypatch):
+    """Names resolve to a public address and nothing touches the network: tests use hosts like ada.example.com."""
+    import ipaddress
+
+    from app.services import safe_http
+
+    def resolve(host, port):
+        try:
+            ipaddress.ip_address(host)
+            return [host]
+        except ValueError:
+            return ["127.0.0.1"] if host == "localhost" else ["93.184.216.34"]
+
+    monkeypatch.setattr(safe_http, "_resolve", resolve)
 
 
 @pytest.fixture()

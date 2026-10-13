@@ -1275,7 +1275,7 @@ def test_sync_follows_effective_plan(client, owner, db_session, monkeypatch):
     sub.status = "canceled"
     db_session.commit()
     sub = video_quota.sync_video_quota(db_session, ws)
-    assert (sub.video_plan, sub.video_limit) == ("free", 2)
+    assert (sub.video_plan, sub.video_limit) == ("free", 1)
 
 
 def test_monthly_fallback_reset(client, owner, db_session, session_factory):
@@ -1318,9 +1318,10 @@ def test_row_holds_the_full_reference(client, b2v, owner, db_session):
     b2v.queue("GET", "/api/v1/videos/812/status", (200, {"status": "done", "ready": True,
                                                           "video_url": "https://cdn.test/v.mp4"}))
     client.get(f"/api/videos/{art['id']}/status", headers=headers)
-    client.get(f"/api/videos/{art['id']}", headers=headers)
+    detail = client.get(f"/api/videos/{art['id']}", headers=headers).json()
     db_session.expire_all()
     assert row.video_url == "https://cdn.test/v.mp4" and row.preview_url == f"{API}/embed/t"
+    assert detail["video_url"] == "https://cdn.test/v.mp4"  # project may omit it after status already found it
 
 
 def test_calls_use_the_row_not_the_artifact_copy(client, b2v, owner, db_session):
@@ -1356,16 +1357,15 @@ def test_plan_video_limits(client, owner, db_session, monkeypatch):
     _, ws = owner
     monkeypatch.setattr(settings, "billing_enabled", True)
     video_quota.sync_video_quota(db_session, ws)
-    for plan, limit in (("free", 2), ("writer", 10), ("studio", 20)):
+    for plan, limit in (("free", 1), ("writer", 10), ("studio", 20)):
         _on_plan(db_session, ws, plan)
         assert video_quota.sync_video_quota(db_session, ws).video_limit == limit
 
 
-def test_free_is_two_videos_in_total(client, b2v, owner, free_plan, db_session, session_factory):
+def test_free_is_one_video_in_total(client, b2v, owner, free_plan, db_session, session_factory):
     headers, ws = owner
     make_video(client, headers)
-    make_video(client, headers, url="https://a.test/2")
-    r = client.post("/api/videos", json={"url": "https://a.test/3"}, headers=headers)
+    r = client.post("/api/videos", json={"url": "https://a.test/2"}, headers=headers)
     assert r.status_code == 402
     usage = client.get("/api/videos/quota", headers=headers).json()
     assert usage["resets_at"] is None
@@ -1395,7 +1395,7 @@ def test_dropping_to_free_counts_what_was_made(client, b2v, owner, db_session, m
         make_video(client, headers, url=f"https://a.test/{i}")
     _on_plan(db_session, ws, "free")
     usage = client.get("/api/videos/quota", headers=headers).json()
-    assert (usage["used"], usage["limit"]) == (3, 2)
+    assert (usage["used"], usage["limit"]) == (3, 1)
     assert client.post("/api/videos", json={"url": "https://a.test/x"}, headers=headers).status_code == 402
 
 

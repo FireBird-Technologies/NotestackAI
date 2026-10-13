@@ -16,6 +16,7 @@ from app.routers.notebooks import ensure_archive_notebook
 from app.services import artifact_feedback
 from app.services.artifacts import latest_jobs, serialize_artifact, start_artifact
 from app.services.jobs import create_job, serialize_job
+from app.services.notebook_titles import visible_notebook_title
 from app.services.plans import effective_plan, plan_limit_error
 from app.services.renderer import COMPOSITIONS
 from app.services.storage import storage
@@ -126,7 +127,7 @@ def _target_title(ctx: Ctx, notebook_id: uuid.UUID | None, document_id: uuid.UUI
                                                   Notebook.workspace_id == ctx.workspace.id))
         if not nb:
             raise HTTPException(404, "Notebook not found")
-        return nb.title
+        return visible_notebook_title(nb.title)
     raise HTTPException(400, "Pick a notebook or a post")
 
 

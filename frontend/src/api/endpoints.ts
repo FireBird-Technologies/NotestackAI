@@ -17,6 +17,8 @@ import type {
   DocDetail,
   Job,
   LibraryVoice,
+  McpGrant,
+  McpRequest,
   Notebook,
   NotebookSummary,
   WorkspaceChat,
@@ -304,6 +306,14 @@ export const memoryApi = {
   list: () => api<{ items: MemoryNote[]; limit: number }>("/api/memory"),
   put: (key: string, value: string) => put<MemoryNote>(`/api/memory/${encodeURIComponent(key)}`, { value }),
   remove: (key: string) => del(`/api/memory/${encodeURIComponent(key)}`),
+};
+
+export const mcpApi = {
+  request: (id: string) => api<McpRequest>(`/api/mcp/requests/${encodeURIComponent(id)}`),
+  decide: (id: string, approve: boolean, scopes?: string[]) =>
+    post<{ redirect_url: string }>(`/api/mcp/requests/${encodeURIComponent(id)}/decision`, { approve, scopes }),
+  grants: () => api<McpGrant[]>("/api/mcp/grants"),
+  revoke: (id: string) => del(`/api/mcp/grants/${encodeURIComponent(id)}`),
 };
 
 export type BillingCycle = "monthly" | "annual";

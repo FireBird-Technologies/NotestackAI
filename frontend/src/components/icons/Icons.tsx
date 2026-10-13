@@ -131,6 +131,15 @@ export const OrbitIcon = (p: P) => (
   </Icon>
 );
 
+/** A clean chain link: external apps connected to Notestack over MCP. */
+export const ConnectorIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M9.5 14.5 14.5 9.5" />
+    <path d="m7.2 16.8-1.1 1.1a3.54 3.54 0 0 1-5-5l3.1-3.1a3.54 3.54 0 0 1 5 0" />
+    <path d="m16.8 7.2 1.1-1.1a3.54 3.54 0 0 1 5 5l-3.1 3.1a3.54 3.54 0 0 1-5 0" />
+  </Icon>
+);
+
 export const ArrowRightIcon = (p: P) => (
   <Icon {...p}>
     <path d="M5 12h14M13 6l6 6-6 6" />

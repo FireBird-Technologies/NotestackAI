@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flashcards</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: transparent; font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif; }
+  #deck { position: relative; padding: 14px; border-radius: 14px; color: #fff; min-height: 330px;
+          background-color: #000; background-image: radial-gradient(1.5px 1.5px at 59% 74%,rgba(255,255,255,0.86),transparent),radial-gradient(2px 2px at 26% 26%,rgba(255,255,255,0.72),transparent),radial-gradient(1.5px 1.5px at 25% 15%,rgba(255,255,255,0.4),transparent),radial-gradient(1px 1px at 90% 84%,rgba(255,255,255,0.59),transparent),radial-gradient(2px 2px at 59% 86%,rgba(255,255,255,0.72),transparent),radial-gradient(1px 1px at 69% 11%,rgba(33,124,255,0.98),transparent),radial-gradient(1.5px 1.5px at 78% 6%,rgba(255,255,255,0.7),transparent),radial-gradient(1px 1px at 27% 69%,rgba(255,255,255,0.65),transparent),radial-gradient(1.5px 1.5px at 86% 13%,rgba(255,255,255,0.59),transparent),radial-gradient(1px 1px at 72% 13%,rgba(255,255,255,0.49),transparent),radial-gradient(1px 1px at 38% 6%,rgba(255,255,255,0.41),transparent),radial-gradient(1.5px 1.5px at 15% 40%,rgba(33,124,255,0.45999999999999996),transparent),radial-gradient(1px 1px at 89% 3%,rgba(33,124,255,1),transparent),radial-gradient(1.5px 1.5px at 62% 51%,rgba(255,255,255,0.69),transparent),radial-gradient(1px 1px at 27% 89%,rgba(255,255,255,0.54),transparent),radial-gradient(1px 1px at 3% 55%,rgba(33,124,255,0.87),transparent),radial-gradient(1.5px 1.5px at 3% 10%,rgba(255,255,255,0.46),transparent),radial-gradient(1.5px 1.5px at 73% 27%,rgba(255,255,255,0.94),transparent),radial-gradient(1.5px 1.5px at 18% 56%,rgba(33,124,255,0.7),transparent),radial-gradient(1px 1px at 29% 3%,rgba(255,255,255,0.93),transparent),radial-gradient(1px 1px at 77% 41%,rgba(33,124,255,0.69),transparent),radial-gradient(2px 2px at 79% 85%,rgba(33,124,255,1),transparent),radial-gradient(1px 1px at 29% 59%,rgba(33,124,255,0.82),transparent),radial-gradient(1px 1px at 39% 52%,rgba(33,124,255,0.58),transparent),radial-gradient(1px 1px at 83% 34%,rgba(255,255,255,0.57),transparent),radial-gradient(2px 2px at 60% 19%,rgba(255,255,255,0.69),transparent),radial-gradient(1px 1px at 51% 26%,rgba(255,255,255,0.49),transparent),radial-gradient(1px 1px at 80% 34%,rgba(33,124,255,0.83),transparent),radial-gradient(1.5px 1.5px at 72% 28%,rgba(255,255,255,0.71),transparent),radial-gradient(1px 1px at 55% 9%,rgba(33,124,255,0.76),transparent),radial-gradient(1.5px 1.5px at 34% 33%,rgba(255,255,255,0.84),transparent),radial-gradient(1px 1px at 78% 65%,rgba(255,255,255,0.91),transparent),radial-gradient(1px 1px at 10% 19%,rgba(255,255,255,0.74),transparent),radial-gradient(1px 1px at 80% 81%,rgba(255,255,255,0.9),transparent),radial-gradient(ellipse at 50% 0%,rgba(33,124,255,.07),transparent 55%); border: 1px solid rgba(255,255,255,.1); }
+  #top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+  #title { font-size: 13px; color: rgba(255,255,255,.72); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  button { font: inherit; font-size: 13px; color: #fff; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.18);
+           border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  button:hover:not(:disabled) { background: rgba(33,124,255,.2); }
+  button:disabled { opacity: .4; cursor: default; }
+  #stage { perspective: 1200px; }
+  #card { position: relative; height: 200px; cursor: pointer; transform-style: preserve-3d; transition: transform .45s; outline-offset: 4px; }
+  #card.flipped { transform: rotateY(180deg); }
+  .face { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+          padding: 20px 26px; border-radius: 14px; backface-visibility: hidden; -webkit-backface-visibility: hidden; overflow: auto;
+          background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.18); }
+  .face.back { transform: rotateY(180deg); background: rgba(33,124,255,.1); }
+  .tag { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: rgba(255,255,255,.56); margin-bottom: 8px; }
+  .text { font-size: 17px; line-height: 1.45; margin: 0; }
+  .face.back .text { font-size: 15px; color: rgba(255,255,255,.9); }
+  #nav { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; gap: 8px; }
+  #pos { font-size: 13px; color: rgba(255,255,255,.72); }
+  #hint { font-size: 12px; color: rgba(255,255,255,.56); text-align: center; margin-top: 8px; }
+  #msg { padding: 40px 20px; text-align: center; color: rgba(255,255,255,.72); font-size: 15px; }
+
+  /* The app's own look: black, starry, pill buttons, blue only for the main action and for selection. */
+  button { border-radius: 999px; background: transparent; border: 1px solid rgba(255,255,255,.18); color: #fff; font-weight: 600; transition: box-shadow .2s, border-color .2s, background .2s; }
+  button:hover:not(:disabled) { background: transparent; border-color: rgba(33,124,255,.6); box-shadow: 0 0 12px rgba(33,124,255,.35); }
+  button.go { background: #217cff; border: 1px solid #217cff; padding: 10px 22px; box-shadow: 0 0 24px rgba(33,124,255,.35), 0 0 2px rgba(33,124,255,.6); }
+  button.go:hover:not(:disabled) { background: rgba(33,124,255,.9); border-color: rgba(33,124,255,.9); box-shadow: 0 0 32px rgba(33,124,255,.6); }
+  button:disabled { opacity: .5; }
+  .chip, .opt, .pickbtn { border-radius: 14px; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.18); font-weight: 400; }
+  .chip:hover, .opt:hover, .pickbtn:hover { border-color: rgba(33,124,255,.6); box-shadow: 0 0 12px rgba(33,124,255,.2); }
+  .chip.sel, .opt.sel { border-color: rgba(33,124,255,.9); background: rgba(33,124,255,.08); box-shadow: 0 0 12px rgba(33,124,255,.2); }
+  .row .chip { border-radius: 999px; }
+  input[type=text], input[type=search], select { border-radius: 999px; background: rgba(0,0,0,.6); border: 1px solid rgba(255,255,255,.18); padding-left: 16px; padding-right: 16px; }
+  input[type=text]:focus, input[type=search]:focus, select:focus { outline: none; border-color: rgba(33,124,255,.6); box-shadow: 0 0 12px rgba(33,124,255,.2); }
+  input[type=checkbox] { accent-color: #217cff; }
+</style>
+</head>
+<body>
+<div id="deck">
+  <div id="msg">Loading your flashcards...</div>
+  <div id="main" hidden>
+    <div id="top"><span id="title"></span><span><button id="shuffle" type="button">Shuffle</button> <button id="open" type="button" hidden>Open in Notestack</button></span></div>
+    <div id="stage"><div id="card" tabindex="0" role="button" aria-label="Flip the card">
+      <div class="face front"><div class="tag">Question</div><p class="text" id="front"></p></div>
+      <div class="face back"><div class="tag">Answer</div><p class="text" id="back"></p></div>
+    </div></div>
+    <div id="nav"><button id="prev" type="button">Previous</button><span id="pos"></span><button id="next" type="button">Next</button></div>
+    <div id="hint">Click the card (or press Space) to flip it. Arrow keys move between cards.</div>
+  </div>
+</div>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var data = null, cards = [], i = 0;
+
+  /* ---- talking to the host: JSON-RPC 2.0 over postMessage (MCP Apps) ---- */
+  var pending = {}, rid = 1;
+  function send(m) { m.jsonrpc = "2.0"; window.parent.postMessage(m, "*"); }
+  function request(method, params) {
+    return new Promise(function (resolve, reject) { var id = rid++; pending[id] = { resolve: resolve, reject: reject }; send({ id: id, method: method, params: params || {} }); });
+  }
+  function notify(method, params) { send({ method: method, params: params || {} }); }
+  window.addEventListener("message", function (e) {
+    if (e.source !== window.parent) return;
+    var m = e.data;
+    if (!m || m.jsonrpc !== "2.0") return;
+    if (m.method) seen.push(m.method);
+    if (m.method && m.method.indexOf("tool-result") < 0 && m.params && find(m.params, 0)) { show(unwrap(m.params)); return; }
+    if (m.method === undefined && m.id !== undefined) {
+      var p = pending[m.id]; if (!p) return; delete pending[m.id];
+      if (m.error) p.reject(m.error); else p.resolve(m.result);
+    } else if (m.method === "ui/notifications/tool-result") {
+      show(unwrap(m.params || {}));
+    } else if (m.method === "ui/resource-teardown" && m.id !== undefined) {
+      send({ id: m.id, result: {} });
+    } else if (m.method === "ping" && m.id !== undefined) {
+      send({ id: m.id, result: {} });
+    }
+  });
+  /* Find the payload wherever the host put it (any depth, or as JSON text), and remember what the host sent so a stuck
+     view can say what it saw. */
+  var seen = [], got = false;
+  function find(o, d) {
+    if (!o || d > 6) return null;
+    if (typeof o === "string") { try { return find(JSON.parse(o), d + 1); } catch (e) { return null; } }
+    if (typeof o !== "object") return null;
+    if (o.kind === "flashcards" && "open_url" in o) return o; /* not the job record, which also has a kind */
+    for (var k in o) { var f = find(o[k], d + 1); if (f) return f; }
+    return null;
+  }
+  /* The result as the host hands it over: structuredContent, or the same wrapped in result, or (cards and quizzes) the text. */
+  function unwrap(p) {
+    var f = find(p, 0); if (f) return { structuredContent: f };
+    if (p.structuredContent) return p;
+    if (p.result && p.result.structuredContent) return p.result;
+    try {
+      var t = p.content && p.content[0] && p.content[0].text, v = t ? JSON.parse(t) : null, c = v && v.content;
+      if (c && c.cards) return { structuredContent: { kind: "flashcards", title: v.title, open_url: v.open_in_notestack, cards: c.cards } };
+    } catch (e) { /* not JSON */ }
+    return p;
+  }
+  function reportSize() { notify("ui/notifications/size-changed", { width: Math.ceil(document.documentElement.scrollWidth), height: Math.ceil(document.documentElement.scrollHeight) }); }
+  if (window.ResizeObserver) new ResizeObserver(reportSize).observe(document.documentElement);
+
+  /* ---- the deck ---- */
+  function render() {
+    var c = cards[i];
+    $("card").classList.remove("flipped");
+    $("front").textContent = c.front;
+    $("back").textContent = c.back;
+    $("pos").textContent = (i + 1) + " / " + cards.length;
+    $("prev").disabled = i === 0;
+    $("next").disabled = i === cards.length - 1;
+  }
+  function go(n) { if (n >= 0 && n < cards.length) { i = n; render(); } }
+  function flip() { $("card").classList.toggle("flipped"); }
+  function shuffle() {
+    for (var k = cards.length - 1; k > 0; k--) { var j = Math.floor(Math.random() * (k + 1)); var t = cards[k]; cards[k] = cards[j]; cards[j] = t; }
+    go(0); render();
+  }
+  function message(text) { $("msg").hidden = false; $("main").hidden = true; $("msg").textContent = text; }
+  function show(result) {
+    got = true;
+    var d = result && result.structuredContent;
+    if (!d || d.kind !== "flashcards") return message("There are no flashcards to show yet.");
+    if (!d.cards || !d.cards.length) return message(d.message || "Your flashcards are still being made. Ask Claude to show them again in a moment.");
+    data = d; cards = d.cards.slice(); i = 0;
+    $("msg").hidden = true; $("main").hidden = false;
+    $("title").textContent = d.title || "Flashcards";
+    $("open").hidden = !d.open_url;
+    render(); reportSize();
+  }
+  $("card").addEventListener("click", flip);
+  $("card").addEventListener("keydown", function (e) {
+    if (e.key === " " || e.key === "Enter") { e.preventDefault(); flip(); }
+    else if (e.key === "ArrowRight") go(i + 1);
+    else if (e.key === "ArrowLeft") go(i - 1);
+  });
+  $("prev").addEventListener("click", function () { go(i - 1); });
+  $("next").addEventListener("click", function () { go(i + 1); });
+  $("shuffle").addEventListener("click", shuffle);
+  $("open").addEventListener("click", function () { if (data && data.open_url) request("ui/open-link", { url: data.open_url }).catch(function () {}); });
+
+  setTimeout(function () {
+    if (got) return;
+    var m = document.getElementById("msg"); if (!m || m.hidden) return;
+    m.hidden = false; m.textContent = "Still waiting for Notestack's result. The host has sent: " + (seen.length ? seen.join(", ") : "nothing") + ". Ask Claude to show it again, or open it in Notestack.";
+  }, 20000);
+  setTimeout(function () { notify("ui/notifications/initialized", {}); reportSize(); }, 1500); /* some hosts hold the result until told we are ready */
+  request("ui/initialize", { protocolVersion: "2026-01-26", appInfo: { name: "notestack-flashcards", version: "1.0.0" }, appCapabilities: {} })
+    .then(function () { notify("ui/notifications/initialized", {}); reportSize(); })
+    .catch(function () { message("This view needs an app that supports interactive results."); });
+})();
+</script>
+</body>
+</html>

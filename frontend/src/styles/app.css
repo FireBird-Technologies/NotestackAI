@@ -834,6 +834,42 @@
   border: 1px solid transparent;
 }
 
+button.side-link {
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
+}
+
+.connector-side-logos {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.connector-side-logos > span {
+  display: grid;
+  place-items: center;
+  width: 23px;
+  height: 23px;
+  border-radius: 7px;
+  background: var(--white);
+}
+
+.connector-side-logos img {
+  display: block;
+  width: 14px;
+  height: 14px;
+  object-fit: contain;
+}
+
+.connector-side-logos img.openai {
+  width: 21px;
+  height: 21px;
+}
+
 .side-link:hover {
   color: var(--white);
   background: var(--surface-2);

@@ -35,10 +35,11 @@ from app.pipeline.generate import ideas_fresh
 from app.pipeline.research import Turn, research
 from app.pipeline.trace import ChatTrace, use_trace
 from app.routers.sources import serialize_document
-from app.services.artifacts import latest_jobs, serialize_artifact
 from app.services import report_suggestions
+from app.services.artifacts import latest_jobs, serialize_artifact
 from app.services.jobs import create_job, record_usage
 from app.services.memory import list_facts, profile_text
+from app.services.notebook_titles import visible_notebook_title
 from app.services.storage import storage
 
 log = logging.getLogger(__name__)
@@ -63,6 +64,7 @@ class DocumentsIn(BaseModel):
 class ChatIn(BaseModel):
     question: str = Field(min_length=1, max_length=4000)
     chat_id: uuid.UUID | None = None
+    label: str | None = Field(None, max_length=30)  # who is asking (an app over MCP): "Claude: <question>" titles the chat
 
 
 def _get(ctx: Ctx, notebook_id: uuid.UUID) -> Notebook:
@@ -72,6 +74,14 @@ def _get(ctx: Ctx, notebook_id: uuid.UUID) -> Notebook:
     if not nb:
         raise HTTPException(404, "Notebook not found")
     return nb
+
+
+def _input_title(title: str) -> str:
+    """Normalize a submitted title and never persist a leaked internal selection key."""
+    cleaned = visible_notebook_title(title)
+    if not cleaned:
+        raise HTTPException(422, "Give the notebook a name.")
+    return cleaned
 
 
 def _add_docs(ctx: Ctx, nb: Notebook, ids: list[uuid.UUID]) -> int:
@@ -94,12 +104,12 @@ def _add_docs(ctx: Ctx, nb: Notebook, ids: list[uuid.UUID]) -> int:
 
 @router.post("")
 def create_notebook(body: NotebookIn, ctx: Ctx = Depends(get_ctx)):
-    nb = Notebook(workspace_id=ctx.workspace.id, title=body.title.strip(), description=body.description)
+    nb = Notebook(workspace_id=ctx.workspace.id, title=_input_title(body.title), description=body.description)
     ctx.db.add(nb)
     ctx.db.flush()
     added = _add_docs(ctx, nb, body.document_ids)
     ctx.db.commit()
-    return {"id": str(nb.id), "title": nb.title, "added": added}
+    return {"id": str(nb.id), "title": visible_notebook_title(nb.title), "added": added}
 
 
 ARCHIVE_TITLE = "All posts"
@@ -130,7 +140,7 @@ def ensure_archive_notebook(ctx: Ctx) -> Notebook:
 @router.post("/archive")
 def archive_notebook(ctx: Ctx = Depends(get_ctx)):
     nb = ensure_archive_notebook(ctx)
-    return {"id": str(nb.id), "title": nb.title}
+    return {"id": str(nb.id), "title": visible_notebook_title(nb.title)}
 
 
 @router.post("/from-topic/{topic_id}")
@@ -139,36 +149,49 @@ def notebook_from_topic(topic_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
     if not topic:
         raise HTTPException(404, "Topic not found")
     ids = list(ctx.db.scalars(select(DocumentTopic.document_id).where(DocumentTopic.topic_id == topic.id)))
-    nb = Notebook(workspace_id=ctx.workspace.id, title=topic.name, description=topic.summary)
+    nb = Notebook(workspace_id=ctx.workspace.id, title=_input_title(topic.name), description=topic.summary)
     ctx.db.add(nb)
     ctx.db.flush()
     added = _add_docs(ctx, nb, ids)
     ctx.db.commit()
-    return {"id": str(nb.id), "title": nb.title, "added": added}
+    return {"id": str(nb.id), "title": visible_notebook_title(nb.title), "added": added}
 
 
 @router.get("")
 def list_notebooks(ctx: Ctx = Depends(get_ctx)):
     rows = ctx.db.scalars(
         select(Notebook).where(Notebook.workspace_id == ctx.workspace.id)
-        .order_by(Notebook.is_archive.desc(), Notebook.updated_at.desc())
     ).all()
     ids = [n.id for n in rows]
     doc_counts = dict(ctx.db.execute(
         select(NotebookDocument.notebook_id, func.count()).where(NotebookDocument.notebook_id.in_(ids))
         .group_by(NotebookDocument.notebook_id)
     ).all()) if ids else {}
-    chat_counts = dict(ctx.db.execute(
-        select(Chat.notebook_id, func.count()).where(Chat.notebook_id.in_(ids)).group_by(Chat.notebook_id)
-    ).all()) if ids else {}
-    artifact_counts = dict(ctx.db.execute(
-        select(Artifact.notebook_id, func.count()).where(Artifact.notebook_id.in_(ids)).group_by(Artifact.notebook_id)
-    ).all()) if ids else {}
+    chat_stats = {notebook_id: (count, latest) for notebook_id, count, latest in ctx.db.execute(
+        select(Chat.notebook_id, func.count(), func.max(Chat.updated_at)).where(Chat.notebook_id.in_(ids))
+        .group_by(Chat.notebook_id)
+    ).all()} if ids else {}
+    artifact_stats = {notebook_id: (count, latest) for notebook_id, count, latest in ctx.db.execute(
+        select(Artifact.notebook_id, func.count(), func.max(Artifact.updated_at)).where(Artifact.notebook_id.in_(ids))
+        .group_by(Artifact.notebook_id)
+    ).all()} if ids else {}
+
+    def epoch(value: datetime) -> float:
+        return (value if value.tzinfo else value.replace(tzinfo=UTC)).timestamp()
+
+    def activity_at(n: Notebook):
+        """The latest notebook edit, chat activity, or generated-artifact activity."""
+        candidates = [n.updated_at]
+        candidates += [x[1] for x in (chat_stats.get(n.id), artifact_stats.get(n.id)) if x and x[1]]
+        return max((x for x in candidates if x is not None), key=epoch)
+
+    # Every notebook, including All posts, follows the same real activity order.
+    rows.sort(key=lambda n: (epoch(activity_at(n)), epoch(n.created_at)), reverse=True)
     return [
-        {"id": str(n.id), "title": n.title, "description": n.description, "summary": n.summary,
-         "document_count": doc_counts.get(n.id, 0), "chat_count": chat_counts.get(n.id, 0),
-         "artifact_count": artifact_counts.get(n.id, 0), "is_archive": n.is_archive,
-         "updated_at": n.updated_at.isoformat() if n.updated_at else None}
+        {"id": str(n.id), "title": visible_notebook_title(n.title), "description": n.description, "summary": n.summary,
+         "document_count": doc_counts.get(n.id, 0), "chat_count": chat_stats.get(n.id, (0, None))[0],
+         "artifact_count": artifact_stats.get(n.id, (0, None))[0], "is_archive": n.is_archive,
+         "updated_at": activity_at(n).isoformat()}
         for n in rows
     ]
 
@@ -183,7 +206,8 @@ def list_all_chats(ctx: Ctx = Depends(get_ctx)):
         .where(Chat.workspace_id == ctx.workspace.id, Chat.id.in_(answered))
         .order_by(Chat.updated_at.desc())
     ).all()
-    return [{"id": str(c.id), "title": c.title, "notebook_id": str(c.notebook_id), "notebook_title": nb_title,
+    return [{"id": str(c.id), "title": c.title, "notebook_id": str(c.notebook_id),
+             "notebook_title": visible_notebook_title(nb_title),
              "updated_at": c.updated_at.isoformat() if c.updated_at else None}
             for c, nb_title in rows]
 
@@ -201,7 +225,7 @@ def get_notebook(notebook_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
     ).all()
     return {
         "id": str(nb.id),
-        "title": nb.title,
+        "title": visible_notebook_title(nb.title),
         "description": nb.description,
         "summary": nb.summary,
         "is_archive": nb.is_archive,
@@ -213,11 +237,11 @@ def get_notebook(notebook_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
 def patch_notebook(notebook_id: uuid.UUID, body: NotebookPatch, ctx: Ctx = Depends(get_ctx)):
     nb = _get(ctx, notebook_id)
     if body.title is not None:
-        nb.title = body.title.strip()
+        nb.title = _input_title(body.title)
     if body.description is not None:
         nb.description = body.description
     ctx.db.commit()
-    return {"id": str(nb.id), "title": nb.title, "description": nb.description}
+    return {"id": str(nb.id), "title": visible_notebook_title(nb.title), "description": nb.description}
 
 
 @router.delete("/{notebook_id}")
@@ -437,7 +461,9 @@ async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)
     if body.chat_id and (not chat_row or chat_row.notebook_id != nb.id):
         log.warning("Chat %s is not in notebook %s; starting a new chat", body.chat_id, nb.id)
     if not chat_row or chat_row.notebook_id != nb.id:
-        chat_row = Chat(workspace_id=ctx.workspace.id, notebook_id=nb.id, title=body.question[:120])
+        label = (body.label or "").strip()
+        title = f"{label}: {body.question}" if label else body.question
+        chat_row = Chat(workspace_id=ctx.workspace.id, notebook_id=nb.id, title=title[:120])
         db.add(chat_row)
         db.flush()
     chat_row.updated_at = datetime.now(UTC)  # keeps the history list newest first

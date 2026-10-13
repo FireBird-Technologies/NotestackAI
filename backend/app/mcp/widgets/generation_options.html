@@ -1,0 +1,754 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Choose settings</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --blue: #217cff; --blue-60: rgba(33,124,255,.6); --blue-35: rgba(33,124,255,.35); --blue-20: rgba(33,124,255,.2); --blue-10: rgba(33,124,255,.1);
+    --text: #fff; --text-2: rgba(255,255,255,.72); --text-3: rgba(255,255,255,.56);
+    --line: rgba(255,255,255,.1); --line-strong: rgba(255,255,255,.18); --surface: rgba(255,255,255,.03); --surface-2: rgba(255,255,255,.06);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: transparent; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--text); -webkit-font-smoothing: antialiased; }
+  button, input, select { font-family: inherit; }
+  #box, #out { padding: 22px; border-radius: 22px; border: 1px solid var(--line); background-color: #000;
+    background-image: radial-gradient(1.5px 1.5px at 8% 14%,rgba(255,255,255,.75),transparent),radial-gradient(1px 1px at 19% 72%,rgba(33,124,255,.9),transparent),radial-gradient(1.5px 1.5px at 36% 31%,rgba(255,255,255,.55),transparent),radial-gradient(1px 1px at 54% 83%,rgba(255,255,255,.7),transparent),radial-gradient(1.5px 1.5px at 71% 18%,rgba(33,124,255,.7),transparent),radial-gradient(1px 1px at 87% 64%,rgba(255,255,255,.65),transparent),radial-gradient(ellipse at 50% 0%,rgba(33,124,255,.07),transparent 55%); }
+  #out { display: none; margin-top: 12px; } #out.on { display: block; } #out > * { margin-top: 0 !important; }
+  #box { transition: padding .25s, border-radius .25s; } #box.done { padding: 10px 14px 10px 20px; border-radius: 999px; } #box.done #resbar { margin: 0; } #box.done #resbar b { font-size: .95rem; }
+  #reslink { text-decoration: none; color: #7fb2ff; }
+  h2 { margin: 0; font: 600 1.25rem "Space Grotesk", Inter, system-ui, sans-serif; letter-spacing: -.01em; }
+  .sub { margin: 4px 0 0; font-size: .85rem; color: var(--text-3); }
+  .lab { display: flex; align-items: center; justify-content: space-between; margin: 20px 0 8px; font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); }
+  .lab:first-of-type { margin-top: 16px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+  .notebook-grid { max-height: 340px; overflow: auto; padding: 2px; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+  #nbsearch { margin-bottom: 10px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  /* a card: a notebook, a template, a look */
+  .card { position: relative; display: flex; flex-direction: column; gap: 3px; padding: 12px 14px; text-align: left; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); color: var(--text); cursor: pointer; transition: border-color .2s, box-shadow .2s, background .2s, transform .15s; }
+  .card:hover { border-color: var(--blue-60); transform: translateY(-1px); }
+  .card.on { border-color: var(--blue); background: var(--blue-10); box-shadow: 0 0 18px var(--blue-20); }
+  .card.on::after { content: "\2713"; position: absolute; top: 10px; right: 12px; width: 18px; height: 18px; border-radius: 50%; background: var(--blue); color: #fff; font-size: 11px; line-height: 18px; text-align: center; }
+  .card b { font-weight: 600; font-size: .92rem; padding-right: 22px; line-height: 1.3; } .card small { font-size: .78rem; line-height: 1.4; color: var(--text-3); }
+  .card img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 9px; margin-bottom: 8px; background: var(--surface-2); }
+  .card.add { border-style: dashed; border-color: var(--line-strong); background: transparent; } .card.add.on { border-style: solid; }
+  /* a pill: a short choice */
+  .vnone { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 16px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); color: var(--text); font: 500 .95rem var(--font-body); text-align: left; cursor: pointer; margin-bottom: 4px; }
+  .vnone .box { width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--line-strong); background: var(--surface-2); display: grid; place-items: center; font-size: .8rem; line-height: 1; }
+  .vnone.on { border-color: var(--blue-60); } .vnone.on .box { background: var(--blue); border-color: var(--blue); color: #fff; }
+  .vlist { display: grid; gap: 8px; margin-top: 8px; } .vlist.off { opacity: .4; pointer-events: none; }
+  .voice { display: flex; align-items: center; gap: 14px; width: 100%; padding: 10px 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); color: var(--text); text-align: left; cursor: pointer; font: 600 1rem var(--font-body); }
+  .voice:hover { border-color: var(--blue-60); } .voice.on { border-color: var(--blue); background: rgba(33,124,255,.07); box-shadow: 0 0 14px rgba(33,124,255,.2); }
+  .voice .play { flex: none; width: 44px; height: 44px; border-radius: 50%; background: var(--surface-2); display: grid; place-items: center; font-size: .9rem; color: #fff; }
+  .voice .play:hover { background: var(--blue-35); }
+  .voice .nm { flex: 1; min-width: 0; } .voice .nm small { display: block; font-weight: 400; font-size: .76rem; color: var(--text-3); text-transform: capitalize; }
+  .voice .tick { flex: none; width: 30px; height: 30px; border-radius: 50%; background: var(--blue); color: #fff; display: grid; place-items: center; font-size: .8rem; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 8px 15px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--text-2); font-size: .88rem; cursor: pointer; transition: border-color .2s, background .2s, color .2s, box-shadow .2s; }
+  .pill:hover { border-color: var(--blue-60); color: var(--text); } .pill.on { border-color: var(--blue); background: var(--blue); color: #fff; box-shadow: 0 0 14px var(--blue-35); }
+  .pill.on.multi::before { content: "\2713"; font-size: .75rem; }
+  .mini { padding: 3px 11px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--text-2); font-size: .72rem; letter-spacing: 0; text-transform: none; cursor: pointer; transition: border-color .2s, color .2s; } .mini:hover { border-color: var(--blue-60); color: #fff; }
+  .minis { display: flex; gap: 6px; }
+  input[type=text], select { width: 100%; height: 44px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--line-strong); background: rgba(0,0,0,.6); color: var(--text); font-size: .92rem; transition: border-color .2s, box-shadow .2s; }
+  input[type=text]::placeholder { color: var(--text-3); }
+  input[type=text]:focus, select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 12px var(--blue-35); }
+  select { appearance: none; background-image: linear-gradient(45deg, transparent 50%, #fff 50%), linear-gradient(135deg, #fff 50%, transparent 50%); background-position: calc(100% - 20px) 19px, calc(100% - 15px) 19px; background-size: 5px 5px; background-repeat: no-repeat; }
+  /* the posts */
+  .panel { border-radius: 14px; border: 1px solid var(--line); background: var(--surface); overflow: hidden; }
+  .panel input[type=text] { height: 38px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; font-size: .85rem; } .panel input[type=text]:focus { box-shadow: none; }
+  .plist { max-height: 232px; overflow: auto; padding: 4px 6px; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+  .plist label { display: flex; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 9px; font-size: .88rem; color: var(--text-2); cursor: pointer; transition: background .15s, color .15s; } .plist label:hover { background: var(--surface-2); color: #fff; }
+  .plist input { appearance: none; flex: none; width: 17px; height: 17px; margin: 0; border-radius: 5px; border: 1px solid var(--line-strong); background: transparent; cursor: pointer; display: grid; place-items: center; transition: background .15s, border-color .15s; }
+  .plist input:checked { background: var(--blue); border-color: var(--blue); } .plist input:checked::after { content: "\2713"; color: #fff; font-size: 11px; line-height: 1; }
+  .plist .none { padding: 14px; font-size: .85rem; color: var(--text-3); }
+  /* buttons */
+  .foot { display: flex; align-items: center; gap: 10px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }
+  .btn { display: inline-flex; align-items: center; justify-content: center; height: 44px; padding: 0 22px; border-radius: 999px; border: 1px solid var(--line-strong); background: transparent; color: #fff; font-weight: 600; font-size: .92rem; cursor: pointer; transition: box-shadow .2s, border-color .2s, background .2s; white-space: nowrap; }
+  .btn:hover { border-color: var(--blue-60); box-shadow: 0 0 12px var(--blue-35); }
+  .btn.primary { background: var(--blue); border-color: var(--blue); box-shadow: 0 0 24px var(--blue-35), 0 0 2px var(--blue-60); flex: 1; } .btn.primary:hover { background: rgba(33,124,255,.9); box-shadow: 0 0 32px var(--blue-60); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
+  /* progress and result */
+  #told { display: none; align-items: center; gap: 10px; margin-top: 14px; padding: 12px 16px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); font-size: .88rem; color: var(--text-2); }
+  #told.err { border-color: rgba(255,120,120,.4); color: #ffb4b4; } #told.ok { border-color: var(--blue-60); color: #fff; }
+  #told a { color: #7fb2ff; margin-left: auto; text-decoration: none; font-weight: 600; } #told a:hover { text-decoration: underline; }
+  .spin { flex: none; width: 15px; height: 15px; border-radius: 50%; border: 2px solid var(--line-strong); border-top-color: var(--blue); animation: sp .8s linear infinite; } @keyframes sp { to { transform: rotate(360deg); } }
+  #msg { padding: 36px 16px; text-align: center; color: var(--text-2); font-size: .95rem; }
+  #player { margin-top: 14px; display: none; } #player iframe { width: 100%; border: 0; border-radius: 14px; background: transparent; min-height: 380px; }
+  #pending, #media { display: none; }
+  #pending { min-height: 260px; align-items: center; justify-content: center; flex-direction: column; gap: 14px; color: var(--text-2); text-align: center; }
+  #pending .spin { width: 24px; height: 24px; }
+  #pending.err { color: #ffb4b4; }
+  #media { text-align: center; }
+  #media img { display: block; max-width: 100%; max-height: 720px; margin: 0 auto; border-radius: 14px; object-fit: contain; }
+  #media audio { display: block; width: min(720px, 100%); margin: 28px auto; }
+  #media .preview-card { padding: 22px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); text-align: left; }
+  #media .preview-card b { display: block; margin-bottom: 7px; }
+  #media .preview-url { display: block; width: 100%; padding: 11px 14px; border: 1px solid var(--blue-35); border-radius: 10px; background: rgba(33,124,255,.08); color: #8fbbff; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
+  #media .render-note { display: flex; align-items: center; gap: 10px; margin: 12px 0 0; color: var(--text-2); font-size: .85rem; }
+  #media .nav { justify-content: center; }
+  body.output-only #where, body.output-only #setup, body.output-only #msg { display: none !important; }
+  body.output-only #out { display: block; }
+  body.output-only.single-result #box { display: none; }
+  body.output-only.single-result #out { margin-top: 0; padding: 0; border: 0; border-radius: 0; background: transparent; }
+  body.output-only.single-result #player, body.output-only.single-result #cards, body.output-only.single-result #quizv,
+  body.output-only.single-result #doc { margin-top: 0; }
+  /* the result screen, flashcards and the quiz */
+  #resbar { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; } #resbar b { flex: 1; font: 600 1.15rem "Space Grotesk", Inter, system-ui, sans-serif; }
+  #cards, #quizv { display: none; margin-top: 14px; }
+  .fc { display: block; width: 100%; min-height: 230px; padding: 28px 26px; text-align: center; border-radius: 18px; border: 1px solid var(--line-strong); background: linear-gradient(160deg, rgba(33,124,255,.12), rgba(255,255,255,.02)); color: #fff; cursor: pointer; transition: border-color .2s, box-shadow .2s; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
+  .fc:hover { border-color: var(--blue-60); box-shadow: 0 0 20px var(--blue-20); } .fc.back { border-color: var(--blue); background: linear-gradient(160deg, rgba(33,124,255,.24), rgba(33,124,255,.06)); }
+  .fc .cap { margin: 0; } .fc .t { font-size: 1.15rem; line-height: 1.5; font-weight: 600; } .fc.back .t { font-weight: 400; font-size: 1.02rem; }
+  .nav { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; } .nav .pos { color: var(--text-3); font-size: .85rem; } .nav .btn { height: 38px; padding: 0 18px; }
+  .qq { font-size: 1.1rem; line-height: 1.5; font-weight: 600; margin: 4px 0 14px; }
+  .opt { display: block; width: 100%; text-align: left; margin: 0 0 8px; padding: 12px 16px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); color: var(--text-2); font-size: .92rem; line-height: 1.45; cursor: pointer; transition: border-color .2s, background .2s; }
+  .opt:hover { border-color: var(--blue-60); color: #fff; } .opt.on { border-color: var(--blue); background: var(--blue-10); color: #fff; }
+  .opt.good { border-color: #3ecf8e; background: rgba(62,207,142,.12); color: #fff; } .opt.bad { border-color: #ff7a8a; background: rgba(255,122,138,.12); color: #fff; }
+  .fb { margin: 12px 0; padding: 12px 16px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); font-size: .9rem; line-height: 1.55; color: var(--text-2); } .fb b.ok { color: #3ecf8e; } .fb b.no { color: #ff9aa6; }
+  .score { text-align: center; padding: 26px 10px; } .score h2 { font-size: 1.6rem; margin-bottom: 6px; } .score p { color: var(--text-2); margin: 0 0 16px; }
+  /* a finished report, read in place */
+  #doc { display: none; margin-top: 14px; border-radius: 16px; border: 1px solid var(--line); background: var(--surface); overflow: hidden; }
+  #dochead { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  #dochead b { font: 600 .95rem "Space Grotesk", Inter, system-ui, sans-serif; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #docbody { max-height: 520px; overflow: auto; padding: 8px 22px 14px; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+  .doc > :last-child { margin-bottom: 0; }
+  .doc h1, .doc h2, .doc h3 { font-family: "Space Grotesk", Inter, system-ui, sans-serif; letter-spacing: -.01em; line-height: 1.25; margin: 1.5em 0 .5em; }
+  .doc h1 { font-size: 1.5rem; } .doc h2 { font-size: 1.2rem; } .doc h3 { font-size: 1.02rem; color: var(--text-2); }
+  .doc p { margin: .7em 0; line-height: 1.7; font-size: .95rem; color: var(--text-2); } .doc li { line-height: 1.65; font-size: .95rem; color: var(--text-2); margin: .25em 0; }
+  .doc ul, .doc ol { padding-left: 1.3em; } .doc strong { color: #fff; } .doc a { color: #7fb2ff; } .doc code { padding: 1px 6px; border-radius: 6px; background: var(--surface-2); font-size: .85em; }
+  .doc .blk { margin: 1.1em 0; } .doc .cap { margin: 0 0 8px; font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); }
+  .doc .callout { padding: 12px 16px; border-radius: 12px; border: 1px solid var(--blue-35); background: var(--blue-10); } .doc .callout p { margin: .3em 0; color: #fff; }
+  .doc table { width: 100%; border-collapse: collapse; font-size: .88rem; } .doc th, .doc td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; color: var(--text-2); } .doc th { color: #fff; font-weight: 600; }
+  .doc dl { margin: 0; } .doc dt { font-weight: 600; margin-top: .7em; } .doc dd { margin: .15em 0 0; color: var(--text-2); font-size: .92rem; line-height: 1.6; }
+  .doc .ev { display: grid; grid-template-columns: 90px 1fr; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); } .doc .ev i { font-style: normal; color: #7fb2ff; font-size: .85rem; }
+  .doc .note { padding: 12px 16px; border-radius: 12px; border: 1px dashed var(--line-strong); color: var(--text-3); font-size: .88rem; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<div id="box">
+  <div id="msg">Loading...</div>
+  <div id="main" hidden>
+    <div id="where" hidden>
+      <h2>What should it use?</h2><p class="sub">Pick a notebook, then choose which of its posts to include.</p>
+      <div class="lab"><span>Notebook</span><span id="nbcount"></span></div>
+      <input type="text" id="nbsearch" placeholder="Search all notebooks" maxlength="100">
+      <div class="grid notebook-grid" id="notebooks"></div>
+      <div id="pbox" hidden>
+        <div class="lab"><span id="plabel">Posts to use</span><span class="minis"><button type="button" class="mini" id="pall">All</button><button type="button" class="mini" id="pnone">None</button></span></div>
+        <div class="panel"><input type="text" id="psearch" placeholder="Search posts" maxlength="80"><div class="plist" id="plist"></div></div>
+      </div>
+      <div class="foot"><button class="btn primary" id="next" type="button" disabled>Next</button></div>
+    </div>
+    <div id="setup" hidden>
+      <h2 id="title"></h2><p class="sub" id="from"></p>
+      <div id="fields"></div>
+      <div class="foot"><button class="btn" id="back" type="button" hidden>Back</button><button class="btn primary" id="go" type="button">Make it</button></div>
+    </div>
+    <div id="resbar" hidden><b id="restitle"></b><a href="#" class="mini" id="reslink" hidden>Open in Notestack</a></div>
+    <div id="told"></div>
+  </div>
+</div>
+<div id="out">
+  <div id="pending"></div><div id="cards"></div><div id="quizv"></div><div id="player"></div><div id="media"></div>
+  <div id="doc"><div id="dochead"><b id="doctitle"></b></div><div id="docbody" class="doc"></div></div>
+</div>
+<script>
+(function () {
+  "use strict";
+  var PLAYERS = /*__PLAYERS__*/{};
+  var $ = function (id) { return document.getElementById(id); };
+  var data = null, sel = {}, seen = [], got = false, nb = null, nbTitle = "", frame = null, shown = null;
+  var pickNb = null, newMode = false, archiveMode = false, list = null, tick = {}, query = "", nbQuery = "", docs = null;
+
+  /* ---- talking to the host: JSON-RPC 2.0 over postMessage (MCP Apps) ---- */
+  var pending = {}, rid = 1;
+  function send(m) { m.jsonrpc = "2.0"; window.parent.postMessage(m, "*"); }
+  function request(method, params) {
+    return new Promise(function (resolve, reject) { var id = rid++; pending[id] = { resolve: resolve, reject: reject }; send({ id: id, method: method, params: params || {} }); });
+  }
+  function notify(method, params) { send({ method: method, params: params || {} }); }
+  function find(o, d) {
+    if (!o || d > 6) return null;
+    if (typeof o === "string") { try { return find(JSON.parse(o), d + 1); } catch (e) { return null; } }
+    if (typeof o !== "object") return null;
+    if (o.kind === "generation_options") return o;
+    for (var k in o) { var f = find(o[k], d + 1); if (f) return f; }
+    return null;
+  }
+  window.addEventListener("message", function (e) {
+    var m = e.data;
+    if (!m || m.jsonrpc !== "2.0") return;
+    if (frame && e.source === frame.contentWindow) return fromPlayer(m);
+    if (e.source !== window.parent) return;
+    if (m.method) seen.push(m.method);
+    if (m.method === undefined && m.id !== undefined) {
+      var p = pending[m.id]; if (!p) return; delete pending[m.id];
+      if (m.error) p.reject(m.error); else p.resolve(m.result);
+    } else if (m.method && m.params && find(m.params, 0)) {
+      if (!got) show(find(m.params, 0));
+    } else if ((m.method === "ui/resource-teardown" || m.method === "ping") && m.id !== undefined) {
+      send({ id: m.id, result: {} });
+    }
+  });
+  function reportSize() { notify("ui/notifications/size-changed", { width: Math.ceil(document.documentElement.scrollWidth), height: Math.ceil(document.body.getBoundingClientRect().height) }); }
+  if (window.ResizeObserver) new ResizeObserver(reportSize).observe(document.body);
+  function call(name, args) { return request("tools/call", { name: name, arguments: args }); }
+  function parse(res) { try { return JSON.parse(res.content[0].text); } catch (e) { return null; } }
+  function nice() { return data.make === "mind_map" ? "Mind Constellation" : String(data.make).replace(/_/g, " "); }
+  function localState() {
+    var saved = window.openai && window.openai.widgetState;
+    return saved && (saved.privateContent || saved);
+  }
+  function remember(id, state, v) {
+    var saved = { version: 1, make: data.make, artifact_id: id, status: state,
+                  open_url: (v && (v.open_in_notestack || v.open_url)) || resUrl || null };
+    if (window.openai && window.openai.setWidgetState) {
+      window.openai.setWidgetState({ modelContent: "Notestack " + data.make + " artifact is " + state + ".",
+                                     privateContent: saved, imageIds: [] });
+    }
+    if (data.state_url && data.state_token) {
+      fetch(data.state_url, { method: "POST", headers: { "Content-Type": "text/plain" },
+        body: data.state_token + "\n" + id, cache: "no-store" }).catch(function () {});
+    }
+  }
+  function restoreState() {
+    var saved = localState();
+    if (saved && saved.make === data.make && saved.artifact_id) return Promise.resolve(saved);
+    if (!data.state_url || !data.state_token) return Promise.resolve(null);
+    return fetch(data.state_url, { method: "POST", headers: { "Content-Type": "text/plain" },
+      body: data.state_token, cache: "no-store" }).then(function (r) { return r.ok ? r.json() : null; }, function () { return null; });
+  }
+
+  /* ---- the finished quiz, cards or map plays inside this view: this page stands in for the host to the player page ---- */
+  function fromPlayer(m) {
+    var w = frame.contentWindow;
+    if (m.method === "ui/initialize" && m.id !== undefined) { w.postMessage({ jsonrpc: "2.0", id: m.id, result: { protocolVersion: "2026-01-26", hostInfo: { name: "notestack", version: "1" }, hostCapabilities: {} } }, "*"); return; }
+    if (m.method === "ui/notifications/initialized") { if (shown) w.postMessage({ jsonrpc: "2.0", method: "ui/notifications/tool-result", params: { structuredContent: shown } }, "*"); return; }
+    if (m.method === "ui/notifications/size-changed" && m.params && m.params.height) { frame.style.height = Math.min(900, Math.ceil(m.params.height) + 4) + "px"; reportSize(); return; }
+    if (m.method === "tools/call" && m.id !== undefined) {
+      request("tools/call", m.params).then(function (r) { w.postMessage({ jsonrpc: "2.0", id: m.id, result: r || {} }, "*"); },
+        function (er) { w.postMessage({ jsonrpc: "2.0", id: m.id, error: er }, "*"); });
+    } else if (m.method === "ui/open-link" && m.id !== undefined) {
+      request("ui/open-link", m.params).then(function (r) { w.postMessage({ jsonrpc: "2.0", id: m.id, result: r || {} }, "*"); },
+        function (er) { w.postMessage({ jsonrpc: "2.0", id: m.id, error: er }, "*"); });
+    } else if (m.method && m.id !== undefined) { w.postMessage({ jsonrpc: "2.0", id: m.id, result: {} }, "*"); }
+  }
+  function play(id, readyPayload) {
+    var tool = { quiz: "show_quiz", flashcards: "show_flashcards", mind_map: "show_mind_map", infographic: "show_infographic", report: "view_report", video: "get_video" }[data.make];
+    if (!tool || !PLAYERS[data.make]) return false;
+    function mount(payload) {
+      shown = payload;
+      if (!shown) return;
+      finishSurface();
+      showOut("player"); $("player").textContent = "";
+      frame = document.createElement("iframe"); frame.setAttribute("sandbox", "allow-scripts"); frame.srcdoc = PLAYERS[data.make];
+      $("player").appendChild(frame); reportSize();
+    }
+    if (readyPayload) mount(readyPayload);
+    else call(tool, { artifact_id: id }).then(function (res) { mount(res.structuredContent); }, function () { /* the link below still works */ });
+    return true;
+  }
+
+  /* ---- step 1: what to use ---- */
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text) e.textContent = text; return e; }
+  function card(title, sub, on, cls, click) {
+    var b = el("button", "card" + (on ? " on" : "") + (cls ? " " + cls : "")); b.type = "button";
+    b.appendChild(el("b", "", title)); if (sub) b.appendChild(el("small", "", sub));
+    b.addEventListener("click", click); return b;
+  }
+  function showWhere() {
+    $("where").hidden = false; $("setup").hidden = true; $("told").style.display = "none";
+    var box = $("notebooks"), matches = 0; box.textContent = "";
+    (data.notebooks || []).forEach(function (n) {
+      if (nbQuery && String(n.title || "").toLowerCase().indexOf(nbQuery) < 0) return;
+      matches++;
+      box.appendChild(card(n.title, n.post_count + (n.post_count === 1 ? " post" : " posts"), !newMode && (n.is_archive ? archiveMode : (!archiveMode && pickNb === n.id)), "", function () {
+        newMode = false; archiveMode = !!n.is_archive; nbTitle = n.title;
+        if (archiveMode) {
+          pickNb = n.id; list = data.posts || []; tick = {}; query = ""; $("psearch").value = "";
+          list.forEach(function (p) { tick[p.id] = 1; }); drawPosts();
+        } else if (pickNb !== n.id) { pickNb = n.id; loadNbPosts(); }
+        showWhere();
+      }));
+    });
+    if (!nbQuery || "new notebook".indexOf(nbQuery) >= 0) box.appendChild(card("New notebook", "Pick the posts to put in it", newMode, "add", function () {
+      newMode = true; archiveMode = false; pickNb = null; list = data.posts || []; tick = {}; query = ""; $("psearch").value = ""; showWhere();
+    }));
+    if (!matches && nbQuery) box.appendChild(el("div", "none", "No notebooks match."));
+    $("nbcount").textContent = matches + " of " + (data.notebooks || []).length;
+    $("pbox").hidden = !newMode && !archiveMode && !pickNb;
+    $("plabel").textContent = newMode ? "Posts for the new notebook" : "Posts to use from it";
+    drawPosts(); reportSize();
+  }
+  function loadNbPosts() {
+    list = null; tick = {}; query = ""; $("psearch").value = ""; drawPosts();
+    var which = pickNb;
+    call("get_notebook", { notebook_id: which }).then(function (res) {
+      if (which !== pickNb) return;
+      var v = parse(res) || {};
+      list = (v.posts || []).filter(function (p) { return !p.locked; });
+      list.forEach(function (p) { tick[p.id] = 1; });
+      drawPosts();
+    }, function () { if (which !== pickNb) return; list = false; drawPosts(); });
+  }
+  function drawPosts() {
+    var box = $("plist"); box.textContent = "";
+    if (list === null) { box.appendChild(el("div", "none", "Loading its posts...")); }
+    else if (list === false) { box.appendChild(el("div", "none", "Could not list its posts, so the whole notebook will be used.")); }
+    else if (!list.length) { box.appendChild(el("div", "none", "No usable posts here.")); }
+    else {
+      var q = query.toLowerCase(), shown = 0;
+      list.forEach(function (p) {
+        if (q && String(p.title || "").toLowerCase().indexOf(q) < 0) return;
+        shown++;
+        var l = el("label"), c = document.createElement("input"); c.type = "checkbox"; c.checked = !!tick[p.id];
+        c.addEventListener("change", function () { if (c.checked) tick[p.id] = 1; else delete tick[p.id]; ready(); });
+        l.appendChild(c); l.appendChild(el("span", "", p.title || "Untitled")); box.appendChild(l);
+      });
+      if (!shown) box.appendChild(el("div", "none", "No posts match."));
+    }
+    ready(); reportSize();
+  }
+  function ready() {
+    var n = Object.keys(tick).length;
+    /* All posts is a virtual archive choice and deliberately has no notebook id. Archive mode itself is therefore
+       the valid selection signal; requiring pickNb leaves Next disabled even while its checked posts are visible. */
+    $("next").disabled = newMode ? n === 0 : ((!archiveMode && !pickNb) || list === null || (list !== false && n === 0));
+    $("next").textContent = newMode ? "Make notebook and go next" : "Next";
+  }
+  $("psearch").addEventListener("input", function () { query = $("psearch").value; drawPosts(); });
+  $("nbsearch").addEventListener("input", function () { nbQuery = $("nbsearch").value.trim().toLowerCase(); showWhere(); });
+  $("pall").addEventListener("click", function () { (list || []).forEach(function (p) { tick[p.id] = 1; }); drawPosts(); });
+  $("pnone").addEventListener("click", function () { tick = {}; drawPosts(); });
+  $("next").addEventListener("click", function () {
+    var ids = Object.keys(tick);
+    if (!newMode) {
+      nb = archiveMode ? null : pickNb; docs = null;
+      if (list && list.length && ids.length < list.length) { docs = ids; }
+      return showSetup();
+    }
+    nb = null; docs = ids; nbTitle = "a new notebook"; showSetup();
+  });
+
+  /* ---- step 2: the settings, drawn from the fields the server sent ---- */
+  function option(f, o, redraw, multi) {
+    var on = multi ? sel[f.key].indexOf(o.value) >= 0 : sel[f.key] === o.value, b;
+    if (f.type === "cards") {
+      b = el("button", "card" + (on ? " on" : "")); b.type = "button";
+      if (o.img) {
+        var im = document.createElement("img"); im.alt = ""; im.src = o.img;
+        if (o.fallback_img) im.addEventListener("error", function () { im.src = o.fallback_img; }, { once: true });
+        b.appendChild(im);
+      }
+      b.appendChild(el("b", "", o.label)); if (o.hint) b.appendChild(el("small", "", o.hint));
+    } else {
+      b = el("button", "pill" + (on ? " on" : "") + (multi ? " multi" : "")); b.type = "button"; b.textContent = o.label;
+    }
+    b.addEventListener("click", function () {
+      if (multi) { var i = sel[f.key].indexOf(o.value); if (i >= 0) { if (sel[f.key].length > 1) sel[f.key].splice(i, 1); } else sel[f.key].push(o.value); }
+      else sel[f.key] = o.value;
+      redraw();
+    });
+    return b;
+  }
+  function draw(f, box) {
+    box.textContent = "";
+    (f.options || []).forEach(function (o) { box.appendChild(option(f, o, function () { draw(f, box); reportSize(); }, f.type === "multi")); });
+  }
+  /* A voice list: tick "No voiceover", or pick a voice and play it to hear it first. */
+  var voiceAudio = null, voicePlaying = null;
+  function stopVoice() { if (voiceAudio) { try { voiceAudio.pause(); } catch (e) { /* fine */ } } voiceAudio = null; voicePlaying = null; }
+  function drawVoices(f, host) {
+    var none = f.none_label ? el("button", "vnone") : null, list = el("div", "vlist"), last = f.default;
+    function render() {
+      var off = sel[f.key] === "none";
+      if (none) { none.className = "vnone" + (off ? " on" : ""); none.textContent = ""; none.appendChild(el("span", "box", off ? "\u2713" : "")); none.appendChild(document.createTextNode(f.none_label)); }
+      list.className = "vlist" + (off ? " off" : ""); list.textContent = "";
+      (f.options || []).forEach(function (o) {
+        var on = sel[f.key] === o.value, b = el("div", "voice" + (on ? " on" : "")); b.setAttribute("role", "button"); b.tabIndex = 0;
+        var pl = el("span", "play", voicePlaying === o.value ? "\u275A\u275A" : "\u25B6"); pl.setAttribute("aria-label", "Play " + o.label);
+        pl.addEventListener("click", function (e) {
+          e.stopPropagation();
+          if (voicePlaying === o.value) { stopVoice(); return render(); }
+          stopVoice(); if (!o.preview) return;
+          try {
+            voiceAudio = new Audio(o.preview); voicePlaying = o.value;
+            voiceAudio.addEventListener("ended", function () { voicePlaying = null; render(); });
+            voiceAudio.addEventListener("error", function () { voicePlaying = null; render(); });
+            voiceAudio.play().catch(function () { voicePlaying = null; render(); });
+          } catch (x) { voicePlaying = null; }
+          render();
+        });
+        var nm = el("span", "nm", o.label); if (o.sub) nm.appendChild(el("small", "", o.sub));
+        b.appendChild(pl); b.appendChild(nm); if (on) b.appendChild(el("span", "tick", "\u2713"));
+        var pick = function () { sel[f.key] = last = o.value; render(); };
+        b.addEventListener("click", pick); b.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
+        list.appendChild(b);
+      });
+      reportSize();
+    }
+    if (none) { none.type = "button"; none.addEventListener("click", function () { if (sel[f.key] === "none") sel[f.key] = last; else { if (sel[f.key]) last = sel[f.key]; sel[f.key] = "none"; stopVoice(); } render(); }); host.appendChild(none); }
+    host.appendChild(list); render();
+  }
+  function showSetup() {
+    $("where").hidden = true; $("setup").hidden = false;
+    $("title").textContent = data.title;
+    $("from").textContent = "Using " + (docs ? docs.length + (docs.length === 1 ? " post" : " posts") + " from " : "") + nbTitle;
+    $("go").textContent = "Make " + nice(); $("go").disabled = false; $("back").hidden = !!data.notebook_id;
+    var host = $("fields"); host.textContent = "";
+    (data.fields || []).forEach(function (f) {
+      if (!(f.key in sel)) sel[f.key] = f.type === "multi" ? (f.default || []).slice() : (f.default === undefined ? "" : f.default);
+      host.appendChild(el("div", "lab", f.label));
+      if (f.type === "text") {
+        var inp = document.createElement("input"); inp.type = "text"; inp.maxLength = 300; inp.placeholder = f.placeholder || ""; inp.value = sel[f.key] || "";
+        inp.addEventListener("input", function () { sel[f.key] = inp.value; });
+        host.appendChild(inp);
+      } else if (f.type === "voices") {
+        drawVoices(f, host);
+      } else if (f.type === "select") {
+        var se = document.createElement("select");
+        (f.options || []).forEach(function (o) { var op = document.createElement("option"); op.value = o.value; op.textContent = o.label; se.appendChild(op); });
+        se.value = sel[f.key]; se.addEventListener("change", function () { sel[f.key] = se.value; });
+        host.appendChild(se);
+      } else {
+        var box = el("div", f.type === "cards" ? "grid" : "row"); host.appendChild(box); draw(f, box);
+      }
+    });
+    reportSize();
+  }
+  $("back").addEventListener("click", function () { showWhere(); });
+  function show(d) {
+    got = true; data = d; nb = d.notebook_id || null; nbTitle = nb ? "your notebook" : "";
+    $("msg").hidden = true; $("main").hidden = false;
+    restoreState().then(function (saved) {
+      if (saved && saved.artifact_id && (!saved.kind || saved.kind === data.make)) {
+        enterOutput((saved.status === "ready" ? "Opening " : "Restoring ") + nice());
+        showPending("Restoring your " + nice() + " from this conversation...", "busy");
+        watch(saved.artifact_id, saved.status === "failed" ? 0 : (data.make === "video" ? 240 : 80));
+        return;
+      }
+      if (nb) showSetup(); else showWhere();
+    });
+  }
+
+  /* ---- step 3: make it right here ---- */
+  function status(text, url, kind, label) {
+    if (document.body.classList.contains("output-only")) {
+      if (url) { resUrl = url; $("reslink").hidden = false; }
+      showPending(text, kind);
+      return;
+    }
+    var t = $("told"); t.style.display = "flex"; t.textContent = ""; t.className = kind || "";
+    if (kind === "busy") t.appendChild(el("span", "spin"));
+    t.appendChild(el("span", "", text));
+    if (url) {
+      var a = document.createElement("a"); a.href = url; a.target = "_blank"; a.rel = "noopener"; a.textContent = label || "Open in Notestack";
+      a.addEventListener("click", function (e) { e.preventDefault(); request("ui/open-link", { url: url }).catch(function () { window.open(url, "_blank"); }); });
+      t.appendChild(a);
+    }
+    reportSize();
+  }
+  /* ---- the result screen ---- */
+  var resUrl = null;
+  function showPending(text, kind) {
+    var p = $("pending"); p.textContent = ""; p.className = kind === "err" ? "err" : ""; p.style.display = "flex";
+    if (kind === "busy") p.appendChild(el("span", "spin"));
+    p.appendChild(el("span", "", text));
+    $("out").classList.add("on"); reportSize();
+  }
+  function enterOutput(title) {
+    document.body.classList.add("output-only");
+    $("where").hidden = true; $("setup").hidden = true; $("msg").hidden = true; $("told").style.display = "none";
+    $("box").classList.add("done"); $("resbar").hidden = false; $("restitle").textContent = title;
+    reportSize();
+  }
+  function result(title, url) {
+    enterOutput(title); $("told").style.display = "none";
+    $("resbar").hidden = false; $("restitle").textContent = title; resUrl = url || null; $("reslink").hidden = !url; reportSize();
+  }
+  function clearResult() {
+    ["pending", "player", "cards", "quizv", "media"].forEach(function (i) { $(i).style.display = "none"; $(i).textContent = ""; });
+    $("doc").style.display = "none"; $("docbody").textContent = ""; $("out").classList.remove("on"); document.body.classList.remove("single-result"); frame = null;
+  }
+  function finishSurface() { document.body.classList.add("single-result"); reportSize(); }
+  function showOut(id) { $(id).style.display = "block"; $("out").classList.add("on"); }
+  $("reslink").addEventListener("click", function (e) { e.preventDefault(); if (resUrl) request("ui/open-link", { url: resUrl }).catch(function () { window.open(resUrl, "_blank"); }); });
+  function view(tool, id, draw) {
+    call(tool, { artifact_id: id }).then(function (res) { if (res.structuredContent) draw(res.structuredContent); }, function () { /* the link still works */ });
+  }
+
+  /* flashcards: flip, step, shuffle */
+  function showCards(p) {
+    var cards = (p.cards || []).slice(), i = 0, back = false;
+    if (!cards.length) return;
+    var box = $("cards"); finishSurface(); showOut("cards");
+    function draw() {
+      box.textContent = "";
+      var f = el("button", "fc" + (back ? " back" : "")); f.type = "button";
+      f.appendChild(el("div", "cap", back ? "Answer" : "Question")); f.appendChild(el("div", "t", back ? cards[i].back : cards[i].front));
+      f.addEventListener("click", function () { back = !back; draw(); });
+      box.appendChild(f);
+      var nav = el("div", "nav"), prev = el("button", "btn", "Previous"), next = el("button", "btn primary", "Next"), shuf = el("button", "mini", "Shuffle");
+      prev.type = next.type = shuf.type = "button"; next.style.flex = "none"; prev.disabled = i === 0; next.disabled = i === cards.length - 1;
+      prev.addEventListener("click", function () { i--; back = false; draw(); }); next.addEventListener("click", function () { i++; back = false; draw(); });
+      shuf.addEventListener("click", function () { cards.sort(function () { return Math.random() - .5; }); i = 0; back = false; draw(); });
+      nav.appendChild(prev); nav.appendChild(el("span", "pos", (i + 1) + " / " + cards.length)); nav.appendChild(shuf); nav.appendChild(next); box.appendChild(nav);
+      reportSize();
+    }
+    draw();
+  }
+
+  /* the quiz: one question at a time with answers and explanations */
+  function showQuiz(p) {
+    var qs = p.questions || [], i = 0, right = 0, graded = 0, picked = {}, typed = "", checked = false;
+    if (!qs.length) return;
+    var box = $("quizv"); finishSurface(); showOut("quizv");
+    function norm(x) { return String(x).toLowerCase().replace(/[^a-z0-9 ]+/g, "").replace(/\s+/g, " ").trim(); }
+    function draw() {
+      box.textContent = "";
+      if (i >= qs.length) {
+        var d = el("div", "score"); d.appendChild(el("h2", "", graded ? right + " of " + graded + " right" : "Quiz finished"));
+        d.appendChild(el("p", "", "Short answers are not counted. Open the quiz in Notestack to keep your results."));
+        var again = el("button", "btn primary", "Try again"); again.type = "button"; again.style.flex = "none";
+        again.addEventListener("click", function () { i = 0; right = 0; graded = 0; picked = {}; typed = ""; checked = false; draw(); });
+        d.appendChild(again); box.appendChild(d); reportSize(); return;
+      }
+      var q = qs[i], multi = q.options && q.options.length;
+      box.appendChild(el("div", "cap", "Question " + (i + 1) + " of " + qs.length));
+      box.appendChild(el("div", "qq", q.question));
+      var inp = null;
+      if (multi) {
+        q.options.forEach(function (o, k) {
+          var b = el("button", "opt" + (picked[k] ? " on" : "")); b.type = "button"; b.textContent = o;
+          if (checked) { var ok = (q.correct || []).indexOf(k) >= 0; if (ok) b.className = "opt good"; else if (picked[k]) b.className = "opt bad"; }
+          b.addEventListener("click", function () {
+            if (checked) return;
+            if (q.type === "multiple_select") { if (picked[k]) delete picked[k]; else picked[k] = 1; } else { picked = {}; picked[k] = 1; }
+            draw();
+          });
+          box.appendChild(b);
+        });
+      } else {
+        inp = document.createElement("input"); inp.type = "text"; inp.placeholder = "Type your answer"; inp.value = typed; inp.disabled = checked;
+        inp.addEventListener("input", function () { typed = inp.value; }); box.appendChild(inp);
+      }
+      var fb = null;
+      if (checked) {
+        fb = el("div", "fb");
+        if (multi) {
+          var got = Object.keys(picked).map(Number).sort().join(), want = (q.correct || []).slice().sort().join();
+          var ok2 = got === want; fb.appendChild(el("b", ok2 ? "ok" : "no", ok2 ? "Correct. " : "Not quite. "));
+        } else if (q.type === "fill_blank") {
+          var acc = [q.answer].concat(q.accepted || []).map(norm), ok3 = acc.indexOf(norm(typed)) >= 0;
+          fb.appendChild(el("b", ok3 ? "ok" : "no", ok3 ? "Correct. " : "Answer: " + q.answer + ". "));
+        } else { fb.appendChild(el("b", "", "Suggested answer: " + (q.answer || "") + ". ")); }
+        if (q.explanation) fb.appendChild(document.createTextNode(q.explanation));
+        box.appendChild(fb);
+      }
+      var row = el("div", "nav"), btn = el("button", "btn primary", checked ? (i === qs.length - 1 ? "Finish" : "Next") : "Check"); btn.type = "button"; btn.style.flex = "none";
+      btn.addEventListener("click", function () {
+        if (!checked) {
+          checked = true;
+          if (multi) { graded++; if (Object.keys(picked).map(Number).sort().join() === (q.correct || []).slice().sort().join()) right++; }
+          else if (q.type === "fill_blank") { graded++; if ([q.answer].concat(q.accepted || []).map(norm).indexOf(norm(typed)) >= 0) right++; }
+        } else { i++; picked = {}; typed = ""; checked = false; }
+        draw();
+      });
+      row.appendChild(el("span", "pos", "")); row.appendChild(btn); box.appendChild(row); reportSize();
+    }
+    draw();
+  }
+
+  function showMedia(v) {
+    var box = $("media"); box.textContent = ""; finishSurface(); showOut("media");
+    if (data.make === "infographic" && v.url) {
+      var image = document.createElement("img"); image.src = v.url; image.alt = v.title || "Notestack infographic"; box.appendChild(image); reportSize(); return;
+    }
+    if (data.make === "audio_overview" && (v.url || v.download_url)) {
+      var audio = document.createElement("audio"); audio.controls = true; audio.preload = "metadata"; audio.src = v.url || v.download_url; box.appendChild(audio); reportSize(); return;
+    }
+    if (data.make === "slide_deck" && v.slide_urls && v.slide_urls.length) {
+      var slides = v.slide_urls.slice(), i = 0;
+      function drawSlide() {
+        box.textContent = ""; var image = document.createElement("img"); image.src = slides[i]; image.alt = "Slide " + (i + 1); box.appendChild(image);
+        var nav = el("div", "nav"), prev = el("button", "btn", "Previous"), pos = el("span", "pos", (i + 1) + " / " + slides.length), next = el("button", "btn primary", "Next");
+        prev.type = next.type = "button"; prev.disabled = i === 0; next.disabled = i === slides.length - 1;
+        prev.addEventListener("click", function () { i--; drawSlide(); }); next.addEventListener("click", function () { i++; drawSlide(); });
+        nav.appendChild(prev); nav.appendChild(pos); nav.appendChild(next); box.appendChild(nav); reportSize();
+      }
+      drawSlide(); return;
+    }
+    box.appendChild(el("p", "sub", "The finished output is available through the Notestack link above.")); reportSize();
+  }
+  function showVideoPreview(v) {
+    if (!v.preview_url) return;
+    var box = $("media"), current = box.getAttribute("data-preview");
+    if (current === v.preview_url) return;
+    box.textContent = ""; box.setAttribute("data-preview", v.preview_url); finishSurface(); showOut("media");
+    var card = el("div", "preview-card"); card.appendChild(el("b", "", "Video preview"));
+    var preview = el("button", "preview-url", v.preview_url); preview.type = "button";
+    preview.addEventListener("click", function () { request("ui/open-link", { url: v.preview_url }).catch(function () { window.open(v.preview_url, "_blank"); }); });
+    card.appendChild(preview); box.appendChild(card);
+    var note = el("div", "render-note"); note.appendChild(el("span", "spin")); note.appendChild(el("span", "", "Live preview is ready. The final video is still rendering and will replace it here."));
+    var open = el("button", "mini", "Open live preview"); open.type = "button";
+    open.addEventListener("click", function () { request("ui/open-link", { url: v.preview_url }).catch(function () { window.open(v.preview_url, "_blank"); }); });
+    note.appendChild(open); box.appendChild(note); $("pending").style.display = "none"; reportSize();
+  }
+
+  /* ---- a finished report, drawn here ---- */
+  function inl(parent, text) {
+    var re = /(\*\*[^*]+\*\*|\*[^*\s][^*]*\*|`[^`]+`|\[[^\]]+\]\(https?:[^)\s]+\))/g, last = 0, m;
+    while ((m = re.exec(text))) {
+      if (m.index > last) parent.appendChild(document.createTextNode(text.slice(last, m.index)));
+      var t = m[0], n;
+      if (t.indexOf("**") === 0) { n = el("strong", "", t.slice(2, -2)); }
+      else if (t.charAt(0) === "`") { n = el("code", "", t.slice(1, -1)); }
+      else if (t.charAt(0) === "[") {
+        var mm = /^\[([^\]]+)\]\((.+)\)$/.exec(t); n = el("a", "", mm[1]); n.href = mm[2];
+        n.addEventListener("click", (function (u) { return function (e) { e.preventDefault(); request("ui/open-link", { url: u }).catch(function () {}); }; })(mm[2]));
+      } else { n = el("em", "", t.slice(1, -1)); }
+      parent.appendChild(n); last = m.index + t.length;
+    }
+    if (last < text.length) parent.appendChild(document.createTextNode(text.slice(last)));
+  }
+  function markdown(host, text) {
+    var lines = String(text).split("\n"), list = null, para = null;
+    function close() { list = null; para = null; }
+    lines.forEach(function (ln) {
+      var h = /^(#{1,3})\s+(.*)$/.exec(ln), b = /^\s*[-*]\s+(.*)$/.exec(ln), o = /^\s*\d+[.)]\s+(.*)$/.exec(ln);
+      if (h) { close(); var hh = el("h" + h[1].length); inl(hh, h[2]); host.appendChild(hh); }
+      else if (b || o) {
+        var kind = b ? "ul" : "ol";
+        if (!list || list.tagName.toLowerCase() !== kind) { list = el(kind); host.appendChild(list); para = null; }
+        var li = el("li"); inl(li, (b || o)[1]); list.appendChild(li);
+      } else if (!ln.trim()) { close(); }
+      else { list = null; if (!para) { para = el("p"); host.appendChild(para); } else para.appendChild(document.createTextNode(" ")); inl(para, ln.trim()); }
+    });
+  }
+  function block(host, b) {
+    var d = el("div", "blk"); if (b.title && b.type !== "prose" && b.type !== "callout") d.appendChild(el("div", "cap", b.title));
+    if (b.type === "prose") { d.className = ""; markdown(d, b.text); }
+    else if (b.type === "callout") { d.className = "blk callout"; if (b.title) d.insertBefore(el("p", "", b.title), null).style.fontWeight = "600"; var p = el("p"); inl(p, b.text); d.appendChild(p); }
+    else if (b.type === "key_terms") { var dl = el("dl"); b.terms.forEach(function (t) { dl.appendChild(el("dt", "", t.term)); dl.appendChild(el("dd", "", t.definition)); }); d.appendChild(dl); }
+    else if (b.type === "table") {
+      var tb = el("table"), tr = el("tr"); b.headers.forEach(function (x) { tr.appendChild(el("th", "", x)); }); var th = el("thead"); th.appendChild(tr); tb.appendChild(th);
+      var tbd = el("tbody"); b.rows.forEach(function (r) { var row = el("tr"); r.forEach(function (c) { row.appendChild(el("td", "", c)); }); tbd.appendChild(row); }); tb.appendChild(tbd); d.appendChild(tb);
+    } else if (b.type === "timeline") {
+      b.events.forEach(function (e) { var r = el("div", "ev"); r.appendChild(el("i", "", e.when)); var c = el("div"); c.appendChild(el("b", "", e.title)); if (e.detail) c.appendChild(el("div", "", e.detail)); r.appendChild(c); d.appendChild(r); });
+    } else if (b.type === "flashcards") {
+      var f = el("dl"); b.cards.forEach(function (c) { f.appendChild(el("dt", "", c.front)); f.appendChild(el("dd", "", c.back)); }); d.appendChild(f);
+      if (b.count > b.cards.length) d.appendChild(el("p", "", "+ " + (b.count - b.cards.length) + " more cards in Notestack"));
+    } else if (b.type === "quiz") {
+      var ol = el("ol"); b.questions.forEach(function (q) { ol.appendChild(el("li", "", q)); }); d.appendChild(ol);
+      if (b.count > b.questions.length) d.appendChild(el("p", "", "+ " + (b.count - b.questions.length) + " more questions in Notestack"));
+    } else { d.appendChild(el("div", "note", "This " + b.type.replace("_", " ") + " is best viewed in Notestack.")); }
+    host.appendChild(d);
+  }
+  function showReport(id) {
+    call("view_report", { artifact_id: id }).then(function (res) {
+      var r = res.structuredContent;
+      if (!r || !r.blocks || !r.blocks.length) return;
+      finishSurface(); showOut("doc"); $("doctitle").textContent = r.title;
+      var body = $("docbody"); body.textContent = "";
+      r.blocks.forEach(function (b) { block(body, b); });
+      reportSize();
+    }, function () { /* the link still works */ });
+  }
+  /* any failure: a plan limit gets the upgrade message and button, wherever it happens */
+  function fail(v, fallback) {
+    if (v && v.error === "plan_limit") {
+      var up = v.upgrade_to ? String(v.upgrade_to).charAt(0).toUpperCase() + String(v.upgrade_to).slice(1) : "";
+      return status((v.message || "You have used everything your plan includes.") + (up ? " Upgrade to " + up + " to continue." : " Upgrade your plan to continue."), v.upgrade_url, "err", "Upgrade plan");
+    }
+    status((v && v.message) || fallback, null, "err");
+  }
+  function check(id, pollUrl, pollToken) {
+    if (data.make !== "video" || !pollUrl) return call(data.make === "video" ? "get_video" : "get_artifact", { artifact_id: id });
+    return fetch(pollUrl, { method: "POST", headers: { "Content-Type": "text/plain" }, body: pollToken, cache: "no-store" }).then(function (r) {
+      if (!r.ok) throw new Error("status " + r.status);
+      return r.json().then(function (v) { return { direct: v }; });
+    }).catch(function () { return call("get_video", { artifact_id: id }); });
+  }
+  function watch(id, tries, pollUrl, pollToken) {
+    check(id, pollUrl, pollToken).then(function (res) {
+      var v = res.direct || res.structuredContent || parse(res) || {};
+      if (data.make === "video" && v.ready) v.status = "ready";
+      if (data.make === "video" && v.preview_url && !v.video_url) {
+        result("Video preview ready", v.open_in_notestack || v.open_url);
+        showVideoPreview(v);
+      }
+      if (v.status === "ready") {
+        remember(id, "ready", v);
+        clearResult(); result(nice().charAt(0).toUpperCase() + nice().slice(1) + " made", v.open_in_notestack || v.open_url);
+        if (data.make === "report") play(id);
+        else if (data.make === "flashcards") view("show_flashcards", id, showCards);
+        else if (data.make === "quiz") view("show_quiz", id, showQuiz);
+        else if (!play(id, data.make === "video" ? v : null)) {
+          showMedia(v);
+          request("ui/update-model-context", { content: [{ type: "text", text: "The writer's " + data.make + " was made in Notestack and is ready: " + (v.open_in_notestack || "") }] }).catch(function () {});
+        }
+      } else if (v.error) {
+        remember(id, "failed", v);
+        $("go").disabled = false; fail(v, "Could not check progress.");
+      } else if (v.status === "failed") {
+        remember(id, "failed", v);
+        status("Notestack could not make it. Try again.", v.open_in_notestack, "err"); $("go").disabled = false;
+      } else if (tries > 0) {
+        setTimeout(function () { watch(id, tries - 1, pollUrl, pollToken); }, 3000);
+      } else { status("Still being made. It will be in your Notestack.", v.open_in_notestack, "busy"); }
+    }, function () { status("Started. It will be in your Notestack.", null, "ok"); });
+  }
+  $("go").addEventListener("click", function () {
+    var args = {};
+    (data.fields || []).forEach(function (f) {
+      var v = sel[f.key];
+      if (v === "" || v === null || v === undefined) return;
+      if (f.type === "multi" && v.length === (f.options || []).length) return; /* all of them is the default */
+      if (f.type === "voices") { /* a chosen voice is sent as generate_video's own voice arguments */
+        if (v === "none") { args.voice_gender = "none"; return; }
+        var vo = (f.options || []).filter(function (o) { return o.value === v; })[0];
+        args.custom_voice_id = v; if (vo && vo.gender) args.voice_gender = vo.gender; if (vo && vo.accent) args.voice_accent = vo.accent;
+        return;
+      }
+      args[f.key] = v;
+    });
+    if (newMode) {
+      /* The notebook is made only when the writer commits to generation, not while browsing the form. */
+    } else if (archiveMode) {
+      args.archive = true; if (docs) args.document_ids = docs;
+    } else {
+      args.notebook_id = nb; if (docs) args.document_ids = docs;
+    }
+    if (data.make !== "video") args.wait_seconds = 0;
+    $("go").disabled = true; clearResult(); enterOutput("Making " + nice()); status("Starting your " + nice(), null, "busy");
+    function start() { call(data.tool, args).then(function (res) {
+      var v = parse(res) || {};
+      if (res.isError || v.error) {
+        $("go").disabled = false;         return fail(v, "Notestack could not start it.");
+      }
+      status("Making your " + nice() + (data.make === "video" ? ". Videos take a few minutes" : ""), v.open_in_notestack, "busy");
+      if (v.id) { remember(v.id, "generating", v); watch(v.id, data.make === "video" ? 240 : 80, v.poll_url, v.poll_token); }
+    }, function () {
+      $("go").disabled = false;       status("This chat app would not let the form start it. Ask " + (data.assistant_name || "the assistant") + " to make it with " + (docs ? docs.length + " chosen posts" : "my notebook") + " with the settings I picked", null, "err");
+    }); }
+    if (!newMode) return start();
+    call("create_notebook", { title: "Selected posts", document_ids: docs }).then(function (res) {
+      var v = parse(res) || {};
+      if (res.isError || v.error || !v.id) { $("go").disabled = false; return fail(v, "Could not make the notebook."); }
+      nb = v.id; nbTitle = v.title || "your new notebook"; args.notebook_id = nb; start();
+    }, function () { $("go").disabled = false; status("Could not make the notebook.", null, "err"); });
+  });
+  setTimeout(function () {
+    if (got) return;
+    $("msg").textContent = "Still waiting for the options. The host has sent: " + (seen.length ? seen.join(", ") : "nothing") + ". Ask the assistant to list them in words.";
+  }, 20000);
+  setTimeout(function () { notify("ui/notifications/initialized", {}); reportSize(); }, 1500);
+  request("ui/initialize", { protocolVersion: "2026-01-26", appInfo: { name: "notestack-generation-options", version: "3.2.0" }, appCapabilities: {} })
+    .then(function () { notify("ui/notifications/initialized", {}); reportSize(); })
+    .catch(function () { $("msg").textContent = "This view needs an app that supports interactive results."; });
+})();
+</script>
+</body>
+</html>

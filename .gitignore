@@ -12,6 +12,7 @@ __pycache__/
 out/
 renderer/build/
 .corpus-cache/
+deploy/env.prod.example
 
 # Local SQLite database
 *.db
@@ -24,3 +25,6 @@ renderer/build/
 # Local-only notes, not for the repo
 /docs-local/
 /docs/
+
+# Production env template (kept local)
+deploy/env.prod.example

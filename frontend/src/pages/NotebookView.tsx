@@ -5,9 +5,10 @@ import { streamSSE } from "../api/stream";
 import type { AnswerFeedback as Feedback, Artifact, ChatSummary, Citation, MemoryChange, Notebook } from "../api/types";
 import { AnswerFeedback } from "../components/AnswerFeedback";
 import { ArtifactCard, CitationList } from "../components/ArtifactCard";
+import ConnectorModal from "../components/ConnectorModal";
 import { Markdown } from "../components/Markdown";
 import { DocPicker } from "../components/DocPicker";
-import { FlashcardsIcon, HeadphonesIcon, InfographicIcon, QuizIcon, ReportIcon, SlidesIcon, TelescopeIcon, VideoIcon } from "../components/icons/Icons";
+import { ConnectorIcon, FlashcardsIcon, HeadphonesIcon, InfographicIcon, QuizIcon, ReportIcon, SlidesIcon, TelescopeIcon, VideoIcon } from "../components/icons/Icons";
 import { MindMapDialog, MindMapExplorer, MindMapRow } from "../components/MindMap";
 import { FlashcardsDialog, type FlashcardsRequest } from "../components/Flashcards";
 import { InfographicDialog, type InfographicRequest } from "../components/Infographic";
@@ -97,6 +98,7 @@ function StudioPanel({ notebookId, notebookTitle, docs, chats, currentChatId, di
   const [artifacts, setArtifacts] = useState<Artifact[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reading, setReading] = useState<{ id: string; start: number; end: number } | null>(null);
+  const [connectorOpen, setConnectorOpen] = useState(false);
   const [mapDialog, setMapDialog] = useState(false);
   const [waitingMap, setWaitingMap] = useState<string | null>(null); // a map the user just asked for: open it when ready
   const [exploring, setExploring] = useState<Artifact | null>(null);
@@ -173,6 +175,25 @@ function StudioPanel({ notebookId, notebookTitle, docs, chats, currentChatId, di
     <div className="stack">
       <span className="vw-label">Create</span>
       <div className="nbv-make">
+        <button
+          type="button"
+          className="nbv-make-connector"
+          aria-haspopup="dialog"
+          aria-expanded={connectorOpen}
+          onClick={() => setConnectorOpen(true)}
+        >
+          <span className="nbv-make-connector-copy">
+            <ConnectorIcon size={20} />
+            <span className="nbv-stars-text">
+              <strong>Connector</strong>
+              <small>Connect to Claude or ChatGPT</small>
+            </span>
+          </span>
+          <span className="nbv-connector-logos" aria-hidden="true">
+            <span><img src="/anthropic.svg" alt="" /></span>
+            <span><img className="openai" src="/openai.png" alt="" /></span>
+          </span>
+        </button>
         <button className="nbv-make-stars" disabled={off} onClick={() => setMapDialog(true)}>
           <span className="nbv-stars-text">
             <strong>Mind Constellation</strong>
@@ -270,6 +291,7 @@ function StudioPanel({ notebookId, notebookTitle, docs, chats, currentChatId, di
                                       onClose={onSlidesClose} onCreate={makeSlides} />}
       {cardsOpen && <FlashcardsDialog notebookId={notebookId} notebookTitle={notebookTitle} chats={chats} currentChatId={currentChatId} busy={false}
                                       error={null} onClose={onCardsClose} onCreate={makeCards} />}
+      {connectorOpen && <ConnectorModal onClose={() => setConnectorOpen(false)} />}
       {mapDialog && <MindMapDialog docs={docs} busy={false} error={null} onClose={() => setMapDialog(false)} onCreate={makeMap} />}
       {exploring && <MindMapExplorer artifact={exploring} onClose={() => setExploring(null)} />}
     </div>

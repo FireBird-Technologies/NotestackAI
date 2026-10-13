@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Choose a notebook</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: transparent; font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif; }
+  #box { padding: 16px; border-radius: 14px; color: #fff; background-color: #000; background-image: radial-gradient(1.5px 1.5px at 59% 74%,rgba(255,255,255,0.86),transparent),radial-gradient(2px 2px at 26% 26%,rgba(255,255,255,0.72),transparent),radial-gradient(1.5px 1.5px at 25% 15%,rgba(255,255,255,0.4),transparent),radial-gradient(1px 1px at 90% 84%,rgba(255,255,255,0.59),transparent),radial-gradient(2px 2px at 59% 86%,rgba(255,255,255,0.72),transparent),radial-gradient(1px 1px at 69% 11%,rgba(33,124,255,0.98),transparent),radial-gradient(1.5px 1.5px at 78% 6%,rgba(255,255,255,0.7),transparent),radial-gradient(1px 1px at 27% 69%,rgba(255,255,255,0.65),transparent),radial-gradient(1.5px 1.5px at 86% 13%,rgba(255,255,255,0.59),transparent),radial-gradient(1px 1px at 72% 13%,rgba(255,255,255,0.49),transparent),radial-gradient(1px 1px at 38% 6%,rgba(255,255,255,0.41),transparent),radial-gradient(1.5px 1.5px at 15% 40%,rgba(33,124,255,0.45999999999999996),transparent),radial-gradient(1px 1px at 89% 3%,rgba(33,124,255,1),transparent),radial-gradient(1.5px 1.5px at 62% 51%,rgba(255,255,255,0.69),transparent),radial-gradient(1px 1px at 27% 89%,rgba(255,255,255,0.54),transparent),radial-gradient(1px 1px at 3% 55%,rgba(33,124,255,0.87),transparent),radial-gradient(1.5px 1.5px at 3% 10%,rgba(255,255,255,0.46),transparent),radial-gradient(1.5px 1.5px at 73% 27%,rgba(255,255,255,0.94),transparent),radial-gradient(1.5px 1.5px at 18% 56%,rgba(33,124,255,0.7),transparent),radial-gradient(1px 1px at 29% 3%,rgba(255,255,255,0.93),transparent),radial-gradient(1px 1px at 77% 41%,rgba(33,124,255,0.69),transparent),radial-gradient(2px 2px at 79% 85%,rgba(33,124,255,1),transparent),radial-gradient(1px 1px at 29% 59%,rgba(33,124,255,0.82),transparent),radial-gradient(1px 1px at 39% 52%,rgba(33,124,255,0.58),transparent),radial-gradient(1px 1px at 83% 34%,rgba(255,255,255,0.57),transparent),radial-gradient(2px 2px at 60% 19%,rgba(255,255,255,0.69),transparent),radial-gradient(1px 1px at 51% 26%,rgba(255,255,255,0.49),transparent),radial-gradient(1px 1px at 80% 34%,rgba(33,124,255,0.83),transparent),radial-gradient(1.5px 1.5px at 72% 28%,rgba(255,255,255,0.71),transparent),radial-gradient(1px 1px at 55% 9%,rgba(33,124,255,0.76),transparent),radial-gradient(1.5px 1.5px at 34% 33%,rgba(255,255,255,0.84),transparent),radial-gradient(1px 1px at 78% 65%,rgba(255,255,255,0.91),transparent),radial-gradient(1px 1px at 10% 19%,rgba(255,255,255,0.74),transparent),radial-gradient(1px 1px at 80% 81%,rgba(255,255,255,0.9),transparent),radial-gradient(ellipse at 50% 0%,rgba(33,124,255,.07),transparent 55%); border: 1px solid rgba(255,255,255,.1); }
+  h2 { margin: 0 0 4px; font-size: 16px; } .sub { margin: 0 0 12px; font-size: 13px; color: rgba(255,255,255,.72); }
+  .opt { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left; margin: 0 0 8px; padding: 10px 12px; border-radius: 10px; font: inherit; font-size: 14.5px; color: #fff;
+         background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.18); cursor: pointer; }
+  .opt:hover { border-color: #217cff; } .opt.sel { border-color: #217cff; background: rgba(33,124,255,.1); }
+  .opt .n { margin-left: auto; font-size: 12px; color: rgba(255,255,255,.56); white-space: nowrap; }
+  .tag { font-size: 11px; color: #5fd39a; margin-left: 6px; }
+  #search { margin-bottom: 8px; }
+  #list { max-height: 320px; overflow: auto; scrollbar-width: thin; }
+  #fresh { display: none; margin: 4px 0 8px; padding: 10px 12px; border-radius: 10px; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.18); }
+  input[type=text] { width: 100%; padding: 9px 11px; border-radius: 8px; font: inherit; font-size: 14px; color: #fff; background: #000; border: 1px solid rgba(255,255,255,.18); margin-bottom: 8px; }
+  #posts { max-height: 190px; overflow: auto; } label.post { display: flex; gap: 8px; align-items: flex-start; font-size: 13.5px; line-height: 1.35; padding: 4px 0; color: rgba(255,255,255,.72); }
+  .row { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+  button.go { box-shadow: 0 0 12px rgba(33,124,255,.35); font: inherit; font-size: 13.5px; color: #fff; background: #217cff; border: 0; border-radius: 8px; padding: 8px 16px; cursor: pointer; } button.go:disabled { opacity: .4; cursor: default; }
+  #told { margin-top: 10px; font-size: 13px; color: rgba(255,255,255,.72); display: none; } #told code { display: block; margin-top: 6px; padding: 8px; background: #000; border-radius: 8px; white-space: pre-wrap; user-select: all; }
+  #msg { padding: 30px 16px; text-align: center; color: rgba(255,255,255,.72); font-size: 15px; }
+  .mini { font-size: 12px; color: rgba(255,255,255,.56); }
+
+  /* The app's own look: black, starry, pill buttons, blue only for the main action and for selection. */
+  button { border-radius: 999px; background: transparent; border: 1px solid rgba(255,255,255,.18); color: #fff; font-weight: 600; transition: box-shadow .2s, border-color .2s, background .2s; }
+  button:hover:not(:disabled) { background: transparent; border-color: rgba(33,124,255,.6); box-shadow: 0 0 12px rgba(33,124,255,.35); }
+  button.go { background: #217cff; border: 1px solid #217cff; padding: 10px 22px; box-shadow: 0 0 24px rgba(33,124,255,.35), 0 0 2px rgba(33,124,255,.6); }
+  button.go:hover:not(:disabled) { background: rgba(33,124,255,.9); border-color: rgba(33,124,255,.9); box-shadow: 0 0 32px rgba(33,124,255,.6); }
+  button:disabled { opacity: .5; }
+  .chip, .opt, .pickbtn { border-radius: 14px; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.18); font-weight: 400; }
+  .chip:hover, .opt:hover, .pickbtn:hover { border-color: rgba(33,124,255,.6); box-shadow: 0 0 12px rgba(33,124,255,.2); }
+  .chip.sel, .opt.sel { border-color: rgba(33,124,255,.9); background: rgba(33,124,255,.08); box-shadow: 0 0 12px rgba(33,124,255,.2); }
+  .row .chip { border-radius: 999px; }
+  input[type=text], input[type=search], select { border-radius: 999px; background: rgba(0,0,0,.6); border: 1px solid rgba(255,255,255,.18); padding-left: 16px; padding-right: 16px; }
+  input[type=text]:focus, input[type=search]:focus, select:focus { outline: none; border-color: rgba(33,124,255,.6); box-shadow: 0 0 12px rgba(33,124,255,.2); }
+  input[type=checkbox] { accent-color: #217cff; }
+</style>
+</head>
+<body>
+<div id="box">
+  <div id="msg">Loading your notebooks...</div>
+  <div id="main" hidden>
+    <h2 id="head">Which notebook should I use?</h2><p class="sub" id="sub"></p>
+    <input type="search" id="search" placeholder="Search all notebooks" aria-label="Search all notebooks">
+    <div class="mini" id="notebook-count"></div>
+    <div id="list"></div>
+    <div id="fresh">
+      <input type="text" id="title" placeholder="Name for the new notebook" maxlength="100">
+      <div class="mini" id="pickhint">Tick the posts to put in it</div><div id="posts"></div>
+    </div>
+    <div class="row"><button class="go" id="go" type="button" disabled>Continue</button><span class="mini" id="count"></span></div>
+    <div id="told"></div>
+  </div>
+</div>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var data = null, choice = null, ticked = {}, notebookQuery = "";
+
+  /* ---- talking to the host: JSON-RPC 2.0 over postMessage (MCP Apps) ---- */
+  var pending = {}, rid = 1, seen = [], got = false;
+  function send(m) { m.jsonrpc = "2.0"; window.parent.postMessage(m, "*"); }
+  function request(method, params) {
+    return new Promise(function (resolve, reject) { var id = rid++; pending[id] = { resolve: resolve, reject: reject }; send({ id: id, method: method, params: params || {} }); });
+  }
+  function notify(method, params) { send({ method: method, params: params || {} }); }
+  function find(o, d) {
+    if (!o || d > 6) return null;
+    if (typeof o === "string") { try { return find(JSON.parse(o), d + 1); } catch (e) { return null; } }
+    if (typeof o !== "object") return null;
+    if (o.kind === "notebook_picker") return o;
+    for (var k in o) { var f = find(o[k], d + 1); if (f) return f; }
+    return null;
+  }
+  window.addEventListener("message", function (e) {
+    if (e.source !== window.parent) return;
+    var m = e.data;
+    if (!m || m.jsonrpc !== "2.0") return;
+    if (m.method) seen.push(m.method);
+    if (m.method === undefined && m.id !== undefined) {
+      var p = pending[m.id]; if (!p) return; delete pending[m.id];
+      if (m.error) p.reject(m.error); else p.resolve(m.result);
+    } else if (m.method && m.params && find(m.params, 0)) {
+      show(find(m.params, 0));
+    } else if (m.method === "ui/resource-teardown" && m.id !== undefined) {
+      send({ id: m.id, result: {} });
+    } else if (m.method === "ping" && m.id !== undefined) {
+      send({ id: m.id, result: {} });
+    }
+  });
+  function reportSize() { notify("ui/notifications/size-changed", { width: Math.ceil(document.documentElement.scrollWidth), height: Math.ceil(document.documentElement.scrollHeight) }); }
+  if (window.ResizeObserver) new ResizeObserver(reportSize).observe(document.documentElement);
+
+  /* ---- the picker ---- */
+  function ready() {
+    var n = Object.keys(ticked).length;
+    if (choice === "new") { $("go").disabled = !($("title").value.trim() && n); $("count").textContent = n + " post" + (n === 1 ? "" : "s") + " ticked"; }
+    else { $("go").disabled = !choice; $("count").textContent = ""; }
+  }
+  function pick(which, btn) {
+    choice = which;
+    Array.prototype.forEach.call($("list").children, function (c) { c.classList.remove("sel"); });
+    btn.classList.add("sel");
+    $("fresh").style.display = which === "new" ? "block" : "none";
+    ready(); reportSize();
+  }
+  function option(label, extra, tag) {
+    var b = document.createElement("button"); b.type = "button"; b.className = "opt";
+    var s = document.createElement("span"); s.textContent = label; b.appendChild(s);
+    if (tag) { var t = document.createElement("span"); t.className = "tag"; t.textContent = tag; b.appendChild(t); }
+    if (extra) { var n = document.createElement("span"); n.className = "n"; n.textContent = extra; b.appendChild(n); }
+    return b;
+  }
+  function drawNotebooks() {
+    var list = $("list"); list.textContent = "";
+    var shown = 0;
+    (data.notebooks || []).forEach(function (nb) {
+      if (notebookQuery && String(nb.title || "").toLowerCase().indexOf(notebookQuery) < 0) return;
+      shown++;
+      var b = option(nb.title, nb.post_count + " posts", nb.is_default ? "your " + (data.assistant_name || "assistant") + " notebook" : "");
+      b.addEventListener("click", function () { pick(nb, b); });
+      list.appendChild(b);
+    });
+    if (!notebookQuery || "new notebook".indexOf(notebookQuery) >= 0) { var nw = option("New notebook, and choose its posts", "", ""); nw.addEventListener("click", function () { pick("new", nw); }); list.appendChild(nw); }
+    $("notebook-count").textContent = shown + " of " + (data.notebooks || []).length + " notebooks";
+  }
+  function show(d) {
+    got = true; data = d;
+    $("msg").hidden = true; $("main").hidden = false;
+    $("sub").textContent = d.for_what ? "For: " + d.for_what : "";
+    drawNotebooks();
+    var posts = $("posts"); posts.textContent = "";
+    (d.posts || []).forEach(function (p) {
+      var l = document.createElement("label"); l.className = "post";
+      var c = document.createElement("input"); c.type = "checkbox";
+      c.addEventListener("change", function () { if (c.checked) ticked[p.id] = p; else delete ticked[p.id]; ready(); });
+      var t = document.createElement("span"); t.textContent = p.title; l.appendChild(c); l.appendChild(t); posts.appendChild(l);
+    });
+    if (!(d.posts || []).length) $("pickhint").textContent = "You have no posts yet. Connect a blog or Substack first.";
+    ready(); reportSize();
+  }
+  function say(text) {
+    /* Put the choice into the conversation as the writer's own message. A host that refuses gets the words to copy. */
+    return request("ui/message", { role: "user", content: [{ type: "text", text: text }] }).then(function () {
+      $("go").disabled = true; $("told").style.display = "block"; $("told").textContent = "Sent. " + ((data && data.assistant_name) || "The assistant") + " will carry on.";
+    }, function () {
+      $("told").style.display = "block"; $("told").textContent = "Copy this and send it to " + ((data && data.assistant_name) || "the assistant") + ":";
+      var c = document.createElement("code"); c.textContent = text; $("told").appendChild(c); reportSize();
+    });
+  }
+  $("title").addEventListener("input", ready);
+  $("search").addEventListener("input", function () { notebookQuery = $("search").value.trim().toLowerCase(); drawNotebooks(); reportSize(); });
+  /* The writer sees names only. The ids go to the assistant as background context, never in the chat message. */
+  function hand(visible, hidden) {
+    request("ui/update-model-context", { content: [{ type: "text", text: hidden }] }).catch(function () {}).then(function () { say(visible); });
+  }
+  $("go").addEventListener("click", function () {
+    if (choice === "new") {
+      var ps = Object.keys(ticked).map(function (k) { return ticked[k]; });
+      hand("Make a new notebook called \"" + $("title").value.trim() + "\" with these posts, then use it: " +
+           ps.map(function (p) { return "\"" + p.title + "\""; }).join("; ") + ".",
+           "Ids for the posts the writer picked: " + ps.map(function (p) { return "\"" + p.title + "\" = " + p.id; }).join("; ") + ".");
+    } else if (choice) {
+      hand("Use my notebook \"" + choice.title + "\".", "The notebook \"" + choice.title + "\" has id " + choice.id + ".");
+    }
+  });
+  setTimeout(function () {
+    if (got) return;
+    $("msg").hidden = false; $("msg").textContent = "Still waiting for your notebooks. The host has sent: " + (seen.length ? seen.join(", ") : "nothing") + ". Ask the assistant to list them in words.";
+  }, 20000);
+  setTimeout(function () { notify("ui/notifications/initialized", {}); reportSize(); }, 1500);
+  /*expand*/
+  /* Expand: ask the host for fullscreen (and back). A host that says no, or has no such mode, just keeps the view as it is. */
+  var dispMode = "inline", dispModes = null, expandBtn = null;
+  (function () {
+    var st = document.createElement("style");
+    st.textContent = "#expand{position:fixed;right:10px;bottom:10px;z-index:50;font:inherit;font-size:12px;color:#fff;background:rgba(10,17,40,.82);border:1px solid rgba(157,184,255,.5);border-radius:999px;padding:5px 12px;cursor:pointer}" +
+      "#expand:hover{background:rgba(58,99,224,.7)}" +
+      "html[data-mode=fullscreen] #sky{height:calc(100vh - 24px)!important}html[data-mode=fullscreen] video{max-height:calc(100vh - 90px)!important}" +
+      "html[data-mode=fullscreen] #player iframe{min-height:calc(100vh - 140px)!important}";
+    document.head.appendChild(st);
+  })();
+  function setMode(m) {
+    dispMode = m === "fullscreen" ? "fullscreen" : "inline";
+    document.documentElement.setAttribute("data-mode", dispMode);
+    if (expandBtn) expandBtn.textContent = dispMode === "fullscreen" ? "Close" : "Expand";
+    if (typeof reportSize === "function") reportSize();
+  }
+  function expandInit(res) {
+    var ctx = res && res.hostContext;
+    dispModes = ctx && ctx.availableDisplayModes;
+    if (ctx && ctx.displayMode) setMode(ctx.displayMode);
+    if (!dispModes || dispModes.indexOf("fullscreen") < 0) return; /* only when the host says it has a bigger view */
+    expandBtn = document.createElement("button"); expandBtn.id = "expand"; expandBtn.type = "button"; expandBtn.textContent = dispMode === "fullscreen" ? "Close" : "Expand";
+    expandBtn.addEventListener("click", function () {
+      request("ui/request-display-mode", { mode: dispMode === "fullscreen" ? "inline" : "fullscreen" }).then(function (r) { if (r && r.mode) setMode(r.mode); }, function () { expandBtn.hidden = true; });
+    });
+    document.body.appendChild(expandBtn);
+  }
+  window.addEventListener("message", function (e) {
+    if (e.source !== window.parent) return;
+    var m = e.data;
+    if (m && m.jsonrpc === "2.0" && m.method === "ui/notifications/host-context-changed" && m.params && m.params.displayMode) setMode(m.params.displayMode);
+  });
+  request("ui/initialize", { protocolVersion: "2026-01-26", appInfo: { name: "notestack-notebook-picker", version: "1.0.0" }, appCapabilities: { availableDisplayModes: ["inline", "fullscreen"] } })
+    .then(function (r) { notify("ui/notifications/initialized", {}); reportSize(); expandInit(r); })
+    .catch(function () { $("msg").textContent = "This view needs an app that supports interactive results."; });
+})();
+</script>
+</body>
+</html>

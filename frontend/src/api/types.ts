@@ -782,3 +782,21 @@ export type TemplateGeneration = {
   scenes_total?: number;
   ready: boolean;
 };
+
+/** An app asking to connect to the writer's Notestack over MCP (Claude, ChatGPT, Cursor ...). */
+export type McpRequest = {
+  client_name: string;
+  /** Where the app will be sent back to after this. The name is self declared; this address is the real signal. */
+  redirect_host: string;
+  trust: "verified" | "local" | "unverified";
+  /** Every permission, with what the app asked for pre-ticked. Reading is always needed. */
+  scopes: { scope: string; label: string; requested: boolean; required: boolean }[];
+};
+
+export type McpGrant = {
+  id: string;
+  client_name: string;
+  scopes: string[];
+  created_at: string;
+  last_used_at: string | null;
+};

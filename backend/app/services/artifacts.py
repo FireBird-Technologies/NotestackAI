@@ -80,23 +80,47 @@ def report_adding(a: Artifact) -> list[dict]:
 
 
 def report_blocks(a: Artifact) -> list[dict]:
-    """A report's blocks, each infographic block with its page: the child artifact's html and status (or "missing"
-    once it was deleted). Read when the report is read, so one still being written shows up when it is ready."""
+    """A report's blocks linked to their real Studio artifacts. Old report visuals are matched by content so reports made
+    before child ids were retained also open in the full viewer. Infographics additionally carry their rendered page."""
     from app.pipeline.infographic import infographic_html  # not at import: pipeline imports this module
 
     blocks = list((a.content_json or {}).get("blocks") or [])
-    ids = [uuid.UUID(b["artifact_id"]) for b in blocks if b.get("type") == "infographic" and b.get("artifact_id")]
     db = object_session(a)
-    kids = {k.id: k for k in db.scalars(select(Artifact).where(Artifact.id.in_(ids), Artifact.workspace_id == a.workspace_id))} \
-        if ids and db else {}
+    visual_types = {"mind_map", "flashcards", "quiz", "infographic"}
+    ids = []
+    for b in blocks:
+        if b.get("type") not in visual_types or not b.get("artifact_id"):
+            continue
+        try:
+            ids.append(uuid.UUID(str(b["artifact_id"])))
+        except (TypeError, ValueError):
+            pass
+    candidates = list(db.scalars(select(Artifact).where(
+        Artifact.workspace_id == a.workspace_id, Artifact.type.in_(visual_types),
+        Artifact.notebook_id == a.notebook_id))) if db else []
+    kids = {k.id: k for k in candidates if not ids or k.id in ids}
+    match_key = {"mind_map": "root", "flashcards": "cards", "quiz": "questions"}
     out = []
     for b in blocks:
-        if b.get("type") != "infographic":
+        if b.get("type") not in visual_types:
             out.append(b)
             continue
-        kid = kids.get(uuid.UUID(b["artifact_id"])) if b.get("artifact_id") else None
+        kid = None
+        if b.get("artifact_id"):
+            try:
+                kid = kids.get(uuid.UUID(str(b["artifact_id"])))
+            except (TypeError, ValueError):
+                pass
+        key = match_key.get(b.get("type"))
+        if not kid and key and b.get(key) is not None:
+            kid = next((x for x in reversed(candidates) if x.type == b["type"] and
+                        (x.content_json or {}).get(key) == b.get(key)), None)
+        linked = {**b, **({"artifact_id": str(kid.id)} if kid else {})}
+        if b.get("type") != "infographic":
+            out.append(linked)
+            continue
         ready = bool(kid and kid.status == "ready" and (kid.content_json or {}).get("content"))
-        out.append({**b, "status": kid.status if kid else "missing",
+        out.append({**linked, "status": kid.status if kid else "missing",
                     "html": infographic_html(kid.content_json) if ready else None,
                     "html_landscape": infographic_html(kid.content_json, "landscape") if ready else None})
     return out
@@ -110,7 +134,7 @@ def serialize_artifact(a: Artifact, job: Job | None = None) -> dict:
         content = {**content, "html": infographic_html(content), "html_landscape": infographic_html(content, "landscape")}
     if a.type == "slide_deck" and a.status == "ready":
         content = {**content, "slides_html": slide_pages(content), "slide_slots": slide_slots(content)}
-    if a.type == "report" and any(b.get("type") == "infographic" for b in content.get("blocks") or []):
+    if a.type == "report":
         content = {**content, "blocks": report_blocks(a)}
     slides = content.get("slide_keys") or []
     return {

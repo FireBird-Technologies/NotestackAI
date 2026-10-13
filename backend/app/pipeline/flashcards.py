@@ -4,11 +4,11 @@ import uuid
 
 from sqlalchemy.orm import Session
 
-from app.llm import run
-from app.llm.provider import fast_lm
+from app.llm.provider import study_lm
 from app.llm.signatures import GenerateFlashcards
 from app.models import Artifact, Job
 from app.pipeline import idea_pool
+from app.pipeline.study_batches import predict_in_halves
 from app.pipeline.generate import NothingToDo
 from app.pipeline.material import Material, load_material
 from app.services.jobs import update_job
@@ -30,11 +30,12 @@ def make_cards(db: Session, workspace_id: uuid.UUID, material: Material, *, topi
     """Cards about the material: a front, a back and verified source lines. Repeats and empty cards are dropped."""
     inputs = dict(title=material.title, topic=topic or "(none)", difficulty=difficulty, language=language.strip() or SAME_LANGUAGE)
     # Posts with their ideas stored (the Mind Constellation's): one call over a random sample of those ideas, not the posts' text.
-    text = idea_pool.sample(db, workspace_id, material.docs, topic, chats=material.text) if material.mode == "ideas" else material.text
-    out = run.predict(GenerateFlashcards, db=db, workspace_id=workspace_id, job=job, material=text, count=count,
-                      lm=fast_lm(), **inputs)
+    text = idea_pool.sample(db, workspace_id, material.docs, topic, chats=material.text, size=count * 2) if material.mode == "ideas" else material.text
+    raw_cards = predict_in_halves(GenerateFlashcards, db=db, workspace_id=workspace_id, job=job, lm=study_lm(), material=text,
+                                  count=count, inputs=inputs, key="cards",
+                                  shared=idea_pool.shared_notes(text))
     cards, seen = [], set()
-    for raw in out.get("cards") or []:
+    for raw in raw_cards:
         card = _card(raw, material.refs)
         if not card or card["front"].lower() in seen:
             continue
