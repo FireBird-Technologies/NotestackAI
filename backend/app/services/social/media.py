@@ -76,10 +76,8 @@ def media_count(a: Artifact) -> int:
         return len(((a.content_json or {}).get("deck") or {}).get("slides") or [])
     if a.type in ("video", "upload", "infographic"):
         return 1
-    if a.type == "report":  # a PDF when it is too long to post as text
-        from app.services.report_export import fits_in_post
-
-        return 0 if fits_in_post(a) else 1
+    if a.type == "report":  # always as a PDF (LinkedIn)
+        return 1 if a.status == "ready" else 0
     return 0
 
 
@@ -113,11 +111,8 @@ def check_postable(a: Artifact, platform: str) -> None:
     if a.type == "report":
         if a.status != "ready":
             raise HTTPException(400, "This report isn't ready yet. Post it once it has finished.")
-        if not media_count(a):  # short enough: posted as its text, anywhere
-            return
         if platform != "linkedin":
-            raise HTTPException(400, "This report is too long for one post here. Post it to LinkedIn, where it goes "
-                                     "as a PDF.")
+            raise HTTPException(400, "Reports go to LinkedIn as a PDF. Post it there.")
         return
     if platform not in MEDIA_PLATFORMS:
         raise HTTPException(400, "Images and videos can only be posted to X and LinkedIn.")
@@ -166,7 +161,7 @@ def media_for(a: Artifact | None, platform: str) -> Iterator[list[Media]]:
                        for i, png in enumerate(_slide_images(a, MAX_IMAGES[platform]))]
             elif a.type == "infographic":
                 out = [Media("image", "infographic.png", "image/png", data=_infographic_image(a))]
-            elif a.type == "report" and media_count(a):
+            elif a.type == "report":
                 out = [Media("document", _pdf_name(a), "application/pdf", data=_report_pdf(a))]
             elif a.type == "upload" and upload_kind(a) == "image":
                 c = a.content_json or {}

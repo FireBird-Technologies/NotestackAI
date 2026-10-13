@@ -7,7 +7,7 @@ from sqlalchemy import delete, func, or_, select
 
 from app.auth import Ctx, get_ctx
 from app.corpus import INDEX, Corpus, CorpusError
-from app.models import Document, Job, NotebookDocument, Source, Upload
+from app.models import Document, Job, Notebook, NotebookDocument, Source, Upload
 from app.pipeline.ingest import IMPORTS_FEED, FeedNotFound, discover_feed, imports_source, rebuild_index
 from app.services.jobs import create_job, serialize_job
 from app.services.plans import effective_plan, plan_limit_error, post_room
@@ -19,10 +19,12 @@ router = APIRouter(prefix="/api/sources", tags=["sources"])
 
 class SourceIn(BaseModel):
     url: str = Field(min_length=3, max_length=1000)
+    notebook_id: uuid.UUID | None = None  # added from inside a notebook: its posts join it
 
 
 class UploadImportIn(BaseModel):
     upload_id: uuid.UUID
+    notebook_id: uuid.UUID | None = None
 
 
 def serialize_source(source: Source, doc_count: int = 0, locked_count: int = 0) -> dict:
@@ -49,9 +51,18 @@ def _get(ctx: Ctx, source_id: uuid.UUID) -> Source:
     return source
 
 
-def _enqueue_sync(ctx: Ctx, source: Source) -> Job:
+def _enqueue_sync(ctx: Ctx, source: Source, notebook_id: uuid.UUID | None = None) -> Job:
     source.sync_status = "pending"
-    return create_job(ctx.db, ctx.workspace.id, "ingest", {"source_id": str(source.id)})
+    return create_job(ctx.db, ctx.workspace.id, "ingest", {"source_id": str(source.id), **_into(ctx, notebook_id)})
+
+
+def _into(ctx: Ctx, notebook_id: uuid.UUID | None) -> dict:
+    """The job param that files imported posts into a notebook of this workspace (404 for anyone else's)."""
+    if not notebook_id:
+        return {}
+    if not ctx.db.scalar(select(Notebook.id).where(Notebook.id == notebook_id, Notebook.workspace_id == ctx.workspace.id)):
+        raise HTTPException(404, "Notebook not found")
+    return {"notebook_id": str(notebook_id)}
 
 
 def _check_url(url: str) -> None:
@@ -76,7 +87,7 @@ async def create_source(body: SourceIn, ctx: Ctx = Depends(get_ctx)):
         select(Source).where(Source.workspace_id == ctx.workspace.id, Source.feed_url == found.feed_url)
     )
     if existing:
-        job = _enqueue_sync(ctx, existing)
+        job = _enqueue_sync(ctx, existing, body.notebook_id)
         return {"source": serialize_source(existing, _doc_count(ctx, existing)), "job": serialize_job(job)}
     plan = effective_plan(ctx.db, ctx.workspace)
     count = ctx.db.scalar(
@@ -87,9 +98,10 @@ async def create_source(body: SourceIn, ctx: Ctx = Depends(get_ctx)):
         raise plan_limit_error(plan, "sources", f"Your plan includes {plan.sources} sources.")
     source = Source(workspace_id=ctx.workspace.id, feed_url=found.feed_url, platform=found.platform,
                     site_url=found.site_url, title=found.title)
+    _into(ctx, body.notebook_id)  # checked before the source is saved
     ctx.db.add(source)
     ctx.db.commit()
-    job = _enqueue_sync(ctx, source)
+    job = _enqueue_sync(ctx, source, body.notebook_id)
     return {"source": serialize_source(source), "job": serialize_job(job)}
 
 
@@ -158,7 +170,8 @@ def import_url(body: SourceIn, ctx: Ctx = Depends(get_ctx)):
     _require_room(ctx)
     source = imports_source(ctx.db, ctx.workspace.id)
     ctx.db.commit()
-    job = create_job(ctx.db, ctx.workspace.id, "import_url", {"source_id": str(source.id), "url": body.url})
+    job = create_job(ctx.db, ctx.workspace.id, "import_url", {"source_id": str(source.id), "url": body.url,
+                                                              **_into(ctx, body.notebook_id)})
     return {"source": serialize_source(source, _doc_count(ctx, source)), "job": serialize_job(job)}
 
 
@@ -171,7 +184,7 @@ def import_upload(body: UploadImportIn, ctx: Ctx = Depends(get_ctx)):
     source = imports_source(ctx.db, ctx.workspace.id)
     ctx.db.commit()
     job = create_job(ctx.db, ctx.workspace.id, "import_upload",
-                     {"source_id": str(source.id), "upload_id": str(upload.id)})
+                     {"source_id": str(source.id), "upload_id": str(upload.id), **_into(ctx, body.notebook_id)})
     return {"source": serialize_source(source, _doc_count(ctx, source)), "job": serialize_job(job)}
 
 

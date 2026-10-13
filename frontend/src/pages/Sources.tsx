@@ -65,11 +65,11 @@ export function looksLikeArticle(raw: string): boolean {
 }
 
 /** Imports each file as its own post. Returns how many failed. */
-export async function importFiles(files: File[], onAdded: (source: Source, job: Job) => void): Promise<number> {
+export async function importFiles(files: File[], onAdded: (source: Source, job: Job) => void, notebookId?: string): Promise<number> {
   let failed = 0;
   for (const f of files) {
     try {
-      const res = await sourcesApi.importFile(f);
+      const res = await sourcesApi.importFile(f, notebookId);
       onAdded(res.source, res.job);
     } catch {
       failed += 1;
@@ -79,7 +79,11 @@ export async function importFiles(files: File[], onAdded: (source: Source, job: 
 }
 
 /** One box for everything: paste a link (feed or article is worked out for you) or add files. */
-export function AddSource({ onAdded }: { onAdded: (source: Source, job: Job) => void }) {
+export function AddSource({ onAdded, notebookId }: {
+  onAdded: (source: Source, job: Job) => void;
+  /** Added from inside a notebook: the posts join it. */
+  notebookId?: string;
+}) {
   const [value, setValue] = useState("");
   const [override, setOverride] = useState<"feed" | "url" | null>(null);
   const [busy, setBusy] = useState(false);
@@ -94,7 +98,7 @@ export function AddSource({ onAdded }: { onAdded: (source: Source, job: Job) => 
     setError(null);
     setBusy(true);
     try {
-      const res = mode === "feed" ? await sourcesApi.connect(value.trim()) : await sourcesApi.importUrl(value.trim());
+      const res = mode === "feed" ? await sourcesApi.connect(value.trim(), notebookId) : await sourcesApi.importUrl(value.trim(), notebookId);
       onAdded(res.source, res.job);
       setValue("");
       setOverride(null);
@@ -110,7 +114,7 @@ export function AddSource({ onAdded }: { onAdded: (source: Source, job: Job) => 
     if (!list.length) return;
     setError(null);
     setBusy(true);
-    const failed = await importFiles(list, onAdded);
+    const failed = await importFiles(list, onAdded, notebookId);
     if (failed) setError(`${failed} of ${list.length} files could not be uploaded.`);
     setBusy(false);
     if (fileRef.current) fileRef.current.value = "";

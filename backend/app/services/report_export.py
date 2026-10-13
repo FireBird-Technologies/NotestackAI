@@ -3,8 +3,11 @@
 The text follows the report's own blocks (the same order the Download Markdown file has, components/ReportView.tsx),
 without citation markers or the list of sources: a post carries the report, not the notebook's posts it came from."""
 
+import base64
 import html
 import re
+from functools import cache
+from pathlib import Path
 
 from app.models import Artifact
 from app.services.artifacts import report_blocks
@@ -52,7 +55,7 @@ def fits_in_post(a: Artifact) -> bool:
 
 
 def report_caption(a: Artifact) -> str:
-    """A long report's starting caption (the PDF carries the rest): its title and its opening paragraph."""
+    """A report's starting caption (the PDF carries the rest): its title and its opening paragraph."""
     text = report_text(a)
     title, _, rest = text.partition("\n\n")
     first = rest.split("\n\n", 1)[0] if rest else ""
@@ -119,8 +122,23 @@ def _block_html(b: dict) -> str:
     return ""
 
 
+@cache
+def _logo() -> str:
+    """The Notestack mark as a data URI (a copy of the frontend's public/logo.svg)."""
+    svg = (Path(__file__).resolve().parent.parent / "assets" / "logo.svg").read_bytes()
+    return "data:image/svg+xml;base64," + base64.b64encode(svg).decode()
+
+
 PAGE_CSS = """
-@page { size: A4; margin: 22mm 20mm; }
+@page { size: A4; margin: 14mm 20mm 12mm; }
+/* The page's frame: Chrome repeats a table's head and foot on every printed page */
+.frame { width: 100%; border-collapse: collapse; }
+.frame > thead td, .frame > tfoot td { border: 0; padding: 0; background: none; }
+.brand { display: flex; align-items: center; gap: 10pt; padding: 4pt 0 20pt; color: #111; font-size: 14pt;
+  font-weight: 700; letter-spacing: 0.01em; }
+.brand img { width: 28pt; height: 28pt; border: 0.7pt solid #d6d9e0; border-radius: 6pt; }
+.made { padding: 20pt 0 4pt; color: #8a8f99; font-size: 9pt; text-align: center; }
+.frame > tbody > tr > td { border: 0; padding: 0; }
 body { font: 11pt/1.6 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color: #111; }
 h1 { font-size: 22pt; line-height: 1.2; margin: 0 0 18pt; }
 h2 { font-size: 14pt; margin: 20pt 0 6pt; }
@@ -138,8 +156,12 @@ th { background: #f2f5fc; }
 def report_pdf_html(a: Artifact) -> str:
     title = html.escape(_clean((a.content_json or {}).get("title")) or "Report")
     body = "".join(_block_html(b) for b in report_blocks(a))
+    head = f'<div class="brand"><img src="{_logo()}" alt="">Notestack</div>'
+    foot = '<div class="made">Made with Notestack AI</div>'
     return (f'<!doctype html><html><head><meta charset="utf-8"><title>{title}</title><style>{PAGE_CSS}</style></head>'
-            f"<body><h1>{title}</h1>{body}</body></html>")
+            f'<body><table class="frame"><thead><tr><td>{head}</td></tr></thead>'
+            f"<tfoot><tr><td>{foot}</td></tr></tfoot>"
+            f"<tbody><tr><td><h1>{title}</h1>{body}</td></tr></tbody></table></body></html>")
 
 
 def report_pdf(a: Artifact) -> bytes:

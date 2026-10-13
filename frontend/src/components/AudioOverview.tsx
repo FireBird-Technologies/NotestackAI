@@ -4,10 +4,12 @@ import type { Artifact, ChatSummary, Segment, VideoSavedVoice } from "../api/typ
 import { useJob } from "../hooks/useJob";
 import { Transcript } from "./ArtifactCard";
 import { Dropdown } from "./Dropdown";
-import { CheckIcon } from "./icons/Icons";
+import { CheckIcon, ChevronIcon, DownloadIcon } from "./icons/Icons";
 import { LANGUAGES, Pills, SourceFocusFields, type SourceSelection } from "./SourceFocusFields";
 import { ConfirmButton, errorMessage, formatDate, JobProgress, Modal, StatusPill } from "./ui";
 import { ShareButton } from "./ShareDialog";
+import { PostButton } from "./launchpad/PostButton";
+import { CardFeedback } from "./CardFeedback";
 
 /** The audio styles. The server describes each to the script writer (backend/app/pipeline/media.py STYLES). */
 const STYLES = [
@@ -286,6 +288,7 @@ export function AudioOverviewCard({ artifact: initial, onRemoved }: { artifact: 
       {ready && segments.length > 0 && (
         <button type="button" className="link-btn ao-transcript-toggle" aria-expanded={transcript} onClick={() => setTranscript((t) => !t)}>
           {transcript ? "Hide transcript" : `Show transcript (${segments.length} lines)`}
+          <ChevronIcon size={16} className={`chevron${transcript ? " open" : ""}`} />
         </button>
       )}
       {transcript && (
@@ -298,8 +301,9 @@ export function AudioOverviewCard({ artifact: initial, onRemoved }: { artifact: 
       )}
       {error && <p className="error-text">{error}</p>}
       <footer className="artifact-actions">
+        {ready && <PostButton artifactId={artifact.id} artifact={artifact} />}
         <ShareButton artifact={artifact} />
-        {ready && artifact.download_url && <a className="btn btn-small" href={artifact.download_url}>Download</a>}
+        {ready && artifact.download_url && <a className="btn btn-small btn-icon-only" href={artifact.download_url} aria-label="Download" title="Download"><DownloadIcon size={16} /></a>}
         {failed && (
           <button type="button" className="btn btn-small" onClick={async () => {
             setError(null);
@@ -311,6 +315,8 @@ export function AudioOverviewCard({ artifact: initial, onRemoved }: { artifact: 
           }}>Retry</button>
         )}
         <ConfirmButton onConfirm={remove}>Delete</ConfirmButton>
+        {/* Bottom right: a positive or negative review */}
+        <CardFeedback artifact={artifact} />
       </footer>
     </article>
   );

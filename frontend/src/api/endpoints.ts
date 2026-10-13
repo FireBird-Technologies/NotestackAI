@@ -66,11 +66,12 @@ type SourceJob = { source: Source; job: Job };
 
 export const sourcesApi = {
   list: () => api<Source[]>("/api/sources"),
-  connect: (url: string) => post<SourceJob>("/api/sources", { url }),
-  importUrl: (url: string) => post<SourceJob>("/api/sources/url", { url }),
-  importFile: async (file: File) => {
+  // notebookId: added from inside a notebook, so the posts join it.
+  connect: (url: string, notebookId?: string) => post<SourceJob>("/api/sources", { url, notebook_id: notebookId }),
+  importUrl: (url: string, notebookId?: string) => post<SourceJob>("/api/sources/url", { url, notebook_id: notebookId }),
+  importFile: async (file: File, notebookId?: string) => {
     const { upload_id } = await uploadFile(file);
-    return post<SourceJob>("/api/sources/upload", { upload_id });
+    return post<SourceJob>("/api/sources/upload", { upload_id, notebook_id: notebookId });
   },
   sync: (id: string) => post<SourceJob>(`/api/sources/${id}/sync`),
   remove: (id: string) => del<{ ok: true; removed_posts: number }>(`/api/sources/${id}`),
@@ -90,6 +91,8 @@ export const notebooksApi = {
     post<{ id: string; title: string; added: number }>("/api/notebooks", { title, document_ids, description }),
   /** The "All posts" notebook, created on first use. */
   archive: () => post<{ id: string; title: string }>("/api/notebooks/archive"),
+  /** Where signing in opens: whether a source was ever connected, and the notebook worked on last. */
+  landing: () => api<{ onboarded: boolean; notebook_id: string | null }>("/api/notebooks/landing"),
   fromTopic: (topicId: string) => post<{ id: string; title: string }>(`/api/notebooks/from-topic/${topicId}`),
   update: (id: string, body: { title?: string; description?: string }) => patch(`/api/notebooks/${id}`, body),
   remove: (id: string) => del(`/api/notebooks/${id}`),
@@ -157,7 +160,7 @@ export const artifactsApi = {
   /** An infographic drawn as a PNG. */
   image: (id: string, layout: "landscape" | "portrait" = "landscape") => apiBlob(`/api/artifacts/${id}/image${qs({ layout })}`),
   /** Thumbs up or down (null takes it back) on a finished report, quiz, flashcard set or infographic. */
-  rate: (id: string, body: { rating: "up" | "down" | null; reasons?: string[]; comment?: string }) =>
+  rate: (id: string, body: { rating: "up" | "down" | null; stars?: number; reasons?: string[]; comment?: string }) =>
     put<{ feedback: AnswerFeedback | null }>(`/api/artifacts/${id}/feedback`, body),
   retry: (id: string) => post<Artifact>(`/api/artifacts/${id}/retry`),
   /** A slide deck as a PDF (exactly as shown) or an editable PowerPoint. */
@@ -271,6 +274,8 @@ export const launchpadApi = {
   disconnect: (id: string) => del(`/api/social/accounts/${id}`),
   /** What can be attached to a post (finished videos, quote cards, carousels, summaries, launch kits; not audio). */
   postable: (q = "") => api<PostableArtifact[]>(`/api/launchpad/postable${qs({ q: q || undefined })}`),
+  /** One item to attach, however old (the Library's Post button). */
+  postableOne: (id: string) => api<PostableArtifact>(`/api/launchpad/postable/${id}`),
   /** A file from the user's computer, sent to storage: make it postable (an `upload` in the picker). */
   uploadToPost: async (file: File, duration_s?: number) => {
     const { upload_id } = await uploadFile(file);

@@ -30,8 +30,7 @@ export function mediaLabel(a: PostableArtifact): string {
     return `${n} slide${n === 1 ? "" : "s"} as images${cut}`;
   }
   // A report goes as its text when it fits in a post, else as a PDF (LinkedIn); an infographic as one image.
-  if (a.media === "document") return "PDF document · LinkedIn";
-  if (a.type === "report") return "Text · fits in one post";
+  if (a.media === "document" || a.type === "report") return "PDF document · LinkedIn";
   if (a.media === "image") return a.media_count === 1 ? "Image" : `${a.media_count} images`;
   return "Text";
 }

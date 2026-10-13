@@ -84,7 +84,13 @@ export type Citation = {
 };
 
 export type ChatSummary = { id: string; title: string | null; updated_at: string | null };
-export type AnswerFeedback = { rating: "up" | "down"; reasons: string[]; comment: string | null };
+export type AnswerFeedback = {
+  rating: "up" | "down";
+  /** A thumbs up's rating, 1 to 5 (artifacts only). */
+  stars?: number | null;
+  reasons: string[];
+  comment: string | null;
+};
 /** A chat listed across the whole workspace, with the notebook it belongs to. */
 export type WorkspaceChat = ChatSummary & { notebook_id: string; notebook_title: string };
 export type ChatMessage = { id: string; role: "user" | "assistant"; text: string; citations: Citation[]; feedback?: AnswerFeedback | null };

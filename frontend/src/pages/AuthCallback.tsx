@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { afterSignUp, authApi, safeNext } from "../api/auth";
 import { useAuth } from "../hooks/useAuth";
+import { landingFor } from "../lib/landing";
 
 /** Landing spot for the Google redirect flow: swaps the one minute ticket in the URL fragment for a session. */
 export default function AuthCallback() {
@@ -24,7 +25,7 @@ export default function AuthCallback() {
       .redeemTicket(ticket)
       .then((result) => {
         complete(result);
-        navigate(result.created ? afterSignUp(next) : next, { replace: true });
+        return landingFor(result.created ? afterSignUp(next) : next).then((to) => navigate(to, { replace: true }));
       })
       .catch(() => {
         const error = new URLSearchParams({ error: "Google sign in expired. Try again." });

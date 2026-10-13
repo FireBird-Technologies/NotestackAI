@@ -4,6 +4,8 @@ import { videosApi } from "../../api/endpoints";
 import type { Artifact } from "../../api/types";
 import { ShareButton } from "../ShareDialog";
 import { ConfirmButton, errorMessage, formatDate, Loading, Modal, StatusPill } from "../ui";
+import { canPost, PostButton } from "../launchpad/PostButton";
+import { CardFeedback } from "../CardFeedback";
 
 /** The player without its speed and captions controls (blog2video's `hide` option, as the video editor uses it). */
 function playerUrl(src: string): string {
@@ -77,6 +79,7 @@ export function VideoCard({ artifact, onRemoved }: { artifact: Artifact; onRemov
         <button type="button" className="btn btn-small" onClick={openPreview}>Preview</button>
         <Link className="btn btn-small" to={`/app/videos/${artifact.id}`}>Open details</Link>
         {/* A link on Notestack's own address that plays this preview: /r/<token> */}
+        {canPost(artifact) && <PostButton artifactId={artifact.id} artifact={artifact} />}
         <ShareButton artifact={artifact} />
         <ConfirmButton onConfirm={async () => {
           await videosApi.remove(artifact.id);
@@ -84,6 +87,8 @@ export function VideoCard({ artifact, onRemoved }: { artifact: Artifact; onRemov
         }}>
           Delete
         </ConfirmButton>
+        {/* Bottom right: a positive or negative review */}
+        <CardFeedback artifact={artifact} />
       </footer>
       {previewing && (
         <Modal title={artifact.title} onClose={() => setPreviewing(false)} wide>

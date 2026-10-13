@@ -93,7 +93,7 @@ function PublicVideo({ video }: { video: PublicVideoData }) {
 /** The Notestack logo (or name) on a shared page: the dashboard for someone signed in, else the landing page. */
 function HomeLink({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  return <Link to={user ? "/app" : "/"} aria-label={user ? "Go to your dashboard" : "Notestack home"}>{children}</Link>;
+  return <Link to={user ? "/app/notebooks" : "/"} aria-label={user ? "Go to your notebooks" : "Notestack home"}>{children}</Link>;
 }
 
 /** On every shared page, for someone not signed in: an invitation to sign in, a moment after the page opens. It can be

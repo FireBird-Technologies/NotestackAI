@@ -12,6 +12,8 @@ import { StudyOverlay } from "./StudyOverlay";
 import { ReportBody } from "./ReportBody";
 import { ConfirmButton, errorMessage, formatDate, formatDuration, JobProgress, StatusPill } from "./ui";
 import { ShareButton } from "./ShareDialog";
+import { DownloadIcon } from "./icons/Icons";
+import { CardFeedback } from "./CardFeedback";
 
 export function CitationList({
   citations,
@@ -259,9 +261,7 @@ export function ArtifactCard({
         {actions?.(artifact)}
         {artifact.type !== "report" && artifact.type !== "infographic" && <ShareButton artifact={artifact} />}
         {artifact.download_url && artifact.type !== "infographic" && (
-          <a className="btn btn-small" href={artifact.download_url}>
-            Download
-          </a>
+          <a className="btn btn-small btn-icon-only" href={artifact.download_url} aria-label="Download" title="Download"><DownloadIcon size={16} /></a>
         )}
         {artifact.status === "failed" && (
           <button
@@ -290,6 +290,8 @@ export function ArtifactCard({
             Delete
           </ConfirmButton>
         )}
+        {/* Bottom right: a positive or negative review */}
+        <CardFeedback artifact={artifact} />
       </footer>
     </article>
   );

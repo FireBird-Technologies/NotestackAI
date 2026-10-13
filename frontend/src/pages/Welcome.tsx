@@ -181,9 +181,18 @@ export default function Welcome() {
   ) : null;
   const first = (user.name ?? user.email).split(/[ @]/)[0];
 
+  /** The All posts notebook: where a skipped (or empty) onboarding ends, to add sources from there. */
+  const toArchive = async () => {
+    try {
+      navigate(`/app/notebooks/${(await notebooksApi.archive()).id}`, { replace: true });
+    } catch {
+      navigate("/app/notebooks", { replace: true });
+    }
+  };
+
   const finish = async (chosen: Goal | null) => {
     markOnboarded();
-    if (!chosen || posts === 0) return navigate("/app", { replace: true });
+    if (!chosen || posts === 0) return toArchive();
     if (chosen === "launch") return navigate("/app/launchpad/kits", { replace: true });
     setBusy(true);
     try {
@@ -191,7 +200,7 @@ export default function Welcome() {
       const nb = await notebooksApi.create(source?.title ? `${source.title} archive` : "My archive", docs.items.map((d) => d.id));
       navigate(chosen === "audio" ? `/app/notebooks/${nb.id}?studio=audio` : `/app/notebooks/${nb.id}`, { replace: true });
     } catch {
-      navigate("/app", { replace: true });
+      navigate("/app/notebooks", { replace: true });
     }
   };
 
@@ -381,7 +390,7 @@ export default function Welcome() {
             </p>
             <div className="row end">
               <button className="btn" onClick={() => finish(null)}>
-                Go to Mission Control
+                Open All posts
               </button>
               <button className="btn btn-primary" disabled={!indexingDone || busy} onClick={() => finish(goal)}>
                 {busy ? "Preparing..." : indexingDone ? "Launch" : "Waiting for posts..."}

@@ -1,4 +1,4 @@
-"""Thumbs up or down on generated reports, quizzes, flashcards and infographics: what can be rated, why a thumbs down can be
+"""Thumbs up or down on generated reports, quizzes, flashcards, infographics, slide decks, audio overviews and videos: what can be rated, why a thumbs down can be
 given, and how the ratings ride along on the artifacts the app lists."""
 
 import uuid
@@ -14,6 +14,9 @@ REASONS: dict[str, set[str]] = {
     "quiz": {"wrong_answers", "too_easy", "too_hard", "unclear", "off_topic", "other"},
     "flashcards": {"inaccurate", "too_basic", "too_detailed", "unclear", "other"},
     "infographic": {"messy_layout", "cut_off", "missing_content", "look", "hard_to_read", "other"},
+    "slide_deck": {"inaccurate", "design", "cut_off", "too_long", "too_short", "other"},
+    "audio_overview": {"inaccurate", "voices", "boring", "too_long", "too_short", "other"},
+    "video": {"inaccurate", "visuals", "voice", "too_long", "too_short", "other"},
 }
 RATEABLE = tuple(REASONS)
 
@@ -21,7 +24,9 @@ RATEABLE = tuple(REASONS)
 def feedback_out(f: ArtifactFeedback | None) -> dict | None:
     if not f:
         return None
-    return {"rating": "up" if f.rating > 0 else "down", "reasons": f.reasons or [], "comment": f.comment}
+    # A thumbs up is stored as its stars (1 to 5), a thumbs down as -1.
+    return {"rating": "up" if f.rating > 0 else "down", "stars": f.rating if f.rating > 0 else None,
+            "reasons": f.reasons or [], "comment": f.comment}
 
 
 def attach(db: Session, user_id: uuid.UUID, items: list[dict]) -> list[dict]:

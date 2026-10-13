@@ -31,14 +31,22 @@ def listed(client, auth, a) -> dict:  # noqa: F811
     return {x["id"]: x for x in client.get("/api/launchpad/postable", headers=auth).json()}[str(a.id)]
 
 
-def test_a_short_report_posts_as_its_text(client, auth, ws, db_session, monkeypatch):  # noqa: F811
+def test_a_short_report_also_posts_as_a_branded_pdf(client, auth, ws, db_session, monkeypatch):  # noqa: F811
     short = report(db_session, ws, 1)
     got = listed(client, auth, short)
-    assert got["media"] == "text" and got["media_count"] == 0
+    assert got["media"] == "document" and got["media_count"] == 1  # always a PDF, however short
     text = got["prefill"]["linkedin"]
-    assert text.startswith("Pricing Brief\n\nPart 0") and "[1]" not in text and "**" not in text
+    assert text.startswith("Pricing Brief") and "[1]" not in text and "**" not in text
+
+    from app.slides import export
+
+    pages: list[str] = []
+    monkeypatch.setattr(export, "_run_chrome", lambda html, args, out: (pages.append(html) or b"%PDF-1.7 fake", ""))
     with media.media_for(short, "linkedin") as files:
-        assert files == []
+        assert [f.kind for f in files] == ["document"]
+    # Every page: the logo and name on top, "Made with Notestack AI" at the foot (a table head and foot repeat)
+    assert '<thead><tr><td><div class="brand"><img src="data:image/svg+xml;base64,' in pages[0]
+    assert "Notestack</div>" in pages[0] and "<tfoot><tr><td><div class=\"made\">Made with Notestack AI</div>" in pages[0]
     acct = account(db_session, ws, "linkedin", scopes=LI_SCOPES)
     assert schedule(client, auth, "linkedin", acct, content=text, artifact_id=str(short.id)).status_code == 200
 
@@ -104,3 +112,19 @@ def test_unfinished_reports_and_infographics_cannot_be_scheduled(client, auth, w
     li = account(db_session, ws, "linkedin", scopes=LI_SCOPES)
     for art in (a, b):
         assert schedule(client, auth, "linkedin", li, content="Hi", artifact_id=str(art.id)).status_code == 400
+
+
+def test_one_item_can_be_looked_up_to_attach(client, auth, ws, db_session):  # noqa: F811
+    from app.models import Workspace
+
+    mine = report(db_session, ws, 1)
+    got = client.get(f"/api/launchpad/postable/{mine.id}", headers=auth)
+    assert got.status_code == 200 and got.json()["id"] == str(mine.id) and got.json()["type"] == "report"
+    other = Workspace(name="Other", owner_id=ws.owner_id)
+    db_session.add(other)
+    db_session.commit()
+    theirs = report(db_session, other, 1)
+    assert client.get(f"/api/launchpad/postable/{theirs.id}", headers=auth).status_code == 404
+    mine.status = "generating"
+    db_session.commit()
+    assert client.get(f"/api/launchpad/postable/{mine.id}", headers=auth).status_code == 404

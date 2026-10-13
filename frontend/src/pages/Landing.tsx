@@ -167,7 +167,7 @@ export default function Landing() {
     e.preventDefault();
     if (url.trim() && !(await check(url))) return;
     // Always go to sign in / sign up. A pasted URL rides along and starts connecting after signup
-    // (Welcome picks it up); signed in writers go straight to Mission Control, which does the same.
+    // (Welcome picks it up); signed in writers go to /app/start, which connects it and opens All posts.
     const value = url.trim();
     if (value) {
       try {
@@ -176,7 +176,7 @@ export default function Landing() {
         /* ignore */
       }
     }
-    navigate(user ? "/app" : "/auth?mode=signup");
+    navigate(user ? "/app/start" : "/auth?mode=signup");
   };
 
   return (

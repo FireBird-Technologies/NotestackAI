@@ -106,7 +106,8 @@ export function ArtifactRow({
             {main}
           </button>
         )}
-        {isDeck && actions?.(artifact)}
+        {/* Post (and the like) on every row, beside Share: not only inside an opened row */}
+        {actions?.(artifact)}
         <ShareButton artifact={artifact} />
         {artifact.status === "failed" && (
           <button type="button" className="btn btn-small" onClick={retry}>Retry</button>
@@ -136,7 +137,6 @@ export function ArtifactRow({
           {artifact.status === "failed" && artifact.content.error && <p className="error-text">{artifact.content.error}</p>}
           <Body artifact={artifact} onCite={onCite} />
           <div className="artifact-actions">
-            {actions?.(artifact)}
             {artifact.download_url && <a className="btn btn-small" href={artifact.download_url}>Download</a>}
           </div>
         </div>

@@ -6,34 +6,29 @@ import { ReportView } from "../ReportView";
 import { SlideFrame } from "../SlideDeck";
 import { errorMessage, Loading, Modal } from "../ui";
 import { PreviewFrame } from "../video/VideoCard";
+import { PdfPreview } from "../PdfPreview";
 
 /** What a post's attachment looks like, in a modal: shown as the app shows that kind of thing (a report read through, an
  * infographic, the deck's slides, a video playing, the images), so it can be checked before it goes out. */
 export function AttachmentPreviewModal({ a, onClose }: { a: PostableArtifact; onClose: () => void }) {
   const [art, setArt] = useState<Artifact | null>(null);
   const [video, setVideo] = useState<string | null>(null);
-  // A report that goes out as a PDF is previewed as that PDF (a local link to the file, freed on close).
-  const asPdf = a.type === "report" && a.media === "document";
-  const [pdf, setPdf] = useState<string | null>(null);
+  // A report goes out as a PDF: it is previewed as that PDF.
+  const asPdf = a.type === "report";
+  const [pdf, setPdf] = useState<Blob | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
-    let made: string | null = null;
     // A blog2video video plays in its live player (its link is made the first time it is asked for).
     const load = a.editable_video
       ? videosApi.get(a.id).then((v) => live && setVideo((v as { preview_url?: string | null }).preview_url ?? null))
       : asPdf
-        ? artifactsApi.reportPdf(a.id).then((b) => {
-          made = URL.createObjectURL(new Blob([b], { type: "application/pdf" }));
-          if (live) setPdf(made);
-          else URL.revokeObjectURL(made); // closed while it was being made
-        })
+        ? artifactsApi.reportPdf(a.id).then((b) => live && setPdf(b))
         : artifactsApi.get(a.id).then((x) => live && setArt(x));
     load.catch((e) => live && setError(errorMessage(e)));
     return () => {
       live = false;
-      if (made) URL.revokeObjectURL(made);
     };
   }, [a.id, a.editable_video, asPdf]);
 
@@ -45,7 +40,7 @@ export function AttachmentPreviewModal({ a, onClose }: { a: PostableArtifact; on
         : <img className="lp-preview-img" src={a.view_url} alt={a.title} />;
     }
     if (asPdf) {
-      return pdf ? <iframe className="lp-preview-pdf" src={pdf} title={`${a.title} (PDF)`} />
+      return pdf ? <PdfPreview blob={pdf} fileName={a.title} />
         : <div className="loading-center inline"><Loading label="Making the PDF" /></div>;
     }
     if (a.editable_video) {

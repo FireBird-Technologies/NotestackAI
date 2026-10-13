@@ -29,6 +29,7 @@ from app.models import (
     MessageFeedback,
     Notebook,
     NotebookDocument,
+    Source,
     Topic,
 )
 from app.pipeline.generate import ideas_fresh
@@ -125,6 +126,24 @@ def ensure_archive_notebook(ctx: Ctx) -> Notebook:
     _add_docs(ctx, nb, ids)
     ctx.db.commit()
     return nb
+
+
+@router.get("/landing")
+def landing(ctx: Ctx = Depends(get_ctx)):
+    """Where signing in opens, in one quick call: whether the workspace ever connected a source, and the notebook
+    worked on last (the All posts notebook when there is no other)."""
+    # One round trip (the database can be far away): the newest notebook, archive last, and whether a source exists.
+    has_source = select(Source.id).where(Source.workspace_id == ctx.workspace.id).exists()
+    row = ctx.db.execute(
+        select(Notebook.id, has_source.label("onboarded"))
+        .where(Notebook.workspace_id == ctx.workspace.id)
+        .order_by(Notebook.is_archive.asc(), Notebook.updated_at.desc()).limit(1)
+    ).first()
+    latest = row[0] if row else None
+    onboarded = bool(row[1]) if row else ctx.db.scalar(select(has_source)) or False
+    if latest is None and onboarded:
+        latest = archive_notebook(ctx)["id"]
+    return {"onboarded": onboarded, "notebook_id": str(latest) if latest else None}
 
 
 @router.post("/archive")

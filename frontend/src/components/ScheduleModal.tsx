@@ -80,10 +80,10 @@ export function ScheduleModal({
   useEffect(() => {
     loadAccounts();
     if (artifactId && !artifact) {
-      launchpadApi.postable().then((list) => {
-        const found = list.find((a) => a.id === artifactId);
+      // Looked up on its own (not in the newest few), so anything posted from the Library opens attached.
+      launchpadApi.postableOne(artifactId).then((found) => {
         // a kit is never an attachment, and audio can't be posted (X and LinkedIn take no audio files)
-        if (found && found.type !== "launch_kit" && found.media !== "audio") attach(found);
+        if (found.type !== "launch_kit" && found.media !== "audio") attach(found);
       }, () => undefined);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

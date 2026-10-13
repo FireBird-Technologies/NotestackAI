@@ -36,7 +36,7 @@ from app.services.social.media import (
     media_count,
     upload_kind,
 )
-from app.services.report_export import fits_in_post, report_caption, report_text
+from app.services.report_export import report_caption
 from app.services.storage import storage
 
 router = APIRouter(prefix="/api", tags=["launchpad"])
@@ -114,8 +114,8 @@ def _prefill(a: Artifact) -> dict:
     title = c.get("title") or TYPE_LABELS.get(a.type, a.type)
     if a.type == "upload":  # their own file: the words are theirs to write
         return {"x": [""], "linkedin": ""}
-    if a.type == "report":  # its text when it fits in a post; else a short caption, and the PDF carries the rest
-        text = report_text(a) if fits_in_post(a) else report_caption(a)
+    if a.type == "report":  # always a PDF: a short caption, and the PDF carries the report
+        text = report_caption(a)
         return {"x": [text], "linkedin": text}
     if a.type == "infographic":  # the image says it all: its title to start the caption with
         head = "\n\n".join(x for x in (c.get("title"), c.get("subtitle")) if isinstance(x, str) and x.strip())
@@ -153,8 +153,8 @@ def artifact_brief(a: Artifact) -> dict:
             # A deck's title starts "Slide deck: ", which its tag already says
             "title": (c.get("title") or TYPE_LABELS.get(a.type, a.type)).removeprefix("Slide deck: " if a.type == "slide_deck" else ""),
             "media": upload_kind(a) or ("video" if a.type == "video" else "audio" if a.type == "audio_overview"
-                                        # a report too long for one post goes as a PDF
-                                        else "document" if a.type == "report" and media_count(a)
+                                        # a report always goes as a PDF
+                                        else "document" if a.type == "report"
                                         else "image" if media_count(a) else "text"),
             "media_count": media_count(a), "duration_s": duration(a),
             "thumb_url": storage.presign_get(thumb) if thumb else None,
@@ -427,6 +427,18 @@ def register_upload(body: UploadIn, ctx: Ctx = Depends(get_ctx)):
                                **({"duration_s": body.duration_s} if body.duration_s else {})})
     ctx.db.add(a)
     ctx.db.commit()
+    return artifact_brief(a)
+
+
+@router.get("/launchpad/postable/{artifact_id}")
+def postable_one(artifact_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
+    """One item to attach (the Library's Post button), however old: as the picker lists it."""
+    a = ctx.db.scalar(select(Artifact).where(Artifact.id == artifact_id, Artifact.workspace_id == ctx.workspace.id,
+                                             Artifact.type.in_(LISTED)))
+    ready = a is not None and (a.status == "ready" or (is_blog2video(a) and (bool((a.content_json or {}).get("video_url"))
+                                                                              or a.status == "rendering")))
+    if not ready:
+        raise HTTPException(404, "Nothing to attach")
     return artifact_brief(a)
 
 

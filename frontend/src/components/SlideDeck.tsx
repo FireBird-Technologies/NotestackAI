@@ -9,6 +9,8 @@ import { CheckIcon, CollapseIcon, DownloadIcon, ExpandIcon, MoreIcon, PdfIcon, P
 import { LANGUAGES, Pills, SourceFocusFields, sourceSummary, type SourceSelection } from "./SourceFocusFields";
 import { ConfirmButton, ConfirmDeleteModal, errorMessage, formatDate, JobProgress, Modal, StatusPill } from "./ui";
 import { canShare, ShareButton, ShareDialog } from "./ShareDialog";
+import { PostButton } from "./launchpad/PostButton";
+import { CardFeedback } from "./CardFeedback";
 
 /** Bumped when the thumbnails are drawn again (backend/scripts/render_slide_thumbnails.py), so browsers fetch the new
  * images instead of the ones they cached. */
@@ -1008,6 +1010,7 @@ export function SlideDeckRow({ artifact: initial, onRemoved }: { artifact: Artif
           <>
             <button type="button" className="btn btn-small" onClick={() => setOpen(true)}>Open deck</button>
             <button type="button" className="btn btn-small" onClick={() => setPresenting(true)}>Present</button>
+            <PostButton artifactId={artifact.id} artifact={artifact} />
             <ShareButton artifact={artifact} />
           </>
         )}
@@ -1022,6 +1025,8 @@ export function SlideDeckRow({ artifact: initial, onRemoved }: { artifact: Artif
           }}>Retry</button>
         )}
         <ConfirmButton onConfirm={remove}>Delete</ConfirmButton>
+        {/* Bottom right: a positive or negative review */}
+        <CardFeedback artifact={artifact} />
       </footer>
       {open && <SlideDeckViewer artifact={artifact} onClose={() => setOpen(false)} onDelete={remove} onSaved={setArtifact} />}
       {presenting && <SlidePresenter artifact={artifact} onClose={() => setPresenting(false)} />}

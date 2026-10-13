@@ -1637,12 +1637,6 @@ select.input option {
   border-radius: 8px;
 }
 
-/* Mission Control */
-.mc {
-  display: grid;
-  gap: 16px;
-}
-
 .checklist ol {
   list-style: none;
   margin: 10px 0 0;
@@ -1704,12 +1698,6 @@ select.input option {
 .recent-list .mono {
   font-size: 0.7rem;
   white-space: nowrap;
-}
-
-.mc-card .add-source {
-  padding: 0;
-  border: none;
-  background: transparent;
 }
 
 /* Collapsible sidebar (desktop). Collapsed keeps icons, labels move into tooltips. */
@@ -2799,20 +2787,17 @@ select.input option {
   gap: 14px;
 }
 
-.page-head,
-.mc-head {
+.page-head {
   margin-bottom: 0;
   align-items: center;
 }
 
-.page-head h1,
-.mc-head h1 {
+.page-head h1 {
   font-size: clamp(1.35rem, 2.6vw, 1.75rem);
   margin-top: 4px;
 }
 
-.page-head .eyebrow,
-.mc-head .eyebrow {
+.page-head .eyebrow {
   font-size: 0.7rem;
 }
 
@@ -2827,14 +2812,9 @@ select.input option {
 
 .two-col,
 .grid-cards,
-.gallery,
-.mc-grid {
+.gallery {
   gap: 14px;
   align-items: start; /* no stretched cards with dead space below short content */
-}
-
-.mc-card {
-  gap: 10px;
 }
 
 .empty-state {
@@ -2949,7 +2929,6 @@ select.input option {
 .two-col > *,
 .grid-cards > *,
 .gallery > *,
-.mc-grid > *,
 .map-layout > *,
 .nbv > *,
 .stack > *,
@@ -3115,139 +3094,6 @@ select.input,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-/* Mission Control */
-.mc-hero {
-  display: grid;
-  gap: 18px;
-  padding: clamp(18px, 3vw, 28px);
-}
-
-.mc-ask {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  color: var(--blue);
-}
-
-.mc-ask .input {
-  flex: 1;
-  min-width: 0;
-  height: 54px;
-  font-size: 1.05rem;
-}
-
-.mc-ask .btn {
-  height: 54px;
-  padding: 0 28px;
-}
-
-.mc-actions {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
-
-@media (max-width: 900px) {
-  .mc-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-.mc-action {
-  display: grid;
-  justify-items: start;
-  align-content: start;
-  gap: 6px;
-  min-height: 132px;
-  padding: 18px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--white);
-  font: inherit;
-  text-align: left;
-  text-decoration: none;
-  cursor: pointer;
-  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
-}
-
-.mc-action svg {
-  color: var(--blue);
-  margin-bottom: 6px;
-}
-
-.mc-action:hover:not(:disabled) {
-  border-color: var(--blue-60);
-  box-shadow: var(--glow-sm);
-  transform: translateY(-2px);
-}
-
-.mc-action:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.mc-more {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  margin-bottom: 6px;
-  border: 1px dashed var(--blue-60);
-  border-radius: 999px;
-  color: var(--blue);
-  font-size: 1.1rem;
-  line-height: 1;
-}
-
-.mc-next {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 18px;
-  border: 1px solid var(--blue-35);
-  border-radius: var(--radius-sm);
-  background: var(--blue-05);
-}
-
-.mc-next p {
-  margin: 0;
-  flex: 1 1 320px;
-}
-
-.mc-stats {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
-
-@media (max-width: 720px) {
-  .mc-stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-.mc-stat {
-  display: grid;
-  gap: 2px;
-  padding: 14px 18px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  color: var(--white);
-  text-decoration: none;
-  transition: border-color 0.2s;
-}
-
-.mc-stat:hover {
-  border-color: var(--line-strong);
-}
-
-.mc-stat strong {
-  font: 600 1.6rem var(--font-display, inherit);
 }
 
 /* Notebook view: conversation rail | current chat | notebook tools. */
@@ -3777,71 +3623,6 @@ select.input,
 .nb-matches {
   max-height: 320px;
   overflow: auto;
-}
-
-/* Create (Studio): format tiles and one row of choices */
-.format-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
-
-@media (max-width: 900px) {
-  .format-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-.format-tile {
-  display: grid;
-  justify-items: center;
-  align-content: center;
-  gap: 10px;
-  min-height: 120px;
-  padding: 16px 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--white);
-  font: inherit;
-  text-align: center;
-  text-decoration: none;
-  cursor: pointer;
-  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
-}
-
-.format-tile svg {
-  color: var(--blue);
-}
-
-.format-tile:hover {
-  border-color: var(--line-strong);
-}
-
-.format-tile.on {
-  border-color: var(--blue);
-  background: var(--blue-05);
-  box-shadow: var(--glow-sm);
-}
-
-.studio-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 12px;
-}
-
-.studio-row .field {
-  flex: 1 1 200px;
-}
-
-.studio-row .field:first-child {
-  flex: 2 1 280px;
-}
-
-.studio-go {
-  height: 44px;
-  padding: 0 26px;
 }
 
 .lp-layout {
@@ -4632,7 +4413,6 @@ select.input,
     display: none;
   }
 }
-
 
 /* A calendar item that carries a video or images */
 .cal-media {
@@ -5876,7 +5656,6 @@ details.map-legend[open] summary {
 .quiz-review li.wrong {
   color: var(--text-3);
 }
-
 
 /* Flashcards: a card that flips between its front and its answer. */
 .fc-deck {
@@ -7641,6 +7420,79 @@ a.rp-src-main:hover .rp-src-out {
   font-size: 0.8rem;
 }
 
+/* A notebook's Posts header: Connect source and Add posts side by side, and imports under way below it. When the
+   pane is too narrow for both, they fold into one "+ Add" with a menu. */
+.nbv-posts {
+  container-type: inline-size;
+}
+
+.nbv-posts-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.nbv-add-menu {
+  position: relative;
+  display: none;
+}
+
+@container (max-width: 400px) {
+  .nbv-posts-actions:has(> :nth-child(2)) {
+    display: none;
+  }
+
+  .nbv-add-menu {
+    display: inline-flex;
+  }
+}
+
+.nbv-add-chev {
+  margin-left: 2px;
+  transition: transform 0.15s;
+}
+
+.nbv-add-chev.open {
+  transform: rotate(180deg);
+}
+
+.nbv-add-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  display: grid;
+  min-width: 180px;
+  padding: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--black);
+  box-shadow: var(--glow-sm);
+}
+
+.nbv-add-list button {
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.875rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nbv-add-list button:hover,
+.nbv-add-list button:focus-visible {
+  background: var(--blue-10);
+  outline: none;
+}
+
+.nbv-import {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0;
+}
+
 .pub-slides-stage {
   position: relative;
   aspect-ratio: 16 / 9;
@@ -8580,8 +8432,6 @@ a.rp-src-main:hover .rp-src-out {
   font: 500 0.92rem var(--font-body);
 }
 
-
-
 /* ---- Slide decks ------------------------------------------------------------------------------------------------ */
 
 .sd-dialog {
@@ -9255,7 +9105,6 @@ a.rp-src-main:hover .rp-src-out {
   }
 }
 
-
 /* ---- Notebook: side panels resized by dragging the line between a panel and the chat (components/PaneResizer) ---- */
 
 .nbv-resizer {
@@ -9364,7 +9213,6 @@ body.nbv-resizing iframe {
     transition: none;
   }
 }
-
 
 /* ---- Audio overview settings (components/AudioOverview) ---- */
 
@@ -9626,31 +9474,81 @@ body.nbv-resizing iframe {
   cursor: pointer;
 }
 
-/* In a notebook's audio card: a thin player, a single line */
+/* In a notebook's audio card: a slim player, the bar across its full width and the time under it */
 .artifact-audio_overview .ao-player {
-  gap: 10px;
-  padding: 3px 6px 3px 3px;
+  width: 100%;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  /* The play button, the slider and the speed on one line; the time under the slider */
+  grid-template-areas:
+    "play seek speed"
+    ".    time .";
+  column-gap: 10px;
+  row-gap: 2px;
+  padding: 6px 8px 4px 6px;
+  border-radius: 18px;
 }
 
 .artifact-audio_overview .ao-play {
-  width: 26px;
-  height: 26px;
+  grid-area: play;
+  align-self: center;
 }
 
-.artifact-audio_overview .ao-play svg {
-  width: 12px;
-  height: 12px;
-}
-
-.artifact-audio_overview .ao-speed {
-  min-width: 40px;
-  height: 22px;
-  padding: 0 8px;
-  font-size: 0.72rem;
+.artifact-audio_overview .ao-seek {
+  grid-area: seek;
+  align-self: center;
 }
 
 .artifact-audio_overview .ao-time {
-  font-size: 0.72rem;
+  grid-area: time;
+  justify-self: start;
+  padding-top: 6px; /* a little room under the slider */
+}
+
+.artifact-audio_overview .ao-speed {
+  grid-area: speed;
+  align-self: center;
+}
+
+.artifact-audio_overview .ao-play {
+  width: 30px;
+  height: 30px;
+}
+
+.artifact-audio_overview .ao-play svg {
+  width: 13px;
+  height: 13px;
+}
+
+.artifact-audio_overview .ao-speed {
+  min-width: 36px;
+  height: 22px;
+  padding: 0 6px;
+  font-size: 0.7rem;
+}
+
+.artifact-audio_overview .ao-time {
+  font-size: 0.7rem;
+}
+
+/* Every card in a notebook (report, quiz, deck, audio, video...): its buttons small, in one row */
+.artifact .artifact-actions,
+.artifact .artifact-body .row {
+  gap: 6px;
+}
+
+.artifact .artifact-actions .btn,
+.artifact .artifact-body .btn {
+  height: 30px;
+  min-height: 30px;
+  padding: 0 12px;
+  font-size: 0.78rem;
+  line-height: 1;
+}
+
+.artifact .artifact-actions .btn svg,
+.artifact .artifact-body .btn svg {
+  width: 14px;
+  height: 14px;
 }
 
 .artifact-audio_overview .ao-transcript-toggle {
@@ -9731,7 +9629,6 @@ body.nbv-resizing iframe {
     transition: none;
   }
 }
-
 
 /* The download going: a strip over the picture in the card, so it can be followed once the viewer has closed */
 .ig-thumb-wrap {
@@ -10270,4 +10167,272 @@ body.nbv-resizing iframe {
   line-height: 1.45;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
+}
+
+/* "Show transcript" reads as a plain text link: no underline, blue when pointed at */
+.link-btn.ao-transcript-toggle {
+  text-decoration: none;
+}
+
+.link-btn.ao-transcript-toggle:hover {
+  color: var(--blue);
+}
+
+/* A card's download: just the icon, a round button the height of the others */
+.artifact .artifact-actions .btn.btn-icon-only {
+  width: 30px;
+  padding: 0;
+}
+
+/* The PDF preview (components/PdfPreview): thumbnails on the left (15%), the pages on the right, one Download button */
+.modal:has(.pdfv) {
+  width: min(1100px, calc(100vw - 32px));
+}
+
+.lp-preview-body:has(.pdfv) {
+  max-height: none;
+  overflow: visible;
+}
+
+.pdfv {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+  height: min(76vh, 900px);
+}
+
+.pdfv-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pdfv-body {
+  display: grid;
+  grid-template-columns: 15% minmax(0, 1fr);
+  min-height: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #1b1d22;
+}
+
+.pdfv-thumbs {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 10px;
+  overflow-y: auto;
+  border-right: 1px solid var(--line);
+}
+
+.pdfv-thumb {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+.pdfv-thumb canvas {
+  display: block;
+  border: 2px solid transparent;
+  border-radius: 3px;
+  background: #fff;
+}
+
+.pdfv-thumb.on canvas {
+  border-color: var(--blue);
+}
+
+.pdfv-thumb.on {
+  color: var(--text);
+}
+
+.pdfv-pages {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.pdfv-page canvas {
+  display: block;
+  background: #fff;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+}
+
+/* A notebook card's thumbs (components/CardFeedback): at the bottom right of its buttons, the chosen one in blue */
+.card-fb {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.card-fb-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.card-fb-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.card-fb-btn:hover {
+  border-color: var(--blue-60);
+  color: var(--text);
+}
+
+.card-fb-btn.is-on {
+  border-color: var(--blue);
+  background: var(--blue-10);
+  color: var(--blue);
+}
+
+/* The review box: a roomy, rounded rectangle (not the pill of a one-line field) */
+.card-fb-modal textarea.input {
+  width: 100%;
+  height: auto;
+  min-height: 120px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  line-height: 1.55;
+  resize: vertical;
+}
+
+/* "Show transcript" with its arrow head */
+.ao-transcript-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ao-transcript-toggle .chevron {
+  transition: transform 0.15s;
+}
+
+.ao-transcript-toggle .chevron.open {
+  transform: rotate(180deg);
+}
+
+/* The thumbs are the same on every card: the inline cards' "every button 40px, full row" rules must not reach them */
+.artifact .card-fb {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.artifact .card-fb .card-fb-btn {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  border-radius: 999px;
+}
+
+.artifact .card-fb .card-fb-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* The thumbs up's rating: five stars, the chosen ones filled in blue */
+.card-fb-stars {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.card-fb-star {
+  display: inline-grid;
+  place-items: center;
+  padding: 2px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.card-fb-star svg {
+  fill: none;
+  stroke: var(--text-3);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  transition: fill 0.12s, stroke 0.12s;
+}
+
+.card-fb-star.on svg {
+  fill: var(--blue);
+  stroke: var(--blue);
+}
+
+.card-fb-star:hover svg {
+  stroke: var(--blue);
+}
+
+.card-fb-stars .mono {
+  margin-left: 6px;
+}
+
+/* The thumbs inside a viewer (quiz results, a report...): the review opens right below them */
+.afb-inline .fb-row {
+  justify-content: space-between;
+}
+
+.afb-form {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.afb-form .afb-text {
+  width: 100%;
+  height: auto;
+  min-height: 88px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.afb-save {
+  justify-content: flex-end;
+  align-items: center;
+  min-height: 0;
+}
+
+.afb-done {
+  color: var(--blue);
+}
+
+/* Quiz results: the review's Save button and its "Review saved" sit in the row with Close and Retake */
+.quiz-fb-slot {
+  display: contents;
+}
+
+.quiz-end-actions {
+  align-items: center;
+}
+
+/* "Review saved": the Save button, kept with its border, its text in green */
+.btn.afb-saved-btn,
+.btn.afb-saved-btn:disabled {
+  border: 1px solid #3fb27f;
+  background: rgba(63, 178, 127, 0.08);
+  color: #4cc98f;
+  opacity: 1;
+  cursor: default;
 }
