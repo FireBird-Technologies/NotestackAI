@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Video options</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: transparent; font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif; }
+  #box { padding: 16px; border-radius: 14px; color: #fff; background-color: #000; background-image: radial-gradient(1.5px 1.5px at 59% 74%,rgba(255,255,255,0.86),transparent),radial-gradient(2px 2px at 26% 26%,rgba(255,255,255,0.72),transparent),radial-gradient(1.5px 1.5px at 25% 15%,rgba(255,255,255,0.4),transparent),radial-gradient(1px 1px at 90% 84%,rgba(255,255,255,0.59),transparent),radial-gradient(2px 2px at 59% 86%,rgba(255,255,255,0.72),transparent),radial-gradient(1px 1px at 69% 11%,rgba(33,124,255,0.98),transparent),radial-gradient(1.5px 1.5px at 78% 6%,rgba(255,255,255,0.7),transparent),radial-gradient(1px 1px at 27% 69%,rgba(255,255,255,0.65),transparent),radial-gradient(1.5px 1.5px at 86% 13%,rgba(255,255,255,0.59),transparent),radial-gradient(1px 1px at 72% 13%,rgba(255,255,255,0.49),transparent),radial-gradient(1px 1px at 38% 6%,rgba(255,255,255,0.41),transparent),radial-gradient(1.5px 1.5px at 15% 40%,rgba(33,124,255,0.45999999999999996),transparent),radial-gradient(1px 1px at 89% 3%,rgba(33,124,255,1),transparent),radial-gradient(1.5px 1.5px at 62% 51%,rgba(255,255,255,0.69),transparent),radial-gradient(1px 1px at 27% 89%,rgba(255,255,255,0.54),transparent),radial-gradient(1px 1px at 3% 55%,rgba(33,124,255,0.87),transparent),radial-gradient(1.5px 1.5px at 3% 10%,rgba(255,255,255,0.46),transparent),radial-gradient(1.5px 1.5px at 73% 27%,rgba(255,255,255,0.94),transparent),radial-gradient(1.5px 1.5px at 18% 56%,rgba(33,124,255,0.7),transparent),radial-gradient(1px 1px at 29% 3%,rgba(255,255,255,0.93),transparent),radial-gradient(1px 1px at 77% 41%,rgba(33,124,255,0.69),transparent),radial-gradient(2px 2px at 79% 85%,rgba(33,124,255,1),transparent),radial-gradient(1px 1px at 29% 59%,rgba(33,124,255,0.82),transparent),radial-gradient(1px 1px at 39% 52%,rgba(33,124,255,0.58),transparent),radial-gradient(1px 1px at 83% 34%,rgba(255,255,255,0.57),transparent),radial-gradient(2px 2px at 60% 19%,rgba(255,255,255,0.69),transparent),radial-gradient(1px 1px at 51% 26%,rgba(255,255,255,0.49),transparent),radial-gradient(1px 1px at 80% 34%,rgba(33,124,255,0.83),transparent),radial-gradient(1.5px 1.5px at 72% 28%,rgba(255,255,255,0.71),transparent),radial-gradient(1px 1px at 55% 9%,rgba(33,124,255,0.76),transparent),radial-gradient(1.5px 1.5px at 34% 33%,rgba(255,255,255,0.84),transparent),radial-gradient(1px 1px at 78% 65%,rgba(255,255,255,0.91),transparent),radial-gradient(1px 1px at 10% 19%,rgba(255,255,255,0.74),transparent),radial-gradient(1px 1px at 80% 81%,rgba(255,255,255,0.9),transparent),radial-gradient(ellipse at 50% 0%,rgba(33,124,255,.07),transparent 55%); border: 1px solid rgba(255,255,255,.1); }
+  h2 { margin: 0 0 12px; font-size: 16px; } h3 { margin: 14px 0 6px; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: rgba(255,255,255,.56); font-weight: 600; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; }
+  .chip { text-align: center; padding: 8px 8px 9px; border-radius: 10px; font: inherit; font-size: 13px; color: #fff; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.18); cursor: pointer; overflow: hidden; }
+  .chip:hover { border-color: #217cff; } .chip.sel { border-color: #217cff; background: rgba(33,124,255,.1); box-shadow: 0 0 0 1px #217cff inset; }
+  .chip img { display: block; width: 100%; height: 64px; object-fit: cover; border-radius: 6px; margin-bottom: 6px; background: #000; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; } .row .chip { padding: 8px 14px; }
+  select { width: 100%; padding: 9px 10px; border-radius: 8px; font: inherit; font-size: 14px; color: #fff; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.18); }
+  button.go { box-shadow: 0 0 12px rgba(33,124,255,.35); margin-top: 16px; font: inherit; font-size: 14px; color: #fff; background: #217cff; border: 0; border-radius: 8px; padding: 9px 20px; cursor: pointer; }
+  #told { margin-top: 10px; font-size: 13px; color: rgba(255,255,255,.72); display: none; } #told code { display: block; margin-top: 6px; padding: 8px; background: #000; border-radius: 8px; white-space: pre-wrap; user-select: all; }
+  #msg { padding: 30px 16px; text-align: center; color: rgba(255,255,255,.72); font-size: 15px; }
+  .chip small { display: block; color: rgba(255,255,255,.56); font-size: 11px; margin-top: 2px; }
+  .chip .badge { display: inline-block; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: #217cff; margin-bottom: 3px; }
+  .colors { display: flex; gap: 14px; flex-wrap: wrap; } .colors label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: rgba(255,255,255,.72); }
+  input[type=color] { width: 34px; height: 28px; border: 1px solid rgba(255,255,255,.18); border-radius: 6px; background: rgba(255,255,255,.03); padding: 2px; }
+  input[type=text] { width: 100%; padding: 9px 11px; border-radius: 8px; font: inherit; font-size: 14px; color: #fff; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.18); }
+  .vlist { display: grid; gap: 6px; } .vlist .chip { text-align: left; display: flex; justify-content: space-between; gap: 8px; }
+  .sw { display: flex; justify-content: center; gap: 4px; margin-top: 6px; } .sw i { width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(255,255,255,.3); }
+  .hint { font-size: 12px; color: rgba(255,255,255,.56); margin-top: 4px; }
+
+  /* The app's own look: black, starry, pill buttons, blue only for the main action and for selection. */
+  button { border-radius: 999px; background: transparent; border: 1px solid rgba(255,255,255,.18); color: #fff; font-weight: 600; transition: box-shadow .2s, border-color .2s, background .2s; }
+  button:hover:not(:disabled) { background: transparent; border-color: rgba(33,124,255,.6); box-shadow: 0 0 12px rgba(33,124,255,.35); }
+  button.go { background: #217cff; border: 1px solid #217cff; padding: 10px 22px; box-shadow: 0 0 24px rgba(33,124,255,.35), 0 0 2px rgba(33,124,255,.6); }
+  button.go:hover:not(:disabled) { background: rgba(33,124,255,.9); border-color: rgba(33,124,255,.9); box-shadow: 0 0 32px rgba(33,124,255,.6); }
+  button:disabled { opacity: .5; }
+  .chip, .opt, .pickbtn { border-radius: 14px; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.18); font-weight: 400; }
+  .chip:hover, .opt:hover, .pickbtn:hover { border-color: rgba(33,124,255,.6); box-shadow: 0 0 12px rgba(33,124,255,.2); }
+  .chip.sel, .opt.sel { border-color: rgba(33,124,255,.9); background: rgba(33,124,255,.08); box-shadow: 0 0 12px rgba(33,124,255,.2); }
+  .row .chip { border-radius: 999px; }
+  input[type=text], input[type=search], select { border-radius: 999px; background: rgba(0,0,0,.6); border: 1px solid rgba(255,255,255,.18); padding-left: 16px; padding-right: 16px; }
+  input[type=text]:focus, input[type=search]:focus, select:focus { outline: none; border-color: rgba(33,124,255,.6); box-shadow: 0 0 12px rgba(33,124,255,.2); }
+  input[type=checkbox] { accent-color: #217cff; }
+</style>
+</head>
+<body>
+<div id="box">
+  <div id="msg">Loading the video options...</div>
+  <div id="main" hidden>
+    <h2>Set up your video</h2>
+    <h3 id="stylesHead">Video style</h3><div class="row" id="styles"></div><div class="hint" id="styleNote"></div>
+    <h3>What should it focus on? (optional)</h3><input type="text" id="focus" maxlength="500" placeholder="Leave empty to cover the posts as a whole">
+    <h3>Template</h3><div class="grid" id="templates"></div>
+    <h3 id="colorsHead">Video colors</h3><div class="colors">
+      <label><input type="color" id="c_accent" value="#7c3aed"> Accent</label>
+      <label><input type="color" id="c_bg" value="#ffffff"> Background</label>
+      <label><input type="color" id="c_text" value="#000000"> Text</label></div>
+    <div class="hint" id="colorsHint">Picking a template sets the colors it was designed with. Change them if you like.</div>
+    <h3>Language</h3><select id="lang"></select>
+    <h3>Voice</h3><div class="vlist" id="voices"></div>
+    <button class="go" id="go" type="button">Make this video</button>
+    <div id="told"></div>
+  </div>
+</div>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var sel = { template: null, style: "auto", voice: null }, data = null, seen = [], got = false;
+
+  /* ---- talking to the host: JSON-RPC 2.0 over postMessage (MCP Apps) ---- */
+  var pending = {}, rid = 1;
+  function send(m) { m.jsonrpc = "2.0"; window.parent.postMessage(m, "*"); }
+  function request(method, params) {
+    return new Promise(function (resolve, reject) { var id = rid++; pending[id] = { resolve: resolve, reject: reject }; send({ id: id, method: method, params: params || {} }); });
+  }
+  function notify(method, params) { send({ method: method, params: params || {} }); }
+  function find(o, d) {
+    if (!o || d > 6) return null;
+    if (typeof o === "string") { try { return find(JSON.parse(o), d + 1); } catch (e) { return null; } }
+    if (typeof o !== "object") return null;
+    if (o.kind === "video_options") return o;
+    for (var k in o) { var f = find(o[k], d + 1); if (f) return f; }
+    return null;
+  }
+  window.addEventListener("message", function (e) {
+    if (e.source !== window.parent) return;
+    var m = e.data;
+    if (!m || m.jsonrpc !== "2.0") return;
+    if (m.method) seen.push(m.method);
+    if (m.method === undefined && m.id !== undefined) {
+      var p = pending[m.id]; if (!p) return; delete pending[m.id];
+      if (m.error) p.reject(m.error); else p.resolve(m.result);
+    } else if (m.method && m.params && find(m.params, 0)) {
+      show(find(m.params, 0));
+    } else if (m.method === "ui/resource-teardown" && m.id !== undefined) {
+      send({ id: m.id, result: {} });
+    } else if (m.method === "ping" && m.id !== undefined) {
+      send({ id: m.id, result: {} });
+    }
+  });
+  function reportSize() { notify("ui/notifications/size-changed", { width: Math.ceil(document.documentElement.scrollWidth), height: Math.ceil(document.documentElement.scrollHeight) }); }
+  if (window.ResizeObserver) new ResizeObserver(reportSize).observe(document.documentElement);
+
+  /* ---- the form ---- */
+  function chips(box, items, key, make) {
+    box.textContent = "";
+    items.forEach(function (it) {
+      var b = document.createElement("button"); b.type = "button"; b.className = "chip" + (sel[key] === it.value ? " sel" : "");
+      make(b, it);
+      b.addEventListener("click", function () { sel[key] = it.value; chips(box, items, key, make); });
+      box.appendChild(b);
+    });
+    reportSize();
+  }
+  function plain(b, it) { b.textContent = it.label; }
+  function setColors(t) {
+    var c = (t && t.colors) || {};
+    if (!t || !t.colors) return; /* no palette for it: leave the colors as they are */
+    $("c_accent").value = c.accent; $("c_bg").value = c.bg; $("c_text").value = c.text;
+    $("colorsHead").textContent = "Video colors: " + (t.label || t.name || "template");
+    $("colorsHint").textContent = "These are the colors " + (t.label || t.name || "this template") + " was designed with. Change them if you like.";
+  }
+  function show(d) {
+    got = true; data = d;
+    $("msg").hidden = true; $("main").hidden = false;
+    var ts = d.templates || [];
+    var tdef = ts.filter(function (t) { return t.id === "default"; })[0] || ts[0];
+    if (!sel.template && tdef) { sel.template = tdef.id; setColors({ label: tdef.name, colors: tdef.colors }); }
+    var items = ts.map(function (t) { return { value: t.id, label: t.name, img: t.preview_url, fallbackImg: t.fallback_preview_url, badge: t.badge, colors: t.colors }; });
+    chips($("templates"), items, "template", function (b, it) {
+      if (it.img) {
+        var im = document.createElement("img"); im.alt = ""; im.src = it.img;
+        if (it.fallbackImg) im.addEventListener("error", function () { im.src = it.fallbackImg; }, { once: true });
+        b.appendChild(im);
+      }
+      if (it.badge) { var g = document.createElement("span"); g.className = "badge"; g.textContent = it.badge; b.appendChild(g); }
+      var s = document.createElement("span"); s.textContent = it.label; b.appendChild(s);
+      if (it.colors) { var sw = document.createElement("div"); sw.className = "sw"; ["accent", "bg", "text"].forEach(function (k) { if (it.colors[k]) { var d = document.createElement("i"); d.style.background = it.colors[k]; d.title = k; sw.appendChild(d); } }); b.appendChild(sw); }
+      b.addEventListener("click", function () { setColors(it); });
+    });
+    var st = d.styles || [];
+    $("styles").hidden = $("stylesHead").hidden = !st.length;
+    if (st.length && !st.some(function (x) { return x.id === sel.style; })) sel.style = st[0].id;
+    chips($("styles"), st.map(function (x) { return { value: x.id, label: x.name + (x.kind === "custom" ? " (yours)" : ""), desc: x.description }; }), "style", function (b, it) {
+      b.textContent = it.label; if (it.desc) b.title = it.desc;
+      b.addEventListener("click", function () { $("styleNote").textContent = it.desc || ""; });
+    });
+    var lang = $("lang"); lang.textContent = "";
+    var auto = document.createElement("option"); auto.value = ""; auto.textContent = "Auto (detect from the content)"; lang.appendChild(auto);
+    (d.languages || []).forEach(function (l) { var o = document.createElement("option"); o.value = l.code; o.textContent = l.name; lang.appendChild(o); });
+    var vs = (d.voices || []).map(function (v) { return { value: v.id, label: v.name, sub: [v.gender, v.accent].filter(Boolean).join(" • ") }; });
+    if (vs.length && sel.voice === null) sel.voice = vs[0].value;
+    vs.push({ value: "none", label: "No voiceover", sub: "" });
+    chips($("voices"), vs, "voice", function (b, it) {
+      var n = document.createElement("strong"); n.textContent = it.label; b.appendChild(n);
+      if (it.sub) { var m = document.createElement("span"); m.className = "hint"; m.textContent = it.sub; b.appendChild(m); }
+    });
+    reportSize();
+  }
+  function say(text) {
+    return request("ui/message", { role: "user", content: [{ type: "text", text: text }] }).then(function () {
+      $("go").disabled = true; $("told").style.display = "block"; $("told").textContent = "Sent. Claude will make the video.";
+    }, function () {
+      $("told").style.display = "block"; $("told").textContent = "Copy this and send it to Claude:";
+      var c = document.createElement("code"); c.textContent = text; $("told").appendChild(c); reportSize();
+    });
+  }
+  $("go").addEventListener("click", function () {
+    var t = (data.templates || []).filter(function (x) { return x.id === sel.template; })[0];
+    var st = (data.styles || []).filter(function (x) { return x.id === sel.style; })[0];
+    var v = (data.voices || []).filter(function (x) { return x.id === sel.voice; })[0];
+    var l = $("lang").value, f = $("focus").value.trim();
+    var parts = [
+      "template \"" + (t ? t.name : "default") + "\" (template " + (t ? t.id : "default") + ")",
+      st ? "video style \"" + st.name + "\" (video_style " + st.id + ")" : "automatic video style",
+      "colors accent " + $("c_accent").value + ", background " + $("c_bg").value + ", text " + $("c_text").value,
+      l ? "language " + l : "language auto-detected",
+      v ? "voice \"" + v.name + "\" (custom_voice_id " + v.id + ", " + (v.gender || "female") + ", " + (v.accent || "american") + ")" : "no voiceover (voice_gender none)",
+      f ? "focus: " + f : "no special focus"];
+    say("Make the video now, exactly with these settings: " + parts.join("; ") + ". Landscape, with stock footage.");
+  });
+  setTimeout(function () {
+    if (got) return;
+    $("msg").textContent = "Still waiting for the options. The host has sent: " + (seen.length ? seen.join(", ") : "nothing") + ". Ask Claude to list them in words.";
+  }, 20000);
+  setTimeout(function () { notify("ui/notifications/initialized", {}); reportSize(); }, 1500);
+  /*expand*/
+  /* Expand: ask the host for fullscreen (and back). A host that says no, or has no such mode, just keeps the view as it is. */
+  var dispMode = "inline", dispModes = null, expandBtn = null;
+  (function () {
+    var st = document.createElement("style");
+    st.textContent = "#expand{position:fixed;right:10px;bottom:10px;z-index:50;font:inherit;font-size:12px;color:#fff;background:rgba(10,17,40,.82);border:1px solid rgba(157,184,255,.5);border-radius:999px;padding:5px 12px;cursor:pointer}" +
+      "#expand:hover{background:rgba(58,99,224,.7)}" +
+      "html[data-mode=fullscreen] #sky{height:calc(100vh - 24px)!important}html[data-mode=fullscreen] video{max-height:calc(100vh - 90px)!important}" +
+      "html[data-mode=fullscreen] #player iframe{min-height:calc(100vh - 140px)!important}";
+    document.head.appendChild(st);
+  })();
+  function setMode(m) {
+    dispMode = m === "fullscreen" ? "fullscreen" : "inline";
+    document.documentElement.setAttribute("data-mode", dispMode);
+    if (expandBtn) expandBtn.textContent = dispMode === "fullscreen" ? "Close" : "Expand";
+    if (typeof reportSize === "function") reportSize();
+  }
+  function expandInit(res) {
+    var ctx = res && res.hostContext;
+    dispModes = ctx && ctx.availableDisplayModes;
+    if (ctx && ctx.displayMode) setMode(ctx.displayMode);
+    if (!dispModes || dispModes.indexOf("fullscreen") < 0) return; /* only when the host says it has a bigger view */
+    expandBtn = document.createElement("button"); expandBtn.id = "expand"; expandBtn.type = "button"; expandBtn.textContent = dispMode === "fullscreen" ? "Close" : "Expand";
+    expandBtn.addEventListener("click", function () {
+      request("ui/request-display-mode", { mode: dispMode === "fullscreen" ? "inline" : "fullscreen" }).then(function (r) { if (r && r.mode) setMode(r.mode); }, function () { expandBtn.hidden = true; });
+    });
+    document.body.appendChild(expandBtn);
+  }
+  window.addEventListener("message", function (e) {
+    if (e.source !== window.parent) return;
+    var m = e.data;
+    if (m && m.jsonrpc === "2.0" && m.method === "ui/notifications/host-context-changed" && m.params && m.params.displayMode) setMode(m.params.displayMode);
+  });
+  request("ui/initialize", { protocolVersion: "2026-01-26", appInfo: { name: "notestack-video-options", version: "1.0.0" }, appCapabilities: { availableDisplayModes: ["inline", "fullscreen"] } })
+    .then(function (r) { notify("ui/notifications/initialized", {}); reportSize(); expandInit(r); })
+    .catch(function () { $("msg").textContent = "This view needs an app that supports interactive results."; });
+})();
+</script>
+</body>
+</html>

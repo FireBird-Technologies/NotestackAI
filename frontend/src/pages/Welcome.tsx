@@ -4,9 +4,11 @@ import { docsApi, jobsApi, notebooksApi, sourcesApi } from "../api/endpoints";
 import type { Job, Source } from "../api/types";
 import Logo from "../components/Logo";
 import SkyCanvas from "../components/SkyCanvas";
+import { SourceUrlHint, useSourceUrlCheck } from "../components/SourceUrlCheck";
 import { errorMessage, JobProgress, Tabs } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import { useJob } from "../hooks/useJob";
+import { classifyUrl } from "../lib/urlScrapability";
 import { PENDING_SOURCE_KEY } from "./Landing";
 
 type Step = "connect" | "indexing" | "goal" | "ready";
@@ -85,6 +87,8 @@ export default function Welcome() {
     setStep((s) => (s === "indexing" ? "goal" : s === "goal" ? "goal" : "ready"));
   });
 
+  const { check, modal } = useSourceUrlCheck();
+
   const connect = async (value: string, as: Mode = "feed") => {
     if (!value.trim()) return;
     setBusy(true);
@@ -130,11 +134,14 @@ export default function Welcome() {
     if (picked.length) setFiles((cur) => [...cur, ...picked.filter((f) => !cur.some((c) => c.name === f.name && c.size === f.size))]);
   };
 
-  // A URL pasted on the landing page starts connecting straight away.
+  // A URL pasted on the landing page starts connecting straight away: its warning was confirmed there, but a link that
+  // can't be added stops here.
   useEffect(() => {
     if (url && !autoStarted.current && user) {
       autoStarted.current = true;
-      void connect(url);
+      const verdict = classifyUrl(url);
+      if (verdict.kind === "blocked") setError(verdict.message);
+      else void connect(url);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
@@ -174,9 +181,18 @@ export default function Welcome() {
   ) : null;
   const first = (user.name ?? user.email).split(/[ @]/)[0];
 
+  /** The All posts notebook: where a skipped (or empty) onboarding ends, to add sources from there. */
+  const toArchive = async () => {
+    try {
+      navigate(`/app/notebooks/${(await notebooksApi.archive()).id}`, { replace: true });
+    } catch {
+      navigate("/app/notebooks", { replace: true });
+    }
+  };
+
   const finish = async (chosen: Goal | null) => {
     markOnboarded();
-    if (!chosen || posts === 0) return navigate("/app", { replace: true });
+    if (!chosen || posts === 0) return toArchive();
     if (chosen === "launch") return navigate("/app/launchpad/kits", { replace: true });
     setBusy(true);
     try {
@@ -184,14 +200,14 @@ export default function Welcome() {
       const nb = await notebooksApi.create(source?.title ? `${source.title} archive` : "My archive", docs.items.map((d) => d.id));
       navigate(chosen === "audio" ? `/app/notebooks/${nb.id}?studio=audio` : `/app/notebooks/${nb.id}`, { replace: true });
     } catch {
-      navigate("/app", { replace: true });
+      navigate("/app/notebooks", { replace: true });
     }
   };
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (mode === "file") void upload();
-    else void connect(url, mode);
+    else if (await check(url)) void connect(url, mode);
   };
 
   const stepIndex = { connect: 0, indexing: 1, goal: 2, ready: 3 }[step];
@@ -293,6 +309,8 @@ export default function Welcome() {
                 {mode === "file" && (busy ? "Uploading..." : files.length === 1 ? "Upload 1 file" : `Upload ${files.length || ""} files`.replace("  ", " "))}
               </button>
             </form>
+            {mode !== "file" && <SourceUrlHint url={url} />}
+            {modal}
             {mode === "feed" && (
               <div className="welcome-examples mono muted">
                 Try:{" "}
@@ -372,7 +390,7 @@ export default function Welcome() {
             </p>
             <div className="row end">
               <button className="btn" onClick={() => finish(null)}>
-                Go to Mission Control
+                Open All posts
               </button>
               <button className="btn btn-primary" disabled={!indexingDone || busy} onClick={() => finish(goal)}>
                 {busy ? "Preparing..." : indexingDone ? "Launch" : "Waiting for posts..."}

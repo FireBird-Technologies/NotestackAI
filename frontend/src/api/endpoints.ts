@@ -7,8 +7,7 @@ import type {
   CalendarItem,
   ChatMessage,
   ChatSummary,
-  PublicInfographicData,
-  PublicReportData,
+  PublicArtifactData,
   QuizQuestionType,
   ReportSuggestionKind,
   ReportTemplate,
@@ -17,6 +16,8 @@ import type {
   DocDetail,
   Job,
   LibraryVoice,
+  McpGrant,
+  McpRequest,
   Notebook,
   NotebookSummary,
   WorkspaceChat,
@@ -67,11 +68,12 @@ type SourceJob = { source: Source; job: Job };
 
 export const sourcesApi = {
   list: () => api<Source[]>("/api/sources"),
-  connect: (url: string) => post<SourceJob>("/api/sources", { url }),
-  importUrl: (url: string) => post<SourceJob>("/api/sources/url", { url }),
-  importFile: async (file: File) => {
+  // notebookId: added from inside a notebook, so the posts join it.
+  connect: (url: string, notebookId?: string) => post<SourceJob>("/api/sources", { url, notebook_id: notebookId }),
+  importUrl: (url: string, notebookId?: string) => post<SourceJob>("/api/sources/url", { url, notebook_id: notebookId }),
+  importFile: async (file: File, notebookId?: string) => {
     const { upload_id } = await uploadFile(file);
-    return post<SourceJob>("/api/sources/upload", { upload_id });
+    return post<SourceJob>("/api/sources/upload", { upload_id, notebook_id: notebookId });
   },
   sync: (id: string) => post<SourceJob>(`/api/sources/${id}/sync`),
   remove: (id: string) => del<{ ok: true; removed_posts: number }>(`/api/sources/${id}`),
@@ -91,6 +93,8 @@ export const notebooksApi = {
     post<{ id: string; title: string; added: number }>("/api/notebooks", { title, document_ids, description }),
   /** The "All posts" notebook, created on first use. */
   archive: () => post<{ id: string; title: string }>("/api/notebooks/archive"),
+  /** Where signing in opens: whether a source was ever connected, and the notebook worked on last. */
+  landing: () => api<{ onboarded: boolean; notebook_id: string | null }>("/api/notebooks/landing"),
   fromTopic: (topicId: string) => post<{ id: string; title: string }>(`/api/notebooks/from-topic/${topicId}`),
   update: (id: string, body: { title?: string; description?: string }) => patch(`/api/notebooks/${id}`, body),
   remove: (id: string) => del(`/api/notebooks/${id}`),
@@ -158,11 +162,13 @@ export const artifactsApi = {
   /** An infographic drawn as a PNG. */
   image: (id: string, layout: "landscape" | "portrait" = "landscape") => apiBlob(`/api/artifacts/${id}/image${qs({ layout })}`),
   /** Thumbs up or down (null takes it back) on a finished report, quiz, flashcard set or infographic. */
-  rate: (id: string, body: { rating: "up" | "down" | null; reasons?: string[]; comment?: string }) =>
+  rate: (id: string, body: { rating: "up" | "down" | null; stars?: number; reasons?: string[]; comment?: string }) =>
     put<{ feedback: AnswerFeedback | null }>(`/api/artifacts/${id}/feedback`, body),
   retry: (id: string) => post<Artifact>(`/api/artifacts/${id}/retry`),
   /** A slide deck as a PDF (exactly as shown) or an editable PowerPoint. */
   slidesFile: (id: string, ext: "pdf" | "pptx") => apiBlob(`/api/artifacts/${id}/slides.${ext}`),
+  /** A report as the PDF a post carries when it is too long to post as text. */
+  reportPdf: (id: string) => apiBlob(`/api/artifacts/${id}/report.pdf`),
   /** A slide deck's slides as the editor has them, drawn without saving (after a slide or a text box is added,
    * removed, moved or changed to another layout). Returns them as they will be kept. */
   previewDeck: (id: string, slides: EditSlide[]) =>
@@ -270,6 +276,8 @@ export const launchpadApi = {
   disconnect: (id: string) => del(`/api/social/accounts/${id}`),
   /** What can be attached to a post (finished videos, quote cards, carousels, summaries, launch kits; not audio). */
   postable: (q = "") => api<PostableArtifact[]>(`/api/launchpad/postable${qs({ q: q || undefined })}`),
+  /** One item to attach, however old (the Library's Post button). */
+  postableOne: (id: string) => api<PostableArtifact>(`/api/launchpad/postable/${id}`),
   /** A file from the user's computer, sent to storage: make it postable (an `upload` in the picker). */
   uploadToPost: async (file: File, duration_s?: number) => {
     const { upload_id } = await uploadFile(file);
@@ -304,6 +312,14 @@ export const memoryApi = {
   list: () => api<{ items: MemoryNote[]; limit: number }>("/api/memory"),
   put: (key: string, value: string) => put<MemoryNote>(`/api/memory/${encodeURIComponent(key)}`, { value }),
   remove: (key: string) => del(`/api/memory/${encodeURIComponent(key)}`),
+};
+
+export const mcpApi = {
+  request: (id: string) => api<McpRequest>(`/api/mcp/requests/${encodeURIComponent(id)}`),
+  decide: (id: string, approve: boolean, scopes?: string[]) =>
+    post<{ redirect_url: string }>(`/api/mcp/requests/${encodeURIComponent(id)}/decision`, { approve, scopes }),
+  grants: () => api<McpGrant[]>("/api/mcp/grants"),
+  revoke: (id: string) => del(`/api/mcp/grants/${encodeURIComponent(id)}`),
 };
 
 export type BillingCycle = "monthly" | "annual";
@@ -341,13 +357,12 @@ export const reportsApi = {
 export const shareApi = {
   get: (id: string) => api<ShareInfo>(`/api/artifacts/${id}/share`),
   create: (id: string) => post<ShareInfo>(`/api/artifacts/${id}/share`),
-  update: (id: string, show_sources: boolean) => patch<ShareInfo>(`/api/artifacts/${id}/share`, { show_sources }),
   remove: (id: string) => del<ShareInfo>(`/api/artifacts/${id}/share`),
 };
 
 /** No sign in needed: what the public sees at a share link. */
 export const publicApi = {
-  report: (token: string) => api<PublicReportData | PublicInfographicData>(`/api/public/reports/${encodeURIComponent(token)}`),
+  artifact: (token: string) => api<PublicArtifactData>(`/api/public/s/${encodeURIComponent(token)}`),
 };
 
 export const videosApi = {

@@ -1380,6 +1380,75 @@ select.input option {
   box-shadow: var(--glow-sm);
 }
 
+/* Past days: their boxes stay, greyed out, and can't be clicked (a post on one still opens) */
+.cal-day.past {
+  opacity: 0.65;
+  border-color: var(--line-strong);
+  background: rgba(255, 255, 255, 0.015);
+  cursor: not-allowed;
+}
+
+.cal-day.past .cal-date {
+  color: var(--text-2);
+}
+
+.cal-day.past .cal-item {
+  cursor: pointer;
+}
+
+/* Today and later days: prominent, and click to schedule a launch on that day */
+.cal-day.schedulable {
+  position: relative;
+  border-color: var(--line-strong);
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.cal-day.today.schedulable {
+  border-color: var(--blue);
+}
+
+.cal-day.schedulable .cal-date {
+  color: var(--white);
+  font-weight: 500;
+}
+
+/* Another month's days around this one: an empty cell, so the weekdays line up */
+.cal-day.blank {
+  border-color: transparent;
+  background: none;
+}
+
+.cal-day.schedulable:hover,
+.cal-day.schedulable:focus-visible {
+  border-color: var(--blue-35);
+  background: var(--blue-10);
+  outline: none;
+}
+
+.cal-day.today.schedulable:hover,
+.cal-day.today.schedulable:focus-visible {
+  border-color: var(--blue);
+}
+
+.cal-day.schedulable::after {
+  content: "+";
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  color: var(--blue);
+  font-size: 1rem;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.cal-day.schedulable:hover::after,
+.cal-day.schedulable:focus-visible::after {
+  opacity: 1;
+}
+
 .cal-date {
   font-size: 0.7rem;
   color: var(--text-2);
@@ -1568,12 +1637,6 @@ select.input option {
   border-radius: 8px;
 }
 
-/* Mission Control */
-.mc {
-  display: grid;
-  gap: 16px;
-}
-
 .checklist ol {
   list-style: none;
   margin: 10px 0 0;
@@ -1635,12 +1698,6 @@ select.input option {
 .recent-list .mono {
   font-size: 0.7rem;
   white-space: nowrap;
-}
-
-.mc-card .add-source {
-  padding: 0;
-  border: none;
-  background: transparent;
 }
 
 /* Collapsible sidebar (desktop). Collapsed keeps icons, labels move into tooltips. */
@@ -2730,20 +2787,17 @@ select.input option {
   gap: 14px;
 }
 
-.page-head,
-.mc-head {
+.page-head {
   margin-bottom: 0;
   align-items: center;
 }
 
-.page-head h1,
-.mc-head h1 {
+.page-head h1 {
   font-size: clamp(1.35rem, 2.6vw, 1.75rem);
   margin-top: 4px;
 }
 
-.page-head .eyebrow,
-.mc-head .eyebrow {
+.page-head .eyebrow {
   font-size: 0.7rem;
 }
 
@@ -2758,14 +2812,9 @@ select.input option {
 
 .two-col,
 .grid-cards,
-.gallery,
-.mc-grid {
+.gallery {
   gap: 14px;
   align-items: start; /* no stretched cards with dead space below short content */
-}
-
-.mc-card {
-  gap: 10px;
 }
 
 .empty-state {
@@ -2880,7 +2929,6 @@ select.input option {
 .two-col > *,
 .grid-cards > *,
 .gallery > *,
-.mc-grid > *,
 .map-layout > *,
 .nbv > *,
 .stack > *,
@@ -3046,139 +3094,6 @@ select.input,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-/* Mission Control */
-.mc-hero {
-  display: grid;
-  gap: 18px;
-  padding: clamp(18px, 3vw, 28px);
-}
-
-.mc-ask {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  color: var(--blue);
-}
-
-.mc-ask .input {
-  flex: 1;
-  min-width: 0;
-  height: 54px;
-  font-size: 1.05rem;
-}
-
-.mc-ask .btn {
-  height: 54px;
-  padding: 0 28px;
-}
-
-.mc-actions {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
-
-@media (max-width: 900px) {
-  .mc-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-.mc-action {
-  display: grid;
-  justify-items: start;
-  align-content: start;
-  gap: 6px;
-  min-height: 132px;
-  padding: 18px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--white);
-  font: inherit;
-  text-align: left;
-  text-decoration: none;
-  cursor: pointer;
-  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
-}
-
-.mc-action svg {
-  color: var(--blue);
-  margin-bottom: 6px;
-}
-
-.mc-action:hover:not(:disabled) {
-  border-color: var(--blue-60);
-  box-shadow: var(--glow-sm);
-  transform: translateY(-2px);
-}
-
-.mc-action:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.mc-more {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  margin-bottom: 6px;
-  border: 1px dashed var(--blue-60);
-  border-radius: 999px;
-  color: var(--blue);
-  font-size: 1.1rem;
-  line-height: 1;
-}
-
-.mc-next {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 18px;
-  border: 1px solid var(--blue-35);
-  border-radius: var(--radius-sm);
-  background: var(--blue-05);
-}
-
-.mc-next p {
-  margin: 0;
-  flex: 1 1 320px;
-}
-
-.mc-stats {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
-
-@media (max-width: 720px) {
-  .mc-stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-.mc-stat {
-  display: grid;
-  gap: 2px;
-  padding: 14px 18px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  color: var(--white);
-  text-decoration: none;
-  transition: border-color 0.2s;
-}
-
-.mc-stat:hover {
-  border-color: var(--line-strong);
-}
-
-.mc-stat strong {
-  font: 600 1.6rem var(--font-display, inherit);
 }
 
 /* Notebook view: conversation rail | current chat | notebook tools. */
@@ -3710,71 +3625,6 @@ select.input,
   overflow: auto;
 }
 
-/* Create (Studio): format tiles and one row of choices */
-.format-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
-
-@media (max-width: 900px) {
-  .format-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-.format-tile {
-  display: grid;
-  justify-items: center;
-  align-content: center;
-  gap: 10px;
-  min-height: 120px;
-  padding: 16px 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--white);
-  font: inherit;
-  text-align: center;
-  text-decoration: none;
-  cursor: pointer;
-  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
-}
-
-.format-tile svg {
-  color: var(--blue);
-}
-
-.format-tile:hover {
-  border-color: var(--line-strong);
-}
-
-.format-tile.on {
-  border-color: var(--blue);
-  background: var(--blue-05);
-  box-shadow: var(--glow-sm);
-}
-
-.studio-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 12px;
-}
-
-.studio-row .field {
-  flex: 1 1 200px;
-}
-
-.studio-row .field:first-child {
-  flex: 2 1 280px;
-}
-
-.studio-go {
-  height: 44px;
-  padding: 0 26px;
-}
-
 .lp-layout {
   display: grid;
   gap: 16px;
@@ -4102,6 +3952,67 @@ select.input,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* The attachment's Preview and Change (small), and a cross to remove it */
+.lp-attach-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+}
+
+.lp-attach-actions .btn.btn-xs {
+  height: 28px;
+  min-height: 28px;
+  padding: 0 12px;
+  font-size: 0.78rem;
+  line-height: 1;
+}
+
+/* The same height as the buttons beside it, in red */
+.lp-attach-actions .lp-attach-remove {
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(242, 120, 107, 0.45);
+  color: #f2786b;
+}
+
+.lp-attach-actions .lp-attach-remove:hover {
+  border-color: #f2786b;
+  background: rgba(242, 120, 107, 0.12);
+  color: #f2786b;
+}
+
+/* The attachment's preview */
+.lp-preview-body {
+  max-height: min(72vh, 900px);
+  overflow: auto;
+}
+
+.lp-preview-img {
+  display: block;
+  max-width: 100%;
+  margin: 0 auto;
+  border-radius: 10px;
+}
+
+.lp-preview-pdf {
+  display: block;
+  width: 100%;
+  height: min(70vh, 860px);
+  border: 0;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.lp-preview-text {
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+
+.lp-preview-slides {
+  gap: 12px;
 }
 
 .lp-attach-btn {
@@ -4502,7 +4413,6 @@ select.input,
     display: none;
   }
 }
-
 
 /* A calendar item that carries a video or images */
 .cal-media {
@@ -5747,7 +5657,6 @@ details.map-legend[open] summary {
   color: var(--text-3);
 }
 
-
 /* Flashcards: a card that flips between its front and its answer. */
 .fc-deck {
   display: grid;
@@ -5794,6 +5703,11 @@ details.map-legend[open] summary {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
+  gap: 8px 24px;
+}
+
+.fc-group {
+  display: flex;
   gap: 8px;
 }
 
@@ -6259,6 +6173,19 @@ details.map-legend[open] summary {
   margin: 0;
 }
 
+/* The kind of a source ("Post", "Chat") before its title */
+.picker-tag {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 1px 8px;
+  border: 1px solid var(--blue-35);
+  border-radius: 999px;
+  background: var(--blue-10);
+  font: 500 0.65rem var(--font-mono);
+  letter-spacing: 0.06em;
+  vertical-align: 1px;
+}
+
 .modal.modal-wide:has(.sf-3) {
   width: min(1360px, 100%);
 }
@@ -6698,42 +6625,10 @@ details.map-legend[open] summary {
   white-space: nowrap;
 }
 
-/* The fixed notebook and its posts dropdown, one under the other */
+/* The posts-and-chats dropdown and the count under it */
 .sp-fixed {
   display: grid;
   gap: 10px;
-}
-
-.sp-notebook {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 46px;
-  padding: 0 18px;
-  border: 1px solid var(--blue-60);
-  border-radius: 999px;
-  background: var(--blue-10);
-  min-width: 0;
-}
-
-.sp-notebook strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 600;
-}
-
-.sp-notebook-label {
-  flex-shrink: 0;
-  font: 0.7rem var(--font-mono);
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--text-2);
-}
-
-.sp-notebook .muted {
-  margin-left: auto;
-  flex-shrink: 0;
 }
 
 /* Quiz and flashcards layout: source and its settings, then the focus, then the rest. */
@@ -6924,8 +6819,6 @@ details.map-legend[open] summary {
 
 .rp-source-row .sp-fixed {
   flex: 1 1 560px;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  align-items: center;
 }
 
 .rp-source-row .vw-label {
@@ -6962,13 +6855,6 @@ details.map-legend[open] summary {
 
 .rp-dialog {
   height: min(680px, calc(100vh - 100px));
-}
-
-/* Posts and chats: two matching dropdowns side by side under the notebook bar */
-.sp-menus {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
 }
 
 /* The sources at the end of a report */
@@ -7456,6 +7342,210 @@ a.rp-src-main:hover .rp-src-out {
   border-radius: 6px;
 }
 
+/* Shared slide decks and videos (pages/PublicReport.tsx) */
+.pub-slides {
+  display: grid;
+  gap: 14px;
+}
+
+/* A shared audio overview: the player centred at half the page's width, the transcript's lines spaced out below */
+.pub-audio {
+  gap: 28px;
+}
+
+.pub-audio .ao-player {
+  justify-self: center;
+  width: min(50%, 520px);
+  min-width: min(100%, 360px);
+}
+
+.pub-audio .transcript {
+  gap: 20px;
+  max-height: none;
+  overflow: visible;
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.pub-audio .transcript li {
+  gap: 12px;
+}
+
+.pub-audio .transcript-time {
+  min-width: 2.6em;
+}
+
+/* The sign-in pop-up on shared pages: narrow, with smaller fields and buttons */
+.modal:has(.pub-signin) {
+  width: min(380px, calc(100vw - 32px));
+  padding: 22px;
+}
+
+.pub-signin {
+  gap: 12px;
+}
+
+.pub-signin > p {
+  margin: -6px 0 0;
+}
+
+.pub-signin .auth-title {
+  font-size: 1.15rem;
+  margin: 0;
+}
+
+.pub-signin .auth-form {
+  gap: 10px;
+}
+
+.pub-signin .auth-form label {
+  gap: 4px;
+  font-size: 0.8rem;
+}
+
+.pub-signin .input,
+.pub-signin .btn,
+.pub-signin .google-redirect-btn {
+  height: 38px;
+  min-height: 38px;
+  font-size: 0.875rem;
+}
+
+.pub-signin .auth-divider {
+  margin: 2px 0;
+  font-size: 0.68rem;
+}
+
+.pub-signin .auth-switch {
+  font-size: 0.8rem;
+}
+
+/* A notebook's Posts header: Connect source and Add posts side by side, and imports under way below it. When the
+   pane is too narrow for both, they fold into one "+ Add" with a menu. */
+.nbv-posts {
+  container-type: inline-size;
+}
+
+.nbv-posts-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.nbv-add-menu {
+  position: relative;
+  display: none;
+}
+
+@container (max-width: 400px) {
+  .nbv-posts-actions:has(> :nth-child(2)) {
+    display: none;
+  }
+
+  .nbv-add-menu {
+    display: inline-flex;
+  }
+}
+
+.nbv-add-chev {
+  margin-left: 2px;
+  transition: transform 0.15s;
+}
+
+.nbv-add-chev.open {
+  transform: rotate(180deg);
+}
+
+.nbv-add-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  display: grid;
+  min-width: 180px;
+  padding: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--black);
+  box-shadow: var(--glow-sm);
+}
+
+.nbv-add-list button {
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.875rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nbv-add-list button:hover,
+.nbv-add-list button:focus-visible {
+  background: var(--blue-10);
+  outline: none;
+}
+
+.nbv-import {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0;
+}
+
+.pub-slides-stage {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #000;
+}
+
+.pub-slides-stage > .sd-frame {
+  position: absolute;
+  inset: 0;
+}
+
+.pub-slides-nav {
+  align-items: center;
+}
+
+/* A video player in a frame, covered by a loader until it is ready */
+.pub-video-wrap {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #000;
+}
+
+.pub-video-wrap .pub-video {
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+
+.pub-video-wrap.ready .pub-video {
+  opacity: 1;
+}
+
+.pub-video-wait {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: #000;
+}
+
+.pub-video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  border-radius: 10px;
+  background: #000;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+}
+
 .ig-public .ig-frame {
   border-radius: 10px;
   box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
@@ -7688,6 +7778,96 @@ a.rp-src-main:hover .rp-src-out {
 
 .nbv-make .nbv-make-stars {
   grid-column: 1 / -1;
+}
+
+/* The notebook repeats the global connector entry where creation starts. It opens the same setup modal as the sidebar. */
+.nbv-make .nbv-make-connector {
+  grid-column: 1 / -1;
+  min-height: 72px;
+  border-color: var(--blue-35);
+  background:
+    radial-gradient(1px 1px at 58% 24%, #fff 50%, transparent 52%),
+    radial-gradient(1px 1px at 72% 78%, #cfe0ff 50%, transparent 52%),
+    radial-gradient(90% 160% at 100% 50%, var(--blue-20), transparent 70%),
+    linear-gradient(135deg, #05070d, #08101f);
+}
+
+.nbv-make .nbv-make-connector-copy,
+.nbv-make .nbv-make-connector .nbv-stars-text {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.nbv-make .nbv-make-connector-copy {
+  flex: 1 1 auto;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.nbv-make .nbv-make-connector-copy > svg.icon {
+  flex: none;
+  color: var(--text-2);
+}
+
+.nbv-make .nbv-make-connector .nbv-stars-text {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nbv-make .nbv-make-connector .nbv-stars-text strong {
+  overflow: hidden;
+  max-width: 100%;
+  font: 600 1rem var(--font-display);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nbv-make .nbv-make-connector .nbv-stars-text small {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--text-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nbv-connector-logos {
+  display: inline-flex;
+  flex: none;
+  gap: 5px;
+}
+
+.nbv-connector-logos > span {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--white);
+}
+
+.nbv-connector-logos img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+
+.nbv-connector-logos img.openai {
+  width: 24px;
+  height: 24px;
+}
+
+.nbv-make > button.nbv-make-connector {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 10px 14px;
+}
+
+.nbv-make > button.nbv-make-connector:hover:not(:disabled) {
+  border-color: var(--blue-60);
+  box-shadow: 0 0 16px var(--blue-20);
 }
 
 /* Mind Constellation: a little night sky of its own, stars that twinkle and a slow shine across it */
@@ -8341,8 +8521,6 @@ a.rp-src-main:hover .rp-src-out {
 .nbv-starting-text strong {
   font: 500 0.92rem var(--font-body);
 }
-
-
 
 /* ---- Slide decks ------------------------------------------------------------------------------------------------ */
 
@@ -9017,7 +9195,6 @@ a.rp-src-main:hover .rp-src-out {
   }
 }
 
-
 /* ---- Notebook: side panels resized by dragging the line between a panel and the chat (components/PaneResizer) ---- */
 
 .nbv-resizer {
@@ -9127,7 +9304,6 @@ body.nbv-resizing iframe {
   }
 }
 
-
 /* ---- Audio overview settings (components/AudioOverview) ---- */
 
 .ao-dialog {
@@ -9202,15 +9378,64 @@ body.nbv-resizing iframe {
 }
 
 /* Hosts pills share the slide deck's pill look (.sd-opts); the two voice pickers sit side by side */
-.ao-voices {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+/* Hosts, length, language and the hosts' voices in one row, a size smaller than the other dialogs' settings */
+.ao-opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 12px;
 }
 
-.ao-voices > p {
-  grid-column: 1 / -1;
-  margin: 0;
+.ao-opts > .field {
+  flex: 1 1 0;
+  min-width: 120px;
+  align-content: start; /* a field beside a taller one (Made from has its count under it) keeps its label tight */
+  gap: 8px;
+}
+
+.ao-opts > .field:first-child {
+  flex: 0 0 auto;
+}
+
+/* Second row: the voices share it with "Made from", which takes the most room */
+.ao-voices-row > .field:first-child {
+  flex: 1 1 0;
+}
+
+.ao-voices-row > .field:last-child {
+  flex: 2 1 0;
+  min-width: 220px;
+}
+
+.ao-opts .sp-trigger {
+  min-height: 40px;
+  padding: 0 12px 0 14px;
+  font-size: 0.875rem;
+}
+
+.ao-opts .vw-chips {
+  gap: 6px;
+}
+
+.ao-opts .vw-chip,
+.ao-opts .dropdown-btn {
+  height: 40px;
+  font-size: 0.875rem;
+}
+
+.ao-opts .vw-chip {
+  padding: 0 14px;
+}
+
+.ao-opts .dropdown-btn {
+  padding: 0 12px 0 14px;
+}
+
+.ao-voices-note {
+  margin: -8px 0 0;
+}
+
+.ao-prompt {
+  min-height: 128px;
 }
 
 @media (max-width: 760px) {
@@ -9218,8 +9443,8 @@ body.nbv-resizing iframe {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .ao-voices {
-    grid-template-columns: 1fr;
+  .ao-opts > .field {
+    flex-basis: 40%;
   }
 }
 
@@ -9339,6 +9564,87 @@ body.nbv-resizing iframe {
   cursor: pointer;
 }
 
+/* In a notebook's audio card: a slim player, the bar across its full width and the time under it */
+.artifact-audio_overview .ao-player {
+  width: 100%;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  /* The play button, the slider and the speed on one line; the time under the slider */
+  grid-template-areas:
+    "play seek speed"
+    ".    time .";
+  column-gap: 10px;
+  row-gap: 2px;
+  padding: 6px 8px 4px 6px;
+  border-radius: 18px;
+}
+
+.artifact-audio_overview .ao-play {
+  grid-area: play;
+  align-self: center;
+}
+
+.artifact-audio_overview .ao-seek {
+  grid-area: seek;
+  align-self: center;
+}
+
+.artifact-audio_overview .ao-time {
+  grid-area: time;
+  justify-self: start;
+  padding-top: 6px; /* a little room under the slider */
+}
+
+.artifact-audio_overview .ao-speed {
+  grid-area: speed;
+  align-self: center;
+}
+
+.artifact-audio_overview .ao-play {
+  width: 30px;
+  height: 30px;
+}
+
+.artifact-audio_overview .ao-play svg {
+  width: 13px;
+  height: 13px;
+}
+
+.artifact-audio_overview .ao-speed {
+  min-width: 36px;
+  height: 22px;
+  padding: 0 6px;
+  font-size: 0.7rem;
+}
+
+.artifact-audio_overview .ao-time {
+  font-size: 0.7rem;
+}
+
+/* Every card in a notebook (report, quiz, deck, audio, video...): its buttons small, in one row */
+.artifact .artifact-actions,
+.artifact .artifact-body .row {
+  gap: 6px;
+}
+
+.artifact .artifact-actions .btn,
+.artifact .artifact-body .btn {
+  height: 30px;
+  min-height: 30px;
+  padding: 0 12px;
+  font-size: 0.78rem;
+  line-height: 1;
+}
+
+.artifact .artifact-actions .btn svg,
+.artifact .artifact-body .btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.artifact-audio_overview .ao-transcript-toggle {
+  justify-self: start;
+}
+
 .ao-play:focus-visible,
 .ao-speed:focus-visible {
   outline: 2px solid var(--blue);
@@ -9413,7 +9719,6 @@ body.nbv-resizing iframe {
     transition: none;
   }
 }
-
 
 /* The download going: a strip over the picture in the card, so it can be followed once the viewer has closed */
 .ig-thumb-wrap {
@@ -9952,4 +10257,471 @@ body.nbv-resizing iframe {
   line-height: 1.45;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
+}
+
+/* Connect: the screen an app sends the writer to for approval. */
+.connect-card h1 {
+  overflow-wrap: anywhere;
+}
+
+.connect-scopes {
+  display: grid;
+  gap: 10px;
+}
+
+.connect-warn {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--warn, #d9a441);
+  border-radius: var(--radius-sm);
+  background: rgba(217, 164, 65, 0.1);
+}
+
+/* Sidebar Connector: one focused setup popup for Claude and ChatGPT. */
+.connector-intro,
+.connector-note {
+  margin: 0;
+}
+
+.connector-url-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--blue-35);
+  border-radius: var(--radius-sm);
+  background: var(--blue-05);
+}
+
+.connector-url-card > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.connector-url-card code {
+  color: var(--white);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.connector-clients {
+  display: grid;
+  gap: 12px;
+}
+
+.connector-client {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.connector-client header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.connector-client h3,
+.connector-client p {
+  margin: 0;
+}
+
+.connector-client-logo {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  border-radius: 12px;
+  background: var(--white);
+}
+
+.connector-client-logo img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+
+.connector-client-logo.openai img {
+  width: 35px;
+  height: 35px;
+}
+
+.connector-client ol {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.connector-client li {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 9px;
+  color: var(--text-2);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.connector-step-num {
+  display: grid;
+  place-items: center;
+  width: 21px;
+  height: 21px;
+  border: 1px solid var(--blue-60);
+  border-radius: 50%;
+  color: var(--white);
+  font: 600 0.7rem var(--font-mono);
+}
+
+@media (min-width: 680px) {
+  .connector-clients {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .connector-url-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+/* "Show transcript" reads as a plain text link: no underline, blue when pointed at */
+.link-btn.ao-transcript-toggle {
+  text-decoration: none;
+}
+
+.link-btn.ao-transcript-toggle:hover {
+  color: var(--blue);
+}
+
+/* A card's download: just the icon, a round button the height of the others */
+.artifact .artifact-actions .btn.btn-icon-only {
+  width: 30px;
+  padding: 0;
+}
+
+/* The PDF preview (components/PdfPreview): thumbnails on the left (15%), the pages on the right, one Download button */
+.modal:has(.pdfv) {
+  width: min(1100px, calc(100vw - 32px));
+}
+
+.lp-preview-body:has(.pdfv) {
+  max-height: none;
+  overflow: visible;
+}
+
+.pdfv {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+  height: min(76vh, 900px);
+}
+
+.pdfv-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pdfv-body {
+  display: grid;
+  grid-template-columns: 15% minmax(0, 1fr);
+  min-height: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #1b1d22;
+}
+
+.pdfv-thumbs {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 10px;
+  overflow-y: auto;
+  border-right: 1px solid var(--line);
+}
+
+.pdfv-thumb {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+.pdfv-thumb canvas {
+  display: block;
+  border: 2px solid transparent;
+  border-radius: 3px;
+  background: #fff;
+}
+
+.pdfv-thumb.on canvas {
+  border-color: var(--blue);
+}
+
+.pdfv-thumb.on {
+  color: var(--text);
+}
+
+.pdfv-pages {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.pdfv-page canvas {
+  display: block;
+  background: #fff;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+}
+
+/* A notebook card's thumbs (components/CardFeedback): at the bottom right of its buttons, the chosen one in blue */
+.card-fb {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.card-fb-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.card-fb-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.card-fb-btn:hover {
+  border-color: var(--blue-60);
+  color: var(--text);
+}
+
+.card-fb-btn.is-on {
+  border-color: var(--blue);
+  background: var(--blue-10);
+  color: var(--blue);
+}
+
+/* The review box: a roomy, rounded rectangle (not the pill of a one-line field) */
+.card-fb-modal textarea.input {
+  width: 100%;
+  height: auto;
+  min-height: 120px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  line-height: 1.55;
+  resize: vertical;
+}
+
+/* "Show transcript" with its arrow head */
+.ao-transcript-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ao-transcript-toggle .chevron {
+  transition: transform 0.15s;
+}
+
+.ao-transcript-toggle .chevron.open {
+  transform: rotate(180deg);
+}
+
+/* The thumbs are the same on every card: the inline cards' "every button 40px, full row" rules must not reach them */
+.artifact .card-fb {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.artifact .card-fb .card-fb-btn {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  border-radius: 999px;
+}
+
+.artifact .card-fb .card-fb-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* The thumbs up's rating: five stars, the chosen ones filled in blue */
+.card-fb-stars {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.card-fb-star {
+  display: inline-grid;
+  place-items: center;
+  padding: 2px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.card-fb-star svg {
+  fill: none;
+  stroke: var(--text-3);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  transition: fill 0.12s, stroke 0.12s;
+}
+
+.card-fb-star.on svg {
+  fill: var(--blue);
+  stroke: var(--blue);
+}
+
+.card-fb-star:hover svg {
+  stroke: var(--blue);
+}
+
+.card-fb-stars .mono {
+  margin-left: 6px;
+}
+
+/* The thumbs inside a viewer (quiz results, a report...): the review opens right below them */
+.afb-inline .fb-row {
+  justify-content: space-between;
+}
+
+.afb-form {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.afb-form .afb-text {
+  width: 100%;
+  height: auto;
+  min-height: 88px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.afb-save {
+  justify-content: flex-end;
+  align-items: center;
+  min-height: 0;
+}
+
+.afb-done {
+  color: var(--blue);
+}
+
+/* Quiz results: the review's Save button and its "Review saved" sit in the row with Close and Retake */
+.quiz-fb-slot {
+  display: contents;
+}
+
+.quiz-end-actions {
+  align-items: center;
+}
+
+/* "Review saved": the Save button, kept with its border, its text in green */
+.btn.afb-saved-btn,
+.btn.afb-saved-btn:disabled {
+  border: 1px solid #3fb27f;
+  background: rgba(63, 178, 127, 0.08);
+  color: #4cc98f;
+  opacity: 1;
+  cursor: default;
+}
+
+/* An icon-only button anywhere (a download): round, as wide as it is tall */
+.btn.btn-small.btn-icon-only {
+  width: 34px;
+  padding: 0;
+}
+
+.artifact .btn.btn-small.btn-icon-only {
+  width: 30px;
+}
+
+/* On every card the download comes last among the buttons (after Delete), then the thumbs at the far right. The card's
+   own markup varies (a link, the infographic's menu, the deck's menu), so the order is set here. */
+.artifact .btn-icon-only,
+.artifact .ig-dl,
+.artifact .artifact-actions > .sd-menu-wrap {
+  order: 90;
+}
+
+.artifact .card-fb {
+  order: 100;
+}
+
+/* A card's delete: a bin icon, just before the download; red when pointed at; "Delete?" to confirm (it widens) */
+.artifact .card-delete {
+  order: 80;
+}
+
+.artifact .btn.card-delete:hover,
+.artifact .btn.card-delete.armed {
+  border-color: #e5675a;
+  color: #f2786b;
+}
+
+.artifact .btn.btn-small.btn-icon-only.card-delete.armed {
+  width: auto;
+  padding: 0 12px;
+}
+
+/* The infographic's download menu on a card: above the next card (which would blur it), its items as plain menu rows
+   (the inline card's "every button is a 40px pill" rule must not reach them) */
+.artifact:has(.ig-dl-menu) {
+  position: relative;
+  z-index: 30;
+}
+
+.artifact .ig-dl .ig-dl-menu {
+  z-index: 40;
+  min-width: 240px;
+  padding: 6px;
+  background: var(--black);
+}
+
+.artifact .ig-dl .ig-dl-menu button {
+  flex: none;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+.artifact .ig-dl .ig-dl-menu button:hover {
+  background: var(--surface-2);
 }

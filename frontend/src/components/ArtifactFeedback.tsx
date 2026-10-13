@@ -1,14 +1,16 @@
-import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { artifactsApi } from "../api/endpoints";
 import type { AnswerFeedback as Feedback, Artifact } from "../api/types";
 import { Thumb } from "./AnswerFeedback";
+import { Stars } from "./CardFeedback";
 import { errorMessage } from "./ui";
 
-/** What can be rated: finished reports, quizzes, flashcard sets and infographics. */
-export const RATEABLE = ["report", "quiz", "flashcards", "infographic"];
+/** What can be rated: finished reports, quizzes, flashcard sets, infographics, slide decks, audio overviews and videos. */
+export const RATEABLE = ["report", "quiz", "flashcards", "infographic", "slide_deck", "audio_overview", "video"];
 
 /** Why a thumbs down, per kind (the ids the server keeps; see services/artifact_feedback.py). */
-const REASONS: Record<string, { id: string; label: string }[]> = {
+export const REASONS: Record<string, { id: string; label: string }[]> = {
   report: [
     { id: "inaccurate", label: "Inaccurate or made up" },
     { id: "missed_points", label: "Missed key points" },
@@ -41,6 +43,30 @@ const REASONS: Record<string, { id: string; label: string }[]> = {
     { id: "hard_to_read", label: "Hard to read" },
     { id: "other", label: "Something else" },
   ],
+  slide_deck: [
+    { id: "inaccurate", label: "Inaccurate" },
+    { id: "design", label: "Poor design" },
+    { id: "cut_off", label: "Text cut off" },
+    { id: "too_long", label: "Too long" },
+    { id: "too_short", label: "Too short" },
+    { id: "other", label: "Something else" },
+  ],
+  audio_overview: [
+    { id: "inaccurate", label: "Inaccurate" },
+    { id: "voices", label: "Unnatural voices" },
+    { id: "boring", label: "Dull to listen to" },
+    { id: "too_long", label: "Too long" },
+    { id: "too_short", label: "Too short" },
+    { id: "other", label: "Something else" },
+  ],
+  video: [
+    { id: "inaccurate", label: "Inaccurate" },
+    { id: "visuals", label: "Poor visuals" },
+    { id: "voice", label: "Narration" },
+    { id: "too_long", label: "Too long" },
+    { id: "too_short", label: "Too short" },
+    { id: "other", label: "Something else" },
+  ],
 };
 
 // A rating is shown wherever its artifact is (the card, the viewer, the results), so they share one copy.
@@ -50,106 +76,99 @@ const subscribe = (fn: () => void) => {
   listeners.add(fn);
   return () => listeners.delete(fn);
 };
-function put(id: string, fb: Feedback | null) {
+export function put(id: string, fb: Feedback | null) {
   ratings.set(id, fb);
   listeners.forEach((l) => l());
 }
 
-/** Thumbs up and thumbs down on a generated report, quiz, flashcard set or infographic, so it is clear which ones are
- * good. A thumbs down asks why (optional). Saved as soon as it is chosen; shared by every place the artifact shows.
- * `compact` opens the reasons over the page instead of pushing it down. */
-export function ArtifactFeedback({ artifact, label, compact = false }: { artifact: Artifact; label?: ReactNode; compact?: boolean }) {
+/** This person's rating of an artifact, kept in step wherever it shows (cards, viewers, results). */
+export function useRating(artifact: Artifact): Feedback | null {
   const initial = artifact.feedback ?? null;
-  const fb = useSyncExternalStore(subscribe, () => (ratings.has(artifact.id) ? ratings.get(artifact.id)! : initial), () => initial);
-  const [open, setOpen] = useState(false);
-  const [reasons, setReasons] = useState<string[]>(fb?.reasons ?? []);
-  const [comment, setComment] = useState(fb?.comment ?? "");
+  return useSyncExternalStore(subscribe, () => (ratings.has(artifact.id) ? ratings.get(artifact.id)! : initial), () => initial);
+}
+
+/** Where a viewer wants the "Save review" button: in its own row of buttons (the quiz results' Close and Retake). Without
+ * it the button sits under the review. */
+export const FeedbackActions = createContext<HTMLElement | null>(null);
+
+/** Thumbs up and down inside a viewer (a report, a quiz's results, flashcards, an infographic), inline: a thumb opens the
+ * review right below (stars for a thumbs up, feedback for both). "Save review" shows once something differs from what
+ * is saved; saving keeps everything open and says "Review saved" for 2 seconds. Nothing is saved until then. */
+export function ArtifactFeedback({ artifact, label, compact = false }: { artifact: Artifact; label?: ReactNode; compact?: boolean }) {
+  const saved = useRating(artifact);
+  const slot = useContext(FeedbackActions);
+  const [choice, setChoice] = useState<"up" | "down" | null>(saved?.rating ?? null);
+  const [stars, setStars] = useState(saved?.stars ?? 2);
+  const [comment, setComment] = useState(saved?.comment ?? "");
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [thanks, setThanks] = useState(false);
-  const options = REASONS[artifact.type] ?? [];
-  const whyRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (open) whyRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }); // in a fixed size popup it can open below the fold
-  }, [open, fb?.rating]);
+    if (!done) return;
+    const t = setTimeout(() => setDone(false), 2000);
+    return () => clearTimeout(t);
+  }, [done]);
   if (!RATEABLE.includes(artifact.type) || artifact.status !== "ready") return null;
 
-  const save = async (rating: "up" | "down" | null, r: string[] = [], c = "") => {
-    const before = fb;
+  const pick = (r: "up" | "down") => {
+    setChoice(r);
+    setDone(false);
+    // Back on the saved thumb: its saved review; on the other one, a fresh start.
+    setStars(r === saved?.rating && saved?.stars ? saved.stars : 2);
+    setComment(r === saved?.rating ? saved?.comment ?? "" : "");
+  };
+  const changed = !!choice && (choice !== saved?.rating || comment.trim() !== (saved?.comment ?? "")
+    || (choice === "up" && stars !== (saved?.stars ?? 2)));
+
+  const save = async () => {
+    if (!choice) return;
+    setBusy(true);
     setError(null);
-    put(artifact.id, rating ? { rating, reasons: r, comment: c || null } : null); // shows at once; undone if the save fails
     try {
-      const res = await artifactsApi.rate(artifact.id, { rating, reasons: r, comment: c || undefined });
+      const res = await artifactsApi.rate(artifact.id, { rating: choice, ...(choice === "up" ? { stars } : {}),
+                                                         comment: comment.trim() || undefined });
       put(artifact.id, res.feedback);
+      setDone(true);
     } catch (e) {
-      put(artifact.id, before);
       setError(errorMessage(e));
+    } finally {
+      setBusy(false);
     }
   };
 
-  const choose = (rating: "up" | "down") => {
-    setThanks(false);
-    if (fb?.rating === rating) {
-      setOpen(false);
-      void save(null);
-      return;
-    }
-    setOpen(true); // both ratings can take a few words (a thumbs down also asks why)
-    if (rating === "up") {
-      setReasons([]);
-      setComment("");
-    }
-    void save(rating, rating === "down" ? reasons : []);
-  };
+  const saveRow = (
+    <>
+      {error && <span className="error-text small">{error}</span>}
+      {/* Saved: the same button, outlined, saying so in green for 2 seconds */}
+      {(changed || done) && (
+        <button type="button" className={`btn${done ? " afb-saved-btn" : " btn-primary"}${slot ? "" : " btn-small"}`}
+                disabled={busy || done} onClick={save} aria-live="polite">
+          {done ? "Review saved" : busy ? "Saving..." : "Save review"}
+        </button>
+      )}
+    </>
+  );
 
   return (
-    <div className={`fb afb${compact ? " afb-compact" : ""}`}>
+    <div className={`fb afb afb-inline${compact ? " afb-compact" : ""}`}>
       <div className="fb-row">
         {label && <span className="muted small afb-label">{label}</span>}
-        <button type="button" className={`fb-btn${fb?.rating === "up" ? " is-on" : ""}`} aria-pressed={fb?.rating === "up"}
-                aria-label="Good" title="Good" onClick={() => choose("up")}>
-          <Thumb />
-        </button>
-        <button type="button" className={`fb-btn${fb?.rating === "down" ? " is-on is-down" : ""}`} aria-pressed={fb?.rating === "down"}
-                aria-label="Not good" title="Not good" onClick={() => choose("down")}>
-          <Thumb down />
-        </button>
-        {thanks && <span className="mono muted small">Thanks, saved.</span>}
-        {error && <span className="error-text small">Could not save that. Try again.</span>}
+        <span className="card-fb">
+          {(["up", "down"] as const).map((r) => (
+            <button key={r} type="button" className={`card-fb-btn${choice === r ? " is-on" : ""}`} aria-pressed={choice === r}
+                    aria-label={r === "up" ? "Good" : "Not good"} title={r === "up" ? "Good" : "Not good"} onClick={() => pick(r)}>
+              <Thumb down={r === "down"} />
+            </button>
+          ))}
+        </span>
       </div>
-      {!open && fb && (fb.comment || fb.reasons.length > 0) && (
-        <div className="afb-saved">
-          <span className="mono muted small">Your review</span>
-          {fb.reasons.length > 0 && (
-            <div className="fb-chips">
-              {fb.reasons.map((id) => <span key={id} className="fb-chip is-on">{options.find((o) => o.id === id)?.label ?? id}</span>)}
-            </div>
-          )}
-          {fb.comment && <p className="afb-saved-text">{fb.comment}</p>}
-          <button type="button" className="link-btn small" onClick={() => { setReasons(fb.reasons); setComment(fb.comment ?? ""); setOpen(true); }}>Edit</button>
-        </div>
-      )}
-      {open && fb && (
-        <div className="fb-why afb-why" ref={whyRef}>
-          <p className="mono muted small">{fb.rating === "up" ? "What worked well? (optional)" : "What was wrong? (optional)"}</p>
-          {fb.rating === "down" && <div className="fb-chips">
-            {options.map((r) => (
-              <button key={r.id} type="button" className={`fb-chip${reasons.includes(r.id) ? " is-on" : ""}`} aria-pressed={reasons.includes(r.id)}
-                      onClick={() => setReasons((list) => (list.includes(r.id) ? list.filter((x) => x !== r.id) : [...list, r.id]))}>
-                {r.label}
-              </button>
-            ))}
-          </div>}
-          <textarea className="input fb-note" rows={2} maxLength={1000} value={comment} onChange={(e) => setComment(e.target.value)}
-                    placeholder={fb.rating === "up" ? "Tell us more, like what you liked" : "Tell us more, like what it should have been"}
-                    aria-label={fb.rating === "up" ? "What worked well" : "What was wrong"} />
-          <div className="row end">
-            <button type="button" className="btn btn-small" onClick={() => setOpen(false)}>Skip</button>
-            <button type="button" className="btn btn-small btn-primary" onClick={async () => {
-              await save(fb.rating, fb.rating === "down" ? reasons : [], comment.trim());
-              setOpen(false);
-              setThanks(true);
-            }}>Send</button>
-          </div>
+      {choice && (
+        <div className="afb-form">
+          {choice === "up" && <Stars value={stars} onChange={(n) => { setStars(n); setDone(false); }} />}
+          <textarea className="input afb-text" rows={3} maxLength={1000} value={comment}
+                    placeholder={choice === "up" ? "What worked well? (optional)" : "What should be better? (optional)"}
+                    onChange={(e) => { setComment(e.target.value); setDone(false); }} />
+          {slot ? createPortal(saveRow, slot) : <div className="row afb-save">{saveRow}</div>}
         </div>
       )}
     </div>

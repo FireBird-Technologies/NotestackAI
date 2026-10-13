@@ -1,9 +1,9 @@
 // Copy for /notebooklm-alternative, shared by the React page and the build time prerender (seo/prerender.ts).
 
 export const NOTEBOOKLM_ALT_META = {
-  title: "Notestack vs NotebookLM: The NotebookLM Alternative for Writers | Notestack",
+  title: "Notestack vs NotebookLM: Side by Side for Writers | Notestack",
   description:
-    "Notestack vs NotebookLM, side by side. Notestack is the NotebookLM alternative for writers, bloggers and newsletters: sync your archive, get answers cited to the exact line, and turn your writing into audio, video and launch posts.",
+    "Notestack vs NotebookLM, side by side, for writers, bloggers and newsletters. Compare syncing your whole archive, answers cited to the exact line, and turning your writing into audio, video and launch posts.",
 };
 
 export const NOTEBOOKLM_ALT_ROWS: { feature: string; notestack: string; notebooklm: string }[] = [

@@ -34,6 +34,8 @@ from app.models import (
     Document,
     Job,
     Message,
+    Notebook,
+    NotebookDocument,
     Source,
     Subscription,
     UpdateEmail,
@@ -97,6 +99,22 @@ def _after_import(db: Session, job: Job, workspace_id: uuid.UUID, changed: list[
         create_job(db, workspace_id, "voice_profile", {"document_ids": []}, max_attempts=2)
 
 
+def _file_into_notebook(db: Session, job: Job, ids: list[uuid.UUID]) -> None:
+    """Posts imported from inside a notebook join it (ones already there, and locked ones, are skipped)."""
+    nb_id = job.params.get("notebook_id")
+    nb = db.get(Notebook, uuid.UUID(nb_id)) if nb_id else None
+    if not nb or nb.workspace_id != job.workspace_id or nb.is_archive or not ids:
+        return
+    valid = set(db.scalars(select(Document.id).where(Document.id.in_(ids), Document.workspace_id == job.workspace_id,
+                                                      Document.path.is_not(None))))
+    there = set(db.scalars(select(NotebookDocument.document_id).where(NotebookDocument.notebook_id == nb.id)))
+    for doc_id in valid - there:
+        db.add(NotebookDocument(notebook_id=nb.id, document_id=doc_id))
+    if valid - there:
+        nb.updated_at = datetime.now(UTC)  # it is the notebook worked on last
+    db.commit()
+
+
 def handle_ingest(db: Session, job: Job):
     source = db.get(Source, uuid.UUID(job.params["source_id"]))
     if not source:
@@ -117,6 +135,8 @@ def handle_ingest(db: Session, job: Job):
             raise PermanentJobError(str(exc)) from exc
         raise
     _after_import(db, job, source.workspace_id, result.get("changed", []))
+    # Connected from a notebook: the whole source joins it, not only what changed this time.
+    _file_into_notebook(db, job, list(db.scalars(select(Document.id).where(Document.source_id == source.id))))
     if result.get("locked"):
         return Done(result, f"Found {result['found']} posts. Your latest {result['available']} are indexed; "
                             f"upgrade to index the other {result['locked']}")
@@ -177,7 +197,13 @@ def handle_import_url(db: Session, job: Job):
     _require_room(db, source, entry.url)
     indexed, _, changed = store_entries(db, source, [entry])
     _after_import(db, job, source.workspace_id, [str(i) for i in changed])
+    _file_into_notebook(db, job, changed or _same_url(db, source, entry.url))
     return Done({"indexed": indexed, "document_ids": [str(i) for i in changed]}, f"{entry.title[:80]} is in orbit")
+
+
+def _same_url(db: Session, source: Source, url: str | None) -> list[uuid.UUID]:
+    """An article imported again unchanged: the post it already is (so it can still join the notebook)."""
+    return list(db.scalars(select(Document.id).where(Document.source_id == source.id, Document.url == url))) if url else []
 
 
 def handle_import_upload(db: Session, job: Job):
@@ -190,6 +216,7 @@ def handle_import_upload(db: Session, job: Job):
     _require_room(db, source, entry.url)
     indexed, _, changed = store_entries(db, source, [entry])
     _after_import(db, job, source.workspace_id, [str(i) for i in changed])
+    _file_into_notebook(db, job, changed or _same_url(db, source, entry.url))
     return Done({"indexed": indexed, "document_ids": [str(i) for i in changed]}, f"{entry.title[:80]} is in orbit")
 
 

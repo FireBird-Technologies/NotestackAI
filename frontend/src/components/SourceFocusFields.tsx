@@ -88,19 +88,14 @@ export function Pills<T extends string>({ label, value, options, onChange }: {
 /** What it is made from (chats, or a notebook's posts, or a single post) and what to focus on (suggested cards or your
  * own topic): the video wizard's first step, shared by the quiz, flashcard and report dialogs. Holds its own state
  * and reports the choice through onChange. */
-export function SourceFocusFields({ notebookId, notebookTitle, chats, currentChatId, preselectChat = false, withPosts = false, largeSelection = false, what, columns = false, extra, below, noFocus = false, onChange }: {
+export function SourceFocusFields({ notebookId, chats, currentChatId, preselectChat = false, largeSelection = false, what, columns = false, extra, below, noFocus = false, onChange }: {
   notebookId: string;
-  /** The notebook's name, shown as the fixed source of its posts. */
-  notebookTitle?: string;
   chats: ChatSummary[];
   /** The chat open beside the dialog. */
   currentChatId?: string | null;
-  /** Tick the open chat to start with (otherwise chats are added by choice). */
+  /** Keep the open chat among the ticked ones when the notebook has more chats than can be ticked. */
   preselectChat?: boolean;
-  /** With preselectChat: the notebook's first posts are ticked as well, not just the chat. */
-  withPosts?: boolean;
-  /** A quiz or flashcard set: as many posts as the plan indexes can be picked (a sample of their extracted ideas is read). A dialog still ticks only
-   * the first few to start with. */
+  /** A quiz or flashcard set: as many posts as the plan indexes can be picked (a sample of their extracted ideas is read). */
   largeSelection?: boolean;
   /** What is being made ("quiz", "flashcard set", "report"), for the wording. */
   what: string;
@@ -117,11 +112,11 @@ export function SourceFocusFields({ notebookId, notebookTitle, chats, currentCha
   const limits = useArtifactLimits();
   const [source, setSource] = useState<VideoSource | null>({ kind: "notebook", id: notebookId });
   const [postIds, setPostIds] = useState<string[]>([]);
-  // Every dialog starts with all of the notebook's posts ticked and no chat; chats are added by choice.
-  const [chatIds, setChatIds] = useState<string[]>(() =>
-    preselectChat && currentChatId && chats.some((c) => c.id === currentChatId) ? [currentChatId] : []);
-  // Opened from a chat: just that chat to start with, no posts (they can still be added), unless withPosts
-  const [chatFirst] = useState(() => chatIds.length > 0 && !withPosts);
+  // Every dialog starts with all of the notebook's posts and chats ticked (as many as can be); untick to narrow it down.
+  const [chatIds, setChatIds] = useState<string[]>(() => {
+    const open = preselectChat && currentChatId ? chats.filter((c) => c.id === currentChatId) : [];
+    return [...open, ...chats.filter((c) => c.id !== currentChatId || !open.length)].slice(0, MAX_CHATS).map((c) => c.id);
+  });
   const [topics, setTopics] = useState<VideoFocusTopic[] | null>(null);
   const topicsFor = useRef(""); // the key of the suggestions shown or on their way
   const [focus, setFocus] = useState<VideoFocusTopic | null>(null);
@@ -187,12 +182,8 @@ export function SourceFocusFields({ notebookId, notebookTitle, chats, currentCha
     <div className="field">
       <span className="vw-label">Made from</span>
       <SourcePicker source={source} onSource={setSource} postIds={postIds} onPostIds={setPostIds}
-                    max={largeSelection ? limits.selectable : limits.posts} autoCount={limits.posts} what={what} autoSelect={!chatFirst} compact notebookTitle={notebookTitle}
-                    chats={chats} chatIds={chatIds} onChatIds={setChatIds} />
-      <small className="muted vw-hint">
-        {!sourceReady ? "Pick at least one post or chat. You can use both together."
-          : `Made from ${[postIds.length ? `${postIds.length} post${postIds.length === 1 ? "" : "s"}` : "", chatIds.length ? `${chatIds.length} chat${chatIds.length === 1 ? "" : "s"}` : ""].filter(Boolean).join(" and ")}.`}
-      </small>
+                    max={largeSelection ? limits.selectable : limits.posts} what={what} compact
+                    chats={chats} chatIds={chatIds} onChatIds={setChatIds} maxChats={MAX_CHATS} />
     </div>
   );
   const belowBlock = below ? <div className="sf-below">{below}</div> : null;
@@ -219,7 +210,7 @@ export function SourceFocusFields({ notebookId, notebookTitle, chats, currentCha
                 : shownTopics.map((t) => {
                   const on = focus?.title === t.title;
                   return (
-                    <button key={t.title} type="button" className={`vw-focus-card${on ? " on" : ""}`} aria-pressed={on}
+                    <button key={t.title} type="button" className={`vw-focus-card${on ? " on" : ""}`} aria-pressed={on} title={t.description ? `${t.title}: ${t.description}` : t.title}
                             onClick={() => {
                               setFocus(on ? null : t);
                               setCustom("");

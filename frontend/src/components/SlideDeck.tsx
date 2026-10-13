@@ -5,9 +5,12 @@ import { addActions, convert, type DeckFmt, LAYOUTS, MAX_SLIDES, newSlide, probl
 import type { Artifact, ChatSummary } from "../api/types";
 import { Dropdown } from "./Dropdown";
 import { useJob } from "../hooks/useJob";
-import { CheckIcon, CollapseIcon, DownloadIcon, ExpandIcon, MoreIcon, PdfIcon, PlayIcon, PptxIcon, SlidesIcon, TrashIcon } from "./icons/Icons";
+import { CheckIcon, CollapseIcon, DownloadIcon, ExpandIcon, MoreIcon, PdfIcon, PlayIcon, PptxIcon, ShareIcon, TrashIcon } from "./icons/Icons";
 import { LANGUAGES, Pills, SourceFocusFields, sourceSummary, type SourceSelection } from "./SourceFocusFields";
-import { ConfirmDeleteModal, errorMessage, formatDate, JobProgress, Modal } from "./ui";
+import { ConfirmButton, ConfirmDeleteModal, errorMessage, formatDate, JobProgress, Modal, StatusPill } from "./ui";
+import { canShare, ShareButton, ShareDialog } from "./ShareDialog";
+import { PostButton } from "./launchpad/PostButton";
+import { CardFeedback } from "./CardFeedback";
 
 /** Bumped when the thumbnails are drawn again (backend/scripts/render_slide_thumbnails.py), so browsers fetch the new
  * images instead of the ones they cached. */
@@ -39,9 +42,8 @@ type DeckFormat = "detailed" | "presenter";
 type DeckLength = "short" | "default" | "long";
 
 /** The slide deck settings: a visual style on top, then the format, language, length, sources and what it should say. */
-export function SlideDeckDialog({ notebookId, notebookTitle, chats, currentChatId, onClose, onCreate }: {
+export function SlideDeckDialog({ notebookId, chats, currentChatId, onClose, onCreate }: {
   notebookId: string;
-  notebookTitle?: string;
   chats: ChatSummary[];
   currentChatId?: string | null;
   onClose: () => void;
@@ -91,7 +93,7 @@ export function SlideDeckDialog({ notebookId, notebookTitle, chats, currentChatI
           </div>
         </section>
 
-        <SourceFocusFields notebookId={notebookId} notebookTitle={notebookTitle} chats={chats} currentChatId={currentChatId}
+        <SourceFocusFields notebookId={notebookId} chats={chats} currentChatId={currentChatId}
                            what="slide deck" noFocus onChange={setSel} />
 
         <label className="field">
@@ -505,27 +507,22 @@ function deckTitle(artifact: Artifact): string {
   return artifact.title.replace(/^Slide deck: /, "") || (artifact.content.deck?.title as string | undefined) || "Slide deck";
 }
 
-/** "5d ago", "3h ago", "just now". */
-function ago(iso: string | null): string {
-  if (!iso) return "";
-  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
-  if (s < 60) return "just now";
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  if (s < 86400 * 30) return `${Math.floor(s / 86400)}d ago`;
-  return formatDate(iso);
-}
-
 /** Download, in the popup's header: a menu of PDF or PowerPoint. */
-function DownloadMenu({ artifact, prepare }: { artifact: Artifact; prepare?: () => Promise<boolean> }) {
+function DownloadMenu({ artifact, prepare, buttonClass = "sd-icon-btn", iconSize = 20 }: {
+  artifact: Artifact;
+  prepare?: () => Promise<boolean>;
+  /** The button's look: the viewer's header icon by default; a card's round icon button there. */
+  buttonClass?: string;
+  iconSize?: number;
+}) {
   const menu = useMenu();
   const dl = useDeckDownload(artifact, prepare);
   return (
     <div className="sd-menu-wrap" ref={menu.ref}>
-      <button type="button" className="sd-icon-btn" aria-haspopup="menu" aria-expanded={menu.open} disabled={dl.busy !== null}
+      <button type="button" className={buttonClass} aria-haspopup="menu" aria-expanded={menu.open} disabled={dl.busy !== null}
               title={dl.busy ? "Preparing the file..." : "Download"} aria-label={dl.busy ? "Preparing the file" : "Download"}
               onClick={() => menu.setOpen((o) => !o)}>
-        {dl.busy ? <span className="nbv-send-spinner" aria-hidden="true" /> : <DownloadIcon size={20} />}
+        {dl.busy ? <span className="nbv-send-spinner" aria-hidden="true" /> : <DownloadIcon size={iconSize} />}
       </button>
       {menu.open && (
         <FloatingMenu menu={menu}>
@@ -556,6 +553,7 @@ function DeckMenu({ artifact, onRename, onPresent, onDelete, notes, onNotes, pre
   const menu = useMenu();
   const dl = useDeckDownload(artifact, prepare);
   const [confirming, setConfirming] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const pick = (fn: () => void) => () => {
     menu.setOpen(false);
     fn();
@@ -572,6 +570,9 @@ function DeckMenu({ artifact, onRename, onPresent, onDelete, notes, onNotes, pre
           <button type="button" role="menuitem" onClick={pick(() => void dl.save("pdf"))}><PdfIcon size={20} /> Download PDF Document (.pdf)</button>
           <button type="button" role="menuitem" onClick={pick(() => void dl.save("pptx"))}><PptxIcon size={20} /> Download PowerPoint (.pptx)</button>
           <button type="button" role="menuitem" onClick={pick(onPresent)}><PlayIcon size={20} /> Start slideshow</button>
+          {canShare(artifact) && (
+            <button type="button" role="menuitem" onClick={pick(() => setSharing(true))}><ShareIcon size={20} /> Share</button>
+          )}
           {onNotes && (
             <button type="button" role="menuitemcheckbox" aria-checked={notes} onClick={pick(onNotes)}>
               <SpeakerNotesIcon /> {notes ? "Hide speaker notes" : "Show speaker notes"}
@@ -584,6 +585,7 @@ function DeckMenu({ artifact, onRename, onPresent, onDelete, notes, onNotes, pre
       )}
       {confirming && <ConfirmDeleteModal heading="Delete slide deck?" name={deckTitle(artifact)} onCancel={() => setConfirming(false)}
                                          onConfirm={onDelete} />}
+      {sharing && <ShareDialog artifactId={artifact.id} what="slide deck" onClose={() => setSharing(false)} />}
       {dl.error && <span className="sd-menu-error error-text small" role="alert">{dl.error}</span>}
     </div>
   );
@@ -966,8 +968,6 @@ export function SlideDeckRow({ artifact: initial, onRemoved }: { artifact: Artif
   const [artifact, setArtifact] = useState(initial);
   const [open, setOpen] = useState(false);
   const [presenting, setPresenting] = useState(false);
-  const [renaming, setRenaming] = useState(false);
-  const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const job = useJob(artifact.job, () => {
     artifactsApi.get(artifact.id).then(setArtifact);
@@ -978,64 +978,51 @@ export function SlideDeckRow({ artifact: initial, onRemoved }: { artifact: Artif
   const title = deckTitle(artifact);
   const count = (artifact.content.source?.count as number | undefined) ?? 0;
   const meta = running || !ready
-    ? (failed ? "Slide deck · could not be made" : `Generating slide deck... based on ${count || "your"} source${count === 1 ? "" : "s"}`)
-    : `${count} source${count === 1 ? "" : "s"} · ${ago(artifact.created_at)}`;
+    ? (failed ? "Could not be made" : `Generating slide deck... based on ${count || "your"} source${count === 1 ? "" : "s"}`)
+    : `${count} source${count === 1 ? "" : "s"}`;
 
   const remove = async () => {
     await artifactsApi.remove(artifact.id);
     setOpen(false);
     onRemoved(artifact.id);
   };
-  const rename = async () => {
-    const next = name.trim();
-    setRenaming(false);
-    if (!next || next === title) return;
-    setError(null);
-    try {
-      const deck = artifact.content.deck ? { ...artifact.content.deck, title: next } : undefined;
-      setArtifact(await artifactsApi.update(artifact.id, { title: next, ...(deck ? { content: { deck } } : {}) }));
-    } catch (e) {
-      setError(errorMessage(e));
-    }
-  };
 
+  const slides = Array.isArray(artifact.content.deck?.slides) ? (artifact.content.deck.slides as unknown[]).length : 0;
+  const format = artifact.content.format === "presenter" ? "Presenter" : "Detailed";
+
+  // The same card as the notebook's other outputs (a report, a quiz): what it is, its title and date, its state, then
+  // what's in it and the ways in.
   return (
-    <div className={`sd-item${ready ? " is-ready" : ""}${running ? " is-running" : ""}`}>
-      <div className="sd-item-main" role={ready && !renaming ? "button" : undefined} tabIndex={ready && !renaming ? 0 : undefined}
-           aria-label={ready && !renaming ? `Open slide deck: ${title}` : undefined}
-           onClick={() => ready && !renaming && setOpen(true)}
-           onKeyDown={(e) => ready && !renaming && (e.key === "Enter" || e.key === " ") && (e.preventDefault(), setOpen(true))}>
-        <span className="sd-item-icon" aria-hidden="true">
-          {running ? <span className="nbv-send-spinner" /> : <SlidesIcon size={22} />}
-        </span>
-        <span className="sd-item-text">
-          {renaming ? (
-            <input className="input sd-rename" autoFocus value={name} maxLength={140} aria-label="Slide deck name"
-                   onChange={(e) => setName(e.target.value)} onBlur={rename} onClick={(e) => e.stopPropagation()}
-                   onKeyDown={(e) => {
-                     e.stopPropagation();
-                     if (e.key === "Enter") void rename();
-                     if (e.key === "Escape") setRenaming(false);
-                   }} />
-          ) : (
-            <strong title={title}>{running ? "Generating slide deck..." : title}</strong>
-          )}
-          <span className="sd-item-meta">{meta}</span>
-        </span>
-      </div>
+    <article className="artifact card artifact-slide_deck">
+      <header className="artifact-head">
+        <div>
+          <p className="eyebrow">Slide deck</p>
+          <h3>{running ? "Generating slide deck..." : title}</h3>
+          <p className="mono muted">{formatDate(artifact.created_at, true)}</p>
+        </div>
+        <StatusPill status={running ? (job!.status === "queued" ? "queued" : "working") : artifact.status} />
+      </header>
+      {running && job && <JobProgress job={job} compact />}
+      {failed && <p className="error-text">{failed}</p>}
       {ready && (
-        <DeckMenu artifact={artifact} onRename={() => { setName(title); setRenaming(true); }} onPresent={() => setPresenting(true)}
-                  onDelete={remove} />
-      )}
-      {running && job && (
-        <div className="sd-item-progress">
-          <JobProgress job={job} compact />
+        <div className="artifact-body">
+          <p className="muted">{format} · {slides} slide{slides === 1 ? "" : "s"} · {meta}</p>
         </div>
       )}
-      {failed && (
-        <div className="sd-item-progress sd-item-failed">
-          <p className="error-text small">{failed}</p>
-          <button type="button" className="link-btn" onClick={async () => {
+      {!ready && !failed && <p className="muted">{meta}</p>}
+      {error && <p className="error-text">{error}</p>}
+      <footer className="artifact-actions">
+        {ready && (
+          <>
+            <button type="button" className="btn btn-small" onClick={() => setOpen(true)}>View</button>
+            <button type="button" className="btn btn-small" onClick={() => setPresenting(true)}>Present</button>
+            <PostButton artifactId={artifact.id} artifact={artifact} />
+            <ShareButton artifact={artifact} />
+            <DownloadMenu artifact={artifact} buttonClass="btn btn-small btn-icon-only" iconSize={16} />
+          </>
+        )}
+        {failed && (
+          <button type="button" className="btn btn-small" onClick={async () => {
             setError(null);
             try {
               setArtifact(await artifactsApi.retry(artifact.id));
@@ -1043,12 +1030,13 @@ export function SlideDeckRow({ artifact: initial, onRemoved }: { artifact: Artif
               setError(errorMessage(e));
             }
           }}>Retry</button>
-          <button type="button" className="link-btn" onClick={() => void remove()}>Remove</button>
-        </div>
-      )}
-      {error && <p className="error-text small sd-item-progress">{error}</p>}
+        )}
+        <ConfirmButton onConfirm={remove} className="btn btn-small btn-icon-only card-delete" label="Delete" confirmLabel="Delete?" busyLabel=""><TrashIcon size={16} /></ConfirmButton>
+        {/* Bottom right: a positive or negative review */}
+        <CardFeedback artifact={artifact} />
+      </footer>
       {open && <SlideDeckViewer artifact={artifact} onClose={() => setOpen(false)} onDelete={remove} onSaved={setArtifact} />}
       {presenting && <SlidePresenter artifact={artifact} onClose={() => setPresenting(false)} />}
-    </div>
+    </article>
   );
 }

@@ -6,7 +6,9 @@ import Logo from "./Logo";
 import { FuelGauge, NudgeDock } from "./Nudges";
 import SkyCanvas from "./SkyCanvas";
 import UpgradeModal from "./UpgradeModal";
+import ConnectorModal from "./ConnectorModal";
 import {
+  ConnectorIcon,
   LaunchpadIcon,
   LibraryIcon,
   MicIcon,
@@ -39,6 +41,7 @@ export default function AppShell() {
   const location = useLocation();
   const notebookFocus = /^\/app\/notebooks\/[^/]+$/.test(location.pathname);
   const [collapsed, setCollapsed] = useState(readCollapsed);
+  const [connectorOpen, setConnectorOpen] = useState(false);
   const toggle = () =>
     setCollapsed((c) => {
       try {
@@ -62,7 +65,7 @@ export default function AppShell() {
                 <Logo size={28} withWordmark={false} />
               </button>
             ) : (
-              <NavLink to="/" className="sidebar-brand">
+              <NavLink to="/app/notebooks" end className="sidebar-brand" aria-label="Your notebooks">
                 <Logo size={28} />
               </NavLink>
             )}
@@ -94,6 +97,21 @@ export default function AppShell() {
                 <span className="side-label">{label}</span>
               </NavLink>
             ))}
+            <button
+              type="button"
+              className={`side-link connector-side-link${connectorOpen ? " active" : ""}`}
+              title={collapsed ? "Connector" : undefined}
+              aria-haspopup="dialog"
+              aria-expanded={connectorOpen}
+              onClick={() => setConnectorOpen(true)}
+            >
+              <ConnectorIcon />
+              <span className="side-label">Connector</span>
+              <span className="connector-side-logos side-label" aria-hidden="true">
+                <span><img src="/anthropic.svg" alt="" /></span>
+                <span><img className="openai" src="/openai.png" alt="" /></span>
+              </span>
+            </button>
           </nav>
           <FuelGauge collapsed={collapsed} />
           <NavLink to="/app/settings" title={collapsed ? "Settings" : undefined} className={({ isActive }) => `side-link side-settings${isActive ? " active" : ""}`}>
@@ -114,6 +132,7 @@ export default function AppShell() {
       {/* Outside .shell: its children get position: relative, and these are fixed overlays. */}
       <NudgeDock />
       <UpgradeModal />
+      {connectorOpen && <ConnectorModal onClose={() => setConnectorOpen(false)} />}
     </UpgradeProvider>
   );
 }

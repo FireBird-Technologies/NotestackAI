@@ -23,7 +23,7 @@ export function StudyOverlay({ title, onClose, children }: { title: string; onCl
             <div className="so-actions">
               <button type="button" className="icon-btn" onClick={() => setMinimized(true)} aria-label="Minimise" title="Minimise">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                  <path d="M5 19h14" />
+                  <path d="M6 12h12" />
                 </svg>
               </button>
               <button type="button" className="icon-btn" onClick={onClose} aria-label="Close" title="Close">

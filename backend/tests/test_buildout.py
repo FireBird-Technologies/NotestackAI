@@ -14,6 +14,7 @@ from app.models import (
     Document,
     EngagementEvent,
     Job,
+    Notebook,
     SocialAccount,
     Source,
     TrackedLink,
@@ -284,6 +285,50 @@ def test_notebook_crud_chat_history_and_summary(client, auth, run_jobs, feed, ll
     client.delete(f"/api/notebooks/{nb['id']}/documents/{pricing['id']}", headers=auth)
     assert client.get(f"/api/notebooks/{nb['id']}", headers=auth).json()["documents"] == []
     assert client.delete(f"/api/notebooks/{nb['id']}", headers=auth).status_code == 200
+
+
+def test_internal_selection_codes_never_appear_as_notebook_names(client, auth, db_session):
+    made = client.post("/api/notebooks", json={"title": "Client research (a1b2c3)"}, headers=auth)
+    assert made.status_code == 200 and made.json()["title"] == "Client research"
+    assert db_session.get(Notebook, uuid.UUID(made.json()["id"])).title == "Client research"
+
+    legacy = Notebook(workspace_id=db_session.query(Workspace).first().id,
+                      title="Claude: 3 chosen posts (052f16)")
+    db_session.add(legacy)
+    db_session.commit()
+
+    listed = client.get("/api/notebooks", headers=auth).json()
+    assert {n["id"]: n["title"] for n in listed}[str(legacy.id)] == "Claude: 3 chosen posts"
+    opened = client.get(f"/api/notebooks/{legacy.id}", headers=auth).json()
+    assert opened["title"] == "Claude: 3 chosen posts"
+    artifact = client.post("/api/artifacts/generate", json={"type": "summary", "notebook_id": str(legacy.id)},
+                           headers=auth).json()
+    assert "052f16" not in artifact["title"]
+
+
+def test_notebooks_are_sorted_by_latest_chat_or_artifact_activity(client, auth, db_session):
+    from app.models import Chat
+
+    made = [client.post("/api/notebooks", json={"title": title}, headers=auth).json()
+            for title in ("Recent chat", "Recent artifact", "Notebook edit")]
+    notebooks = [db_session.get(Notebook, uuid.UUID(row["id"])) for row in made]
+    base = datetime(2026, 1, 1, tzinfo=UTC)
+    for notebook in notebooks:
+        notebook.updated_at = base
+    chat = Chat(workspace_id=notebooks[0].workspace_id, notebook_id=notebooks[0].id, title="Latest question",
+                updated_at=base + timedelta(days=2))
+    artifact = Artifact(workspace_id=notebooks[1].workspace_id, notebook_id=notebooks[1].id, type="report",
+                        status="ready", content_json={}, updated_at=base + timedelta(days=3))
+    notebooks[2].updated_at = base + timedelta(days=1)
+    archive = Notebook(workspace_id=notebooks[0].workspace_id, title="All posts", is_archive=True,
+                       updated_at=base - timedelta(days=1))
+    db_session.add_all([chat, artifact, archive])
+    db_session.commit()
+
+    listed = client.get("/api/notebooks", headers=auth).json()
+    assert [row["title"] for row in listed] == ["Recent artifact", "Recent chat", "Notebook edit", "All posts"]
+    shown_activity = datetime.fromisoformat(listed[0]["updated_at"])
+    assert shown_activity.replace(tzinfo=shown_activity.tzinfo or UTC) == artifact.updated_at
 
 
 def test_summary_of_empty_notebook_fails_cleanly(client, auth, run_jobs, llm):
@@ -1693,6 +1738,7 @@ def test_add_and_remove_a_suggested_visual(client, auth, run_jobs, feed, llm):
         return [a for a in (items["items"] if isinstance(items, dict) else items) if a["status"] == "ready"]
 
     assert len(saved_sets()) == 1  # a set made in the report is also in the notebook's Studio list
+    assert c["blocks"][1]["artifact_id"] == saved_sets()[0]["id"]  # the report opens that real artifact's full player
     assert client.delete(f"/api/reports/{done['id']}/blocks/b1", headers=auth).status_code == 404  # prose stays
     assert client.delete(f"/api/reports/{done['id']}/blocks/{added}", headers=auth).status_code == 200
     assert len(saved_sets()) == 1  # still there to use again, and not saved twice
@@ -1716,9 +1762,7 @@ def test_shared_report_shows_only_the_whitelist_and_can_be_revoked(client, auth,
     for leak in (pricing["path"], pricing["id"], '"quote"', '"span"', '"suggestions"', "Write a brief.",
                  str(done["id"]), '"citations"'):
         assert leak not in raw
-    assert body["sources"]["posts"][0]["title"] == "On Pricing"
-    client.patch(f"/api/artifacts/{done['id']}/share", json={"show_sources": False}, headers=auth)
-    assert "sources" not in client.get(f"/api/public/reports/{token}").json()
+    assert "sources" not in body and "On Pricing" not in raw  # a shared page never lists what it was made from
     client.patch("/api/settings", json={"allow_public_links": False}, headers=auth)
     assert client.get(f"/api/public/reports/{token}").status_code == 404  # the workspace switch ends every link
     assert client.post(f"/api/artifacts/{done['id']}/share", headers=auth).status_code == 403
@@ -1991,14 +2035,14 @@ def test_artifacts_can_be_rated_with_a_thumb_and_reasons(client, auth, run_jobs,
     assert client.get(f"/api/artifacts/{art['id']}", headers=auth).json()["feedback"] is None
 
     up = client.put(url, json={"rating": "up"}, headers=auth).json()["feedback"]
-    assert up == {"rating": "up", "reasons": [], "comment": None}
+    assert up == {"rating": "up", "stars": 2, "reasons": [], "comment": None}  # no stars given: 2
     listed = client.get(f"/api/notebooks/{nb['id']}/artifacts", headers=auth).json()
     assert next(a for a in listed if a["id"] == art["id"])["feedback"]["rating"] == "up"
 
     # Rating again replaces it; unknown reasons are dropped, known ones for this kind kept; a thumbs up carries none
     down = client.put(url, json={"rating": "down", "reasons": ["messy_layout", "nonsense", "wrong_answers"],
                                  "comment": "  Boxes overlap  "}, headers=auth).json()["feedback"]
-    assert down == {"rating": "down", "reasons": ["messy_layout"], "comment": "Boxes overlap"}
+    assert down == {"rating": "down", "stars": None, "reasons": ["messy_layout"], "comment": "Boxes overlap"}
     assert client.get("/api/artifacts?type=infographic", headers=auth).json()["items"][0]["feedback"]["rating"] == "down"
     rows = client.get("/api/artifacts/feedback/export?rating=down", headers=auth).json()
     assert len(rows) == 1 and rows[0]["type"] == "infographic" and rows[0]["snapshot"]["layout"] == "composed"
@@ -2032,3 +2076,72 @@ def test_rating_an_artifact_is_logged_without_the_comment_text(client, auth, run
     assert "feedback refused" in text and "feedback saved" in text and "feedback exported" in text and "feedback removed" in text
     assert art["id"] in text and "rating=down" in text and "messy_layout" in text and "comment_chars=18" in text
     assert "private words here" not in text
+
+
+def test_sources_added_from_a_notebook_join_it(client, auth, run_jobs, feed, monkeypatch):
+    nb = client.post("/api/notebooks", json={"title": "Pricing"}, headers=auth).json()
+
+    def notebook_posts() -> set[str]:
+        return {d["title"] for d in client.get(f"/api/notebooks/{nb['id']}", headers=auth).json()["documents"]}
+
+    r = client.post("/api/sources", json={"url": "ada.example.com", "notebook_id": nb["id"]}, headers=auth)
+    assert r.status_code == 200, r.text
+    assert run_jobs()[0].status == "done"
+    assert notebook_posts() == {"On Pricing", "Writing Every Day"}  # the whole source, in the notebook it came from
+
+    body = "Rebalancing keeps a portfolio on plan. " * 20
+    monkeypatch.setattr(httpx, "get", fake_web({
+        "https://elsewhere.example.com/essay": FakeResponse(200, ARTICLE.format(t="Rebalancing", body=body), "text/html")}))
+    r = client.post("/api/sources/url", json={"url": "https://elsewhere.example.com/essay", "notebook_id": nb["id"]},
+                    headers=auth)
+    assert r.status_code == 200 and run_jobs()[0].status == "done"
+    assert "Rebalancing" in notebook_posts()
+
+    other = client.post("/api/notebooks", json={"title": "Elsewhere"}, headers=auth).json()
+    r = client.post("/api/sources/url", json={"url": "https://elsewhere.example.com/essay"}, headers=auth)
+    assert r.status_code == 200 and run_jobs()[0].status == "done"
+    assert client.get(f"/api/notebooks/{other['id']}", headers=auth).json()["documents"] == []  # no notebook asked for
+
+    missing = "00000000-0000-0000-0000-000000000000"
+    assert client.post("/api/sources/url", json={"url": "https://elsewhere.example.com/essay", "notebook_id": missing},
+                       headers=auth).status_code == 404
+
+
+def test_landing_opens_the_latest_notebook(client, auth, run_jobs, feed):
+    assert client.get("/api/notebooks/landing", headers=auth).json() == {"onboarded": False, "notebook_id": None}
+    connect(client, auth, run_jobs)
+    got = client.get("/api/notebooks/landing", headers=auth).json()
+    archive = client.post("/api/notebooks/archive", headers=auth).json()
+    assert got == {"onboarded": True, "notebook_id": archive["id"]}  # no notebook of their own yet: All posts
+    nb = client.post("/api/notebooks", json={"title": "Pricing"}, headers=auth).json()
+    assert client.get("/api/notebooks/landing", headers=auth).json()["notebook_id"] == nb["id"]
+
+
+def test_decks_audio_and_videos_take_positive_and_negative_reviews(client, auth, db_session):
+    """One table for both: a thumbs up is a positive review stored as its stars (1 to 5, 2 by default), a thumbs down a
+    negative one (rating -1)."""
+    from app.models import ArtifactFeedback
+
+    ws = db_session.query(Workspace).first()
+    deck = Artifact(workspace_id=ws.id, type="slide_deck", status="ready", content_json={"title": "Deck"})
+    audio = Artifact(workspace_id=ws.id, type="audio_overview", status="ready", content_json={"title": "Talk"})
+    video = Artifact(workspace_id=ws.id, type="video", status="generating",
+                     content_json={"title": "Clip", "provider": "blog2video", "video_url": "https://cdn.test/v.mp4"})
+    db_session.add_all([deck, audio, video])
+    db_session.commit()
+    r = client.put(f"/api/artifacts/{deck.id}/feedback", json={"rating": "up", "stars": 4, "comment": "Clear and tidy"},
+                   headers=auth)
+    assert r.status_code == 200
+    assert r.json()["feedback"] == {"rating": "up", "stars": 4, "reasons": [], "comment": "Clear and tidy"}
+    r = client.put(f"/api/artifacts/{audio.id}/feedback",
+                   json={"rating": "down", "reasons": ["voices", "nonsense"], "comment": "Robotic"}, headers=auth)
+    assert r.json()["feedback"]["reasons"] == ["voices"]
+    assert client.put(f"/api/artifacts/{video.id}/feedback", json={"rating": "down"}, headers=auth).status_code == 200
+    rows = {(f.artifact_type, f.rating, f.comment) for f in db_session.query(ArtifactFeedback)}
+    assert rows == {("slide_deck", 4, "Clear and tidy"), ("audio_overview", -1, "Robotic"), ("video", -1, None)}
+    assert client.put(f"/api/artifacts/{audio.id}/feedback", json={"rating": "up", "stars": 6}, headers=auth).status_code == 422
+    client.put(f"/api/artifacts/{audio.id}/feedback", json={"rating": "up"}, headers=auth)  # no stars given: 2
+    assert db_session.query(ArtifactFeedback).filter_by(artifact_id=audio.id).one().rating == 2
+    client.put(f"/api/artifacts/{deck.id}/feedback", json={"rating": "down", "comment": "On second look, too long"},
+               headers=auth)  # rating again replaces it
+    assert db_session.query(ArtifactFeedback).filter_by(artifact_id=deck.id).one().rating == -1

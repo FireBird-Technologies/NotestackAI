@@ -1,0 +1,41 @@
+/* The Notestack app's design, applied to every chat view when it is served (the same tokens as the web app's tokens.css and
+   global.css): black, one blue, white at different opacities; Inter for text, Space Grotesk for headings, JetBrains Mono for
+   small labels; pill buttons with a blue glow; cards of 14px with a hairline border. */
+:root {
+  --black: #000; --blue: #217cff; --white: #fff;
+  --blue-90: rgba(33,124,255,.9); --blue-60: rgba(33,124,255,.6); --blue-35: rgba(33,124,255,.35); --blue-20: rgba(33,124,255,.2); --blue-10: rgba(33,124,255,.1);
+  --text: #fff; --text-2: rgba(255,255,255,.72); --text-3: rgba(255,255,255,.56);
+  --line: rgba(255,255,255,.1); --line-strong: rgba(255,255,255,.18); --surface: rgba(255,255,255,.03); --surface-2: rgba(255,255,255,.06);
+  --glow-sm: 0 0 12px var(--blue-35); --glow-md: 0 0 24px var(--blue-35), 0 0 2px var(--blue-60);
+  --font-display: "Space Grotesk", "Inter", system-ui, sans-serif; --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+  --radius-sm: 8px; --radius: 14px; --radius-lg: 22px;
+  color-scheme: dark;
+}
+html, body, button, input, select, textarea { font-family: var(--font-body); }
+html, body { color: var(--text); -webkit-font-smoothing: antialiased; }
+h1, h2, h3, h4, #title, #q { font-family: var(--font-display); font-weight: 600; letter-spacing: -.01em; line-height: 1.15; }
+h1, h2 { text-transform: none; }
+
+/* small labels: the app's uppercase hairline captions, and the mono eyebrow */
+h3, .lab, .tag, #kind, .vw-label { font-family: var(--font-body); font-size: .75rem; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); }
+#meta, .eyebrow { font-family: var(--font-mono); font-size: .75rem; letter-spacing: .22em; text-transform: uppercase; color: var(--blue); }
+small, .hint, .sub, .note, .mini { color: var(--text-3); }
+
+/* one Expand button, the same pill as the app's small buttons */
+#expand { position: fixed; right: 12px; bottom: 12px; z-index: 50; height: 32px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line-strong);
+  background: rgba(0,0,0,.72); color: var(--text); font: 600 .8125rem var(--font-body); cursor: pointer; backdrop-filter: blur(6px);
+  transition: box-shadow .2s, border-color .2s; }
+#expand:hover { border-color: var(--blue-60); box-shadow: var(--glow-sm); }
+
+/* cards and panels: 14px, hairline, faint surface */
+#box, #deck, #quiz, #sky, #body, #card, .face, .panel, .plist, #posts, #pickbox, #fresh, .card, .q { border-color: var(--line); }
+#card, .panel, #pickbox, .card { border-radius: var(--radius); }
+.face { border-radius: var(--radius); background: rgba(0,0,0,.6); border: 1px solid var(--line-strong); }
+.face.back { background: var(--blue-10); border-color: var(--blue-35); }
+
+/* links and the quiet scrollbar */
+a { color: var(--blue); }
+* { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.2) transparent; }
+::-webkit-scrollbar { width: 8px; height: 8px; } ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.2); border-radius: 999px; }
+:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; border-radius: 4px; }

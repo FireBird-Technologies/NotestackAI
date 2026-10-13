@@ -14,8 +14,15 @@ export type Providers = { google: "redirect" | "popup" | null };
 
 /** Only same site paths, mirroring the backend check, so `next` cannot become an open redirect. */
 export function safeNext(path: string | null | undefined): string {
-  if (!path || !path.startsWith("/") || path.startsWith("//") || path.includes("\\")) return "/app";
+  // No (or no safe) place to go back to: /app/start, which opens the right notebook (or onboarding).
+  if (!path || !path.startsWith("/") || path.startsWith("//") || path.includes("\\")) return "/app/start";
   return path;
+}
+
+/** Where a new account goes after signing up from `next`: onboarding, except people who came to use a free tool or to
+ * read a shared preview, who go straight back to it. */
+export function afterSignUp(next: string): string {
+  return next.startsWith("/tools/") || next.startsWith("/r/") ? next : "/welcome";
 }
 
 export const authApi = {

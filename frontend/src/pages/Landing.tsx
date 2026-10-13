@@ -7,6 +7,7 @@ import "../styles/showcase.css";
 import { PublicFooter, PublicNav } from "../components/PublicChrome";
 import { blogPosts } from "../content/blogPosts";
 import { useAuth } from "../hooks/useAuth";
+import { SourceUrlHint, useSourceUrlCheck } from "../components/SourceUrlCheck";
 import {
   ArrowRightIcon,
   ConstellationIcon,
@@ -160,11 +161,13 @@ export default function Landing() {
   const navigate = useNavigate();
   const { user } = useAuth();
   useArrivals();
+  const { check, modal } = useSourceUrlCheck();
 
-  const onSubmit = (e: FormEvent) => {
+  const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (url.trim() && !(await check(url))) return;
     // Always go to sign in / sign up. A pasted URL rides along and starts connecting after signup
-    // (Welcome picks it up); signed in writers go straight to Mission Control, which does the same.
+    // (Welcome picks it up); signed in writers go to /app/start, which connects it and opens All posts.
     const value = url.trim();
     if (value) {
       try {
@@ -173,7 +176,7 @@ export default function Landing() {
         /* ignore */
       }
     }
-    navigate(user ? "/app" : "/auth?mode=signup");
+    navigate(user ? "/app/start" : "/auth?mode=signup");
   };
 
   return (
@@ -217,6 +220,8 @@ export default function Landing() {
                 <ArrowRightIcon size={18} />
               </button>
             </form>
+            <SourceUrlHint url={url} />
+            {modal}
             <p className="mono hero-meta">
               Works with Substack, Ghost, WordPress, Medium, any RSS feed or site, and markdown files.{" "}
               <Link to="/auth?mode=signup">Upload files instead</Link>

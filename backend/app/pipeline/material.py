@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.corpus import Corpus
 from app.models import Chat, Document, Job, Message, Notebook, Workspace
-from app.pipeline.generate import NothingToDo
+from app.pipeline.generate import NothingToDo, extract_ideas, ideas_fresh
 from app.pipeline.passages import ScopedTools, notebook_docs, passages_for, tools_for, verify_refs, workspace_docs
 from app.services.jobs import update_job
 from app.services.plans import effective_plan
@@ -37,6 +37,18 @@ def use_ideas(docs: list[Document], *, large_ok: bool, ideas_always: bool) -> bo
     if len(docs) > max_posts() or ideas_always:
         return has_ideas(docs) * 2 >= len(docs)
     return False
+
+
+def _extract_missing_ideas(db: Session, job: Job | None, workspace_id: uuid.UUID, docs: list[Document]) -> None:
+    """A set that is always made from the posts' key ideas (flashcards) reads those posts first when they have none yet, together
+    and once: the ideas stay on the post, so the next set finds them. At most `report_inline_ideas` posts, like a report; the
+    rest are represented by a random stretch of their text."""
+    stale = [d for d in docs if not ideas_fresh(d)]
+    if not stale or settings.report_inline_ideas <= 0:
+        return
+    extract_ideas(db, job, workspace_id, [str(d.id) for d in stale], parallel=True, limit=settings.report_inline_ideas)
+    for d in stale:
+        db.refresh(d)
 
 
 @dataclass
@@ -91,7 +103,12 @@ def load_material(db: Session, workspace_id: uuid.UUID, notebook_id: uuid.UUID |
         docs = notebook_docs(db, nb.id)
     # Quiz and flashcards take as many posts as the plan indexes: their ideas are sampled. The rest read max_posts().
     docs = docs[:effective_plan(db, db.get(Workspace, workspace_id)).indexed_posts] if large_ok else docs[:max_posts()]
-    ideas_mode = use_ideas(docs, large_ok=large_ok, ideas_always=ideas_always)
+    from app.pipeline.idea_pool import SMALL_SELECTION, spread_text
+
+    small = ideas_always and 0 < len(docs) <= SMALL_SELECTION  # a post stores at most 8 ideas: for one or two, read their text
+    if ideas_always and docs and not small:
+        _extract_missing_ideas(db, job, workspace_id, docs)
+    ideas_mode = use_ideas(docs, large_ok=large_ok, ideas_always=ideas_always) and not small
     if large_ok and not ideas_mode:
         docs = docs[:max_posts()]  # their ideas are not stored yet: read the first posts' text, as a small selection is
 
@@ -114,7 +131,12 @@ def load_material(db: Session, workspace_id: uuid.UUID, notebook_id: uuid.UUID |
         if job:
             update_job(db, job, progress=0.1, message=f"Gathering the key ideas of {len(docs)} posts" if ideas_mode
                        else f"Reading {len(docs)} posts")
-        text = [] if ideas_mode else passages_for(corpus, docs, budget_chars=passage_budget)
+        if ideas_mode:
+            text = []
+        elif small:
+            text = spread_text(workspace_id, docs, str(params.get("topic") or ""))
+        else:
+            text = passages_for(corpus, docs, budget_chars=passage_budget)
         tools = tools_for(corpus, docs)
         by_path = {d.path: d for d in docs}
 

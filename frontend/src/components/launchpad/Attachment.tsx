@@ -4,9 +4,10 @@ import { useNavigate } from "react-router-dom";
 import { ApiError } from "../../api/client";
 import { artifactsApi, launchpadApi, videoEditApi, videosApi } from "../../api/endpoints";
 import type { PostableArtifact } from "../../api/types";
-import { ArrowRightIcon, DownloadIcon, FilmIcon, HeadphonesIcon, SlidesIcon, SparkleIcon, UploadIcon } from "../icons/Icons";
+import { ArrowRightIcon, DownloadIcon, FilmIcon, HeadphonesIcon, InfographicIcon, ReportIcon, SlidesIcon, SparkleIcon, UploadIcon } from "../icons/Icons";
 import { errorMessage, formatDate, Loading, Modal } from "../ui";
 import { finished, jobPercent } from "../video/jobState";
+import { AttachmentPreviewModal } from "./AttachmentPreview";
 
 /** X's video limit for standard accounts (2:20): longer videos go to LinkedIn only. */
 export const X_VIDEO_SECONDS = 140;
@@ -28,6 +29,8 @@ export function mediaLabel(a: PostableArtifact): string {
     const cut = n > 20 ? " · X posts the first 4, LinkedIn the first 20" : n > 4 ? " · X posts the first 4" : "";
     return `${n} slide${n === 1 ? "" : "s"} as images${cut}`;
   }
+  // A report goes as its text when it fits in a post, else as a PDF (LinkedIn); an infographic as one image.
+  if (a.media === "document" || a.type === "report") return "PDF document · LinkedIn";
   if (a.media === "image") return a.media_count === 1 ? "Image" : `${a.media_count} images`;
   return "Text";
 }
@@ -37,7 +40,8 @@ function Thumb({ a }: { a: PostableArtifact }) {
   return (
     <span className="lp-thumb lp-thumb-icon" aria-hidden="true">
       {a.media === "video" ? <FilmIcon size={20} /> : a.media === "audio" ? <HeadphonesIcon size={20} />
-        : a.type === "slide_deck" ? <SlidesIcon size={20} /> : <SparkleIcon size={20} />}
+        : a.type === "slide_deck" ? <SlidesIcon size={20} /> : a.type === "report" ? <ReportIcon size={20} />
+        : a.type === "infographic" ? <InfographicIcon size={20} /> : <SparkleIcon size={20} />}
     </span>
   );
 }
@@ -105,13 +109,22 @@ export function AttachmentChip({ a, onChange, onRemove }: {
           <Thumb a={a} />
         </button>
       ) : <Thumb a={a} />}
-      {previewing && <MediaPreviewModal a={a} onClose={() => setPreviewing(false)} />}
+      {previewing && <AttachmentPreviewModal a={a} onClose={() => setPreviewing(false)} />}
       <span className="lp-attach-text">
         <strong>{a.title}</strong>
         <span className="muted small">{a.type_label} · {mediaLabel(a)}</span>
       </span>
-      {onChange && <button type="button" className="btn btn-small" onClick={onChange}>Change</button>}
-      {onRemove && <button type="button" className="btn btn-small" onClick={onRemove}>Remove</button>}
+      <span className="lp-attach-actions">
+        <button type="button" className="btn btn-xs" onClick={() => setPreviewing(true)}>Preview</button>
+        {onChange && <button type="button" className="btn btn-xs" onClick={onChange}>Change</button>}
+        {onRemove && (
+          <button type="button" className="icon-btn lp-attach-remove" onClick={onRemove} aria-label={`Remove ${a.title}`} title="Remove">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        )}
+      </span>
     </div>
   );
 }
@@ -341,19 +354,22 @@ function deleteWording(a: PostableArtifact): { title: string; body: string } {
   return { title: "Delete this item?", body: "It's deleted for good. Posts on your calendar that carry it are removed too." };
 }
 
-type Kind = "all" | "kits" | "video" | "decks" | "audio" | "uploads";
+type Kind = "all" | "kits" | "video" | "decks" | "reports" | "infographics" | "audio" | "uploads";
 const KINDS: { id: Kind; label: string }[] = [
   { id: "all", label: "All" },
   { id: "kits", label: "Launch kits" },
   { id: "video", label: "Videos" },
   { id: "decks", label: "Slide decks" },
+  { id: "reports", label: "Reports" },
+  { id: "infographics", label: "Infographics" },
   { id: "audio", label: "Audio" },
   { id: "uploads", label: "Uploads" },
 ];
 /** Which rows a tab shows: Videos is only the ones the video service made (uploaded videos are under Uploads). */
 const matches = (a: PostableArtifact, kind: Kind) =>
   kind === "all" || (kind === "kits" ? a.type === "launch_kit" : kind === "uploads" ? a.type === "upload"
-    : kind === "decks" ? a.type === "slide_deck" : kind === "audio" ? a.type === "audio_overview" : a.editable_video);
+    : kind === "decks" ? a.type === "slide_deck" : kind === "reports" ? a.type === "report"
+    : kind === "infographics" ? a.type === "infographic" : kind === "audio" ? a.type === "audio_overview" : a.editable_video);
 
 /** Saves a file from its (presigned, attachment) link. */
 function download(url: string) {
@@ -599,6 +615,8 @@ export function LibraryPicker({ onPick, onPickKit, onCreateKit, fill = false, on
           <p className="muted lp-pick-empty">{kind === "kits" ? "No launch kits yet: create a new one."
             : kind === "uploads" ? "Nothing uploaded yet." : kind === "decks" ? "No slide decks yet: make one from a notebook."
             : kind === "audio" ? "No audio overviews yet: make one from a notebook."
+            : kind === "reports" ? "No reports yet: make one from a notebook."
+            : kind === "infographics" ? "No infographics yet: make one from a notebook."
             : "Nothing to attach here yet."}</p>
         )}
         <ul className={`lk-rows lp-pick-rows${fill ? " lp-pick-rows-fill" : ""}`}>

@@ -32,6 +32,11 @@ def create_refresh_token(user_id: uuid.UUID, token_version: int) -> str:
     return _encode(user_id, token_version, "refresh", timedelta(days=settings.jwt_refresh_expiration_days))
 
 
+def create_short_access_token(user_id: uuid.UUID, token_version: int, seconds: int = 60) -> str:
+    """A normal access token that expires in moments, for in-process calls made on a user's behalf (the MCP tools)."""
+    return _encode(user_id, token_version, "access", timedelta(seconds=seconds))
+
+
 def create_login_ticket(user_id: uuid.UUID, token_version: int, created: bool) -> str:
     """Short lived handoff from the OAuth callback redirect to the SPA, swapped for real tokens."""
     now = datetime.now(UTC)

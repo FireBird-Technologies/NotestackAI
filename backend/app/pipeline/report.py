@@ -535,12 +535,12 @@ def copy_block(kind: str, existing: Artifact) -> dict:
     """A visual's content taken from an artifact the user already made (a Mind Constellation, a quiz or flashcards)."""
     c = existing.content_json or {}
     if kind == "mind_map" and c.get("root"):
-        return {"title": c.get("title"), "root": c["root"], "node_count": c.get("node_count"),
+        return {"title": c.get("title"), "artifact_id": str(existing.id), "root": c["root"], "node_count": c.get("node_count"),
                 "post_count": c.get("post_count")}
     if kind == "quiz" and c.get("questions"):
-        return {"title": c.get("title"), "questions": c["questions"]}
+        return {"title": c.get("title"), "artifact_id": str(existing.id), "questions": c["questions"]}
     if kind == "flashcards" and c.get("cards"):
-        return {"title": c.get("title"), "cards": c["cards"]}
+        return {"title": c.get("title"), "artifact_id": str(existing.id), "cards": c["cards"]}
     if kind == "infographic" and c.get("content"):  # the picture itself is shared, not copied
         return {"title": c.get("title"), "artifact_id": str(existing.id), "theme": c.get("theme")}
     raise NothingToDo("That one has nothing to add.")
@@ -614,7 +614,9 @@ def handle_report_block(db: Session, job: Job) -> dict:
             block = copy_block(kind, existing)
         else:
             block = make_block(db, job, report, kind, (p.get("brief") or "").strip(), p.get("theme"))
-            keep_visual(db, report, {"type": kind, **block})  # a new one also lands in the notebook's Studio list
+            saved = keep_visual(db, report, {"type": kind, **block})  # also lands in the notebook's Studio list
+            if saved and not block.get("artifact_id"):
+                block["artifact_id"] = str(saved.id)
     except NothingToDo as exc:
         raise PermanentJobError(str(exc)) from exc
     # Several visuals can be built at once and each takes a while: lock the report and read it again here, so this
@@ -644,8 +646,9 @@ def keep_visual(db: Session, report: Artifact, block: dict) -> Artifact | None:
         return None  # an infographic already is its own artifact
     same = db.scalars(select(Artifact).where(Artifact.workspace_id == report.workspace_id, Artifact.type == kind,
                                              Artifact.notebook_id == report.notebook_id))
-    if any((a.content_json or {}).get(key) == content[key] for a in same):
-        return None
+    duplicate = next((a for a in same if (a.content_json or {}).get(key) == content[key]), None)
+    if duplicate:
+        return duplicate
     saved = Artifact(workspace_id=report.workspace_id, notebook_id=report.notebook_id, type=kind, status="ready",
                      content_json={"title": block.get("title") or kind, "source": source, **content})
     db.add(saved)

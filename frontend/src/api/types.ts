@@ -84,7 +84,13 @@ export type Citation = {
 };
 
 export type ChatSummary = { id: string; title: string | null; updated_at: string | null };
-export type AnswerFeedback = { rating: "up" | "down"; reasons: string[]; comment: string | null };
+export type AnswerFeedback = {
+  rating: "up" | "down";
+  /** A thumbs up's rating, 1 to 5 (artifacts only). */
+  stars?: number | null;
+  reasons: string[];
+  comment: string | null;
+};
 /** A chat listed across the whole workspace, with the notebook it belongs to. */
 export type WorkspaceChat = ChatSummary & { notebook_id: string; notebook_title: string };
 export type ChatMessage = { id: string; role: "user" | "assistant"; text: string; citations: Citation[]; feedback?: AnswerFeedback | null };
@@ -145,6 +151,20 @@ export type PublicReportData = {
 
 /** An infographic as the public sees it: its title and the page (our own template output, shown in a sandboxed frame). */
 export type PublicInfographicData = { kind: "infographic"; title: string; html: string; html_landscape?: string; created_at: string | null };
+
+type PublicHead = { title: string; created_at: string | null };
+export type PublicFlashcardsData = PublicHead & { kind: "flashcards"; cards: { front: string; back: string }[] };
+export type PublicQuizData = PublicHead & { kind: "quiz"; questions: QuizQuestion[] };
+export type PublicSlidesData = PublicHead & { kind: "slides"; pages: string[] };
+export type PublicAudioData = PublicHead & {
+  kind: "audio"; audio_url: string | null; duration: number | null;
+  segments: { speaker: string; text: string; start: number; end: number }[];
+};
+export type PublicVideoData = PublicHead & { kind: "video"; video_url: string | null; preview_url: string | null };
+
+/** Anything a share link can open. */
+export type PublicArtifactData = PublicReportData | PublicInfographicData | PublicFlashcardsData | PublicQuizData
+  | PublicSlidesData | PublicAudioData | PublicVideoData;
 
 export type ReportTemplate = { id: string; name: string; description: string; prompt: string };
 
@@ -333,7 +353,8 @@ export type PostableArtifact = {
   type_label: string;
   title: string;
   /** "audio": an audio overview, listed to download only (X and LinkedIn take no audio files). */
-  media: "image" | "video" | "audio" | "text";
+  /** "document": a report too long for one post, which goes to LinkedIn as a PDF. */
+  media: "image" | "video" | "audio" | "document" | "text";
   media_count: number;
   duration_s: number | null;
   thumb_url: string | null;
@@ -781,4 +802,22 @@ export type TemplateGeneration = {
   scenes_done?: number;
   scenes_total?: number;
   ready: boolean;
+};
+
+/** An app asking to connect to the writer's Notestack over MCP (Claude, ChatGPT, Cursor ...). */
+export type McpRequest = {
+  client_name: string;
+  /** Where the app will be sent back to after this. The name is self declared; this address is the real signal. */
+  redirect_host: string;
+  trust: "verified" | "local" | "unverified";
+  /** Every permission, with what the app asked for pre-ticked. Reading is always needed. */
+  scopes: { scope: string; label: string; requested: boolean; required: boolean }[];
+};
+
+export type McpGrant = {
+  id: string;
+  client_name: string;
+  scopes: string[];
+  created_at: string;
+  last_used_at: string | null;
 };

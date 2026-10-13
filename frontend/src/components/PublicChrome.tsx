@@ -9,7 +9,7 @@ export function PublicNav() {
   return (
     <header className="nav">
       <div className="container nav-inner">
-        <Link to="/" className="nav-brand" aria-label="Notestack home">
+        <Link to={user ? "/app/notebooks" : "/"} className="nav-brand" aria-label={user ? "Your notebooks" : "Notestack home"}>
           <Logo />
         </Link>
         <nav className="nav-links" aria-label="Main">
@@ -19,8 +19,8 @@ export function PublicNav() {
           <NavLink to="/blogs">Blog</NavLink>
         </nav>
         {user ? (
-          <Link to="/app" className="btn btn-primary nav-cta">
-            Mission Control
+          <Link to="/app/notebooks" className="btn btn-primary nav-cta">
+            Your notebooks
           </Link>
         ) : (
           <div className="nav-auth">

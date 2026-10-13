@@ -3,11 +3,29 @@ import { NavLink } from "react-router-dom";
 import { docsApi, jobsApi, sourcesApi } from "../api/endpoints";
 import type { Doc, Job, Source } from "../api/types";
 import { Reader } from "../components/Reader";
+import { SourceUrlHint, useSourceUrlCheck } from "../components/SourceUrlCheck";
 import { ConfirmButton, EmptyState, errorMessage, formatDate, JobProgress, Loading, PageHeader, StatusPill } from "../components/ui";
 import { useJobMap } from "../hooks/useJob";
 import { useUpgrade } from "../hooks/useUpgrade";
 
 const PAGE = 50;
+const PENDING_IMPORTS_ID = "pending-imports";
+
+function pendingImports(count: number): Source {
+  return {
+    id: PENDING_IMPORTS_ID,
+    feed_url: "imports",
+    site_url: null,
+    platform: "imports",
+    title: "Imported posts and files",
+    sync_status: "syncing",
+    sync_error: null,
+    last_synced_at: null,
+    document_count: count,
+    locked_count: 0,
+    is_imports: true,
+  };
+}
 
 /** Sources and the Topic map share one sidebar entry; this strip switches between them. */
 export function SourcesNav() {
@@ -64,11 +82,11 @@ export function looksLikeArticle(raw: string): boolean {
 }
 
 /** Imports each file as its own post. Returns how many failed. */
-export async function importFiles(files: File[], onAdded: (source: Source, job: Job) => void): Promise<number> {
+export async function importFiles(files: File[], onAdded: (source: Source, job: Job) => void, notebookId?: string): Promise<number> {
   let failed = 0;
   for (const f of files) {
     try {
-      const res = await sourcesApi.importFile(f);
+      const res = await sourcesApi.importFile(f, notebookId);
       onAdded(res.source, res.job);
     } catch {
       failed += 1;
@@ -78,21 +96,33 @@ export async function importFiles(files: File[], onAdded: (source: Source, job: 
 }
 
 /** One box for everything: paste a link (feed or article is worked out for you) or add files. */
-export function AddSource({ onAdded }: { onAdded: (source: Source, job: Job) => void }) {
+export function AddSource({
+  onAdded,
+  notebookId,
+  onUploadStart,
+  onUploadSettled,
+}: {
+  onAdded: (source: Source, job: Job) => void;
+  /** Added from inside a notebook: the posts join it. */
+  notebookId?: string;
+  onUploadStart?: (count: number) => void;
+  onUploadSettled?: (failed: number, total: number) => void;
+}) {
   const [value, setValue] = useState("");
   const [override, setOverride] = useState<"feed" | "url" | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const mode = override ?? (looksLikeArticle(value) ? "url" : "feed");
+  const { check, modal } = useSourceUrlCheck();
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!value.trim()) return;
+    if (!value.trim() || !(await check(value))) return;
     setError(null);
     setBusy(true);
     try {
-      const res = mode === "feed" ? await sourcesApi.connect(value.trim()) : await sourcesApi.importUrl(value.trim());
+      const res = mode === "feed" ? await sourcesApi.connect(value.trim(), notebookId) : await sourcesApi.importUrl(value.trim(), notebookId);
       onAdded(res.source, res.job);
       setValue("");
       setOverride(null);
@@ -108,7 +138,9 @@ export function AddSource({ onAdded }: { onAdded: (source: Source, job: Job) => 
     if (!list.length) return;
     setError(null);
     setBusy(true);
-    const failed = await importFiles(list, onAdded);
+    onUploadStart?.(list.length);
+    const failed = await importFiles(list, onAdded, notebookId);
+    onUploadSettled?.(failed, list.length);
     if (failed) setError(`${failed} of ${list.length} files could not be uploaded.`);
     setBusy(false);
     if (fileRef.current) fileRef.current.value = "";
@@ -155,11 +187,13 @@ export function AddSource({ onAdded }: { onAdded: (source: Source, job: Job) => 
           </>
         )}
       </p>
+      <SourceUrlHint url={value} />
       {error && (
         <p className="error-text" role="alert">
           {error}
         </p>
       )}
+      {modal}
     </div>
   );
 }
@@ -175,8 +209,21 @@ export default function Sources() {
   const [offset, setOffset] = useState(0);
   const [reading, setReading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [optimisticImportCount, setOptimisticImportCount] = useState<number | null>(null);
+  const optimisticImportCountRef = useRef<number | null>(null);
 
-  const loadSources = useCallback(() => sourcesApi.list().then(setSources), []);
+  const rememberOptimisticCount = (count: number | null) => {
+    optimisticImportCountRef.current = count;
+    setOptimisticImportCount(count);
+  };
+
+  const loadSources = useCallback(() => sourcesApi.list().then((next) => {
+    const expected = optimisticImportCountRef.current;
+    if (expected === null) return setSources(next);
+    const imports = next.find((s) => s.is_imports);
+    if (!imports) return setSources([...next, pendingImports(expected)]);
+    setSources(next.map((s) => (s.id === imports.id ? { ...s, document_count: Math.max(s.document_count, expected) } : s)));
+  }), []);
   const loadDocs = useCallback(
     (reset = true) => {
       const start = reset ? 0 : offset + PAGE;
@@ -189,9 +236,10 @@ export default function Sources() {
     [q, filter, offset],
   );
 
-  const { jobs, watch } = useJobMap(() => {
-    loadSources();
-    loadDocs();
+  const { jobs, watch } = useJobMap((_key, finished) => {
+    void Promise.all([loadSources(), loadDocs()]).then(() => {
+      if (finished.kind === "import_upload") rememberOptimisticCount(null);
+    });
   });
 
   // The post counts on the cards come from the server, so refresh them, and the posts list under them, while a sync is running:
@@ -234,10 +282,29 @@ export default function Sources() {
 
   const added = (source: Source, job: Job) => {
     setSources((list) => {
-      const rest = (list ?? []).filter((s) => s.id !== source.id);
+      const rest = (list ?? []).filter((s) => s.id !== source.id && !(source.is_imports && s.is_imports));
       return [...rest, source];
     });
     watch(source.id, job);
+  };
+
+  const importsStarted = (count: number) => {
+    const current = sources?.find((s) => s.is_imports)?.document_count ?? 0;
+    const expected = Math.max(current, optimisticImportCountRef.current ?? 0) + count;
+    rememberOptimisticCount(expected);
+    setSources((list) => {
+      const items = list ?? [];
+      const existing = items.find((s) => s.is_imports);
+      if (!existing) return [...items, pendingImports(expected)];
+      return items.map((s) => (s.id === existing.id ? { ...s, document_count: expected, sync_status: "syncing" } : s));
+    });
+  };
+
+  const importsSettled = (failed: number, total: number) => {
+    if (!failed) return;
+    const next = Math.max(0, (optimisticImportCountRef.current ?? total) - failed);
+    rememberOptimisticCount(next || null);
+    if (failed === total) void loadSources();
   };
 
   const [dropping, setDropping] = useState(false);
@@ -258,13 +325,15 @@ export default function Sources() {
         e.preventDefault();
         setDropping(false);
         const files = Array.from(e.dataTransfer.files);
+        importsStarted(files.length);
         const failed = await importFiles(files, added);
+        importsSettled(failed, files.length);
         setError(failed ? `${failed} of ${files.length} files could not be uploaded.` : null);
       }}
     >
       <SourcesNav />
       <PageHeader eyebrow="Sources" title="Your knowledge, in orbit" />
-      <AddSource onAdded={added} />
+      <AddSource onAdded={added} onUploadStart={importsStarted} onUploadSettled={importsSettled} />
       {error && <p className="error-text">{error}</p>}
 
       {/* Outside the card grid, so the loader is centered across the page rather than in the first column */}
@@ -279,7 +348,7 @@ export default function Sources() {
                 <div className="source-title">
                   <strong>{s.title ?? s.feed_url}</strong>
                   <span className="mono muted">
-                    {s.is_imports ? "imports" : s.platform} · {s.document_count - s.locked_count} posts
+                    {s.is_imports ? "imports" : s.platform} · {Math.max(s.document_count - s.locked_count, s.is_imports ? optimisticImportCount ?? 0 : 0)} posts
                     {s.last_synced_at ? ` · synced ${formatDate(s.last_synced_at, true)}` : ""}
                   </span>
                 </div>
@@ -325,7 +394,11 @@ export default function Sources() {
                     {filter === s.id ? "Show all posts" : "Only these posts"}
                   </button>
                 )}
-                <ConfirmButton
+                {s.id === PENDING_IMPORTS_ID ? (
+                  <button type="button" className="btn btn-small" disabled title="Available as soon as the upload begins">
+                    Delete
+                  </button>
+                ) : <ConfirmButton
                   confirmLabel="Click again to delete"
                   busyLabel="Deleting..."
                   onConfirm={async () => {
@@ -349,7 +422,7 @@ export default function Sources() {
                   }}
                 >
                   Delete
-                </ConfirmButton>
+                </ConfirmButton>}
               </footer>
             </article>
           );

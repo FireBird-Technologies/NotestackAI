@@ -21,7 +21,7 @@ export default function NotebookLMAlternative() {
     name: "Notestack",
     applicationCategory: "BusinessApplication",
     operatingSystem: "Web",
-    description: "The ultimate NotebookLM alternative for writers: a grounded research notebook built from your own archive.",
+    description: "Notestack vs NotebookLM for writers: a grounded research notebook built from your own archive.",
     offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
   };
 
@@ -34,12 +34,12 @@ export default function NotebookLMAlternative() {
         <script type="application/ld+json">{JSON.stringify(appLd)}</script>
 
         <header className="mission-head">
-          <p className="eyebrow">NotebookLM alternative</p>
+          <p className="eyebrow">Notestack vs NotebookLM</p>
           <div className="transmission incoming">
             <span className="mono tx-label">Incoming query</span>
             <p className="tx-query">Is there a NotebookLM built for my own writing?</p>
           </div>
-          <h1 className="post-title">Notestack vs NotebookLM: the NotebookLM alternative for writers</h1>
+          <h1 className="post-title">Notestack vs NotebookLM: which fits a writer's archive?</h1>
           <p className="post-lede muted">
             NotebookLM is great for a pile of documents. Notestack is built for a body of work: it syncs your blog, newsletter, site or
             markdown, answers with citations to the exact lines you wrote, and turns your knowledge into audio, video and launch posts.
@@ -113,7 +113,7 @@ export default function NotebookLMAlternative() {
           <h2>When NotebookLM is still the right call</h2>
           <p className="muted">
             If you are studying someone else's documents for a one off project, want a free tool from Google, or live in Google Drive,
-            NotebookLM is excellent. Notestack is the ultimate NotebookLM alternative when the sources are your own writing and the goal is
+            NotebookLM is excellent. Notestack is the better fit when the sources are your own writing and the goal is
             to reuse and publish it.
           </p>
         </section>

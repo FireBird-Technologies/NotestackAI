@@ -129,8 +129,8 @@ function PodcastScriptWidget({ tool }: { tool: ToolDef }) {
           </ol>
           <div className="tool-next">
             <p className="muted">Hear it with two natural voices, grounded in your whole archive.</p>
-            <Link to="/app/studio" className="btn btn-primary">
-              Voice it in Studio
+            <Link to="/app/notebooks" className="btn btn-primary">
+              Make an audio overview
             </Link>
           </div>
         </div>

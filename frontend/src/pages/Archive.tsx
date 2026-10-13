@@ -7,7 +7,6 @@ import { Reader } from "../components/Reader";
 import { EmptyState, Loading, PageHeader, Tabs } from "../components/ui";
 import Videos from "./Videos";
 import { canPost, PostButton } from "../components/launchpad/PostButton";
-import { AudioOnlyModal } from "../components/launchpad/Attachment";
 
 type Filter = "all" | "report" | "summary" | "quiz" | "flashcards" | "mind_map" | "infographic" | "slide_deck" | "audio_overview";
 /** The Library's tabs: kinds of things made (a filter on one list), plus your videos (their own page). Voices moved to
@@ -40,17 +39,6 @@ export default function Archive() {
       <Tabs<Tab> tabs={TABS} value={tab} onChange={pickTab} />
       {tab === "videos" ? <Videos /> : <MadeList filter={tab} />}
     </div>
-  );
-}
-
-/** "Post" on an audio overview: X and LinkedIn take no audio files, so it explains that and offers the download. */
-function AudioPostButton({ artifact }: { artifact: Artifact }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <button type="button" className="btn btn-small" onClick={() => setOpen(true)}>Post</button>
-      {open && <AudioOnlyModal title={artifact.title} downloadUrl={artifact.download_url} onClose={() => setOpen(false)} />}
-    </>
   );
 }
 
@@ -104,8 +92,8 @@ function MadeList({ filter }: { filter: Filter }) {
       )}
       {items?.length === 0 && <EmptyState title="Nothing here yet" body="Reports, summaries, quizzes, flashcards, Mind Constellations, slide decks, audio and more that you create show up here."
           action={
-            <Link className="btn btn-primary" to="/app/studio">
-              Create something
+            <Link className="btn btn-primary" to="/app/notebooks">
+              Open a notebook
             </Link>
           }
         />}
@@ -114,8 +102,7 @@ function MadeList({ filter }: { filter: Filter }) {
           <ArtifactRow
             key={a.id}
             artifact={a}
-            actions={(art) => (canPost(art) ? <PostButton artifactId={art.id} />
-              : art.type === "audio_overview" && art.status === "ready" ? <AudioPostButton artifact={art} /> : null)}
+            actions={(art) => (canPost(art) ? <PostButton artifactId={art.id} artifact={art} /> : null)}
             onCite={(c) => c.document_id && setReading({ id: c.document_id, start: c.line_start, end: c.line_end })}
             onRemoved={(id) => {
               setItems((list) => (list ?? []).filter((x) => x.id !== id));

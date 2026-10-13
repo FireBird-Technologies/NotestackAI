@@ -26,6 +26,7 @@ from app.models import (
     Job,
     Message,
     Notebook,
+    NotebookDocument,
     Subscription,
     Topic,
     UsageCounter,
@@ -911,7 +912,7 @@ def test_chat_with_a_focus_keeps_the_chat_context_first(client, b2v, owner, hous
 
 
 @pytest.mark.parametrize("body", [{"video_length": "detailed"}, {"video_length": "more_detailed"},
-                                  {"custom_voice_id": BELLA}, {"template": "crafted_neon"}])
+                                  {"custom_voice_id": "not_a_voice"}, {"template": "crafted_neon"}])
 def test_options_that_are_not_offered_are_refused_on_every_plan(client, b2v, owner, body):
     headers, ws = owner
     r = client.post("/api/videos", json={"url": "https://a.test/x", **body}, headers=headers)
@@ -1124,15 +1125,23 @@ def test_capacity_alert(b2v, caplog):
 
 def test_new_workspace_gets_starter_voices_and_library(client, b2v, owner):
     got = client.get("/api/video-voices", headers=owner[0]).json()
-    assert [v["voice_id"] for v in got["saved"]] == [SARAH]  # free voices only
-    assert [v["voice_id"] for v in got["library"]] == [SARAH]  # the paid voice is not offered
+    assert [v["voice_id"] for v in got["saved"]] == [SARAH, BELLA]  # the first built-in voices, any of them
+    assert [v["voice_id"] for v in got["library"]] == [SARAH, BELLA]  # every voice offered, none marked premium
     assert "custom" not in got and all("premium" not in v for v in got["saved"] + got["library"])
 
 
-def test_a_paid_voice_cannot_be_saved_or_used_on_any_plan(client, b2v, owner):
-    assert client.post("/api/video-voices/saved", json={"voice_id": BELLA}, headers=owner[0]).status_code == 404
-    r = client.post("/api/videos", json={"url": "https://a.test/x", "custom_voice_id": BELLA}, headers=owner[0])
-    assert r.status_code == 404 and not creates(b2v)
+def test_a_paid_voice_can_be_saved_and_used(client, b2v, owner):
+    """blog2video and NoteStack share one ElevenLabs account, so any built-in voice works."""
+    headers, _ = owner
+    assert client.post("/api/video-voices/saved", json={"voice_id": BELLA}, headers=headers).status_code == 201
+    got = client.get("/api/video-voices", headers=headers).json()
+    assert BELLA in [v["voice_id"] for v in got["saved"]]
+    assert next(v for v in got["library"] if v["voice_id"] == BELLA)["saved"]
+    make_video(client, headers, custom_voice_id=BELLA)
+
+
+def test_an_unknown_voice_cannot_be_saved(client, b2v, owner):
+    assert client.post("/api/video-voices/saved", json={"voice_id": "not_a_voice"}, headers=owner[0]).status_code == 404
 
 
 def test_saved_voices_never_touch_blog2video_saved_list(client, b2v, owner, db_session):
@@ -1150,13 +1159,13 @@ def notestack_voice(db, ws, voice_id="nv_narrator", name="Narrator") -> None:
 
 def test_any_number_of_voices_can_be_saved(client, b2v, owner, db_session):
     headers, ws = owner
-    client.get("/api/video-voices", headers=headers)  # the starter voice
+    client.get("/api/video-voices", headers=headers)  # the starter voices (both built-in ones)
     for i in range(7):
         db_session.add(UserSavedVoice(workspace_id=ws.id, voice_id=f"v{i}", name=f"V{i}"))
     db_session.commit()
     assert client.post("/api/video-voices/saved", json={"voice_id": SARAH}, headers=headers).status_code in (200, 201)
     got = client.get("/api/video-voices", headers=headers).json()
-    assert len(got["saved"]) == 8 and "max_saved" not in got
+    assert len(got["saved"]) == 9 and "max_saved" not in got
 
 
 def test_notestack_voices_are_saved_for_audio_but_not_used_in_videos(client, b2v, owner, other, db_session):
@@ -1275,7 +1284,7 @@ def test_sync_follows_effective_plan(client, owner, db_session, monkeypatch):
     sub.status = "canceled"
     db_session.commit()
     sub = video_quota.sync_video_quota(db_session, ws)
-    assert (sub.video_plan, sub.video_limit) == ("free", 2)
+    assert (sub.video_plan, sub.video_limit) == ("free", 1)
 
 
 def test_monthly_fallback_reset(client, owner, db_session, session_factory):
@@ -1318,9 +1327,10 @@ def test_row_holds_the_full_reference(client, b2v, owner, db_session):
     b2v.queue("GET", "/api/v1/videos/812/status", (200, {"status": "done", "ready": True,
                                                           "video_url": "https://cdn.test/v.mp4"}))
     client.get(f"/api/videos/{art['id']}/status", headers=headers)
-    client.get(f"/api/videos/{art['id']}", headers=headers)
+    detail = client.get(f"/api/videos/{art['id']}", headers=headers).json()
     db_session.expire_all()
     assert row.video_url == "https://cdn.test/v.mp4" and row.preview_url == f"{API}/embed/t"
+    assert detail["video_url"] == "https://cdn.test/v.mp4"  # project may omit it after status already found it
 
 
 def test_calls_use_the_row_not_the_artifact_copy(client, b2v, owner, db_session):
@@ -1356,16 +1366,15 @@ def test_plan_video_limits(client, owner, db_session, monkeypatch):
     _, ws = owner
     monkeypatch.setattr(settings, "billing_enabled", True)
     video_quota.sync_video_quota(db_session, ws)
-    for plan, limit in (("free", 2), ("writer", 10), ("studio", 20)):
+    for plan, limit in (("free", 1), ("writer", 10), ("studio", 20)):
         _on_plan(db_session, ws, plan)
         assert video_quota.sync_video_quota(db_session, ws).video_limit == limit
 
 
-def test_free_is_two_videos_in_total(client, b2v, owner, free_plan, db_session, session_factory):
+def test_free_is_one_video_in_total(client, b2v, owner, free_plan, db_session, session_factory):
     headers, ws = owner
     make_video(client, headers)
-    make_video(client, headers, url="https://a.test/2")
-    r = client.post("/api/videos", json={"url": "https://a.test/3"}, headers=headers)
+    r = client.post("/api/videos", json={"url": "https://a.test/2"}, headers=headers)
     assert r.status_code == 402
     usage = client.get("/api/videos/quota", headers=headers).json()
     assert usage["resets_at"] is None
@@ -1395,7 +1404,7 @@ def test_dropping_to_free_counts_what_was_made(client, b2v, owner, db_session, m
         make_video(client, headers, url=f"https://a.test/{i}")
     _on_plan(db_session, ws, "free")
     usage = client.get("/api/videos/quota", headers=headers).json()
-    assert (usage["used"], usage["limit"]) == (3, 2)
+    assert (usage["used"], usage["limit"]) == (3, 1)
     assert client.post("/api/videos", json={"url": "https://a.test/x"}, headers=headers).status_code == 402
 
 
@@ -1412,3 +1421,33 @@ def test_list_restores_a_video_whose_library_item_went_missing(client, b2v, owne
     client.get(f"/api/videos/{listed[0]['id']}/status", headers=headers)
     assert "/api/v1/videos/812/status" in b2v.paths("GET")  # the same blog2video video
     assert len(client.get("/api/videos", headers=headers).json()) == 1  # restored once
+
+
+# The notebook a video is made in lists it
+
+def notebook_videos(client, headers, nb) -> list[str]:
+    return [a["id"] for a in client.get(f"/api/notebooks/{nb.id}/artifacts", headers=headers).json() if a["type"] == "video"]
+
+
+def test_a_video_is_listed_in_the_notebook_it_was_made_in(client, b2v, owner, other, db_session):
+    headers, ws = owner
+    _on_plan(db_session, ws, "studio")  # room for the five videos below
+    doc = add_doc(db_session, ws, "https://ada.example.com/p/a", "Raise prices once a year, and say why. " * 3)
+    nb = Notebook(workspace_id=ws.id, title="Pricing series")
+    db_session.add(nb)
+    db_session.flush()
+    db_session.add(NotebookDocument(notebook_id=nb.id, document_id=doc.id))
+    db_session.commit()
+    posts = make_video(client, headers, url=None, document_ids=[str(doc.id)], notebook_id=str(nb.id))
+    one = make_video(client, headers, url=None, document_id=str(doc.id), notebook_id=str(nb.id))
+    found = make_video(client, headers, url=None, document_id=str(doc.id))  # the post's only notebook
+    assert set(notebook_videos(client, headers, nb)) == {posts["id"], one["id"], found["id"]}
+    chat = add_chat(db_session, ws, [("user", "How often should I raise my prices?"),
+                                     ("assistant", "Once a year, and tell readers why the price went up.")])
+    chatted = make_video(client, headers, url=None, chat_ids=[str(chat.id)])
+    assert notebook_videos(client, headers, db_session.get(Notebook, chat.notebook_id)) == [chatted["id"]]
+    theirs = Notebook(workspace_id=other[1].id, title="Not yours")
+    db_session.add(theirs)
+    db_session.commit()
+    stray = make_video(client, headers, url=None, document_id=str(doc.id), notebook_id=str(theirs.id))
+    assert db_session.get(Artifact, uuid.UUID(stray["id"])).notebook_id == nb.id  # someone else's notebook is ignored

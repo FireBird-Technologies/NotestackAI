@@ -1,4 +1,5 @@
-"""What a shared report shows to someone with the link.
+"""What a shared artifact (a report, infographic, audio overview, video, slide deck, flashcard set or quiz) shows to
+someone with the link.
 
 The public view is built from a whitelist, field by field, never by filtering the stored content: a field added to a
 block later stays private until it is added here on purpose. It carries no post text, no quoted lines, no ids, no
@@ -11,6 +12,8 @@ from app.config import settings
 from app.models import Artifact, ArtifactShare
 from app.pipeline.infographic import infographic_html
 from app.services.artifacts import report_blocks
+from app.services.storage import storage
+from app.slides.build import view as slide_pages
 
 MARKER = re.compile(r"\s*\[\d+\](?:\[\d+\])*")  # [n] points into citations the public view does not carry
 MAX_TEXT = 20_000
@@ -57,17 +60,26 @@ def _block(b: dict) -> dict | None:
         html, wide = b.get("html"), b.get("html_landscape")
         return {**base, "html": html, "html_landscape": wide if isinstance(wide, str) else None} if isinstance(html, str) and html else None
     if kind == "flashcards":
-        return {**base, "cards": [{"front": _s(c.get("front"), 300), "back": _s(c.get("back"), 800)}
-                                  for c in b.get("cards") or [] if isinstance(c, dict)][:60]}
+        return {**base, "cards": _cards(b.get("cards"))}
     if kind == "quiz":
-        return {**base, "questions": [{
-            "type": q.get("type"), "question": _s(q.get("question"), 600),
-            "options": [_s(o, 300) for o in q.get("options") or []][:8],
-            "correct": [i for i in q.get("correct") or [] if isinstance(i, int)][:8],
-            "answer": _s(q.get("answer"), 600), "accepted": [_s(a, 200) for a in q.get("accepted") or []][:8],
-            "explanation": _s(q.get("explanation"), 800)}
-            for q in b.get("questions") or [] if isinstance(q, dict)][:30]}
+        return {**base, "questions": _questions(b.get("questions"))}
     return None
+
+
+def _cards(cards, limit: int = 60) -> list[dict]:
+    """Flashcards as front and back only (no sources)."""
+    return [{"front": _s(c.get("front"), 300), "back": _s(c.get("back"), 800)}
+            for c in cards or [] if isinstance(c, dict)][:limit]
+
+
+def _questions(questions, limit: int = 30) -> list[dict]:
+    """Quiz questions with their answers and explanations, and no sources."""
+    return [{"type": q.get("type"), "question": _s(q.get("question"), 600),
+             "options": [_s(o, 300) for o in q.get("options") or []][:8],
+             "correct": [i for i in q.get("correct") or [] if isinstance(i, int)][:8],
+             "answer": _s(q.get("answer"), 600), "accepted": [_s(a, 200) for a in q.get("accepted") or []][:8],
+             "explanation": _s(q.get("explanation"), 800), "sources": []}
+            for q in questions or [] if isinstance(q, dict)][:limit]
 
 
 def public_report(artifact: Artifact, share: ArtifactShare) -> dict:
@@ -77,14 +89,7 @@ def public_report(artifact: Artifact, share: ArtifactShare) -> dict:
     out = {"kind": "report", "title": _s(c.get("title"), 300), "format": "interactive" if c.get("format") == "interactive" else "document",
            "language": _s(c.get("language"), 40),
            "created_at": artifact.created_at.isoformat() if artifact.created_at else None, "blocks": blocks,
-           "show_sources": bool(share.show_sources)}
-    if share.show_sources:
-        source = c.get("source") or {}
-        # Only a post's own public web address is shown; an upload or anything else is named by its title alone.
-        out["sources"] = {"chats": len(source.get("chat_ids") or []), "posts": [
-            {"title": _s(s.get("title"), 300),
-             "url": s["url"] if isinstance(s.get("url"), str) and re.match(r"https?://", s["url"]) else None}
-            for s in c.get("sources") or [] if isinstance(s, dict)][:60]}
+           "show_sources": False}  # a shared page never says which sources it was made from
     return out
 
 
@@ -95,3 +100,54 @@ def public_infographic(artifact: Artifact) -> dict:
     return {"kind": "infographic", "title": _s(c.get("title"), 300), "html": infographic_html(c) or "",
             "html_landscape": infographic_html(c, "landscape") or "",
             "created_at": artifact.created_at.isoformat() if artifact.created_at else None}
+
+
+def _head(artifact: Artifact, kind: str) -> dict:
+    c = artifact.content_json or {}
+    return {"kind": kind, "title": _s(c.get("title"), 300),
+            "created_at": artifact.created_at.isoformat() if artifact.created_at else None}
+
+
+def public_flashcards(artifact: Artifact) -> dict:
+    return {**_head(artifact, "flashcards"), "cards": _cards((artifact.content_json or {}).get("cards"), 200)}
+
+
+def public_quiz(artifact: Artifact) -> dict:
+    return {**_head(artifact, "quiz"), "questions": _questions((artifact.content_json or {}).get("questions"), 100)}
+
+
+def public_slides(artifact: Artifact) -> dict:
+    """The deck's slides as the pages our own slide builder draws (the same ones the app shows). No speaker notes."""
+    pages = slide_pages(artifact.content_json or {})
+    return {**_head(artifact, "slides"), "pages": [p for p in pages if isinstance(p, str)][:80]}
+
+
+def public_audio(artifact: Artifact) -> dict:
+    """The audio (a freshly signed link on every view) and its transcript, without the lines it quotes."""
+    c = artifact.content_json or {}
+    return {**_head(artifact, "audio"),
+            "audio_url": storage.presign_get(artifact.storage_key) if artifact.storage_key else None,
+            "duration": c.get("duration_s") if isinstance(c.get("duration_s"), (int, float)) else None,
+            "segments": [{"speaker": _s(g.get("speaker"), 60), "text": _s(g.get("text"), 4000),
+                          "start": g.get("start") if isinstance(g.get("start"), (int, float)) else 0,
+                          "end": g.get("end") if isinstance(g.get("end"), (int, float)) else 0}
+                         for g in c.get("segments") or [] if isinstance(g, dict)][:2000]}
+
+
+def video_file(artifact: Artifact) -> str | None:
+    """The finished video file: our own copy, or the one blog2video rendered."""
+    if artifact.storage_key:
+        return storage.presign_get(artifact.storage_key)
+    url = (artifact.content_json or {}).get("video_url")
+    return url if isinstance(url, str) and re.match(r"https?://", url) else None
+
+
+def video_preview(artifact: Artifact) -> str | None:
+    """blog2video's live player for the video (a public embed link, no key in it)."""
+    url = (artifact.content_json or {}).get("preview_url")
+    return url if isinstance(url, str) and re.match(r"https?://", url) else None
+
+
+def public_video(artifact: Artifact) -> dict:
+    """Shown on our own page: blog2video's live player (it plays the latest edit, rendered or not), else the MP4."""
+    return {**_head(artifact, "video"), "preview_url": video_preview(artifact), "video_url": video_file(artifact)}

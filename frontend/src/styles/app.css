@@ -834,6 +834,42 @@
   border: 1px solid transparent;
 }
 
+button.side-link {
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
+}
+
+.connector-side-logos {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.connector-side-logos > span {
+  display: grid;
+  place-items: center;
+  width: 23px;
+  height: 23px;
+  border-radius: 7px;
+  background: var(--white);
+}
+
+.connector-side-logos img {
+  display: block;
+  width: 14px;
+  height: 14px;
+  object-fit: contain;
+}
+
+.connector-side-logos img.openai {
+  width: 21px;
+  height: 21px;
+}
+
 .side-link:hover {
   color: var(--white);
   background: var(--surface-2);
@@ -880,42 +916,6 @@
 .shell-main {
   padding: 32px var(--gutter) 64px;
   min-width: 0;
-}
-
-/* Mission Control */
-.mc-head {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: 16px;
-  margin-bottom: 28px;
-}
-
-.mc-head h1 {
-  font-size: clamp(1.6rem, 4vw, 2.25rem);
-  margin-top: 8px;
-}
-
-.mc-grid {
-  display: grid;
-  gap: 16px;
-}
-
-@media (min-width: 1100px) {
-  .mc-grid {
-    grid-template-columns: 3fr 2fr;
-  }
-}
-
-.mc-card {
-  display: grid;
-  gap: 14px;
-  align-content: start;
-}
-
-.mc-card h2 {
-  font-size: 1.25rem;
 }
 
 .inline-form {
@@ -1318,3 +1318,11 @@
   }
 }
 
+/* Signed in, while the notebook to open is worked out */
+.auth-opening {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  padding: 36px 0 20px;
+  text-align: center;
+}

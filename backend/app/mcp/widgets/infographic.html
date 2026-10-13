@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Infographic</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; background: transparent; color: #fff; font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  #shell { overflow: hidden; border: 1px solid rgba(255,255,255,.1); border-radius: 16px; background-color: #000;
+    background-image: radial-gradient(1.5px 1.5px at 8% 14%,rgba(255,255,255,.75),transparent),radial-gradient(1px 1px at 19% 72%,rgba(33,124,255,.9),transparent),radial-gradient(1.5px 1.5px at 36% 31%,rgba(255,255,255,.55),transparent),radial-gradient(1px 1px at 54% 83%,rgba(255,255,255,.7),transparent),radial-gradient(1.5px 1.5px at 71% 18%,rgba(33,124,255,.7),transparent),radial-gradient(1px 1px at 87% 64%,rgba(255,255,255,.65),transparent),radial-gradient(ellipse at 50% 0%,rgba(33,124,255,.07),transparent 55%); }
+  #bar { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,.1); }
+  #title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  #layouts { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid rgba(255,255,255,.16); border-radius: 999px; }
+  button { border: 0; border-radius: 999px; padding: 6px 12px; background: transparent; color: rgba(255,255,255,.68); font: inherit; font-size: 12px; cursor: pointer; }
+  button:hover { color: #fff; } button.on { color: #fff; background: #217cff; }
+  #open { border: 1px solid rgba(255,255,255,.16); color: #fff; }
+  #page { position: relative; width: 100%; overflow: hidden; }
+  #page iframe { position: absolute; top: 0; left: 0; border: 0; transform-origin: top left; background: #000; }
+  #msg { min-height: 300px; display: grid; place-items: center; padding: 28px; color: rgba(255,255,255,.7); text-align: center; }
+  html[data-mode=fullscreen] #page { max-height: calc(100vh - 62px); }
+  @media (max-width: 560px) { #title { display: none; } #bar { gap: 6px; } button { padding: 6px 9px; } }
+</style>
+</head>
+<body>
+<div id="shell">
+  <div id="bar" hidden><strong id="title">Infographic</strong><div id="layouts"><button id="landscape" type="button" class="on">Landscape</button><button id="portrait" type="button">Portrait</button></div><button id="open" type="button" hidden>Open in Notestack</button></div>
+  <div id="msg">Loading your infographic...</div>
+  <div id="page" hidden><iframe id="frame" title="Infographic" sandbox="" tabindex="-1"></iframe></div>
+</div>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var data = null, layout = "landscape", got = false, seen = [], timer = null;
+  var pending = {}, rid = 1;
+  function send(m) { m.jsonrpc = "2.0"; window.parent.postMessage(m, "*"); }
+  function request(method, params) {
+    return new Promise(function (resolve, reject) { var id = rid++; pending[id] = { resolve: resolve, reject: reject }; send({ id: id, method: method, params: params || {} }); });
+  }
+  function notify(method, params) { send({ method: method, params: params || {} }); }
+  function find(o, d) {
+    if (!o || d > 6) return null;
+    if (typeof o === "string") { try { return find(JSON.parse(o), d + 1); } catch (e) { return null; } }
+    if (typeof o !== "object") return null;
+    if (o.kind === "infographic" && "open_url" in o) return o;
+    for (var k in o) { var f = find(o[k], d + 1); if (f) return f; }
+    return null;
+  }
+  window.addEventListener("message", function (e) {
+    if (e.source !== window.parent) return;
+    var m = e.data; if (!m || m.jsonrpc !== "2.0") return;
+    if (m.method) seen.push(m.method);
+    if (m.method === undefined && m.id !== undefined) {
+      var p = pending[m.id]; if (!p) return; delete pending[m.id];
+      if (m.error) p.reject(m.error); else p.resolve(m.result);
+    } else if (m.method && m.params && find(m.params, 0)) show(find(m.params, 0));
+    else if ((m.method === "ui/resource-teardown" || m.method === "ping") && m.id !== undefined) send({ id: m.id, result: {} });
+  });
+  function reportSize() { notify("ui/notifications/size-changed", { width: Math.ceil(document.documentElement.scrollWidth), height: Math.ceil(document.body.getBoundingClientRect().height) }); }
+  function fit() {
+    if (!data) return;
+    var wide = layout === "landscape", w = wide ? 2260 : 1600, h = wide ? 1600 : 2260;
+    var page = $("page"), frame = $("frame"), scale = page.clientWidth / w;
+    page.style.height = Math.ceil(h * scale) + "px"; frame.width = w; frame.height = h; frame.style.transform = "scale(" + scale + ")";
+    reportSize();
+  }
+  function draw() {
+    if (!data) return;
+    var html = layout === "landscape" ? data.html_landscape : data.html;
+    if (!html) html = data.html_landscape || data.html;
+    $("landscape").className = layout === "landscape" ? "on" : ""; $("portrait").className = layout === "portrait" ? "on" : "";
+    if (!html) { $("page").hidden = true; $("msg").hidden = false; $("msg").textContent = data.message || "Your infographic is still being made."; poll(); return reportSize(); }
+    if (timer) { clearInterval(timer); timer = null; }
+    $("msg").hidden = true; $("page").hidden = false; $("frame").srcdoc = html; fit();
+  }
+  function poll() {
+    if (timer || !data || !data.artifact_id || data.status === "failed") return;
+    timer = setInterval(function () {
+      request("tools/call", { name: "show_infographic", arguments: { artifact_id: data.artifact_id } }).then(function (r) {
+        var d = find(r, 0); if (d) show(d);
+      }, function () { clearInterval(timer); timer = null; });
+    }, 6000);
+  }
+  function show(d) {
+    got = true; data = d; $("bar").hidden = false; $("title").textContent = d.title || "Infographic"; $("open").hidden = !d.open_url; draw();
+  }
+  $("landscape").addEventListener("click", function () { layout = "landscape"; draw(); });
+  $("portrait").addEventListener("click", function () { layout = "portrait"; draw(); });
+  $("open").addEventListener("click", function () { if (data && data.open_url) request("ui/open-link", { url: data.open_url }).catch(function () {}); });
+  window.addEventListener("resize", fit);
+  if (window.ResizeObserver) new ResizeObserver(fit).observe($("page"));
+  setTimeout(function () { if (!got) $("msg").textContent = "Still waiting for the infographic. The host has sent: " + (seen.length ? seen.join(", ") : "nothing") + "."; }, 20000);
+  var mode = "inline", expand = null;
+  function setMode(m) { mode = m === "fullscreen" ? "fullscreen" : "inline"; document.documentElement.setAttribute("data-mode", mode); if (expand) expand.textContent = mode === "fullscreen" ? "Close" : "Expand"; fit(); }
+  function init(r) {
+    var ctx = r && r.hostContext, modes = ctx && ctx.availableDisplayModes; if (ctx && ctx.displayMode) setMode(ctx.displayMode);
+    if (!modes || modes.indexOf("fullscreen") < 0) return;
+    expand = document.createElement("button"); expand.type = "button"; expand.textContent = mode === "fullscreen" ? "Close" : "Expand"; $("bar").appendChild(expand);
+    expand.addEventListener("click", function () { request("ui/request-display-mode", { mode: mode === "fullscreen" ? "inline" : "fullscreen" }).then(function (x) { if (x && x.mode) setMode(x.mode); }, function () { expand.hidden = true; }); });
+  }
+  request("ui/initialize", { protocolVersion: "2026-01-26", appInfo: { name: "notestack-infographic", version: "1.0.0" }, appCapabilities: { availableDisplayModes: ["inline", "fullscreen"] } })
+    .then(function (r) { notify("ui/notifications/initialized", {}); reportSize(); init(r); })
+    .catch(function () { $("msg").textContent = "This view needs an app that supports interactive results."; });
+})();
+</script>
+</body>
+</html>

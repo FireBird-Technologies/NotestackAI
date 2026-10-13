@@ -70,7 +70,7 @@ class Settings(BaseSettings):
     # Characters of post text a report, quiz or flashcard set may read in all (split evenly between the posts, 1,500 at least each).
     artifact_passage_budget: int = 120_000
     # The same for a quiz: it needs less text than a report to ask good questions.
-    artifact_quiz_passage_budget: int = 60_000
+    artifact_quiz_passage_budget: int = 30_000
     # Ideas (already extracted from each post) in the evidence of a flashcard set, or of a quiz above ARTIFACT_MAX_POSTS posts.
     artifact_idea_sample: int = 30
 
@@ -108,6 +108,7 @@ class Settings(BaseSettings):
     # The output cap of the fast model: quizzes, flashcards, infographics, idea extraction, template suggestions. A cap, not a target:
     # only the tokens written are charged, and the thinking counts too, so keep room for it. Measured answers are under 3,000.
     llm_fast_max_tokens: int = 6000
+    llm_max_concurrent: int = 6  # model calls in flight at once across all jobs: quizzes and flashcards run two at a time per job
     # GLM-5.x always reasons (it cannot be disabled); this sets how hard. low | high | max
     llm_reasoning_effort: str = "low"
 
@@ -157,6 +158,15 @@ class Settings(BaseSettings):
     # Renderer
     renderer_url: str = "http://localhost:3100"
     internal_token: str = "internal-change-me"
+
+    # MCP server (/mcp, plus the OAuth endpoints at the API root). Off unless MCP_ENABLED. Writers sign in through the web
+    # app (FRONTEND_URL/connect); API_URL must be the public https address the clients use, it is the OAuth issuer.
+    mcp_enabled: bool = False
+    mcp_signing_key: str = ""  # signs MCP access tokens; empty = derived from JWT_SECRET, so web tokens are never valid here
+    mcp_access_ttl_seconds: int = 3600
+    mcp_refresh_ttl_days: int = 30
+    mcp_template_preview_base_url: str = ""  # where template preview pictures live: {base}/<template-id>.png. Empty = use the app's own pictures
+    mcp_media_domains: str = ""  # extra https hosts a video may play from in the chat view, comma separated (e.g. a CDN)
 
     # Billing (Stripe). With BILLING_ENABLED=false everyone gets Studio limits and checkout is off.
     billing_enabled: bool = False

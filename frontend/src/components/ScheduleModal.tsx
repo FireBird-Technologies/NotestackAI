@@ -35,6 +35,7 @@ export function ScheduleModal({
   kitId,
   kitTitle,
   documentId,
+  at,
   onClose,
   onScheduled,
 }: {
@@ -47,6 +48,8 @@ export function ScheduleModal({
   kitId?: string | null;
   kitTitle?: string | null;
   documentId?: string | null;
+  /** When the post goes out to start with (a day clicked on the calendar); else the next half hour. */
+  at?: Date;
   onClose: () => void;
   onScheduled?: (item: CalendarItem) => void;
 }) {
@@ -59,7 +62,7 @@ export function ScheduleModal({
   const [attached, setAttached] = useState<PostableArtifact | null>(artifact?.type === "launch_kit" ? null : artifact ?? null);
   const navigate = useNavigate();
   const [picking, setPicking] = useState(false);
-  const [when, setWhen] = useState(() => toWall(nextSlot()));
+  const [when, setWhen] = useState(() => toWall(at ?? nextSlot()));
   const [accounts, setAccounts] = useState<SocialAccounts | null>(null);
   // The connections are checked before anything says one is missing: loading isn't "not connected".
   const [accountsState, setAccountsState] = useState<"loading" | "ready" | "error">("loading");
@@ -77,10 +80,10 @@ export function ScheduleModal({
   useEffect(() => {
     loadAccounts();
     if (artifactId && !artifact) {
-      launchpadApi.postable().then((list) => {
-        const found = list.find((a) => a.id === artifactId);
+      // Looked up on its own (not in the newest few), so anything posted from the Library opens attached.
+      launchpadApi.postableOne(artifactId).then((found) => {
         // a kit is never an attachment, and audio can't be posted (X and LinkedIn take no audio files)
-        if (found && found.type !== "launch_kit" && found.media !== "audio") attach(found);
+        if (found.type !== "launch_kit" && found.media !== "audio") attach(found);
       }, () => undefined);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
