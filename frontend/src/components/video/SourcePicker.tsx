@@ -131,7 +131,7 @@ export function SourcePicker({
             }
           }}
           options={[
-            // The API lists the "All posts" notebook first, so the sections come out in order.
+            // The API keeps every notebook in latest-activity order; groups retain that order.
             ...(notebooks ?? []).map((n) => ({ value: n.id, label: n.is_archive ? "My whole archive" : n.title,
                                                hint: `${n.document_count} posts`, group: n.is_archive ? "Archive" : "Notebooks" })),
             { value: ONE_POST, label: `Create a ${what} on a single post`, group: "Single post" },

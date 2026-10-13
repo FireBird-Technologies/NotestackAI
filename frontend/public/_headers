@@ -1,0 +1,5 @@
+# The approval screen must never be shown inside another site's frame.
+/connect
+  X-Frame-Options: DENY
+  Content-Security-Policy: frame-ancestors 'none'
+  Referrer-Policy: no-referrer

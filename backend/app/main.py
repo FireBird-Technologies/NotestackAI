@@ -2,7 +2,7 @@ import logging
 import threading
 import time
 import uuid
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,6 +15,7 @@ from app.routers import (
     billing,
     jobs,
     launchpad,
+    mcp_oauth,
     memory,
     notebooks,
     reports,
@@ -64,7 +65,11 @@ async def lifespan(app: FastAPI):
 
         start_background(stop)
         log.info("worker running inside the API (RUN_WORKER_IN_API)")
-    yield
+    async with AsyncExitStack() as stack:
+        server = getattr(app.state, "mcp_server", None)
+        if server is not None:  # the MCP app is not mounted, so its own lifespan never runs: the API starts it
+            await stack.enter_async_context(server.session_manager.run())
+        yield
     stop.set()
 
 
@@ -96,9 +101,15 @@ def health():
 
 # video_templates (custom templates) is switched off: users pick only from the built-in templates.
 for r in (auth, billing, storage, sources, notebooks, artifacts, jobs, unsubscribe, topics, voice, resurface,
-          launchpad, videos, video_edit, video_voices, video_styles, settings_router, memory, support, reports, share):
+          launchpad, videos, video_edit, video_voices, video_styles, settings_router, memory, support, reports, share,
+          mcp_oauth):
     app.include_router(r.router)
 app.include_router(sources.documents_router)
 app.include_router(launchpad.links_router)
 if settings.use_local_storage:
     app.include_router(storage.local_router)
+if settings.mcp_enabled:
+    from app.mcp.server import McpRoutes, build_app
+
+    app.state.mcp_server, app.state.mcp_asgi = build_app()  # building the app creates the session manager the lifespan starts
+    app.add_middleware(McpRoutes)

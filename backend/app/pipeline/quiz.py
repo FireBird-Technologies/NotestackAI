@@ -5,11 +5,11 @@ import uuid
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.llm import run
-from app.llm.provider import fast_lm
+from app.llm.provider import study_lm
 from app.llm.signatures import GenerateQuiz
 from app.models import Artifact, Job
 from app.pipeline import idea_pool
+from app.pipeline.study_batches import predict_in_halves
 from app.pipeline.generate import NothingToDo
 from app.pipeline.material import Material, load_material
 from app.services.jobs import update_job
@@ -58,10 +58,17 @@ def make_questions(db: Session, workspace_id: uuid.UUID, material: Material, *, 
     inputs = dict(title=material.title, topic=topic or "(none)", difficulty=difficulty, question_types=types,
                   language=language.strip() or SAME_LANGUAGE)
     # Many posts: one call over a random sample of the ideas already extracted from them (idea_pool), not the posts' text.
-    text = idea_pool.sample(db, workspace_id, material.docs, topic, chats=material.text) if material.mode == "ideas" else material.text
-    out = run.predict(GenerateQuiz, db=db, workspace_id=workspace_id, job=job, material=text, count=count, lm=fast_lm(), **inputs)
-    cleaned = [c for q in out.get("questions") or [] if (c := _clean(q, material.refs))]
-    return [c for c in cleaned if c["type"] in allowed][:count]
+    text = idea_pool.sample(db, workspace_id, material.docs, topic, chats=material.text, size=count * 2) if material.mode == "ideas" else material.text
+    raw = predict_in_halves(GenerateQuiz, db=db, workspace_id=workspace_id, job=job, lm=study_lm(), material=text,
+                            count=count, inputs=inputs, key="questions",
+                            shared=idea_pool.shared_notes(text))
+    cleaned, seen = [], set()
+    for q in raw:
+        c = _clean(q, material.refs)
+        if c and c["type"] in allowed and c["question"].lower() not in seen:
+            seen.add(c["question"].lower())
+            cleaned.append(c)
+    return cleaned[:count]
 
 
 def build_quiz(db: Session, job: Job, artifact: Artifact) -> dict:

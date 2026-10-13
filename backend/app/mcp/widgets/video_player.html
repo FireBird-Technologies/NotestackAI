@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Video</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: transparent; font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif; }
+  #box { padding: 12px; border-radius: 14px; color: #fff; background-color: #000; background-image: radial-gradient(1.5px 1.5px at 59% 74%,rgba(255,255,255,0.86),transparent),radial-gradient(2px 2px at 26% 26%,rgba(255,255,255,0.72),transparent),radial-gradient(1.5px 1.5px at 25% 15%,rgba(255,255,255,0.4),transparent),radial-gradient(1px 1px at 90% 84%,rgba(255,255,255,0.59),transparent),radial-gradient(2px 2px at 59% 86%,rgba(255,255,255,0.72),transparent),radial-gradient(1px 1px at 69% 11%,rgba(33,124,255,0.98),transparent),radial-gradient(1.5px 1.5px at 78% 6%,rgba(255,255,255,0.7),transparent),radial-gradient(1px 1px at 27% 69%,rgba(255,255,255,0.65),transparent),radial-gradient(1.5px 1.5px at 86% 13%,rgba(255,255,255,0.59),transparent),radial-gradient(1px 1px at 72% 13%,rgba(255,255,255,0.49),transparent),radial-gradient(1px 1px at 38% 6%,rgba(255,255,255,0.41),transparent),radial-gradient(1.5px 1.5px at 15% 40%,rgba(33,124,255,0.45999999999999996),transparent),radial-gradient(1px 1px at 89% 3%,rgba(33,124,255,1),transparent),radial-gradient(1.5px 1.5px at 62% 51%,rgba(255,255,255,0.69),transparent),radial-gradient(1px 1px at 27% 89%,rgba(255,255,255,0.54),transparent),radial-gradient(1px 1px at 3% 55%,rgba(33,124,255,0.87),transparent),radial-gradient(1.5px 1.5px at 3% 10%,rgba(255,255,255,0.46),transparent),radial-gradient(1.5px 1.5px at 73% 27%,rgba(255,255,255,0.94),transparent),radial-gradient(1.5px 1.5px at 18% 56%,rgba(33,124,255,0.7),transparent),radial-gradient(1px 1px at 29% 3%,rgba(255,255,255,0.93),transparent),radial-gradient(1px 1px at 77% 41%,rgba(33,124,255,0.69),transparent),radial-gradient(2px 2px at 79% 85%,rgba(33,124,255,1),transparent),radial-gradient(1px 1px at 29% 59%,rgba(33,124,255,0.82),transparent),radial-gradient(1px 1px at 39% 52%,rgba(33,124,255,0.58),transparent),radial-gradient(1px 1px at 83% 34%,rgba(255,255,255,0.57),transparent),radial-gradient(2px 2px at 60% 19%,rgba(255,255,255,0.69),transparent),radial-gradient(1px 1px at 51% 26%,rgba(255,255,255,0.49),transparent),radial-gradient(1px 1px at 80% 34%,rgba(33,124,255,0.83),transparent),radial-gradient(1.5px 1.5px at 72% 28%,rgba(255,255,255,0.71),transparent),radial-gradient(1px 1px at 55% 9%,rgba(33,124,255,0.76),transparent),radial-gradient(1.5px 1.5px at 34% 33%,rgba(255,255,255,0.84),transparent),radial-gradient(1px 1px at 78% 65%,rgba(255,255,255,0.91),transparent),radial-gradient(1px 1px at 10% 19%,rgba(255,255,255,0.74),transparent),radial-gradient(1px 1px at 80% 81%,rgba(255,255,255,0.9),transparent),radial-gradient(ellipse at 50% 0%,rgba(33,124,255,.07),transparent 55%); border: 1px solid rgba(255,255,255,.1); }
+  #top { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 13px; color: rgba(255,255,255,.72); }
+  #title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  video { width: 100%; max-height: 420px; border-radius: 10px; background: #000; display: block; }
+  #preview { display: block; width: 100%; padding: 13px 15px; border: 1px solid rgba(33,124,255,.35); border-radius: 10px; background: rgba(33,124,255,.08); color: #8fbbff; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
+  #rendering { display: none; align-items: center; justify-content: center; gap: 8px; padding: 10px 4px 0; color: rgba(255,255,255,.72); font-size: 13px; text-align: center; }
+  button { font: inherit; font-size: 13px; color: #fff; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.18); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  button:hover { background: rgba(33,124,255,.2); }
+  #wait { padding: 46px 16px; text-align: center; color: rgba(255,255,255,.72); font-size: 15px; line-height: 1.5; }
+  .bar { height: 6px; border-radius: 3px; background: rgba(255,255,255,.03); margin: 14px auto 0; width: 60%; overflow: hidden; } .bar i { display: block; height: 100%; width: 40%; background: #217cff; animation: sl 1.4s ease-in-out infinite; }
+  @keyframes sl { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
+  #fail { display: none; margin-top: 8px; font-size: 13px; color: #ffd0d6; }
+
+  /* The app's own look: black, starry, pill buttons, blue only for the main action and for selection. */
+  button { border-radius: 999px; background: transparent; border: 1px solid rgba(255,255,255,.18); color: #fff; font-weight: 600; transition: box-shadow .2s, border-color .2s, background .2s; }
+  button:hover:not(:disabled) { background: transparent; border-color: rgba(33,124,255,.6); box-shadow: 0 0 12px rgba(33,124,255,.35); }
+  button.go { background: #217cff; border: 1px solid #217cff; padding: 10px 22px; box-shadow: 0 0 24px rgba(33,124,255,.35), 0 0 2px rgba(33,124,255,.6); }
+  button.go:hover:not(:disabled) { background: rgba(33,124,255,.9); border-color: rgba(33,124,255,.9); box-shadow: 0 0 32px rgba(33,124,255,.6); }
+  button:disabled { opacity: .5; }
+  .chip, .opt, .pickbtn { border-radius: 14px; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.18); font-weight: 400; }
+  .chip:hover, .opt:hover, .pickbtn:hover { border-color: rgba(33,124,255,.6); box-shadow: 0 0 12px rgba(33,124,255,.2); }
+  .chip.sel, .opt.sel { border-color: rgba(33,124,255,.9); background: rgba(33,124,255,.08); box-shadow: 0 0 12px rgba(33,124,255,.2); }
+  .row .chip { border-radius: 999px; }
+  input[type=text], input[type=search], select { border-radius: 999px; background: rgba(0,0,0,.6); border: 1px solid rgba(255,255,255,.18); padding-left: 16px; padding-right: 16px; }
+  input[type=text]:focus, input[type=search]:focus, select:focus { outline: none; border-color: rgba(33,124,255,.6); box-shadow: 0 0 12px rgba(33,124,255,.2); }
+  input[type=checkbox] { accent-color: #217cff; }
+</style>
+</head>
+<body>
+<div id="box">
+  <div id="top"><span id="title">Video</span><button id="open" type="button" hidden>Open in Notestack</button></div>
+  <div id="wait">Loading your video...</div>
+  <video id="v" controls playsinline preload="metadata" hidden></video>
+  <button id="preview" type="button" hidden></button>
+  <div id="rendering">Live preview is ready. The final video is still rendering and will replace it here.</div>
+  <div id="fail">The video would not play here. Use Open in Notestack to watch it.</div>
+</div>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var data = null, timer = null, seen = [], got = false;
+
+  /* ---- talking to the host: JSON-RPC 2.0 over postMessage (MCP Apps) ---- */
+  var pending = {}, rid = 1;
+  function send(m) { m.jsonrpc = "2.0"; window.parent.postMessage(m, "*"); }
+  function request(method, params) {
+    return new Promise(function (resolve, reject) { var id = rid++; pending[id] = { resolve: resolve, reject: reject }; send({ id: id, method: method, params: params || {} }); });
+  }
+  function notify(method, params) { send({ method: method, params: params || {} }); }
+  function find(o, d) {
+    if (!o || d > 6) return null;
+    if (typeof o === "string") { try { return find(JSON.parse(o), d + 1); } catch (e) { return null; } }
+    if (typeof o !== "object") return null;
+    if (o.kind === "video" && "open_url" in o) return o; /* not the job record, which also has a kind */
+    for (var k in o) { var f = find(o[k], d + 1); if (f) return f; }
+    return null;
+  }
+  window.addEventListener("message", function (e) {
+    if (e.source !== window.parent) return;
+    var m = e.data;
+    if (!m || m.jsonrpc !== "2.0") return;
+    if (m.method) seen.push(m.method);
+    if (m.method === undefined && m.id !== undefined) {
+      var p = pending[m.id]; if (!p) return; delete pending[m.id];
+      if (m.error) p.reject(m.error); else p.resolve(m.result);
+    } else if (m.method && m.params && find(m.params, 0)) {
+      show(find(m.params, 0));
+    } else if (m.method === "ui/resource-teardown" && m.id !== undefined) {
+      send({ id: m.id, result: {} });
+    } else if (m.method === "ping" && m.id !== undefined) {
+      send({ id: m.id, result: {} });
+    }
+  });
+  function reportSize() { notify("ui/notifications/size-changed", { width: Math.ceil(document.documentElement.scrollWidth), height: Math.ceil(document.documentElement.scrollHeight) }); }
+  if (window.ResizeObserver) new ResizeObserver(reportSize).observe(document.documentElement);
+
+  /* ---- the player ---- */
+  function waiting(text) {
+    var w = $("wait"); w.hidden = false; $("v").hidden = true; $("preview").hidden = true; $("rendering").style.display = "none"; w.textContent = text;
+    var bar = document.createElement("div"); bar.className = "bar"; bar.appendChild(document.createElement("i")); w.appendChild(bar);
+  }
+  function poll() {
+    if (timer || !data || !data.artifact_id) return;
+    timer = setInterval(function () {
+      /* Poll Notestack directly when possible: Claude may reject a widget's follow-up tool call. */
+      var read = data.poll_url
+        ? fetch(data.poll_url, { method: "POST", headers: { "Content-Type": "text/plain" }, body: data.poll_token, cache: "no-store" }).then(function (r) { if (!r.ok) throw new Error("status"); return r.json(); })
+        : request("tools/call", { name: "get_video", arguments: { artifact_id: data.artifact_id } }).then(function (r) { return find(r, 0); });
+      read.then(function (d) { if (d) show(d); }, function () { clearInterval(timer); timer = null; });
+    }, 12000);
+  }
+  function show(d) {
+    got = true; data = d;
+    $("title").textContent = d.title || "Video"; $("open").hidden = !d.open_url;
+    if (d.video_url) {
+      if (timer) { clearInterval(timer); timer = null; }
+      $("wait").hidden = true; $("fail").style.display = "none";
+      $("rendering").style.display = "none";
+      var v = $("v"); v.hidden = false;
+      $("preview").hidden = true;
+      if (v.getAttribute("src") !== d.video_url) { v.setAttribute("src", d.video_url); try { v.load(); } catch (e) { /* the element loads it anyway */ } }
+    } else if (d.preview_url) {
+      $("wait").hidden = true; $("fail").style.display = "none"; $("v").hidden = true;
+      var f = $("preview"); f.hidden = false; f.textContent = d.preview_url;
+      $("rendering").style.display = "flex";
+      poll();
+    } else if (d.status === "failed") {
+      waiting("Notestack could not make this video. Open it in Notestack for details.");
+    } else {
+      waiting("Your video is being made. This takes a few minutes. It will appear here when it is ready.");
+      poll();
+    }
+    reportSize();
+  }
+  $("v").addEventListener("error", function () { $("fail").style.display = "block"; reportSize(); });
+  $("preview").addEventListener("click", function () { if (data && data.preview_url) request("ui/open-link", { url: data.preview_url }).catch(function () {}); });
+  $("open").addEventListener("click", function () { if (data && data.open_url) request("ui/open-link", { url: data.open_url }).catch(function () {}); });
+  setTimeout(function () {
+    if (got) return;
+    $("wait").textContent = "Still waiting for the video. The host has sent: " + (seen.length ? seen.join(", ") : "nothing") + ". Ask Claude to check it again, or open it in Notestack.";
+  }, 20000);
+  setTimeout(function () { notify("ui/notifications/initialized", {}); reportSize(); }, 1500);
+  request("ui/initialize", { protocolVersion: "2026-01-26", appInfo: { name: "notestack-video", version: "1.0.0" }, appCapabilities: { availableDisplayModes: ["inline", "fullscreen"] } })
+    .then(function () { notify("ui/notifications/initialized", {}); reportSize(); })
+    .catch(function () { $("wait").textContent = "This view needs an app that supports interactive results."; });
+})();
+</script>
+</body>
+</html>

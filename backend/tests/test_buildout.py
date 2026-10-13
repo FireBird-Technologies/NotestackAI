@@ -14,6 +14,7 @@ from app.models import (
     Document,
     EngagementEvent,
     Job,
+    Notebook,
     SocialAccount,
     Source,
     TrackedLink,
@@ -284,6 +285,50 @@ def test_notebook_crud_chat_history_and_summary(client, auth, run_jobs, feed, ll
     client.delete(f"/api/notebooks/{nb['id']}/documents/{pricing['id']}", headers=auth)
     assert client.get(f"/api/notebooks/{nb['id']}", headers=auth).json()["documents"] == []
     assert client.delete(f"/api/notebooks/{nb['id']}", headers=auth).status_code == 200
+
+
+def test_internal_selection_codes_never_appear_as_notebook_names(client, auth, db_session):
+    made = client.post("/api/notebooks", json={"title": "Client research (a1b2c3)"}, headers=auth)
+    assert made.status_code == 200 and made.json()["title"] == "Client research"
+    assert db_session.get(Notebook, uuid.UUID(made.json()["id"])).title == "Client research"
+
+    legacy = Notebook(workspace_id=db_session.query(Workspace).first().id,
+                      title="Claude: 3 chosen posts (052f16)")
+    db_session.add(legacy)
+    db_session.commit()
+
+    listed = client.get("/api/notebooks", headers=auth).json()
+    assert {n["id"]: n["title"] for n in listed}[str(legacy.id)] == "Claude: 3 chosen posts"
+    opened = client.get(f"/api/notebooks/{legacy.id}", headers=auth).json()
+    assert opened["title"] == "Claude: 3 chosen posts"
+    artifact = client.post("/api/artifacts/generate", json={"type": "summary", "notebook_id": str(legacy.id)},
+                           headers=auth).json()
+    assert "052f16" not in artifact["title"]
+
+
+def test_notebooks_are_sorted_by_latest_chat_or_artifact_activity(client, auth, db_session):
+    from app.models import Chat
+
+    made = [client.post("/api/notebooks", json={"title": title}, headers=auth).json()
+            for title in ("Recent chat", "Recent artifact", "Notebook edit")]
+    notebooks = [db_session.get(Notebook, uuid.UUID(row["id"])) for row in made]
+    base = datetime(2026, 1, 1, tzinfo=UTC)
+    for notebook in notebooks:
+        notebook.updated_at = base
+    chat = Chat(workspace_id=notebooks[0].workspace_id, notebook_id=notebooks[0].id, title="Latest question",
+                updated_at=base + timedelta(days=2))
+    artifact = Artifact(workspace_id=notebooks[1].workspace_id, notebook_id=notebooks[1].id, type="report",
+                        status="ready", content_json={}, updated_at=base + timedelta(days=3))
+    notebooks[2].updated_at = base + timedelta(days=1)
+    archive = Notebook(workspace_id=notebooks[0].workspace_id, title="All posts", is_archive=True,
+                       updated_at=base - timedelta(days=1))
+    db_session.add_all([chat, artifact, archive])
+    db_session.commit()
+
+    listed = client.get("/api/notebooks", headers=auth).json()
+    assert [row["title"] for row in listed] == ["Recent artifact", "Recent chat", "Notebook edit", "All posts"]
+    shown_activity = datetime.fromisoformat(listed[0]["updated_at"])
+    assert shown_activity.replace(tzinfo=shown_activity.tzinfo or UTC) == artifact.updated_at
 
 
 def test_summary_of_empty_notebook_fails_cleanly(client, auth, run_jobs, llm):
@@ -1693,6 +1738,7 @@ def test_add_and_remove_a_suggested_visual(client, auth, run_jobs, feed, llm):
         return [a for a in (items["items"] if isinstance(items, dict) else items) if a["status"] == "ready"]
 
     assert len(saved_sets()) == 1  # a set made in the report is also in the notebook's Studio list
+    assert c["blocks"][1]["artifact_id"] == saved_sets()[0]["id"]  # the report opens that real artifact's full player
     assert client.delete(f"/api/reports/{done['id']}/blocks/b1", headers=auth).status_code == 404  # prose stays
     assert client.delete(f"/api/reports/{done['id']}/blocks/{added}", headers=auth).status_code == 200
     assert len(saved_sets()) == 1  # still there to use again, and not saved twice

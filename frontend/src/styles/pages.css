@@ -7780,6 +7780,96 @@ a.rp-src-main:hover .rp-src-out {
   grid-column: 1 / -1;
 }
 
+/* The notebook repeats the global connector entry where creation starts. It opens the same setup modal as the sidebar. */
+.nbv-make .nbv-make-connector {
+  grid-column: 1 / -1;
+  min-height: 72px;
+  border-color: var(--blue-35);
+  background:
+    radial-gradient(1px 1px at 58% 24%, #fff 50%, transparent 52%),
+    radial-gradient(1px 1px at 72% 78%, #cfe0ff 50%, transparent 52%),
+    radial-gradient(90% 160% at 100% 50%, var(--blue-20), transparent 70%),
+    linear-gradient(135deg, #05070d, #08101f);
+}
+
+.nbv-make .nbv-make-connector-copy,
+.nbv-make .nbv-make-connector .nbv-stars-text {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.nbv-make .nbv-make-connector-copy {
+  flex: 1 1 auto;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.nbv-make .nbv-make-connector-copy > svg.icon {
+  flex: none;
+  color: var(--text-2);
+}
+
+.nbv-make .nbv-make-connector .nbv-stars-text {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nbv-make .nbv-make-connector .nbv-stars-text strong {
+  overflow: hidden;
+  max-width: 100%;
+  font: 600 1rem var(--font-display);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nbv-make .nbv-make-connector .nbv-stars-text small {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--text-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nbv-connector-logos {
+  display: inline-flex;
+  flex: none;
+  gap: 5px;
+}
+
+.nbv-connector-logos > span {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--white);
+}
+
+.nbv-connector-logos img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+
+.nbv-connector-logos img.openai {
+  width: 24px;
+  height: 24px;
+}
+
+.nbv-make > button.nbv-make-connector {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 10px 14px;
+}
+
+.nbv-make > button.nbv-make-connector:hover:not(:disabled) {
+  border-color: var(--blue-60);
+  box-shadow: 0 0 16px var(--blue-20);
+}
+
 /* Mind Constellation: a little night sky of its own, stars that twinkle and a slow shine across it */
 .nbv-make .nbv-make-stars {
   position: relative;
@@ -10169,6 +10259,136 @@ body.nbv-resizing iframe {
   white-space: pre-wrap;
 }
 
+/* Connect: the screen an app sends the writer to for approval. */
+.connect-card h1 {
+  overflow-wrap: anywhere;
+}
+
+.connect-scopes {
+  display: grid;
+  gap: 10px;
+}
+
+.connect-warn {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--warn, #d9a441);
+  border-radius: var(--radius-sm);
+  background: rgba(217, 164, 65, 0.1);
+}
+
+/* Sidebar Connector: one focused setup popup for Claude and ChatGPT. */
+.connector-intro,
+.connector-note {
+  margin: 0;
+}
+
+.connector-url-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--blue-35);
+  border-radius: var(--radius-sm);
+  background: var(--blue-05);
+}
+
+.connector-url-card > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.connector-url-card code {
+  color: var(--white);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.connector-clients {
+  display: grid;
+  gap: 12px;
+}
+
+.connector-client {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.connector-client header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.connector-client h3,
+.connector-client p {
+  margin: 0;
+}
+
+.connector-client-logo {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  border-radius: 12px;
+  background: var(--white);
+}
+
+.connector-client-logo img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+
+.connector-client-logo.openai img {
+  width: 35px;
+  height: 35px;
+}
+
+.connector-client ol {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.connector-client li {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 9px;
+  color: var(--text-2);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.connector-step-num {
+  display: grid;
+  place-items: center;
+  width: 21px;
+  height: 21px;
+  border: 1px solid var(--blue-60);
+  border-radius: 50%;
+  color: var(--white);
+  font: 600 0.7rem var(--font-mono);
+}
+
+@media (min-width: 680px) {
+  .connector-clients {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .connector-url-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
 /* "Show transcript" reads as a plain text link: no underline, blue when pointed at */
 .link-btn.ao-transcript-toggle {
   text-decoration: none;

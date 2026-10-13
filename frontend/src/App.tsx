@@ -15,6 +15,7 @@ import Notebooks from "./pages/Notebooks";
 import NotebookLMAlternative from "./pages/NotebookLMAlternative";
 import NotebookView from "./pages/NotebookView";
 import PublicReport from "./pages/PublicReport";
+import ArtifactPage from "./pages/ArtifactPage";
 import ReportPage from "./pages/ReportPage";
 import Resurface from "./pages/Resurface";
 import Settings from "./pages/Settings";
@@ -23,6 +24,7 @@ import VideoCreate from "./pages/VideoCreate";
 import VideoEditor from "./pages/VideoEditor";
 import TopicMap from "./pages/TopicMap";
 import { ToolPage, ToolsHub } from "./pages/Tools";
+import Connect from "./pages/Connect";
 import Welcome from "./pages/Welcome";
 import { SupportWidget } from "./components/support/SupportWidget";
 import StartRoute from "./pages/StartRoute";
@@ -57,6 +59,7 @@ export default function App() {
       <Route path="/auth" element={<AuthPage />} />
       <Route path="/auth/callback" element={<AuthCallback />} />
       <Route path="/welcome" element={<Welcome />} />
+      <Route path="/connect" element={<Connect />} />
       <Route path="/app" element={<AppShell />}>
         {/* Notebooks is home: the old dashboard (/app) and Create page (/app/studio) are gone */}
         <Route index element={<Navigate to="/app/notebooks" replace />} />
@@ -64,6 +67,7 @@ export default function App() {
         <Route path="notebooks" element={<Notebooks />} />
         <Route path="notebooks/:id" element={<NotebookView />} />
         <Route path="reports/:id" element={<ReportPage />} />
+        <Route path="artifacts/:id" element={<ArtifactPage />} />
         <Route path="videos" element={<Navigate to="/app/archive?tab=videos" replace />} />
         <Route path="videos/new" element={<VideoCreate />} />
         <Route path="videos/voices" element={<Navigate to="/app/voices" replace />} />

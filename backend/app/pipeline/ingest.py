@@ -30,6 +30,7 @@ from app.corpus import INDEX, Corpus, index_line, post_path, render_post, slugif
 from app.models import Document, Job, Source
 from app.services import firecrawl
 from app.services.jobs import update_job
+from app.services.safe_http import UnsafeURL, safe_get
 from app.services.storage import keys, storage
 
 log = logging.getLogger(__name__)
@@ -68,7 +69,7 @@ def normalize_feed_url(url: str) -> tuple[str, str]:
 
 def _parse_feed(url: str, timeout: float = 15) -> tuple[feedparser.FeedParserDict | None, httpx.Response | None]:
     try:
-        resp = httpx.get(url, follow_redirects=True, timeout=timeout, headers=UA)
+        resp = safe_get(url, timeout=timeout, headers=UA)
     except httpx.HTTPError:
         return None, None
     if resp.status_code >= 400:
@@ -321,7 +322,10 @@ def extract_article(url: str) -> FeedEntry:
             return _firecrawl_entry(url)
         except (firecrawl.FirecrawlError, httpx.HTTPError, FeedNotFound):
             log.warning("firecrawl scrape failed for %s, falling back to plain HTTP", url, exc_info=True)
-    resp = httpx.get(url, follow_redirects=True, timeout=30, headers=UA)
+    try:
+        resp = safe_get(url, timeout=30, headers=UA)
+    except UnsafeURL as exc:
+        raise FeedNotFound("That address cannot be imported.") from exc
     if resp.status_code >= 400:
         raise FeedNotFound(f"That page returned {resp.status_code}.")
     soup = BeautifulSoup(resp.text, "html.parser")
@@ -345,7 +349,7 @@ def extract_article(url: str) -> FeedEntry:
 
 
 def fetch_feed(feed_url: str, limit: int) -> tuple[str | None, list[FeedEntry]]:
-    resp = httpx.get(feed_url, follow_redirects=True, timeout=30, headers=UA)
+    resp = safe_get(feed_url, timeout=30, headers=UA)
     resp.raise_for_status()
     parsed = feedparser.parse(resp.content)
     entries = []
@@ -403,13 +407,13 @@ def _plain_links(url: str) -> list[str]:
     links: list[str] = []
     for sitemap in (f"{parsed.scheme}://{parsed.netloc}/sitemap.xml", f"{parsed.scheme}://{parsed.netloc}/sitemap_index.xml"):
         try:
-            resp = httpx.get(sitemap, follow_redirects=True, timeout=20, headers=UA)
+            resp = safe_get(sitemap, timeout=20, headers=UA)
         except httpx.HTTPError:
             continue
         if resp.status_code < 400:
             links += re.findall(r"<loc>\s*([^<\s]+)\s*</loc>", resp.text)
     try:
-        resp = httpx.get(url, follow_redirects=True, timeout=20, headers=UA)
+        resp = safe_get(url, timeout=20, headers=UA)
         if resp.status_code < 400:
             soup = BeautifulSoup(resp.text, "html.parser")
             links += [urljoin(str(resp.url), a["href"]) for a in soup.find_all("a", href=True)]
@@ -458,13 +462,26 @@ def crawl_site(url: str, limit: int, on_found=None, on_post=None, read_limit: in
     return entries
 
 
+class _SafeClient:
+    """Stands in for httpx.Client where the host came from the writer: every request goes through safe_get."""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def get(self, url: str, params: dict | None = None) -> httpx.Response:
+        return safe_get(url, timeout=30, headers=UA, params=params)
+
+
 def fetch_substack_archive(site: str, known_urls: set[str], limit: int, on_page=None,
                            body_budget: int | None = None) -> list[FeedEntry]:
     """Posts beyond the ~20 the RSS feed carries, through Substack's public archive API. Only the first body_budget
     posts get their body fetched; the rest are listed from the archive metadata alone (title, date, link)."""
     out: list[FeedEntry] = []
     offset = 0
-    with httpx.Client(follow_redirects=True, timeout=30, headers=UA) as client:
+    with _SafeClient() as client:
         while len(out) + len(known_urls) < limit:
             resp = client.get(f"{site}/api/v1/archive", params={"sort": "new", "offset": offset, "limit": 50})
             if resp.status_code >= 400:

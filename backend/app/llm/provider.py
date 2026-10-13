@@ -52,6 +52,15 @@ def fast_lm() -> dspy.LM:
     return _build(settings.llm_fast_model, effort="low", temperature=None, max_tokens=settings.llm_fast_max_tokens)
 
 
+STUDY_MAX_TOKENS = 3000  # a quiz or flashcard set (or one batch of it) plus GLM's low-effort reasoning
+
+
+@lru_cache
+def study_lm() -> dspy.LM:
+    """Writes quizzes and flashcards: the fast model with a smaller output cap, since the answer is short."""
+    return _build(settings.llm_fast_model, effort="low", temperature=None, max_tokens=STUDY_MAX_TOKENS)
+
+
 REPORT_MAX_TOKENS = 16000  # a few pages of prose plus GLM's low-effort reasoning
 
 

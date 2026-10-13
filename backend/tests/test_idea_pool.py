@@ -13,6 +13,7 @@ from app.corpus import Corpus
 from app.llm import run
 from app.models import Document, Job, Workspace
 from app.pipeline import idea_pool
+from app.pipeline.generate import ideas_fresh
 from app.pipeline.material import load_material, max_posts
 from app.services import report_suggestions
 from tests.conftest import last_code
@@ -144,7 +145,24 @@ def _cited(inputs: dict) -> list[dict]:
     return [{"path": t[1], "line_start": int(t[2]), "line_end": int(t[3])} for t in tags if t]
 
 
-def test_a_big_quiz_is_one_call_over_a_sample_of_ideas(client, owner, db_session, run_jobs, monkeypatch):
+
+def _both(monkeypatch, predict):
+    """Quizzes and flashcards ask for their two halves through predict_many: answer each from the same canned predict, a
+    failing half being None as in the real one."""
+    def many(signature, inputs_list, *, db, workspace_id, lm=None, workers=5, job=None):
+        out = []
+        for i in inputs_list:
+            try:
+                out.append(predict(signature, db=db, workspace_id=workspace_id, job=job, lm=lm, **i))
+            except Exception:
+                out.append(None)
+        return out
+
+    monkeypatch.setattr(run, "predict", predict)
+    monkeypatch.setattr(run, "predict_many", many)
+
+
+def test_a_big_quiz_is_two_calls_over_halves_of_a_sample_of_ideas(client, owner, db_session, run_jobs, monkeypatch):
     headers, ws = owner
     docs = make_posts(db_session, ws, 40)
     nb = _notebook(client, owner, docs)
@@ -154,18 +172,18 @@ def test_a_big_quiz_is_one_call_over_a_sample_of_ideas(client, owner, db_session
         assert signature.__name__ == "GenerateQuiz"
         calls.append(inputs)
         cited = _cited(inputs)
-        return {"questions": [{"type": "multiple_choice", "question": f"Question {k}?", "options": ["a", "b"], "correct": [0],
+        return {"questions": [{"type": "multiple_choice", "question": f"Question {len(calls)}-{k}?", "options": ["a", "b"], "correct": [0],
                                "explanation": "", "sources": [cited[k]]} for k in range(inputs["count"])]}
 
-    monkeypatch.setattr(run, "predict", predict)
-    monkeypatch.setattr(run, "predict_many", lambda *a, **k: pytest.fail("one call"))
+    _both(monkeypatch, predict)
     art = client.post("/api/artifacts/generate", json={"type": "quiz", "notebook_id": nb["id"], "document_ids": [str(d.id) for d in docs],
                       "question_types": ["multiple_choice"]}, headers=headers).json()
     run_jobs()
     done = client.get(f"/api/artifacts/{art['id']}", headers=headers).json()
     assert done["status"] == "ready", done["content"]
-    assert len(calls) == 1 and calls[0]["count"] == 10 and calls[0]["material"][0] == idea_pool.FORMAT_NOTE
-    assert len(idea_lines(calls[0]["material"])) == 30
+    assert [c["count"] for c in calls] == [6, 6] and all(c["material"][0] == idea_pool.FORMAT_NOTE for c in calls)
+    first, second = (idea_lines(c["material"]) for c in calls)
+    assert len(first) == len(second) == 10 and not set(first) & set(second)  # two ideas per question, each half its own
     qs = done["content"]["questions"]
     assert len(qs) == 10 and all(q["sources"] and q["sources"][0]["document_id"] and q["sources"][0]["quote"] for q in qs)  # lines verified
     assert len(done["content"]["source"]["document_ids"]) == 40
@@ -181,16 +199,18 @@ def test_flashcards_use_the_ideas_for_any_size_of_selection_but_not_for_chats(cl
     def predict(signature, *, db, workspace_id, job=None, lm=None, **inputs):
         calls.append(inputs["material"])
         cited = _cited(inputs) or [{"path": docs[0].path, "line_start": 1, "line_end": 2}]
-        return {"cards": [{"front": f"Front {k}", "back": "Back.", "sources": [cited[k % len(cited)]]} for k in range(inputs["count"])]}
+        return {"cards": [{"front": f"Front {len(calls)}-{k}", "back": "Back.", "sources": [cited[k % len(cited)]]} for k in range(inputs["count"])]}
 
-    monkeypatch.setattr(run, "predict", predict)
+    _both(monkeypatch, predict)
     art = client.post("/api/artifacts/generate", json={"type": "flashcards", "notebook_id": nb["id"],
                       "document_ids": [str(d.id) for d in docs]}, headers=headers).json()
     run_jobs()
     done = client.get(f"/api/artifacts/{art['id']}", headers=headers).json()
     assert done["status"] == "ready" and done["content"]["card_count"] == 16
-    assert calls[0][0] == idea_pool.FORMAT_NOTE and len(idea_lines(calls[0])) == 12  # all twelve ideas, no post text
-    assert not any(m.startswith("FILE ") for m in calls[0])
+    assert all(c[0] == idea_pool.FORMAT_NOTE for c in calls) and len(calls) == 2
+    assert sorted(idea_lines(calls[0]) + idea_lines(calls[1])) == sorted(set(idea_lines(calls[0]) + idea_lines(calls[1])))
+    assert len(idea_lines(calls[0])) + len(idea_lines(calls[1])) == 12  # all twelve ideas split between the halves, no post text
+    assert not any(m.startswith("FILE ") for c in calls for m in c)
     assert all(c["sources"] and c["sources"][0]["document_id"] for c in done["content"]["cards"])
 
 
@@ -199,7 +219,7 @@ def test_a_quiz_or_flashcards_take_any_number_of_posts_and_the_limits_are_served
     docs = make_posts(db_session, ws, 130)
     ids = [str(d.id) for d in docs]
     nb = _notebook(client, owner, docs)
-    assert client.get("/api/settings/limits", headers=headers).json() == {"posts": 20}
+    assert client.get("/api/settings/limits", headers=headers).json() == {"posts": 20, "selectable_posts": 250}
     big = load_material(db_session, ws.id, uuid.UUID(nb["id"]), {"document_ids": ids}, what="quiz", large_ok=True)
     assert big.mode == "ideas" and len(big.docs) == 130 and big.text == []  # all of them count; the sample stays the same size
     assert len(idea_lines(idea_pool.sample(db_session, ws.id, big.docs))) == settings.artifact_idea_sample
@@ -232,13 +252,13 @@ def test_a_quiz_reads_posts_with_its_own_smaller_budget(client, owner, db_sessio
         sizes[signature.__name__] = sum(len(m) for m in inputs["material"])
         raise RuntimeError("stop here: only the size of what was sent is wanted")
 
-    monkeypatch.setattr(run, "predict", predict)
+    _both(monkeypatch, predict)
     ids = [str(d.id) for d in docs]
     for kind in ("quiz", "report"):
         client.post("/api/artifacts/generate", json={"type": kind, "notebook_id": nb["id"], "document_ids": ids}, headers=headers)
     run_jobs()
-    assert settings.artifact_quiz_passage_budget == 60_000
-    assert sizes["GenerateQuiz"] < 0.6 * sizes["WriteReport"]  # a quiz's 60,000 characters against a report's 120,000
+    assert settings.artifact_quiz_passage_budget == 30_000
+    assert sizes["GenerateQuiz"] < 0.6 * sizes["WriteReport"]  # a quiz's 30,000 characters against a report's 120,000
 
 
 
@@ -259,17 +279,19 @@ def test_suggested_report_templates_read_each_posts_stored_summary(client, owner
     r = client.post("/api/reports/suggest", json={"document_ids": [str(d.id) for d in docs]}, headers=headers)
     assert r.status_code == 200 and len(r.json()["templates"]) == 4
     items = seen[0]["items"]
-    assert len(items) == report_suggestions.SUGGEST_ITEMS  # at most this many sources, however many are selected (newest first)
+    assert len(items) == report_suggestions.SUGGEST_ITEMS  # at most this many sources, in deterministic post order
     summaries = [i for i in items if "\n- " in i]
     starts = [i for i in items if "\n- " not in i]
-    assert len(summaries) == 2 and len(starts) == 2  # the two newest posts have no stored ideas: read by their start
+    chosen = report_suggestions.stable_order(docs)[:report_suggestions.SUGGEST_ITEMS]
+    expected_summaries = sum(1 for d in chosen if ideas_fresh(d))
+    assert len(summaries) == expected_summaries and len(starts) == len(chosen) - expected_summaries
     for item in summaries:
         ideas = report_suggestions.SUMMARY_IDEAS
         assert "Topics: Pricing, Growth" in item and item.count("\n- ") == ideas and len(item) <= report_suggestions.SUMMARY_CHARS
         assert " idea " in item and "Sentence 1 about" not in item  # the stored ideas, not the post text
     assert all("Sentence" in i for i in starts)
     # A post with no stored ideas is still read, by its start
-    r = client.post("/api/reports/suggest", json={"document_ids": [str(docs[13].id)]}, headers=headers)
+    r = client.post("/api/reports/suggest", json={"document_ids": [str(docs[-1].id)]}, headers=headers)
     assert r.status_code == 200 and "Sentence" in seen[1]["items"][0]
 
 
@@ -277,3 +299,107 @@ def test_the_fast_models_output_cap_is_a_setting():
     from app.llm.provider import fast_lm
 
     assert settings.llm_fast_max_tokens == 6000 and fast_lm().kwargs["max_tokens"] == 6000  # quizzes and flashcards write under 3,000
+
+
+def test_flashcards_read_the_ideas_of_posts_that_have_none_yet_and_keep_them(client, owner, db_session, run_jobs, monkeypatch):
+    headers, ws = owner
+    docs = make_posts(db_session, ws, 3, with_ideas=0, body=300)
+    nb = _notebook(client, owner, docs)
+    extracted: list[str] = []
+    calls: list[list[str]] = []
+
+    def predict_many(signature, inputs_list, *, db, workspace_id, lm=None, workers=5, job=None):
+        if signature.__name__ == "ExtractIdeas":
+            extracted.extend(i["title"] for i in inputs_list)
+            return [{"ideas": [{"label": f"Idea of {i['title']}", "note": "n", "sources": [], "details": []}]} for i in inputs_list]
+        return [{"cards": [{"front": f"Front {len(calls)}-{k}", "back": "B", "sources": []} for k in range(i["count"])]}
+                for i in inputs_list if not calls.append(i["material"])]
+
+    monkeypatch.setattr(run, "predict_many", predict_many)
+    monkeypatch.setattr(run, "predict", lambda *a, **k: pytest.fail("no single call: the halves and the extraction go together"))
+    art = client.post("/api/artifacts/generate", json={"type": "flashcards", "notebook_id": nb["id"],
+                      "document_ids": [str(d.id) for d in docs]}, headers=headers).json()
+    run_jobs()
+    assert len(extracted) == 3  # every post was read once for its ideas
+    assert all(m.startswith("IDEA") or m == idea_pool.FORMAT_NOTE for c in calls for m in c)  # the cards saw ideas, not post text
+    for d in docs:
+        db_session.refresh(d)
+        assert (d.metadata_json or {}).get("ideas")  # kept on the post for the next set
+
+
+def _name(docs, titles):
+    for d, t in zip(docs, titles):
+        d.title = t
+
+
+def test_a_post_the_focus_names_is_found_by_its_title(owner, db_session):
+    _, ws = owner
+    docs = make_posts(db_session, ws, 4)
+    _name(docs, ["The Overhang", "Agency and Agents", "The Dot and the Swarm", "Twilight of the chatbots"])
+    names = lambda topic: [d.title for d in idea_pool.mentioned(docs, topic)]  # noqa: E731
+    assert names("mostly the Overhang post, a bit of the others") == ["The Overhang"]
+    assert names("focus on agency and agents") == ["Agency and Agents"]
+    assert names("twilight chatbots") == ["Twilight of the chatbots"]
+    assert names("the dot and the swarm") == ["The Dot and the Swarm"]
+    assert names("pricing") == [] and names("") == [] and names("the") == []  # words that name no post name none
+    assert idea_pool._only("just the overhang") and idea_pool._only("ONLY this post") and not idea_pool._only("mostly this post")
+
+
+def test_a_named_post_gets_most_of_the_material_and_the_others_a_little(owner, db_session):
+    _, ws = owner
+    docs = make_posts(db_session, ws, 6, ideas_each=6)
+    _name(docs, ["The Overhang", "Post B", "Post C", "Post D", "Post E", "Post F"])
+    mine = docs[0].path
+    mixed = idea_pool.sample(db_session, ws.id, docs, topic="mostly the Overhang, a bit of the others", size=20, rng=random.Random(3))
+    lines = idea_lines(mixed)
+    from_it = [m for m in lines if f"[{mine} " in m]
+    assert len(from_it) == 6  # every idea the post stored
+    assert 0 < len(lines) - len(from_it) <= 6  # a little from the others (30% of the size)
+    assert any(m.startswith(f"FILE {mine} ") for m in mixed) and sum(m.startswith("FILE ") for m in mixed) == idea_pool.FOCUS_CHUNKS
+    only = idea_pool.sample(db_session, ws.id, docs, topic="just the overhang", size=20, rng=random.Random(3))
+    assert all(f"[{mine} " in m for m in idea_lines(only)) and all(m.startswith(f"FILE {mine} ") for m in only if m.startswith("FILE "))
+    plain = idea_pool.sample(db_session, ws.id, docs, topic="", size=20, rng=random.Random(3))
+    assert not any(m.startswith("FILE ") for m in plain)  # no named post, no stretches of text
+
+
+def test_one_or_two_posts_give_stretches_of_their_own_text_from_all_over_each(owner, db_session):
+    _, ws = owner
+    docs = make_posts(db_session, ws, 1, body=200)
+    chunks = idea_pool.spread_text(ws.id, docs, rng=random.Random(5))
+    chunks, note = chunks[1:], chunks[0]
+    assert note == idea_pool.TEXT_NOTE and len(chunks) >= 5 and all(c.startswith(f"FILE {docs[0].path} ") for c in chunks)
+    assert sum(len(c) for c in chunks) < idea_pool.SMALL_TOTAL * 1.4
+    starts = sorted(int(c.split("\n")[1].split("|")[0]) for c in chunks)
+    assert starts[0] < 60 and starts[-1] > 140  # from the start of the post to its end, not only the opening
+    assert chunks != idea_pool.spread_text(ws.id, docs, rng=random.Random(6))  # a fresh draw each time
+    two = make_posts(db_session, ws, 2, body=200, start=10)
+    _name(two, ["The Overhang", "Other post"])
+    mostly = idea_pool.spread_text(ws.id, two, topic="mostly the overhang", rng=random.Random(5))
+    assert mostly[0] == idea_pool.TEXT_NOTE and sum(c.startswith(f"FILE {two[0].path} ") for c in mostly) > 2 * sum(c.startswith(f"FILE {two[1].path} ") for c in mostly) > 0
+    just = idea_pool.spread_text(ws.id, two, topic="just the overhang", rng=random.Random(5))
+    assert all(c.startswith(f"FILE {two[0].path} ") for c in just[1:])
+
+
+def test_flashcards_from_one_post_read_its_text_not_its_few_ideas(client, owner, db_session, run_jobs, monkeypatch):
+    headers, ws = owner
+    docs = make_posts(db_session, ws, 1, body=120)
+    nb = _notebook(client, owner, docs)
+    calls: list[list[str]] = []
+
+    def predict_many(signature, inputs_list, *, db, workspace_id, lm=None, workers=5, job=None):
+        assert signature.__name__ == "GenerateFlashcards"  # no extraction of ideas for one post
+        out = []
+        for i in inputs_list:
+            calls.append(i["material"])
+            out.append({"cards": [{"front": f"Front {len(calls)}-{k}", "back": "B", "sources": []} for k in range(i["count"])]})
+        return out
+
+    monkeypatch.setattr(run, "predict_many", predict_many)
+    monkeypatch.setattr(run, "predict", lambda *a, **k: pytest.fail("two halves, not one call"))
+    art = client.post("/api/artifacts/generate", json={"type": "flashcards", "notebook_id": nb["id"],
+                      "document_ids": [str(d.id) for d in docs]}, headers=headers).json()
+    run_jobs()
+    done = client.get(f"/api/artifacts/{art['id']}", headers=headers).json()
+    assert done["status"] == "ready" and done["content"]["card_count"] == 16, done["content"]
+    assert len(calls) == 2 and all(c[0] == idea_pool.TEXT_NOTE and all(m.startswith("FILE ") for m in c[1:]) for c in calls)  # text, with the note
+    assert not set(calls[0][1:]) & set(calls[1][1:])  # each half its own stretches
