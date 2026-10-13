@@ -44,9 +44,9 @@ def test_a_short_report_also_posts_as_a_branded_pdf(client, auth, ws, db_session
     monkeypatch.setattr(export, "_run_chrome", lambda html, args, out: (pages.append(html) or b"%PDF-1.7 fake", ""))
     with media.media_for(short, "linkedin") as files:
         assert [f.kind for f in files] == ["document"]
-    # Every page: the logo and name on top, "Made with Notestack AI" at the foot (a table head and foot repeat)
-    assert '<thead><tr><td><div class="brand"><img src="data:image/svg+xml;base64,' in pages[0]
-    assert "Notestack AI</div>" in pages[0] and "<tfoot><tr><td><div class=\"made\">Made with Notestack AI</div>" in pages[0]
+    # Every page: "Notestack AI" on top; "Made with Notestack AI" and the logo at the bottom right
+    assert '<thead><tr><td><div class="brand">Notestack AI</div>' in pages[0]
+    assert '<tfoot><tr><td><div class="made">Made with Notestack AI<img src="data:image/svg+xml;base64,' in pages[0]
     acct = account(db_session, ws, "linkedin", scopes=LI_SCOPES)
     assert schedule(client, auth, "linkedin", acct, content=text, artifact_id=str(short.id)).status_code == 200
 

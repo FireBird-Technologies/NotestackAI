@@ -10474,3 +10474,34 @@ body.nbv-resizing iframe {
   width: auto;
   padding: 0 12px;
 }
+
+/* The infographic's download menu on a card: above the next card (which would blur it), its items as plain menu rows
+   (the inline card's "every button is a 40px pill" rule must not reach them) */
+.artifact:has(.ig-dl-menu) {
+  position: relative;
+  z-index: 30;
+}
+
+.artifact .ig-dl .ig-dl-menu {
+  z-index: 40;
+  min-width: 240px;
+  padding: 6px;
+  background: var(--black);
+}
+
+.artifact .ig-dl .ig-dl-menu button {
+  flex: none;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+.artifact .ig-dl .ig-dl-menu button:hover {
+  background: var(--surface-2);
+}

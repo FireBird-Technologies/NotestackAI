@@ -136,8 +136,10 @@ PAGE_CSS = """
 .frame > thead td, .frame > tfoot td { border: 0; padding: 0; background: none; }
 .brand { display: flex; align-items: center; gap: 10pt; padding: 10pt 0 34pt; color: #111; font-size: 14pt;
   font-weight: 700; letter-spacing: 0.01em; }
-.brand img { width: 28pt; height: 28pt; border: 0.7pt solid #d6d9e0; border-radius: 6pt; }
-.made { padding: 20pt 0 4pt; color: #8a8f99; font-size: 9pt; text-align: center; }
+/* Bottom right of every page: "Made with Notestack AI", the logo on its right */
+.made { display: flex; align-items: center; justify-content: flex-end; gap: 5pt; padding: 20pt 0 4pt; color: #8a8f99;
+  font-size: 9pt; }
+.made img { width: 16pt; height: 16pt; border: 0.5pt solid #d6d9e0; border-radius: 4pt; }
 .frame > tbody > tr > td { border: 0; padding: 0; }
 body { font: 11pt/1.6 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color: #111; }
 h1 { font-size: 22pt; line-height: 1.2; margin: 0 0 18pt; }
@@ -156,8 +158,8 @@ th { background: #f2f5fc; }
 def report_pdf_html(a: Artifact) -> str:
     title = html.escape(_clean((a.content_json or {}).get("title")) or "Report")
     body = "".join(_block_html(b) for b in report_blocks(a))
-    head = f'<div class="brand"><img src="{_logo()}" alt="">Notestack AI</div>'
-    foot = '<div class="made">Made with Notestack AI</div>'
+    head = '<div class="brand">Notestack AI</div>'
+    foot = f'<div class="made">Made with Notestack AI<img src="{_logo()}" alt=""></div>'
     return (f'<!doctype html><html><head><meta charset="utf-8"><title>{title}</title><style>{PAGE_CSS}</style></head>'
             f'<body><table class="frame"><thead><tr><td>{head}</td></tr></thead>'
             f"<tfoot><tr><td>{foot}</td></tr></tfoot>"
