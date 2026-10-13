@@ -508,15 +508,21 @@ function deckTitle(artifact: Artifact): string {
 }
 
 /** Download, in the popup's header: a menu of PDF or PowerPoint. */
-function DownloadMenu({ artifact, prepare }: { artifact: Artifact; prepare?: () => Promise<boolean> }) {
+function DownloadMenu({ artifact, prepare, buttonClass = "sd-icon-btn", iconSize = 20 }: {
+  artifact: Artifact;
+  prepare?: () => Promise<boolean>;
+  /** The button's look: the viewer's header icon by default; a card's round icon button there. */
+  buttonClass?: string;
+  iconSize?: number;
+}) {
   const menu = useMenu();
   const dl = useDeckDownload(artifact, prepare);
   return (
     <div className="sd-menu-wrap" ref={menu.ref}>
-      <button type="button" className="sd-icon-btn" aria-haspopup="menu" aria-expanded={menu.open} disabled={dl.busy !== null}
+      <button type="button" className={buttonClass} aria-haspopup="menu" aria-expanded={menu.open} disabled={dl.busy !== null}
               title={dl.busy ? "Preparing the file..." : "Download"} aria-label={dl.busy ? "Preparing the file" : "Download"}
               onClick={() => menu.setOpen((o) => !o)}>
-        {dl.busy ? <span className="nbv-send-spinner" aria-hidden="true" /> : <DownloadIcon size={20} />}
+        {dl.busy ? <span className="nbv-send-spinner" aria-hidden="true" /> : <DownloadIcon size={iconSize} />}
       </button>
       {menu.open && (
         <FloatingMenu menu={menu}>
@@ -1008,10 +1014,11 @@ export function SlideDeckRow({ artifact: initial, onRemoved }: { artifact: Artif
       <footer className="artifact-actions">
         {ready && (
           <>
-            <button type="button" className="btn btn-small" onClick={() => setOpen(true)}>Open deck</button>
+            <button type="button" className="btn btn-small" onClick={() => setOpen(true)}>View</button>
             <button type="button" className="btn btn-small" onClick={() => setPresenting(true)}>Present</button>
             <PostButton artifactId={artifact.id} artifact={artifact} />
             <ShareButton artifact={artifact} />
+            <DownloadMenu artifact={artifact} buttonClass="btn btn-small btn-icon-only" iconSize={16} />
           </>
         )}
         {failed && (
@@ -1024,7 +1031,7 @@ export function SlideDeckRow({ artifact: initial, onRemoved }: { artifact: Artif
             }
           }}>Retry</button>
         )}
-        <ConfirmButton onConfirm={remove}>Delete</ConfirmButton>
+        <ConfirmButton onConfirm={remove} className="btn btn-small btn-icon-only card-delete" label="Delete" confirmLabel="Delete?" busyLabel=""><TrashIcon size={16} /></ConfirmButton>
         {/* Bottom right: a positive or negative review */}
         <CardFeedback artifact={artifact} />
       </footer>

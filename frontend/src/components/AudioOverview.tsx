@@ -10,6 +10,7 @@ import { ConfirmButton, errorMessage, formatDate, JobProgress, Modal, StatusPill
 import { ShareButton } from "./ShareDialog";
 import { PostButton } from "./launchpad/PostButton";
 import { CardFeedback } from "./CardFeedback";
+import { TrashIcon } from "./icons/Icons";
 
 /** The audio styles. The server describes each to the script writer (backend/app/pipeline/media.py STYLES). */
 const STYLES = [
@@ -314,7 +315,7 @@ export function AudioOverviewCard({ artifact: initial, onRemoved }: { artifact: 
             }
           }}>Retry</button>
         )}
-        <ConfirmButton onConfirm={remove}>Delete</ConfirmButton>
+        <ConfirmButton onConfirm={remove} className="btn btn-small btn-icon-only card-delete" label="Delete" confirmLabel="Delete?" busyLabel=""><TrashIcon size={16} /></ConfirmButton>
         {/* Bottom right: a positive or negative review */}
         <CardFeedback artifact={artifact} />
       </footer>

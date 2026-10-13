@@ -130,11 +130,11 @@ def _logo() -> str:
 
 
 PAGE_CSS = """
-@page { size: A4; margin: 14mm 20mm 12mm; }
+@page { size: A4; margin: 8mm 20mm 12mm; }
 /* The page's frame: Chrome repeats a table's head and foot on every printed page */
 .frame { width: 100%; border-collapse: collapse; }
 .frame > thead td, .frame > tfoot td { border: 0; padding: 0; background: none; }
-.brand { display: flex; align-items: center; gap: 10pt; padding: 4pt 0 20pt; color: #111; font-size: 14pt;
+.brand { display: flex; align-items: center; gap: 10pt; padding: 10pt 0 34pt; color: #111; font-size: 14pt;
   font-weight: 700; letter-spacing: 0.01em; }
 .brand img { width: 28pt; height: 28pt; border: 0.7pt solid #d6d9e0; border-radius: 6pt; }
 .made { padding: 20pt 0 4pt; color: #8a8f99; font-size: 9pt; text-align: center; }
@@ -156,7 +156,7 @@ th { background: #f2f5fc; }
 def report_pdf_html(a: Artifact) -> str:
     title = html.escape(_clean((a.content_json or {}).get("title")) or "Report")
     body = "".join(_block_html(b) for b in report_blocks(a))
-    head = f'<div class="brand"><img src="{_logo()}" alt="">Notestack</div>'
+    head = f'<div class="brand"><img src="{_logo()}" alt="">Notestack AI</div>'
     foot = '<div class="made">Made with Notestack AI</div>'
     return (f'<!doctype html><html><head><meta charset="utf-8"><title>{title}</title><style>{PAGE_CSS}</style></head>'
             f'<body><table class="frame"><thead><tr><td>{head}</td></tr></thead>'

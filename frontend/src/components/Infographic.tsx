@@ -5,7 +5,7 @@ import { SourceFocusFields, sourceSummary, type SourceSelection } from "./Source
 import { ArtifactFeedback } from "./ArtifactFeedback";
 import { ShareDialog } from "./ShareDialog";
 import { errorMessage, Modal } from "./ui";
-import { ShareIcon } from "./icons/Icons";
+import { DownloadIcon, ShareIcon } from "./icons/Icons";
 
 /** The looks: black and blue, and white with orbits. The AI composes the page itself in the look chosen
  * (backend/app/infographics/design.py); the thumbnails are rendered from a sample (backend/scripts/render_theme_thumbnails.py). */
@@ -78,9 +78,10 @@ function DownloadMenu({ busy, onPick }: { busy: Which | null; onPick: (which: Wh
   };
   return (
     <div className="ig-dl">
-      <button type="button" className="btn btn-small" disabled={busy !== null} aria-expanded={open} aria-haspopup="menu"
+      <button type="button" className="btn btn-small btn-icon-only" disabled={busy !== null} aria-expanded={open} aria-haspopup="menu"
+              aria-label={busy ? "Preparing the download" : "Download"} title={busy ? "Preparing..." : "Download"}
               onClick={() => setOpen((o) => !o)}>
-        {busy ? (<><span className="nbv-send-spinner" aria-hidden="true" /> Preparing...</>) : "Download"}
+        {busy ? <span className="nbv-send-spinner" aria-hidden="true" /> : <DownloadIcon size={16} />}
       </button>
       {open && (
         <div className="ig-dl-menu" role="menu">

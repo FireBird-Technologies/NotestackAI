@@ -10436,3 +10436,41 @@ body.nbv-resizing iframe {
   opacity: 1;
   cursor: default;
 }
+
+/* An icon-only button anywhere (a download): round, as wide as it is tall */
+.btn.btn-small.btn-icon-only {
+  width: 34px;
+  padding: 0;
+}
+
+.artifact .btn.btn-small.btn-icon-only {
+  width: 30px;
+}
+
+/* On every card the download comes last among the buttons (after Delete), then the thumbs at the far right. The card's
+   own markup varies (a link, the infographic's menu, the deck's menu), so the order is set here. */
+.artifact .btn-icon-only,
+.artifact .ig-dl,
+.artifact .artifact-actions > .sd-menu-wrap {
+  order: 90;
+}
+
+.artifact .card-fb {
+  order: 100;
+}
+
+/* A card's delete: a bin icon, just before the download; red when pointed at; "Delete?" to confirm (it widens) */
+.artifact .card-delete {
+  order: 80;
+}
+
+.artifact .btn.card-delete:hover,
+.artifact .btn.card-delete.armed {
+  border-color: #e5675a;
+  color: #f2786b;
+}
+
+.artifact .btn.btn-small.btn-icon-only.card-delete.armed {
+  width: auto;
+  padding: 0 12px;
+}

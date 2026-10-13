@@ -14,6 +14,7 @@ import { ConfirmButton, errorMessage, formatDate, formatDuration, JobProgress, S
 import { ShareButton } from "./ShareDialog";
 import { DownloadIcon } from "./icons/Icons";
 import { CardFeedback } from "./CardFeedback";
+import { TrashIcon } from "./icons/Icons";
 
 export function CitationList({
   citations,
@@ -281,13 +282,14 @@ export function ArtifactCard({
         )}
         {onRemoved && (
           <ConfirmButton
+            className="btn btn-small btn-icon-only card-delete" label="Delete" confirmLabel="Delete?" busyLabel=""
             onConfirm={async () => {
               // A blog2video video is also removed from blog2video.
               await (artifact.provider === "blog2video" ? videosApi.remove(artifact.id) : artifactsApi.remove(artifact.id));
               onRemoved(artifact.id);
             }}
           >
-            Delete
+            <TrashIcon size={16} />
           </ConfirmButton>
         )}
         {/* Bottom right: a positive or negative review */}

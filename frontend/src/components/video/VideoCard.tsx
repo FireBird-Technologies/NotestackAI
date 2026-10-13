@@ -6,6 +6,7 @@ import { ShareButton } from "../ShareDialog";
 import { ConfirmButton, errorMessage, formatDate, Loading, Modal, StatusPill } from "../ui";
 import { canPost, PostButton } from "../launchpad/PostButton";
 import { CardFeedback } from "../CardFeedback";
+import { TrashIcon } from "../icons/Icons";
 
 /** The player without its speed and captions controls (blog2video's `hide` option, as the video editor uses it). */
 function playerUrl(src: string): string {
@@ -81,11 +82,11 @@ export function VideoCard({ artifact, onRemoved }: { artifact: Artifact; onRemov
         {/* A link on Notestack's own address that plays this preview: /r/<token> */}
         {canPost(artifact) && <PostButton artifactId={artifact.id} artifact={artifact} />}
         <ShareButton artifact={artifact} />
-        <ConfirmButton onConfirm={async () => {
+        <ConfirmButton className="btn btn-small btn-icon-only card-delete" label="Delete" confirmLabel="Delete?" busyLabel="" onConfirm={async () => {
           await videosApi.remove(artifact.id);
           onRemoved(artifact.id);
         }}>
-          Delete
+          <TrashIcon size={16} />
         </ConfirmButton>
         {/* Bottom right: a positive or negative review */}
         <CardFeedback artifact={artifact} />
