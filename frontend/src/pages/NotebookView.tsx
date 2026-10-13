@@ -2,13 +2,14 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { artifactsApi, notebooksApi } from "../api/endpoints";
 import { streamSSE } from "../api/stream";
-import type { AnswerFeedback as Feedback, Artifact, ChatSummary, Citation, MemoryChange, Notebook } from "../api/types";
+import type { AnswerFeedback as Feedback, Artifact, ChatSummary, Citation, Job, MemoryChange, Notebook } from "../api/types";
 import { AnswerFeedback } from "../components/AnswerFeedback";
 import { ArtifactCard, CitationList } from "../components/ArtifactCard";
 import ConnectorModal from "../components/ConnectorModal";
 import { Markdown } from "../components/Markdown";
 import { DocPicker } from "../components/DocPicker";
-import { ConnectorIcon, FlashcardsIcon, HeadphonesIcon, InfographicIcon, QuizIcon, ReportIcon, SlidesIcon, TelescopeIcon, VideoIcon } from "../components/icons/Icons";
+import { ConnectorIcon, FlashcardsIcon, HeadphonesIcon, InfographicIcon, QuizIcon, ReportIcon, RocketIcon, SlidesIcon, TelescopeIcon, VideoIcon } from "../components/icons/Icons";
+import { ScheduleModal } from "../components/ScheduleModal";
 import { MindMapDialog, MindMapExplorer, MindMapRow } from "../components/MindMap";
 import { FlashcardsDialog, type FlashcardsRequest } from "../components/Flashcards";
 import { InfographicDialog, type InfographicRequest } from "../components/Infographic";
@@ -22,9 +23,12 @@ import { ReportDialog, type ReportRequest } from "../components/ReportDialog";
 import { PaneResizer, usePaneWidths } from "../components/PaneResizer";
 import { Reader } from "../components/Reader";
 import { seedDocs } from "../components/video/sourceCache";
-import { ConfirmButton, errorMessage, formatDate, Loading, Modal } from "../components/ui";
+import { ConfirmButton, errorMessage, formatDate, JobProgress, Loading, Modal } from "../components/ui";
+import { useJob } from "../hooks/useJob";
+import { AddSource } from "./Sources";
 import { VideoCreateForm } from "./VideoCreate";
 import { canPost, PostButton } from "../components/launchpad/PostButton";
+import { VideoCard } from "../components/video/VideoCard";
 
 type Turn = {
   id?: string; // the saved message, once there is one: what a thumbs up or down is attached to
@@ -68,9 +72,8 @@ function readChatRailOpen(): boolean {
 }
 
 /** Create: one click per format with sensible defaults, options folded away; then what was made from this notebook. */
-function StudioPanel({ notebookId, notebookTitle, docs, chats, currentChatId, disabled, quizOpen, onQuizClose, onCreateQuiz, cardsOpen, onCardsClose, onCreateCards, infographicOpen, onInfographicClose, onCreateInfographic, audioOpen, onAudioClose, onCreateAudio, slidesOpen, onSlidesClose, onCreateSlides, reportOpen, onReportClose, onCreateReport, onCreateVideo }: {
+function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, quizOpen, onQuizClose, onCreateQuiz, cardsOpen, onCardsClose, onCreateCards, infographicOpen, onInfographicClose, onCreateInfographic, audioOpen, onAudioClose, onCreateAudio, slidesOpen, onSlidesClose, onCreateSlides, reportOpen, onReportClose, onCreateReport, onCreateVideo }: {
   notebookId: string;
-  notebookTitle: string;
   docs: { id: string; title: string; locked?: boolean }[];
   chats: ChatSummary[];
   currentChatId: string | null;
@@ -170,6 +173,7 @@ function StudioPanel({ notebookId, notebookTitle, docs, chats, currentChatId, di
 
   const cite = (c: Citation) => c.document_id && setReading({ id: c.document_id, start: c.line_start, end: c.line_end });
   const off = disabled;
+  const [launching, setLaunching] = useState(false); // the Launch composer is open
 
   return (
     <div className="stack">
@@ -226,10 +230,15 @@ function StudioPanel({ notebookId, notebookTitle, docs, chats, currentChatId, di
         <button disabled={off} onClick={onCreateQuiz}>
           <QuizIcon size={18} /> <span className="nbv-make-text">Quiz</span>
         </button>
-        <button className="nbv-make-wide" disabled={off} onClick={onCreateCards}>
+        <button disabled={off} onClick={onCreateCards}>
           <FlashcardsIcon size={18} /> <span className="nbv-make-text">Flashcards</span>
         </button>
+        {/* Launch: the composer, to post something from the Library (or just words) to LinkedIn */}
+        <button onClick={() => setLaunching(true)}>
+          <RocketIcon size={18} /> <span className="nbv-make-text">Launch</span>
+        </button>
       </div>
+      {launching && <ScheduleModal platform="linkedin" posts={[]} onClose={() => setLaunching(false)} />}
       {disabled && <p className="muted small">Add posts to this notebook to start creating.</p>}
       {error && <p className="error-text">{error}</p>}
       {maps.length > 0 && (
@@ -268,28 +277,30 @@ function StudioPanel({ notebookId, notebookTitle, docs, chats, currentChatId, di
           <SlideDeckRow key={a.id} artifact={a} onRemoved={(id) => setArtifacts((list) => (list ?? []).filter((x) => x.id !== id))} />
         ) : a.type === "audio_overview" ? (
           <AudioOverviewCard key={a.id} artifact={a} onRemoved={(id) => setArtifacts((list) => (list ?? []).filter((x) => x.id !== id))} />
+        ) : a.type === "video" && a.provider === "blog2video" ? (
+          <VideoCard key={a.id} artifact={a} onRemoved={(id) => setArtifacts((list) => (list ?? []).filter((x) => x.id !== id))} />
         ) : (
           <ArtifactCard
             key={a.id}
             artifact={a}
             onCite={cite}
             onRemoved={(id) => setArtifacts((list) => (list ?? []).filter((x) => x.id !== id))}
-            actions={(art) => canPost(art) ? <PostButton artifactId={art.id} /> : null}
+            actions={(art) => canPost(art) ? <PostButton artifactId={art.id} artifact={art} /> : null}
           />
         ))}
       </div>}
       {reading && <Reader documentId={reading.id} highlight={{ start: reading.start, end: reading.end }} onClose={() => setReading(null)} />}
-      {quizOpen && <QuizDialog notebookId={notebookId} notebookTitle={notebookTitle} chats={chats} currentChatId={currentChatId} busy={false} error={null}
+      {quizOpen && <QuizDialog notebookId={notebookId} chats={chats} currentChatId={currentChatId} busy={false} error={null}
                                onClose={onQuizClose} onCreate={makeQuiz} />}
-      {reportOpen && <ReportDialog notebookId={notebookId} notebookTitle={notebookTitle} chats={chats} currentChatId={currentChatId} busy={false}
+      {reportOpen && <ReportDialog notebookId={notebookId} chats={chats} currentChatId={currentChatId} busy={false}
                                    error={null} onClose={onReportClose} onCreate={makeReport} />}
-      {infographicOpen && <InfographicDialog notebookId={notebookId} notebookTitle={notebookTitle} chats={chats} currentChatId={currentChatId}
+      {infographicOpen && <InfographicDialog notebookId={notebookId} chats={chats} currentChatId={currentChatId}
                                              busy={false} error={null} onClose={onInfographicClose} onCreate={makeInfographic} />}
-      {audioOpen && <AudioOverviewDialog notebookId={notebookId} notebookTitle={notebookTitle} chats={chats} currentChatId={currentChatId}
+      {audioOpen && <AudioOverviewDialog notebookId={notebookId} chats={chats} currentChatId={currentChatId}
                                          onClose={onAudioClose} onCreate={makeAudio} />}
-      {slidesOpen && <SlideDeckDialog notebookId={notebookId} notebookTitle={notebookTitle} chats={chats} currentChatId={currentChatId}
+      {slidesOpen && <SlideDeckDialog notebookId={notebookId} chats={chats} currentChatId={currentChatId}
                                       onClose={onSlidesClose} onCreate={makeSlides} />}
-      {cardsOpen && <FlashcardsDialog notebookId={notebookId} notebookTitle={notebookTitle} chats={chats} currentChatId={currentChatId} busy={false}
+      {cardsOpen && <FlashcardsDialog notebookId={notebookId} chats={chats} currentChatId={currentChatId} busy={false}
                                       error={null} onClose={onCardsClose} onCreate={makeCards} />}
       {connectorOpen && <ConnectorModal onClose={() => setConnectorOpen(false)} />}
       {mapDialog && <MindMapDialog docs={docs} busy={false} error={null} onClose={() => setMapDialog(false)} onCreate={makeMap} />}
@@ -312,6 +323,10 @@ export default function NotebookView() {
   const [busy, setBusy] = useState(false);
   const [loadingChatId, setLoadingChatId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  // Connecting a source or importing posts from here: the box, and the imports under way (their posts join this
+  // notebook; All posts gathers every post anyway).
+  const [connecting, setConnecting] = useState(false);
+  const [imports, setImports] = useState<Job[]>([]);
   const [makingVideo, setMakingVideo] = useState(false); // the video wizard is open in a modal
   const [makingQuiz, setMakingQuiz] = useState(false); // the quiz settings are open in a modal
   const [makingInfographic, setMakingInfographic] = useState(false); // the infographic settings are open in a modal
@@ -640,10 +655,23 @@ export default function NotebookView() {
               <svg className={`nbv-posts-chev${postsOpen ? " open" : ""}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
               Posts <span className="nbv-posts-count">{nb.documents.length}</span>
             </button>
-            {!nb.is_archive && (
-              <button className="btn btn-small" onClick={() => setAdding(true)}>+ Add</button>
-            )}
+            <span className="nbv-posts-actions">
+              <button className="btn btn-small" onClick={() => setConnecting(true)} title="Connect a blog or newsletter, import an article, or upload files">
+                + Connect source
+              </button>
+              {!nb.is_archive && (
+                <button className="btn btn-small" onClick={() => setAdding(true)} title="Add posts you already have">+ Add posts</button>
+              )}
+            </span>
+            {/* A narrow pane: the two buttons fold into one "Add" with a menu (only the notebook's posts have two) */}
+            {!nb.is_archive && <AddMenu onConnect={() => setConnecting(true)} onAdd={() => setAdding(true)} />}
           </div>
+          {imports.map((j) => (
+            <ImportProgress key={j.id} job={j} onDone={() => {
+              setImports((cur) => cur.filter((x) => x.id !== j.id));
+              load();
+            }} />
+          ))}
           {postsOpen && (
             <>
               {nb.is_archive && <p className="muted small">Every indexed post. New posts join automatically.</p>}
@@ -818,7 +846,7 @@ export default function NotebookView() {
       </section>
 
       <aside className="card nbv-pane nbv-side" aria-label="Notebook tools">
-        <StudioPanel notebookId={nb.id} notebookTitle={nb.title} docs={nb.documents.map((d) => ({ id: d.id, title: d.title, locked: d.locked }))}
+        <StudioPanel notebookId={nb.id} docs={nb.documents.map((d) => ({ id: d.id, title: d.title, locked: d.locked }))}
                      chats={chats} currentChatId={chatId} quizOpen={makingQuiz}
                      onQuizClose={() => setMakingQuiz(false)} onCreateQuiz={openQuiz}
                      reportOpen={makingReport} onReportClose={() => setMakingReport(false)} onCreateReport={openReport}
@@ -836,6 +864,14 @@ export default function NotebookView() {
       {makingVideo && (
         <Modal title="New video" onClose={() => setMakingVideo(false)} wide>
           <VideoCreateForm startNotebook={nb.id} inModal />
+        </Modal>
+      )}
+      {connecting && (
+        <Modal title={nb.is_archive ? "Connect a source" : `Add sources to ${nb.title}`} onClose={() => setConnecting(false)} wide>
+          <AddSource notebookId={nb.is_archive ? undefined : nb.id} onAdded={(_, job) => {
+            setImports((cur) => [...cur, job]);
+            setConnecting(false);
+          }} />
         </Modal>
       )}
       {adding && (
@@ -873,5 +909,57 @@ export default function NotebookView() {
         </Modal>
       )}
     </div>
+  );
+}
+
+/** An import started from this notebook, until it is done: then the notebook reloads, with its new posts. */
+function ImportProgress({ job, onDone }: { job: Job; onDone: () => void }) {
+  const live = useJob(job, (j) => {
+    if (j.status === "done") onDone();
+  });
+  if (!live) return null;
+  return (
+    <div className="nbv-import">
+      <JobProgress job={live} compact />
+      {live.status === "failed" && (
+        <button type="button" className="link-btn small" onClick={onDone}>Dismiss</button>
+      )}
+    </div>
+  );
+}
+
+/** "+ Add" with a chevron: a menu of Connect source and Add posts, for a pane too narrow for both buttons. */
+function AddMenu({ onConnect, onAdd }: { onConnect: () => void; onAdd: () => void }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent) => !box.current?.contains(e.target as Node) && setOpen(false);
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", away);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", away);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+  const pick = (fn: () => void) => () => {
+    setOpen(false);
+    fn();
+  };
+  return (
+    <span className="nbv-add-menu" ref={box}>
+      <button type="button" className="btn btn-small" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        + Add
+        <svg className={`nbv-add-chev${open ? " open" : ""}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+      </button>
+      {open && (
+        <span className="nbv-add-list" role="menu">
+          <button type="button" role="menuitem" onClick={pick(onConnect)}>Connect source</button>
+          <button type="button" role="menuitem" onClick={pick(onAdd)}>Add posts</button>
+        </span>
+      )}
+    </span>
   );
 }

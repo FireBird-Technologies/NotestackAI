@@ -1,15 +1,15 @@
 """mcp_oauth: apps that connect over MCP, the sign-ins they start, and the grants a writer gives them
 
-Revision ID: 0027_mcp_oauth
-Revises: 0026_plan_copy
+Revision ID: 0028_mcp_oauth
+Revises: 0027_link_videos_to_notebooks
 Create Date: 2026-10-09
 """
 import sqlalchemy as sa
 
 from alembic import op
 
-revision = "0027_mcp_oauth"
-down_revision = "0026_plan_copy"
+revision = "0028_mcp_oauth"
+down_revision = "0027_link_videos_to_notebooks"
 branch_labels = None
 depends_on = None
 

@@ -5,13 +5,26 @@ from collections import defaultdict, deque
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.auth import Ctx, get_ctx
 from app.db import get_db
 from app.models import Artifact, ArtifactShare, Workspace
 from app.routers.artifacts import get_artifact_or_404
-from app.services.share import new_token, public_infographic, public_report, share_url
+from app.services.share import (
+    new_token,
+    public_audio,
+    public_flashcards,
+    public_infographic,
+    public_quiz,
+    public_report,
+    public_slides,
+    public_video,
+    share_url,
+    video_file,
+    video_preview,
+)
 
 router = APIRouter(tags=["share"])
 
@@ -29,15 +42,38 @@ def _limit(request: Request) -> None:
     window.append(now)
 
 
-SHAREABLE = ("report", "infographic")
+SHAREABLE = ("report", "infographic", "audio_overview", "video", "slide_deck", "flashcards", "quiz")
+
+
+def _ready(a: Artifact) -> bool:
+    """Finished, so there is something to show (a video once its file exists)."""
+    return a.type in SHAREABLE and (a.status == "ready" or (a.type == "video" and bool(video_file(a) or video_preview(a))))
 
 
 def _report(ctx: Ctx, artifact_id: uuid.UUID) -> Artifact:
-    """A finished report or infographic of this workspace."""
+    """A finished shareable artifact of this workspace."""
     a = get_artifact_or_404(ctx, artifact_id)
-    if a.type not in SHAREABLE or a.status != "ready":
+    if not _ready(a):
         raise HTTPException(404, "Not found")
     return a
+
+
+def _mint_preview(ctx: Ctx, a: Artifact) -> None:
+    """A video's live-preview link is made when its editor first opens; one shared before that gets it now."""
+    from app.models import B2VVideo
+    from app.routers.videos import preview_url
+
+    vid = (a.content_json or {}).get("b2v_video_id")
+    if not str(vid or "").isdigit():
+        return
+    row = ctx.db.scalar(select(B2VVideo).where(B2VVideo.artifact_id == a.id, B2VVideo.workspace_id == ctx.workspace.id))
+    preview_url(ctx, a, int(vid), row)
+
+
+PUBLIC_VIEWS = {"infographic": lambda a, s: public_infographic(a), "report": public_report,
+                "audio_overview": lambda a, s: public_audio(a), "video": lambda a, s: public_video(a),
+                "slide_deck": lambda a, s: public_slides(a), "flashcards": lambda a, s: public_flashcards(a),
+                "quiz": lambda a, s: public_quiz(a)}
 
 
 def _share(ctx: Ctx, a: Artifact) -> ArtifactShare | None:
@@ -60,11 +96,17 @@ def create_share(artifact_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
     a = _report(ctx, artifact_id)
     if not ctx.workspace.allow_public_links:
         raise HTTPException(403, "Public links are turned off for this workspace. Turn them on in Settings, Privacy.")
+    if a.type == "video" and not video_preview(a):
+        _mint_preview(ctx, a)
     share = _share(ctx, a)
     if not share:
         share = ArtifactShare(workspace_id=ctx.workspace.id, artifact_id=a.id, token=new_token(), show_sources=True)
         ctx.db.add(share)
-        ctx.db.commit()
+        try:
+            ctx.db.commit()
+        except IntegrityError:  # made by a request that ran at the same time: that one's link
+            ctx.db.rollback()
+            share = _share(ctx, a)
     return _out(share)
 
 
@@ -92,16 +134,16 @@ def delete_share(artifact_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
     return _out(None)
 
 
-@router.get("/api/public/reports/{token}")
+@router.get("/api/public/s/{token}")
+@router.get("/api/public/reports/{token}")  # the address links made before every type could be shared used
 def public(token: str, request: Request, response: Response, db: Session = Depends(get_db)):
-    """The shared view of a report or an infographic. No sign in. A wrong, revoked or switched-off link is a plain 404."""
+    """The shared view of an artifact. No sign in. A wrong, revoked or switched-off link is a plain 404."""
     _limit(request)
     response.headers["X-Robots-Tag"] = "noindex, nofollow"
     response.headers["Cache-Control"] = "no-store"
     share = db.scalar(select(ArtifactShare).where(ArtifactShare.token == token[:64]))
     artifact = db.get(Artifact, share.artifact_id) if share else None
     workspace = db.get(Workspace, share.workspace_id) if share else None
-    if not share or not artifact or artifact.type not in SHAREABLE or artifact.status != "ready" \
-            or not workspace or not workspace.allow_public_links:
+    if not share or not artifact or not _ready(artifact) or not workspace or not workspace.allow_public_links:
         raise HTTPException(404, "This link does not work")
-    return public_infographic(artifact) if artifact.type == "infographic" else public_report(artifact, share)
+    return PUBLIC_VIEWS[artifact.type](artifact, share)

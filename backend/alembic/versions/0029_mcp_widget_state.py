@@ -1,7 +1,7 @@
 """persist the artifact created by each MCP generation widget
 
-Revision ID: 0028_mcp_widget_state
-Revises: 0027_mcp_oauth
+Revision ID: 0029_mcp_widget_state
+Revises: 0028_mcp_oauth
 Create Date: 2026-10-13
 """
 
@@ -9,8 +9,8 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision = "0028_mcp_widget_state"
-down_revision = "0027_mcp_oauth"
+revision = "0029_mcp_widget_state"
+down_revision = "0028_mcp_oauth"
 branch_labels = None
 depends_on = None
 

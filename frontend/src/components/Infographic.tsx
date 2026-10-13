@@ -5,6 +5,7 @@ import { SourceFocusFields, sourceSummary, type SourceSelection } from "./Source
 import { ArtifactFeedback } from "./ArtifactFeedback";
 import { ShareDialog } from "./ShareDialog";
 import { errorMessage, Modal } from "./ui";
+import { DownloadIcon, ShareIcon } from "./icons/Icons";
 
 /** The looks: black and blue, and white with orbits. The AI composes the page itself in the look chosen
  * (backend/app/infographics/design.py); the thumbnails are rendered from a sample (backend/scripts/render_theme_thumbnails.py). */
@@ -77,9 +78,10 @@ function DownloadMenu({ busy, onPick }: { busy: Which | null; onPick: (which: Wh
   };
   return (
     <div className="ig-dl">
-      <button type="button" className="btn btn-small" disabled={busy !== null} aria-expanded={open} aria-haspopup="menu"
+      <button type="button" className="btn btn-small btn-icon-only" disabled={busy !== null} aria-expanded={open} aria-haspopup="menu"
+              aria-label={busy ? "Preparing the download" : "Download"} title={busy ? "Preparing..." : "Download"}
               onClick={() => setOpen((o) => !o)}>
-        {busy ? (<><span className="nbv-send-spinner" aria-hidden="true" /> Preparing...</>) : "Download"}
+        {busy ? <span className="nbv-send-spinner" aria-hidden="true" /> : <DownloadIcon size={16} />}
       </button>
       {open && (
         <div className="ig-dl-menu" role="menu">
@@ -139,9 +141,8 @@ export function ThemePicker({ value, onChange, disabled = false }: { value: stri
 }
 
 /** The infographic settings: what it is made from (posts and/or chats), what it should show, and a theme. */
-export function InfographicDialog({ notebookId, notebookTitle, chats, currentChatId, busy, error, onClose, onCreate, title = "Infographic" }: {
+export function InfographicDialog({ notebookId, chats, currentChatId, busy, error, onClose, onCreate, title = "Infographic" }: {
   notebookId: string;
-  notebookTitle?: string;
   chats: ChatSummary[];
   currentChatId?: string | null;
   busy: boolean;
@@ -175,7 +176,7 @@ export function InfographicDialog({ notebookId, notebookTitle, chats, currentCha
             <span className="vw-label">Look</span>
             <ThemePicker value={theme} onChange={setTheme} />
           </div>
-          <SourceFocusFields notebookId={notebookId} notebookTitle={notebookTitle} chats={chats} currentChatId={currentChatId}
+          <SourceFocusFields notebookId={notebookId} chats={chats} currentChatId={currentChatId}
                              what="infographic" noFocus onChange={setSel} />
           <label className="field">
             <span className="vw-label">What should it show? <span className="muted">(optional)</span></span>
@@ -231,7 +232,7 @@ export function InfographicViewer({ artifact, onClose, onDownload }: { artifact:
                 onClose();
                 onDownload(which);
               }} />
-              <button type="button" className="btn btn-small" onClick={() => setSharing(true)}>Share</button>
+              <button type="button" className="btn btn-small" onClick={() => setSharing(true)}><ShareIcon size={16} /> Share</button>
             </div>
           </div>
           {info && (
@@ -282,7 +283,7 @@ export function InfographicBody({ artifact }: { artifact: Artifact }) {
       <div className="row">
         <button type="button" className="btn btn-small" onClick={() => setOpen(true)}>Open</button>
         <DownloadMenu busy={dl.busy} onPick={dl.download} />
-        <button type="button" className="btn btn-small" onClick={() => setSharing(true)}>Share</button>
+        <button type="button" className="btn btn-small" onClick={() => setSharing(true)}><ShareIcon size={16} /> Share</button>
       </div>
       {open && <InfographicViewer artifact={artifact} onClose={() => setOpen(false)} onDownload={dl.download} />}
       {sharing && <ShareDialog artifactId={artifact.id} what="infographic" onClose={() => setSharing(false)} />}

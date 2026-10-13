@@ -30,7 +30,8 @@ from app.db import get_db
 from app.llm import run
 from app.llm.provider import focus_lm
 from app.llm.signatures import VideoFocusAngles
-from app.models import Artifact, B2VVideo, Chat, Document, Message, Notebook, Upload, User, Workspace, WorkspaceMember
+from app.models import (Artifact, B2VVideo, Chat, Document, Message, Notebook, NotebookDocument, Upload, User, Workspace,
+                        WorkspaceMember)
 from app.routers.sources import is_locked
 from app.services import b2v_access, video_focus, video_limits, video_quota
 from app.services import blog2video as b2v
@@ -389,7 +390,8 @@ def _logo(ctx: Ctx, upload_id: uuid.UUID | None) -> tuple[str, str, bytes] | Non
 
 def _start(ctx: Ctx, plan: Plan, title: str, aspect_ratio: str, template: str, created_via: str,
            call: Callable[[B2VVideo], int], logo: tuple[str, str, bytes] | None = None,
-           document_id: uuid.UUID | None = None, source_url: str | None = None) -> Artifact:
+           document_id: uuid.UUID | None = None, source_url: str | None = None,
+           notebook_id: uuid.UUID | None = None) -> Artifact:
     """Reserve one video, record it, ask blog2video for it (call returns its id), refund if that fails."""
     if not video_quota.reserve(ctx.db, ctx.workspace.id):
         usage = video_usage(ctx.db, ctx.workspace)
@@ -397,6 +399,7 @@ def _start(ctx: Ctx, plan: Plan, title: str, aspect_ratio: str, template: str, c
                                f"You have made {usage['used']} of {usage['limit']} videos this period.")
     try:
         artifact = Artifact(workspace_id=ctx.workspace.id, type="video", status="generating", document_id=document_id,
+                            notebook_id=notebook_id,
                             content_json={"provider": "blog2video", "title": title[:300],
                                           "aspect_ratio": aspect_ratio})
         ctx.db.add(artifact)
@@ -452,8 +455,28 @@ def create_video(body: VideoCreateIn, ctx: Ctx = Depends(get_ctx), _: None = Dep
         return int(created["video_id"])
 
     a = _start(ctx, plan, title, body.aspect_ratio, body.template, "v1", call, logo, body.document_id,
-               source_url=source.get("url"))
+               source_url=source.get("url"), notebook_id=_notebook_of(ctx, body))
     return serialize_artifact(a)
+
+
+def _notebook_of(ctx: Ctx, body: VideoCreateIn) -> uuid.UUID | None:
+    """The notebook a video is made from (its posts, or its chats), so the notebook lists it with its other outputs."""
+    if body.notebook_id and ctx.db.scalar(select(Notebook.id).where(Notebook.id == body.notebook_id,
+                                                                    Notebook.workspace_id == ctx.workspace.id)):
+        return body.notebook_id
+    if body.chat_ids:
+        found = set(ctx.db.scalars(select(Chat.notebook_id).where(Chat.id.in_(body.chat_ids),
+                                                                  Chat.workspace_id == ctx.workspace.id)))
+        if len(found) == 1:
+            return next(iter(found))
+    if body.document_id:
+        # One post: the notebook it is in, when there is just one (besides the whole archive).
+        found = list(ctx.db.scalars(select(Notebook.id).join(NotebookDocument, NotebookDocument.notebook_id == Notebook.id)
+                                    .where(NotebookDocument.document_id == body.document_id,
+                                           Notebook.workspace_id == ctx.workspace.id, Notebook.is_archive.is_(False))))
+        if len(found) == 1:
+            return found[0]
+    return None
 
 
 def _excerpt(text: str | None, limit: int) -> str:

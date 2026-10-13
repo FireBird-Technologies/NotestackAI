@@ -276,14 +276,14 @@ def export_artifact_feedback(ctx: Ctx = Depends(get_ctx), rating: Literal["up", 
     which kinds do well and which do not."""
     q = select(ArtifactFeedback).where(ArtifactFeedback.workspace_id == ctx.workspace.id)
     if rating:
-        q = q.where(ArtifactFeedback.rating == (1 if rating == "up" else -1))
+        q = q.where(ArtifactFeedback.rating > 0 if rating == "up" else ArtifactFeedback.rating < 0)
     if type:
         q = q.where(ArtifactFeedback.artifact_type == type)
     rows = ctx.db.scalars(q.order_by(ArtifactFeedback.updated_at.desc()).limit(min(limit, 1000))).all()
     log.info("feedback exported: rows=%d rating=%s type=%s user=%s workspace=%s", len(rows), rating, type, ctx.user.id,
              ctx.workspace.id)
     return [{"id": str(f.id), "artifact_id": str(f.artifact_id) if f.artifact_id else None, "type": f.artifact_type,
-             "rating": "up" if f.rating > 0 else "down", "reasons": f.reasons, "comment": f.comment, "snapshot": f.snapshot,
+             "rating": "up" if f.rating > 0 else "down", "stars": f.rating if f.rating > 0 else None, "reasons": f.reasons, "comment": f.comment, "snapshot": f.snapshot,
              "rated_at": f.updated_at.isoformat() if f.updated_at else None} for f in rows]
 
 
@@ -310,20 +310,29 @@ def _offer_visuals_once(ctx: Ctx, a: Artifact) -> None:
     ctx.db.commit()
 
 
+DEFAULT_STARS = 2  # a thumbs up with no stars given
+
+
 class FeedbackIn(BaseModel):
     rating: Literal["up", "down"] | None  # null takes the rating back
+    stars: int | None = Field(None, ge=1, le=5)  # a thumbs up's rating, 1 to 5 (2 when not given)
     reasons: list[str] = []
     comment: str | None = Field(None, max_length=1000)
 
 
 @router.put("/{artifact_id}/feedback")
 def rate_artifact(artifact_id: uuid.UUID, body: FeedbackIn, ctx: Ctx = Depends(get_ctx)):
-    """Thumbs up or down on a finished report, quiz, flashcard set or infographic. Rating again replaces it; null removes it."""
+    """Thumbs up (a positive review) or down (a negative one) on a finished report, quiz, flashcard set, infographic,
+    slide deck, audio overview or video, in one table told apart by `rating` (1 / -1). Rating again replaces it; null
+    removes it."""
     a = get_artifact_or_404(ctx, artifact_id)
     allowed = artifact_feedback.REASONS.get(a.type)
-    if allowed is None or a.status != "ready":
+    # A blog2video video counts once it has its MP4, whatever its status says.
+    finished = a.status == "ready" or (a.type == "video" and bool((a.content_json or {}).get("video_url")))
+    if allowed is None or not finished:
         log.warning("feedback refused: artifact=%s type=%s status=%s user=%s", a.id, a.type, a.status, ctx.user.id)
-        raise HTTPException(400, "Only a finished report, quiz, flashcard set or infographic can be rated")
+        raise HTTPException(400, "Only a finished report, quiz, flashcard set, infographic, slide deck, audio overview "
+                                 "or video can be rated")
     row = ctx.db.scalar(select(ArtifactFeedback).where(ArtifactFeedback.artifact_id == a.id, ArtifactFeedback.user_id == ctx.user.id))
     if body.rating is None:
         if row:
@@ -335,7 +344,11 @@ def rate_artifact(artifact_id: uuid.UUID, body: FeedbackIn, ctx: Ctx = Depends(g
         row = ArtifactFeedback(workspace_id=ctx.workspace.id, artifact_id=a.id, user_id=ctx.user.id)
         ctx.db.add(row)
     row.artifact_type = a.type
-    row.rating = 1 if body.rating == "up" else -1
+    # One column tells them apart: a thumbs up keeps its stars (1 to 5), a thumbs down is -1.
+    if body.rating == "up":
+        row.rating = body.stars or (row.rating if row.rating and row.rating > 0 else DEFAULT_STARS)
+    else:
+        row.rating = -1
     row.reasons = [r for r in dict.fromkeys(body.reasons) if r in allowed] if body.rating == "down" else []
     row.comment = (body.comment or "").strip() or None
     row.snapshot = artifact_feedback.snapshot(a)
@@ -378,6 +391,22 @@ def slide_deck_file(artifact_id: uuid.UUID, ext: Literal["pdf", "pptx"], ctx: Ct
     media = "application/pdf" if ext == "pdf" else \
         "application/vnd.openxmlformats-officedocument.presentationml.presentation"
     return Response(data, media_type=media, headers={"Content-Disposition": f'attachment; filename="{name}.{ext}"'})
+
+
+@router.get("/{artifact_id}/report.pdf")
+def report_file(artifact_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
+    """A finished report as the PDF a LinkedIn post carries when it is too long to post as text (shown inline)."""
+    from app.services.report_export import report_pdf
+
+    a = get_artifact_or_404(ctx, artifact_id)
+    if a.type != "report" or a.status != "ready":
+        raise HTTPException(404, "This report has nothing to show yet.")
+    try:
+        data = report_pdf(a)
+    except ImageUnavailable as exc:
+        raise HTTPException(503, str(exc)) from exc
+    name = re.sub(r"[^\w\- ]+", "", str((a.content_json or {}).get("title") or "Report")).strip()[:80] or "Report"
+    return Response(data, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{name}.pdf"'})
 
 
 class DeckIn(BaseModel):

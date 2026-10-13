@@ -117,6 +117,17 @@ def _upload_image(account: SocialAccount, m) -> str:
     return got["image"]
 
 
+def _upload_document(account: SocialAccount, m) -> str:
+    """A PDF through the Documents API: initialize, then PUT the file to the upload URL."""
+    owner = f"urn:li:person:{account.external_id}"
+    got = _check(_call("POST", f"{REST}/documents", params={"action": "initializeUpload"}, headers=_headers(account),
+                       json={"initializeUploadRequest": {"owner": owner}}), "document upload")["value"]
+    _check(_call("PUT", got["uploadUrl"], content=m.read(),
+                 headers={"Authorization": _headers(account)["Authorization"], "Content-Type": m.content_type}),
+           "document upload")
+    return got["document"]
+
+
 def _upload_video(account: SocialAccount, m) -> str:
     owner = f"urn:li:person:{account.external_id}"
     got = _check(_call("POST", f"{REST}/videos", params={"action": "initializeUpload"}, headers=_headers(account),
@@ -167,7 +178,8 @@ def _put_part(part: dict, m) -> str:
 def publish(db: Session, account: SocialAccount, posts: list[str], media: list | None = None) -> tuple[str, str]:
     if expired(account):
         refresh(db, account)  # without a refresh token: reconnect
-    urns = [(_upload_video if m.kind == "video" else _upload_image)(account, m) for m in media or []]
+    upload = {"video": _upload_video, "document": _upload_document}
+    urns = [upload.get(m.kind, _upload_image)(account, m) for m in media or []]
     body = {
         "author": f"urn:li:person:{account.external_id}",
         "commentary": little_text("\n\n".join(posts)),
@@ -176,7 +188,9 @@ def publish(db: Session, account: SocialAccount, posts: list[str], media: list |
         "lifecycleState": "PUBLISHED",
         "isReshareDisabledByAuthor": False,
     }
-    if len(urns) == 1:
+    if len(urns) == 1 and media[0].kind == "document":  # a PDF shows as a document, titled after its file
+        body["content"] = {"media": {"id": urns[0], "title": media[0].filename.removesuffix(".pdf")[:400]}}
+    elif len(urns) == 1:
         body["content"] = {"media": {"id": urns[0]}}
     elif urns:
         body["content"] = {"multiImage": {"images": [{"id": u} for u in urns]}}

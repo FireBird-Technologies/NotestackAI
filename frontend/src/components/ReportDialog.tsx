@@ -13,9 +13,8 @@ const fill = (prompt: string, about: string) => prompt.replaceAll("{about}", abo
 
 /** Create report: step 1 picks the format (and, for a document, a template); step 2 shows the instructions the writer
  * will get, already filled in from the topic and the sources, for the user to edit. */
-export function ReportDialog({ notebookId, notebookTitle, chats, currentChatId, busy, error, onClose, onCreate }: {
+export function ReportDialog({ notebookId, chats, currentChatId, busy, error, onClose, onCreate }: {
   notebookId: string;
-  notebookTitle?: string;
   chats: ChatSummary[];
   currentChatId: string | null;
   busy: boolean;
@@ -140,8 +139,8 @@ export function ReportDialog({ notebookId, notebookTitle, chats, currentChatId, 
         {/* Stays mounted on step 2, so going Back keeps the chosen posts and topic */}
         <div className="rp-split" style={{ display: step === 1 ? "grid" : "none" }}>
           <section className="rp-source-row stack vw">
-            <SourceFocusFields notebookId={notebookId} notebookTitle={notebookTitle} chats={chats} currentChatId={currentChatId}
-                               what="report" noFocus preselectChat withPosts largeSelection onChange={setSel} />
+            <SourceFocusFields notebookId={notebookId} chats={chats} currentChatId={currentChatId}
+                               what="report" noFocus preselectChat largeSelection onChange={setSel} />
           </section>
 
           <div className="rp-formats">

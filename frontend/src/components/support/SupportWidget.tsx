@@ -24,7 +24,8 @@ export function SupportWidget() {
     return () => window.clearTimeout(t);
   }, []);
 
-  if (pathname.startsWith("/auth") || pathname === "/welcome") return null;
+  // Not on sign in, onboarding, or a shared preview link (/r/…), which is for people without an account.
+  if (pathname.startsWith("/auth") || pathname === "/welcome" || pathname.startsWith("/r/")) return null;
 
   const dismiss = () => {
     setDismissed(true);

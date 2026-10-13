@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { launchpadApi } from "../api/endpoints";
 import type { CalendarItem, PostableArtifact, SocialAccounts } from "../api/types";
 import { FilmIcon } from "../components/icons/Icons";
 import { AttachmentChip, AttachPicker, LibraryPicker } from "../components/launchpad/Attachment";
 import { PLATFORMS, ScheduleModal } from "../components/ScheduleModal";
-import { monthGrid, SlotPicker, toWall, userTimeZone, wallToDate } from "../components/launchpad/SlotPicker";
+import { dayKey, monthGrid, nextSlot, SlotPicker, toWall, userTimeZone, wallToDate } from "../components/launchpad/SlotPicker";
 import { BackArrow, ConfirmButton, CopyButton, errorMessage, formatDate, Loading, Modal, PageHeader, StatusPill, Tabs } from "../components/ui";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -335,6 +335,8 @@ export default function Launchpad() {
   const [items, setItems] = useState<CalendarItem[] | null>(null);
   const [accounts, setAccounts] = useState<SocialAccounts | null>(null);
   const [open, setOpen] = useState<CalendarItem | null>(null);
+  // A day clicked on the calendar: the composer opens with the post going out then.
+  const [newAt, setNewAt] = useState<Date | null>(null);
   const navigate = useNavigate();
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -346,6 +348,11 @@ export default function Launchpad() {
   }, [notice]);
 
   const days = useMemo(() => monthGrid(month), [month]);
+  // The grid shows this month only: the weeks it spans, with other months' days left as empty cells.
+  const shown = useMemo(() => {
+    const end = days.findIndex((d, i) => i > 7 && d.getMonth() !== month.getMonth()); // the day after the month ends
+    return end < 0 ? days : days.slice(0, Math.ceil(end / 7) * 7);
+  }, [days, month]);
   const load = useCallback(() => {
     const start = view === "month" ? days[0] : new Date(Date.now() - 7 * 864e5);
     const end = view === "month" ? new Date(days[41].getTime() + 864e5) : new Date(Date.now() + 120 * 864e5);
@@ -402,6 +409,8 @@ export default function Launchpad() {
   };
 
   const today = new Date();
+  /** Today starts at the next half hour, a later day at 9:00. */
+  const startOn = (d: Date) => (sameDay(d, today) ? nextSlot() : new Date(d.getFullYear(), d.getMonth(), d.getDate(), 9, 0));
   const upcoming = (items ?? []).filter((i) => i.status === "scheduled" || i.status === "draft");
 
   return (
@@ -442,13 +451,31 @@ export default function Launchpad() {
                 {d}
               </div>
             ))}
-            {days.map((d) => {
+            {shown.map((d) => {
+              if (d.getMonth() !== month.getMonth()) return <div key={d.toISOString()} className="cal-day blank" aria-hidden="true" />;
               const dayItems = items.filter((i) => sameDay(new Date(i.scheduled_at), d));
+              // Today and later days open the composer on that day; past days don't.
+              const ahead = dayKey(d) >= dayKey(today);
               return (
-                <div key={d.toISOString()} className={`cal-day${d.getMonth() !== month.getMonth() ? " out" : ""}${sameDay(d, today) ? " today" : ""}`}>
+                <div key={d.toISOString()}
+                     className={`cal-day${sameDay(d, today) ? " today" : ""}${ahead ? " schedulable" : " past"}`}
+                     {...(ahead ? {
+                       role: "button", tabIndex: 0,
+                       "aria-label": `Schedule a launch on ${d.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}`,
+                       onClick: () => setNewAt(startOn(d)),
+                       onKeyDown: (e: KeyboardEvent<HTMLDivElement>) => {
+                         if (e.target !== e.currentTarget || (e.key !== "Enter" && e.key !== " ")) return;
+                         e.preventDefault();
+                         setNewAt(startOn(d));
+                       },
+                     } : {})}>
                   <span className="cal-date mono">{d.getDate()}</span>
                   {dayItems.map((i) => (
-                    <button key={i.id} className={`cal-item cal-${i.status}`} onClick={() => setOpen(i)} title={i.content}>
+                    <button key={i.id} className={`cal-item cal-${i.status}`} title={i.content}
+                            onClick={(e) => {
+                              e.stopPropagation(); // the post's editor, not a new post on its day
+                              setOpen(i);
+                            }}>
                       {/* Its time, then what it is ("LinkedIn post"), each on its own line */}
                       <span className="mono cal-item-time">
                         {new Date(i.scheduled_at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
@@ -485,7 +512,8 @@ export default function Launchpad() {
           <div className="lp-cal-foot">
             <p className="mono muted small">{upcoming.length} upcoming in view</p>
             <p className="muted small lp-cal-hint">
-              Click a post on the calendar to edit it: change its words or time, reschedule it, or publish it now.
+              Click a day to schedule a launch on it, or a post to edit it: change its words or time, reschedule it, or
+              publish it now.
             </p>
           </div>
         )}
@@ -497,6 +525,7 @@ export default function Launchpad() {
         }} />
       </div>
 
+      {newAt && <ScheduleModal platform="linkedin" posts={[]} at={newAt} onClose={() => setNewAt(null)} onScheduled={load} />}
       {open && <ItemModal item={open} accounts={accounts} onClose={() => setOpen(null)} onChanged={changed}
                           onReconnect={connect} />}
     </div>

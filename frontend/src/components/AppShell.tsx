@@ -65,7 +65,7 @@ export default function AppShell() {
                 <Logo size={28} withWordmark={false} />
               </button>
             ) : (
-              <NavLink to="/" className="sidebar-brand">
+              <NavLink to="/app/notebooks" end className="sidebar-brand" aria-label="Your notebooks">
                 <Logo size={28} />
               </NavLink>
             )}
