@@ -161,6 +161,16 @@ export const DownloadIcon = (p: P) => (
   </Icon>
 );
 
+/** Three linked dots: share. */
+export const ShareIcon = (p: P) => (
+  <Icon {...p}>
+    <circle cx="18" cy="5" r="2.5" />
+    <circle cx="6" cy="12" r="2.5" />
+    <circle cx="18" cy="19" r="2.5" />
+    <path d="M8.2 10.8l7.6-4.4M8.2 13.2l7.6 4.4" />
+  </Icon>
+);
+
 /** A stack of media with a play mark on the front: the Library (what you made, your videos and your voices). */
 export const LibraryIcon = (p: P) => (
   <Icon {...p}>

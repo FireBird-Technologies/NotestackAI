@@ -11,6 +11,10 @@ import { QuizBody } from "./Quiz";
 import { StudyOverlay } from "./StudyOverlay";
 import { ReportBody } from "./ReportBody";
 import { ConfirmButton, errorMessage, formatDate, formatDuration, JobProgress, StatusPill } from "./ui";
+import { ShareButton } from "./ShareDialog";
+import { DownloadIcon } from "./icons/Icons";
+import { CardFeedback } from "./CardFeedback";
+import { TrashIcon } from "./icons/Icons";
 
 export function CitationList({
   citations,
@@ -256,10 +260,9 @@ export function ArtifactCard({
       {error && <p className="error-text">{error}</p>}
       <footer className="artifact-actions">
         {actions?.(artifact)}
+        {artifact.type !== "report" && artifact.type !== "infographic" && <ShareButton artifact={artifact} />}
         {artifact.download_url && artifact.type !== "infographic" && (
-          <a className="btn btn-small" href={artifact.download_url}>
-            Download
-          </a>
+          <a className="btn btn-small btn-icon-only" href={artifact.download_url} aria-label="Download" title="Download"><DownloadIcon size={16} /></a>
         )}
         {artifact.status === "failed" && (
           <button
@@ -279,15 +282,18 @@ export function ArtifactCard({
         )}
         {onRemoved && (
           <ConfirmButton
+            className="btn btn-small btn-icon-only card-delete" label="Delete" confirmLabel="Delete?" busyLabel=""
             onConfirm={async () => {
               // A blog2video video is also removed from blog2video.
               await (artifact.provider === "blog2video" ? videosApi.remove(artifact.id) : artifactsApi.remove(artifact.id));
               onRemoved(artifact.id);
             }}
           >
-            Delete
+            <TrashIcon size={16} />
           </ConfirmButton>
         )}
+        {/* Bottom right: a positive or negative review */}
+        <CardFeedback artifact={artifact} />
       </footer>
     </article>
   );

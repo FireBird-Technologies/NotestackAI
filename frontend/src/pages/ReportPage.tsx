@@ -9,6 +9,7 @@ import { Reader } from "../components/Reader";
 import { reportMarkdown, ReportView } from "../components/ReportView";
 import { ConfirmButton, errorMessage, JobProgress, Loading } from "../components/ui";
 import { useJob } from "../hooks/useJob";
+import { ShareIcon } from "../components/icons/Icons";
 
 /** One report, full page: /app/reports/:id. */
 export default function ReportPage() {
@@ -116,7 +117,7 @@ export default function ReportPage() {
         <h1>{artifact.title}</h1>
         {artifact.status === "ready" && (
           <div className="row">
-            <button type="button" className="btn btn-small btn-primary" onClick={() => setSharing(true)}>Share</button>
+            <button type="button" className="btn btn-small btn-primary" onClick={() => setSharing(true)}><ShareIcon size={16} /> Share</button>
             <button type="button" className="btn btn-small" onClick={download}>Download Markdown</button>
             <ArtifactFeedback artifact={artifact} label="How is this report?" compact />
             <ConfirmButton onConfirm={async () => {

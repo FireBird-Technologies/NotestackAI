@@ -60,7 +60,7 @@ export function YourVoices({ reloadKey = 0, onAdd }: {
   return (
     <div className="stack">
       <div className="row between wrap manage-top">
-        <p className="muted">Your voices read your audio overviews, and the free ones can narrate videos. Add your own, or pick from the library.</p>
+        <p className="muted">Your voices read your audio overviews, and narrate your videos. Add your own, or pick from the library.</p>
         <button className="btn btn-primary" onClick={onAdd}>Add voices</button>
       </div>
       {error && <p className="error-text">{error}</p>}
@@ -87,7 +87,7 @@ export function YourVoices({ reloadKey = 0, onAdd }: {
                     </div>
                     <button className="btn btn-small" disabled={busy === v.voice_id}
                             onClick={() => act(v.voice_id, () => videoVoicesApi.unsave(v.voice_id))}>
-                      Remove
+                      {busy === v.voice_id ? "Removing..." : "Remove"}
                     </button>
                   </div>
                 ))}
@@ -113,7 +113,7 @@ export function YourVoices({ reloadKey = 0, onAdd }: {
                       </span>
                     </div>
                     <button className="btn btn-small btn-primary" disabled={busy === v.voice_id} onClick={() => add(v)}>
-                      Add
+                      {busy === v.voice_id ? "Adding..." : "Add"}
                     </button>
                   </div>
                 ))}

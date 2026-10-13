@@ -1,5 +1,5 @@
 """What a scheduled post carries from the artifact it was made from: images (quote cards, carousel slides, a slide
-deck's slides, drawn when the post goes out) or one
+deck's slides or an infographic, drawn when the post goes out), a PDF (a report too long for one post, LinkedIn only) or one
 video (an audiogram, or a blog2video video), or a file the user uploaded from their computer (an `upload`: one image or
 one MP4). Summaries, launch kits and mind maps post as text; audio overviews can't
 be posted (X and LinkedIn take no audio files).
@@ -9,6 +9,7 @@ removed when the post is done (media_for is a context manager). Sizes are checke
 
 import contextlib
 import os
+import re
 import tempfile
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -32,12 +33,13 @@ SIZE_LIMITS = {
     ("x", "video"): (1, 512 * MB),
     ("linkedin", "image"): (1, 36 * MB),
     ("linkedin", "video"): (75 * 1024, 500 * MB),
+    ("linkedin", "document"): (1, 100 * MB),
 }
 
 
 @dataclass
 class Media:
-    kind: str  # image | video
+    kind: str  # image | video | document
     filename: str
     content_type: str
     data: bytes | None = None  # images: the bytes
@@ -72,8 +74,10 @@ def media_count(a: Artifact) -> int:
         return len((a.content_json or {}).get("slide_keys") or ([a.storage_key] if a.storage_key else []))
     if a.type == "slide_deck":
         return len(((a.content_json or {}).get("deck") or {}).get("slides") or [])
-    if a.type in ("video", "upload"):
+    if a.type in ("video", "upload", "infographic"):
         return 1
+    if a.type == "report":  # always as a PDF (LinkedIn)
+        return 1 if a.status == "ready" else 0
     return 0
 
 
@@ -99,13 +103,20 @@ def check_postable(a: Artifact, platform: str) -> None:
         raise HTTPException(400, "Audio can't be posted: X and LinkedIn don't take audio files.")
     if a.type == "launch_kit":  # a post is written from a kit (kit_id); the kit itself is never an attachment
         raise HTTPException(400, "A launch kit can't be attached. Attach a video, quote card or carousel instead.")
-    if a.type not in TEXT_ONLY and a.type not in ("quote_card", "carousel", "video", "upload", "slide_deck"):
+    if a.type not in TEXT_ONLY and a.type not in ("quote_card", "carousel", "video", "upload", "slide_deck", "report",
+                                                   "infographic"):
         raise HTTPException(400, "This can't be posted.")
     if a.type in TEXT_ONLY:
         return
+    if a.type == "report":
+        if a.status != "ready":
+            raise HTTPException(400, "This report isn't ready yet. Post it once it has finished.")
+        if platform != "linkedin":
+            raise HTTPException(400, "Reports go to LinkedIn as a PDF. Post it there.")
+        return
     if platform not in MEDIA_PLATFORMS:
         raise HTTPException(400, "Images and videos can only be posted to X and LinkedIn.")
-    if a.type == "slide_deck":  # drawn from the deck when the post goes out: nothing stored to wait for
+    if a.type in ("slide_deck", "infographic"):  # drawn when the post goes out: nothing stored to wait for
         if a.status != "ready" or not media_count(a):
             raise HTTPException(400, "This slide deck isn't ready yet. Post it once it has finished.")
     elif a.type == "video" and is_blog2video(a):
@@ -148,6 +159,10 @@ def media_for(a: Artifact | None, platform: str) -> Iterator[list[Media]]:
             elif a.type == "slide_deck":
                 out = [Media("image", f"slide-{i + 1}.png", "image/png", data=png)
                        for i, png in enumerate(_slide_images(a, MAX_IMAGES[platform]))]
+            elif a.type == "infographic":
+                out = [Media("image", "infographic.png", "image/png", data=_infographic_image(a))]
+            elif a.type == "report":
+                out = [Media("document", _pdf_name(a), "application/pdf", data=_report_pdf(a))]
             elif a.type == "upload" and upload_kind(a) == "image":
                 c = a.content_json or {}
                 out = [Media("image", c.get("filename") or "image", c.get("content_type") or "image/png",
@@ -187,6 +202,37 @@ def _slide_images(a: Artifact, limit: int) -> list[bytes]:
         return export.render_slide_pngs(*got, limit=limit)
     except ImageUnavailable as exc:  # no Chrome on this worker right now: worth another try
         raise SocialError(f"The slides could not be drawn: {exc}") from exc
+
+
+def _infographic_image(a: Artifact) -> bytes:
+    """The infographic as a PNG, wide when it has a wide version (it reads better in a feed), as the app draws it."""
+    from app.infographics.image import ImageUnavailable, render_png
+    from app.pipeline.infographic import infographic_html
+
+    c = a.content_json or {}
+    wide = infographic_html(c, "landscape")
+    page = wide or infographic_html(c)
+    if not page:
+        raise SocialError("This infographic has nothing to post.", permanent=True)
+    try:
+        return render_png(page, "landscape" if wide else "portrait")
+    except ImageUnavailable as exc:  # no Chrome on this worker right now: worth another try
+        raise SocialError(f"The infographic could not be drawn: {exc}") from exc
+
+
+def _report_pdf(a: Artifact) -> bytes:
+    from app.infographics.image import ImageUnavailable
+    from app.services.report_export import report_pdf
+
+    try:
+        return report_pdf(a)
+    except ImageUnavailable as exc:
+        raise SocialError(f"The report's PDF could not be made: {exc}") from exc
+
+
+def _pdf_name(a: Artifact) -> str:
+    title = re.sub(r"[^\w\- ]+", "", str((a.content_json or {}).get("title") or "Report")).strip()[:80] or "Report"
+    return f"{title}.pdf"
 
 
 def _temp_file(temps: list[str]) -> str:

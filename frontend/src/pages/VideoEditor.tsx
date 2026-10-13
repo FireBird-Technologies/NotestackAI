@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ApiError } from "../api/client";
 import { videoEditApi, videosApi, type LayoutInfo, type LayoutSchema } from "../api/endpoints";
 import type { LegacyVideo, ScriptScene, VideoCatalog, VideoConfig, VideoJobState, VideoProject, VideoStatus } from "../api/types";
@@ -12,6 +12,7 @@ import { PhoneIcon, ScreenIcon } from "../components/video/parts";
 import { usePoll } from "../hooks/usePoll";
 import { finished, jobPercent } from "../components/video/jobState";
 import { useUpgrade } from "../hooks/useUpgrade";
+import { ShareButton } from "../components/ShareDialog";
 
 const STEPS = ["Reading the source", "Writing the script", "Building scenes", "Finishing"];
 const REVIEW = new Set(["awaiting_stock_footage_review", "awaiting_script_review"]);
@@ -304,6 +305,19 @@ export default function VideoEditor() {
   const storedMp4 = project ? project.video_url ?? project.artifact.url ?? null : null;
   const rendered = (status?.status ?? "") === "done" || !!storedMp4;
 
+  // Opened to render (Launch on a video with no MP4 yet, ?render=1): start the render once the project is here.
+  const [params, setParams] = useSearchParams();
+  const renderAsked = useRef(false);
+  useEffect(() => {
+    if (params.get("render") !== "1" || renderAsked.current || !project || !status) return;
+    renderAsked.current = true;
+    setParams({}, { replace: true });
+    if (!rendered && !running) {
+      void startJob("Rendering", () => videoEditApi.render(id, { force: false }), () => videoEditApi.renderStatus(id));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params, project, status, rendered, running]);
+
   /** Download the MP4 by opening its R2 link in a new tab: R2 serves it with Content-Disposition: attachment, so the
    * browser saves the file. If the browser blocks the new tab (it can, after a long render with no click), follow
    * the link here instead: an attachment does not navigate away, the download just starts. */
@@ -444,6 +458,7 @@ export default function VideoEditor() {
                 Preview · {summary?.scenes ?? project.project.scenes.length} scenes
                 {summary ? ` · ${summary.duration_seconds}s` : ""}
               </span>
+              {storedMp4 && project && <ShareButton artifact={{ ...project.artifact, url: storedMp4 }} />}
               <RenderPanel disabled={locked}
                            format={portrait ? "portrait" : "landscape"}
                            onFormat={setFormatTo}

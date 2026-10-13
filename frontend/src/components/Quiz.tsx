@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import type { GenerateBody } from "../api/endpoints";
 import type { Artifact, ChatSummary, QuizQuestion, QuizQuestionType } from "../api/types";
-import { ArtifactFeedback } from "./ArtifactFeedback";
+import { ArtifactFeedback, FeedbackActions } from "./ArtifactFeedback";
 import { CheckIcon, ChevronIcon } from "./icons/Icons";
 import { Pills, SourceFocusFields, sourceSummary, type SourceSelection } from "./SourceFocusFields";
 import { StudyOverlay } from "./StudyOverlay";
@@ -22,9 +22,8 @@ export type QuizRequest = Omit<GenerateBody, "type">;
 
 /** The quiz settings, laid out like the video wizard's first step: what it is made from, what it should focus on, then
  * how it is asked. */
-export function QuizDialog({ notebookId, notebookTitle, chats, currentChatId, busy, error, onClose, onCreate }: {
+export function QuizDialog({ notebookId, chats, currentChatId, busy, error, onClose, onCreate }: {
   notebookId: string;
-  notebookTitle?: string;
   chats: ChatSummary[];
   /** The chat open beside the dialog, ticked to start with. */
   currentChatId: string | null;
@@ -71,7 +70,7 @@ export function QuizDialog({ notebookId, notebookTitle, chats, currentChatId, bu
               ))}
             </div>
           </div>
-          <SourceFocusFields notebookId={notebookId} notebookTitle={notebookTitle} chats={chats} currentChatId={currentChatId}
+          <SourceFocusFields notebookId={notebookId} chats={chats} currentChatId={currentChatId}
                              preselectChat what="quiz" largeSelection onChange={setSel} />
           <div className="qz-foot">
             <div>
@@ -189,6 +188,7 @@ export function ResultScene({ score, total, tone }: { score: number; total: numb
 
 /** The quiz itself, without a frame: in a modal (QuizPlayer) or inside a report. `onExit` adds a Close button. */
 export function QuizRunner({ questions, onExit, feedback }: { questions: QuizQuestion[]; onExit?: () => void; feedback?: ReactNode }) {
+  const [slot, setSlot] = useState<HTMLElement | null>(null); // where the review puts its Save button
   const [i, setI] = useState(0);
   const [answers, setAnswers] = useState<Answer[]>(() => questions.map(blank));
   const [done, setDone] = useState(false);
@@ -250,8 +250,10 @@ export function QuizRunner({ questions, onExit, feedback }: { questions: QuizQue
             </ol>
           )}
 
-          {feedback}
-          <div className="row end">
+          {/* The review's Save button joins Close and Retake */}
+          <FeedbackActions.Provider value={slot}>{feedback}</FeedbackActions.Provider>
+          <div className="row end quiz-end-actions">
+            <span className="quiz-fb-slot" ref={setSlot} />
             {onExit && <button type="button" className="btn" onClick={onExit}>Close</button>}
             <button type="button" className="btn btn-primary" onClick={restart}>Retake</button>
           </div>

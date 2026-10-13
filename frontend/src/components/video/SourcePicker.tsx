@@ -4,7 +4,7 @@ import type { ChatSummary, Doc, NotebookSummary } from "../../api/types";
 import { DocPicker } from "../DocPicker";
 import { Dropdown } from "../Dropdown";
 import { Loading } from "../ui";
-import { ChatsMenu, PostsMenu } from "./PostsMenu";
+import { SourcesMenu } from "./PostsMenu";
 import { freshlySeeded, loadDocs, loadNotebooks, sourceCache } from "./sourceCache";
 
 /** What a video is made from: a notebook's (or the whole archive's) ticked posts, combined into one video, or one
@@ -24,10 +24,10 @@ export function SourcePicker({
   max = MAX_VIDEO_POSTS,
   what = "video",
   compact = false,
-  notebookTitle,
   chats,
   chatIds = [],
   onChatIds,
+  maxChats = 5,
   autoSelect = true,
   autoCount,
 }: {
@@ -41,12 +41,12 @@ export function SourcePicker({
   what?: string;
   /** Under a heading that already says "made from": no repeated labels or hints. */
   compact?: boolean;
-  /** With compact: the name of the fixed notebook. */
-  notebookTitle?: string;
   /** With compact: the notebook's chats, to pick from beside the posts (posts and chats can be combined). */
   chats?: ChatSummary[];
   chatIds?: string[];
   onChatIds?: (ids: string[]) => void;
+  /** With compact: most chats that can be ticked. */
+  maxChats?: number;
   /** Tick the first posts when the list loads. Off when the dialog was opened from a chat. */
   autoSelect?: boolean;
   /** How many posts to tick to start with (default: as many as can be ticked). */
@@ -96,31 +96,20 @@ export function SourcePicker({
   const ticked = docs ? postIds.length : 0;
   const pickable = docs?.filter((d) => !d.locked).length ?? 0;
 
-  // Compact (the quiz, flashcard and report dialogs): the notebook the dialog was opened from, shown and fixed, and one
-  // dropdown to pick its posts from. No notebook choice and no list.
+  // Compact (the quiz, flashcard, report and other create dialogs): the notebook is fixed by where the dialog was opened,
+  // so there is no notebook choice, just one dropdown with its posts and chats.
   if (compact) {
+    const chatList = chats ?? [];
     return (
       <div className="sp-fixed">
-        <div className="sp-notebook" title="What this is made from">
-          <strong>{notebookTitle || "This notebook"}</strong>
-          {(docs || chatIds.length > 0) && (
-            <span className="muted">
-              {[docs && postIds.length ? `${postIds.length} post${postIds.length === 1 ? "" : "s"}` : "",
-                chatIds.length ? `${chatIds.length} chat${chatIds.length === 1 ? "" : "s"}` : ""].filter(Boolean).join(" + ")
-                || (docs ? `${docs.length} post${docs.length === 1 ? "" : "s"}` : "")}
-            </span>
-          )}
-        </div>
-        <div className="sp-menus">
-          {chats && onChatIds && <ChatsMenu chats={chats} selected={chatIds} onChange={onChatIds} max={5} />}
-          {notebookId && docs && docs.length === 0 ? (
-            <p className="muted small">
-              No posts yet. <Link to="/app/sources">Connect a source</Link>
-            </p>
-          ) : notebookId ? (
-            <PostsMenu docs={docs} loading={!docs} selected={postIds} onChange={onPostIds} max={max} />
-          ) : null}
-        </div>
+        {notebookId && docs && docs.length === 0 && chatList.length === 0 ? (
+          <p className="muted small">
+            No posts yet. <Link to="/app/sources">Connect a source</Link>
+          </p>
+        ) : (
+          <SourcesMenu docs={docs} loading={!!notebookId && !docs} postIds={postIds} onPostIds={onPostIds} maxPosts={max}
+                       chats={chatList} chatIds={chatIds} onChatIds={onChatIds ?? (() => undefined)} maxChats={maxChats} />
+        )}
       </div>
     );
   }

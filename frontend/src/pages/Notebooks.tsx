@@ -6,12 +6,12 @@ import { DocPicker } from "../components/DocPicker";
 import { PlanetIcon } from "../components/icons/Icons";
 import { ConfirmButton, errorMessage, formatDate, Loading, Modal, PageHeader } from "../components/ui";
 
-/** New notebook from a topic: typing it finds and pre-selects the matching posts; hand picking is the fallback. */
+/** New notebook: the post picker is open by default; typing a topic can instead find and pre-select matching posts. */
 export function NewNotebookModal({ onClose, initialDocs = [] }: { onClose: () => void; initialDocs?: string[] }) {
   const [topic, setTopic] = useState("");
   const [matches, setMatches] = useState<Doc[]>([]);
   const [selected, setSelected] = useState<string[]>(initialDocs);
-  const [manual, setManual] = useState(initialDocs.length > 0);
+  const [manual, setManual] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -81,7 +81,7 @@ export function NewNotebookModal({ onClose, initialDocs = [] }: { onClose: () =>
         {error && <p className="error-text">{error}</p>}
         <div className="row between">
           <button type="button" className="link-btn small" onClick={() => setManual(!manual)}>
-            {manual ? "Find posts by topic instead" : "Pick posts by hand"}
+            {manual ? "Hide posts" : "Show posts"}
           </button>
           <button className="btn btn-primary" disabled={busy || !selected.length}>
             {busy ? "Creating..." : `Create with ${selected.length} posts`}
