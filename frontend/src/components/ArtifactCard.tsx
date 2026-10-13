@@ -12,7 +12,7 @@ import { StudyOverlay } from "./StudyOverlay";
 import { ReportBody } from "./ReportBody";
 import { ConfirmButton, errorMessage, formatDate, formatDuration, JobProgress, StatusPill } from "./ui";
 import { ShareButton } from "./ShareDialog";
-import { DownloadIcon } from "./icons/Icons";
+import { ChevronIcon, DownloadIcon } from "./icons/Icons";
 import { CardFeedback } from "./CardFeedback";
 import { TrashIcon } from "./icons/Icons";
 
@@ -132,8 +132,10 @@ export function Body({ artifact, onCite }: { artifact: Artifact; onCite?: (c: Ci
           {artifact.url && <audio ref={setAudioEl} controls preload="metadata" src={artifact.url} className="player" />}
           {c.segments?.length > 0 && (
             <>
-              <button type="button" className="link-btn" onClick={() => setShowTranscript((v) => !v)}>
+              <button type="button" className="link-btn ao-transcript-toggle" aria-expanded={showTranscript}
+                onClick={() => setShowTranscript((v) => !v)}>
                 {showTranscript ? "Hide transcript" : `Show transcript (${c.segments.length} lines)`}
+                <ChevronIcon size={16} className={`chevron${showTranscript ? " open" : ""}`} />
               </button>
               {showTranscript && (
                 <Transcript

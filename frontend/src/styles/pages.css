@@ -10389,6 +10389,8 @@ body.nbv-resizing iframe {
     align-items: stretch;
     flex-direction: column;
   }
+}
+
 /* "Show transcript" reads as a plain text link: no underline, blue when pointed at */
 .link-btn.ao-transcript-toggle {
   text-decoration: none;
@@ -10535,7 +10537,7 @@ body.nbv-resizing iframe {
   resize: vertical;
 }
 
-/* "Show transcript" with its arrow head */
+/* "Show transcript" with its arrow head: pointing right when closed, down when open */
 .ao-transcript-toggle {
   display: inline-flex;
   align-items: center;
@@ -10543,11 +10545,12 @@ body.nbv-resizing iframe {
 }
 
 .ao-transcript-toggle .chevron {
+  transform: rotate(-90deg);
   transition: transform 0.15s;
 }
 
 .ao-transcript-toggle .chevron.open {
-  transform: rotate(180deg);
+  transform: none;
 }
 
 /* The thumbs are the same on every card: the inline cards' "every button 40px, full row" rules must not reach them */
