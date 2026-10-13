@@ -24,6 +24,7 @@ import { seedDocs } from "../components/video/sourceCache";
 import { ConfirmButton, errorMessage, formatDate, Loading, Modal } from "../components/ui";
 import { VideoCreateForm } from "./VideoCreate";
 import { canPost, PostButton } from "../components/launchpad/PostButton";
+import { VideoCard } from "../components/video/VideoCard";
 
 type Turn = {
   id?: string; // the saved message, once there is one: what a thumbs up or down is attached to
@@ -246,6 +247,8 @@ function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, quizOpe
           <SlideDeckRow key={a.id} artifact={a} onRemoved={(id) => setArtifacts((list) => (list ?? []).filter((x) => x.id !== id))} />
         ) : a.type === "audio_overview" ? (
           <AudioOverviewCard key={a.id} artifact={a} onRemoved={(id) => setArtifacts((list) => (list ?? []).filter((x) => x.id !== id))} />
+        ) : a.type === "video" && a.provider === "blog2video" ? (
+          <VideoCard key={a.id} artifact={a} onRemoved={(id) => setArtifacts((list) => (list ?? []).filter((x) => x.id !== id))} />
         ) : (
           <ArtifactCard
             key={a.id}

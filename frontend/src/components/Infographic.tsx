@@ -5,6 +5,7 @@ import { SourceFocusFields, sourceSummary, type SourceSelection } from "./Source
 import { ArtifactFeedback } from "./ArtifactFeedback";
 import { ShareDialog } from "./ShareDialog";
 import { errorMessage, Modal } from "./ui";
+import { ShareIcon } from "./icons/Icons";
 
 /** The looks: black and blue, and white with orbits. The AI composes the page itself in the look chosen
  * (backend/app/infographics/design.py); the thumbnails are rendered from a sample (backend/scripts/render_theme_thumbnails.py). */
@@ -230,7 +231,7 @@ export function InfographicViewer({ artifact, onClose, onDownload }: { artifact:
                 onClose();
                 onDownload(which);
               }} />
-              <button type="button" className="btn btn-small" onClick={() => setSharing(true)}>Share</button>
+              <button type="button" className="btn btn-small" onClick={() => setSharing(true)}><ShareIcon size={16} /> Share</button>
             </div>
           </div>
           {info && (
@@ -281,7 +282,7 @@ export function InfographicBody({ artifact }: { artifact: Artifact }) {
       <div className="row">
         <button type="button" className="btn btn-small" onClick={() => setOpen(true)}>Open</button>
         <DownloadMenu busy={dl.busy} onPick={dl.download} />
-        <button type="button" className="btn btn-small" onClick={() => setSharing(true)}>Share</button>
+        <button type="button" className="btn btn-small" onClick={() => setSharing(true)}><ShareIcon size={16} /> Share</button>
       </div>
       {open && <InfographicViewer artifact={artifact} onClose={() => setOpen(false)} onDownload={dl.download} />}
       {sharing && <ShareDialog artifactId={artifact.id} what="infographic" onClose={() => setSharing(false)} />}

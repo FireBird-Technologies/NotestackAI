@@ -379,6 +379,22 @@ def slide_deck_file(artifact_id: uuid.UUID, ext: Literal["pdf", "pptx"], ctx: Ct
     return Response(data, media_type=media, headers={"Content-Disposition": f'attachment; filename="{name}.{ext}"'})
 
 
+@router.get("/{artifact_id}/report.pdf")
+def report_file(artifact_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
+    """A finished report as the PDF a LinkedIn post carries when it is too long to post as text (shown inline)."""
+    from app.services.report_export import report_pdf
+
+    a = get_artifact_or_404(ctx, artifact_id)
+    if a.type != "report" or a.status != "ready":
+        raise HTTPException(404, "This report has nothing to show yet.")
+    try:
+        data = report_pdf(a)
+    except ImageUnavailable as exc:
+        raise HTTPException(503, str(exc)) from exc
+    name = re.sub(r"[^\w\- ]+", "", str((a.content_json or {}).get("title") or "Report")).strip()[:80] or "Report"
+    return Response(data, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{name}.pdf"'})
+
+
 class DeckIn(BaseModel):
     # The deck's slides as the editor has them, in the stored shape (app.slides.content.empty_slide); coerced on arrival
     slides: list[dict] = Field(min_length=1, max_length=60)

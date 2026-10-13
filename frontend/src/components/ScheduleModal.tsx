@@ -35,6 +35,7 @@ export function ScheduleModal({
   kitId,
   kitTitle,
   documentId,
+  at,
   onClose,
   onScheduled,
 }: {
@@ -47,6 +48,8 @@ export function ScheduleModal({
   kitId?: string | null;
   kitTitle?: string | null;
   documentId?: string | null;
+  /** When the post goes out to start with (a day clicked on the calendar); else the next half hour. */
+  at?: Date;
   onClose: () => void;
   onScheduled?: (item: CalendarItem) => void;
 }) {
@@ -59,7 +62,7 @@ export function ScheduleModal({
   const [attached, setAttached] = useState<PostableArtifact | null>(artifact?.type === "launch_kit" ? null : artifact ?? null);
   const navigate = useNavigate();
   const [picking, setPicking] = useState(false);
-  const [when, setWhen] = useState(() => toWall(nextSlot()));
+  const [when, setWhen] = useState(() => toWall(at ?? nextSlot()));
   const [accounts, setAccounts] = useState<SocialAccounts | null>(null);
   // The connections are checked before anything says one is missing: loading isn't "not connected".
   const [accountsState, setAccountsState] = useState<"loading" | "ready" | "error">("loading");

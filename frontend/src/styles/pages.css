@@ -1380,6 +1380,75 @@ select.input option {
   box-shadow: var(--glow-sm);
 }
 
+/* Past days: their boxes stay, greyed out, and can't be clicked (a post on one still opens) */
+.cal-day.past {
+  opacity: 0.65;
+  border-color: var(--line-strong);
+  background: rgba(255, 255, 255, 0.015);
+  cursor: not-allowed;
+}
+
+.cal-day.past .cal-date {
+  color: var(--text-2);
+}
+
+.cal-day.past .cal-item {
+  cursor: pointer;
+}
+
+/* Today and later days: prominent, and click to schedule a launch on that day */
+.cal-day.schedulable {
+  position: relative;
+  border-color: var(--line-strong);
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.cal-day.today.schedulable {
+  border-color: var(--blue);
+}
+
+.cal-day.schedulable .cal-date {
+  color: var(--white);
+  font-weight: 500;
+}
+
+/* Another month's days around this one: an empty cell, so the weekdays line up */
+.cal-day.blank {
+  border-color: transparent;
+  background: none;
+}
+
+.cal-day.schedulable:hover,
+.cal-day.schedulable:focus-visible {
+  border-color: var(--blue-35);
+  background: var(--blue-10);
+  outline: none;
+}
+
+.cal-day.today.schedulable:hover,
+.cal-day.today.schedulable:focus-visible {
+  border-color: var(--blue);
+}
+
+.cal-day.schedulable::after {
+  content: "+";
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  color: var(--blue);
+  font-size: 1rem;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.cal-day.schedulable:hover::after,
+.cal-day.schedulable:focus-visible::after {
+  opacity: 1;
+}
+
 .cal-date {
   font-size: 0.7rem;
   color: var(--text-2);
@@ -4104,6 +4173,67 @@ select.input,
   white-space: nowrap;
 }
 
+/* The attachment's Preview and Change (small), and a cross to remove it */
+.lp-attach-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+}
+
+.lp-attach-actions .btn.btn-xs {
+  height: 28px;
+  min-height: 28px;
+  padding: 0 12px;
+  font-size: 0.78rem;
+  line-height: 1;
+}
+
+/* The same height as the buttons beside it, in red */
+.lp-attach-actions .lp-attach-remove {
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(242, 120, 107, 0.45);
+  color: #f2786b;
+}
+
+.lp-attach-actions .lp-attach-remove:hover {
+  border-color: #f2786b;
+  background: rgba(242, 120, 107, 0.12);
+  color: #f2786b;
+}
+
+/* The attachment's preview */
+.lp-preview-body {
+  max-height: min(72vh, 900px);
+  overflow: auto;
+}
+
+.lp-preview-img {
+  display: block;
+  max-width: 100%;
+  margin: 0 auto;
+  border-radius: 10px;
+}
+
+.lp-preview-pdf {
+  display: block;
+  width: 100%;
+  height: min(70vh, 860px);
+  border: 0;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.lp-preview-text {
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+
+.lp-preview-slides {
+  gap: 12px;
+}
+
 .lp-attach-btn {
   justify-self: start;
   border-style: dashed;
@@ -5794,6 +5924,11 @@ details.map-legend[open] summary {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
+  gap: 8px 24px;
+}
+
+.fc-group {
+  display: flex;
   gap: 8px;
 }
 
@@ -7426,6 +7561,137 @@ a.rp-src-main:hover .rp-src-out {
 
 .ig-viewer .ig-frame {
   border-radius: 6px;
+}
+
+/* Shared slide decks and videos (pages/PublicReport.tsx) */
+.pub-slides {
+  display: grid;
+  gap: 14px;
+}
+
+/* A shared audio overview: the player centred at half the page's width, the transcript's lines spaced out below */
+.pub-audio {
+  gap: 28px;
+}
+
+.pub-audio .ao-player {
+  justify-self: center;
+  width: min(50%, 520px);
+  min-width: min(100%, 360px);
+}
+
+.pub-audio .transcript {
+  gap: 20px;
+  max-height: none;
+  overflow: visible;
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.pub-audio .transcript li {
+  gap: 12px;
+}
+
+.pub-audio .transcript-time {
+  min-width: 2.6em;
+}
+
+/* The sign-in pop-up on shared pages: narrow, with smaller fields and buttons */
+.modal:has(.pub-signin) {
+  width: min(380px, calc(100vw - 32px));
+  padding: 22px;
+}
+
+.pub-signin {
+  gap: 12px;
+}
+
+.pub-signin > p {
+  margin: -6px 0 0;
+}
+
+.pub-signin .auth-title {
+  font-size: 1.15rem;
+  margin: 0;
+}
+
+.pub-signin .auth-form {
+  gap: 10px;
+}
+
+.pub-signin .auth-form label {
+  gap: 4px;
+  font-size: 0.8rem;
+}
+
+.pub-signin .input,
+.pub-signin .btn,
+.pub-signin .google-redirect-btn {
+  height: 38px;
+  min-height: 38px;
+  font-size: 0.875rem;
+}
+
+.pub-signin .auth-divider {
+  margin: 2px 0;
+  font-size: 0.68rem;
+}
+
+.pub-signin .auth-switch {
+  font-size: 0.8rem;
+}
+
+.pub-slides-stage {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #000;
+}
+
+.pub-slides-stage > .sd-frame {
+  position: absolute;
+  inset: 0;
+}
+
+.pub-slides-nav {
+  align-items: center;
+}
+
+/* A video player in a frame, covered by a loader until it is ready */
+.pub-video-wrap {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #000;
+}
+
+.pub-video-wrap .pub-video {
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+
+.pub-video-wrap.ready .pub-video {
+  opacity: 1;
+}
+
+.pub-video-wait {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: #000;
+}
+
+.pub-video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  border-radius: 10px;
+  background: #000;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
 }
 
 .ig-public .ig-frame {
@@ -9358,6 +9624,37 @@ body.nbv-resizing iframe {
   background: var(--blue);
   color: var(--white);
   cursor: pointer;
+}
+
+/* In a notebook's audio card: a thin player, a single line */
+.artifact-audio_overview .ao-player {
+  gap: 10px;
+  padding: 3px 6px 3px 3px;
+}
+
+.artifact-audio_overview .ao-play {
+  width: 26px;
+  height: 26px;
+}
+
+.artifact-audio_overview .ao-play svg {
+  width: 12px;
+  height: 12px;
+}
+
+.artifact-audio_overview .ao-speed {
+  min-width: 40px;
+  height: 22px;
+  padding: 0 8px;
+  font-size: 0.72rem;
+}
+
+.artifact-audio_overview .ao-time {
+  font-size: 0.72rem;
+}
+
+.artifact-audio_overview .ao-transcript-toggle {
+  justify-self: start;
 }
 
 .ao-play:focus-visible,

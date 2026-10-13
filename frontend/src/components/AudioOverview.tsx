@@ -4,9 +4,10 @@ import type { Artifact, ChatSummary, Segment, VideoSavedVoice } from "../api/typ
 import { useJob } from "../hooks/useJob";
 import { Transcript } from "./ArtifactCard";
 import { Dropdown } from "./Dropdown";
-import { CheckIcon, ChevronIcon, HeadphonesIcon } from "./icons/Icons";
+import { CheckIcon } from "./icons/Icons";
 import { LANGUAGES, Pills, SourceFocusFields, type SourceSelection } from "./SourceFocusFields";
-import { ConfirmDeleteModal, errorMessage, JobProgress, Modal, StatusPill } from "./ui";
+import { ConfirmButton, errorMessage, formatDate, JobProgress, Modal, StatusPill } from "./ui";
+import { ShareButton } from "./ShareDialog";
 
 /** The audio styles. The server describes each to the script writer (backend/app/pipeline/media.py STYLES). */
 const STYLES = [
@@ -184,7 +185,7 @@ function clock(seconds: number): string {
 }
 
 /** The audio's own player: play or pause, where it is, a bar to move through it, and the playback speed. */
-function AudioPlayer({ src, duration: known, audioRef }: { src: string; duration?: number; audioRef: RefObject<HTMLAudioElement> }) {
+export function AudioPlayer({ src, duration: known, audioRef }: { src: string; duration?: number; audioRef: RefObject<HTMLAudioElement> }) {
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(known ?? 0);
@@ -244,9 +245,7 @@ const STYLE_NAMES: Record<string, string> = Object.fromEntries(STYLES.map((s) =>
  * transcript, Download and Delete. Shows its progress while it is being made. */
 export function AudioOverviewCard({ artifact: initial, onRemoved }: { artifact: Artifact; onRemoved: (id: string) => void }) {
   const [artifact, setArtifact] = useState(initial);
-  const [open, setOpen] = useState(false);
   const [transcript, setTranscript] = useState(false);
-  const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const audio = useRef<HTMLAudioElement>(null);
   const job = useJob(artifact.job, () => {
@@ -268,26 +267,41 @@ export function AudioOverviewCard({ artifact: initial, onRemoved }: { artifact: 
     onRemoved(artifact.id);
   };
 
+  // The same card as the notebook's other outputs (a report, a quiz): what it is, its title and date, its state, then
+  // a thin player, the transcript on request, and the actions.
   return (
-    <article className={`ao-card${open ? " open" : ""}`}>
-      <div className="ao-card-head" role={ready ? "button" : undefined} tabIndex={ready ? 0 : undefined} aria-expanded={ready ? open : undefined}
-           onClick={() => ready && setOpen((o) => !o)}
-           onKeyDown={(e) => ready && (e.key === "Enter" || e.key === " ") && (e.preventDefault(), setOpen((o) => !o))}>
-        <span className="ao-card-icon" aria-hidden="true">{running ? <span className="nbv-send-spinner" /> : <HeadphonesIcon size={20} />}</span>
-        <span className="ao-card-text">
-          <strong title={artifact.title}>{artifact.title}</strong>
-          <span className="ao-card-meta">{meta}</span>
-        </span>
-        {!ready && !failed && <StatusPill status={running ? (job!.status === "queued" ? "queued" : "working") : artifact.status} />}
-        {ready && (
-          <span className="ao-chevron" aria-hidden="true"><ChevronIcon size={18} className={`chevron${open ? " open" : ""}`} /></span>
-        )}
-      </div>
-      {running && job && <div className="ao-card-progress"><JobProgress job={job} compact /></div>}
-      {failed && (
-        <div className="ao-card-progress sd-item-failed">
-          <p className="error-text small">{failed}</p>
-          <button type="button" className="link-btn" onClick={async () => {
+    <article className="artifact card artifact-audio_overview">
+      <header className="artifact-head">
+        <div>
+          <p className="eyebrow">Audio overview</p>
+          <h3>{artifact.title}</h3>
+          <p className="mono muted">{formatDate(artifact.created_at, true)}</p>
+        </div>
+        <StatusPill status={running ? (job!.status === "queued" ? "queued" : "working") : artifact.status} />
+      </header>
+      {running && job && <JobProgress job={job} compact />}
+      {failed && <p className="error-text">{failed}</p>}
+      {meta && <p className="muted">{meta}</p>}
+      {ready && artifact.url && <AudioPlayer src={artifact.url} duration={c.duration_s as number | undefined} audioRef={audio} />}
+      {ready && segments.length > 0 && (
+        <button type="button" className="link-btn ao-transcript-toggle" aria-expanded={transcript} onClick={() => setTranscript((t) => !t)}>
+          {transcript ? "Hide transcript" : `Show transcript (${segments.length} lines)`}
+        </button>
+      )}
+      {transcript && (
+        <Transcript segments={segments} onSeek={(t) => {
+          const a = audio.current;
+          if (!a) return;
+          a.currentTime = t;
+          void a.play();
+        }} />
+      )}
+      {error && <p className="error-text">{error}</p>}
+      <footer className="artifact-actions">
+        <ShareButton artifact={artifact} />
+        {ready && artifact.download_url && <a className="btn btn-small" href={artifact.download_url}>Download</a>}
+        {failed && (
+          <button type="button" className="btn btn-small" onClick={async () => {
             setError(null);
             try {
               setArtifact(await artifactsApi.retry(artifact.id));
@@ -295,34 +309,9 @@ export function AudioOverviewCard({ artifact: initial, onRemoved }: { artifact: 
               setError(errorMessage(e));
             }
           }}>Retry</button>
-          <button type="button" className="link-btn" onClick={() => setConfirming(true)}>Remove</button>
-        </div>
-      )}
-      {ready && open && (
-        <div className="ao-card-body">
-          {artifact.url && <AudioPlayer src={artifact.url} duration={c.duration_s as number | undefined} audioRef={audio} />}
-          {segments.length > 0 && (
-            <button type="button" className="link-btn ao-transcript-toggle" aria-expanded={transcript} onClick={() => setTranscript((t) => !t)}>
-              {transcript ? "Hide transcript" : `Show transcript (${segments.length} lines)`}
-            </button>
-          )}
-          {transcript && (
-            <Transcript segments={segments} onSeek={(t) => {
-              const a = audio.current;
-              if (!a) return;
-              a.currentTime = t;
-              void a.play();
-            }} />
-          )}
-          <div className="row ao-card-actions">
-            {artifact.download_url && <a className="btn btn-small" href={artifact.download_url}>Download</a>}
-            <button type="button" className="btn btn-small ao-delete" onClick={() => setConfirming(true)}>Delete</button>
-          </div>
-        </div>
-      )}
-      {error && <p className="error-text small ao-card-progress">{error}</p>}
-      {confirming && <ConfirmDeleteModal heading="Delete audio overview?" name={artifact.title} onCancel={() => setConfirming(false)}
-                                         onConfirm={remove} />}
+        )}
+        <ConfirmButton onConfirm={remove}>Delete</ConfirmButton>
+      </footer>
     </article>
   );
 }

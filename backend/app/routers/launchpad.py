@@ -36,6 +36,7 @@ from app.services.social.media import (
     media_count,
     upload_kind,
 )
+from app.services.report_export import fits_in_post, report_caption, report_text
 from app.services.storage import storage
 
 router = APIRouter(prefix="/api", tags=["launchpad"])
@@ -97,7 +98,8 @@ def _aware(dt: datetime) -> datetime:
 
 
 # audio can't be posted; "upload" is a file the user brought from their computer
-POSTABLE = ("video", "quote_card", "carousel", "summary", "launch_kit", "mind_map", "upload", "slide_deck")
+POSTABLE = ("video", "quote_card", "carousel", "summary", "launch_kit", "mind_map", "upload", "slide_deck", "report",
+            "infographic")
 # Listed on the Launchpad too, but only to download: X and LinkedIn take no audio files (check_postable refuses it)
 LISTED = (*POSTABLE, "audio_overview")
 
@@ -112,6 +114,12 @@ def _prefill(a: Artifact) -> dict:
     title = c.get("title") or TYPE_LABELS.get(a.type, a.type)
     if a.type == "upload":  # their own file: the words are theirs to write
         return {"x": [""], "linkedin": ""}
+    if a.type == "report":  # its text when it fits in a post; else a short caption, and the PDF carries the rest
+        text = report_text(a) if fits_in_post(a) else report_caption(a)
+        return {"x": [text], "linkedin": text}
+    if a.type == "infographic":  # the image says it all: its title to start the caption with
+        head = "\n\n".join(x for x in (c.get("title"), c.get("subtitle")) if isinstance(x, str) and x.strip())
+        return {"x": [head or title], "linkedin": head or title}
     if a.type == "launch_kit":
         posts = c.get("posts") or {}
         x_posts = posts.get("x_thread") or posts.get("x") or [title]
@@ -145,6 +153,8 @@ def artifact_brief(a: Artifact) -> dict:
             # A deck's title starts "Slide deck: ", which its tag already says
             "title": (c.get("title") or TYPE_LABELS.get(a.type, a.type)).removeprefix("Slide deck: " if a.type == "slide_deck" else ""),
             "media": upload_kind(a) or ("video" if a.type == "video" else "audio" if a.type == "audio_overview"
+                                        # a report too long for one post goes as a PDF
+                                        else "document" if a.type == "report" and media_count(a)
                                         else "image" if media_count(a) else "text"),
             "media_count": media_count(a), "duration_s": duration(a),
             "thumb_url": storage.presign_get(thumb) if thumb else None,
@@ -423,7 +433,7 @@ def register_upload(body: UploadIn, ctx: Ctx = Depends(get_ctx)):
 @router.get("/launchpad/postable")
 def postable(ctx: Ctx = Depends(get_ctx), q: str = "", limit: int = 60):
     """What can be attached to a post: finished videos, quote cards, carousels, summaries, launch kits, mind maps,
-    slide decks, newest first, and audio overviews (listed to download: they can't be posted). Videos made but not
+    slide decks, reports and infographics, newest first, and audio overviews (listed to download: they can't be posted). Videos made but not
     rendered yet are listed too, flagged needs_render (they can only be posted once rendered), and so are videos being
     rendered, flagged rendering."""
     rows = ctx.db.scalars(select(Artifact).where(Artifact.workspace_id == ctx.workspace.id,

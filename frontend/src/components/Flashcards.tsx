@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { GenerateBody } from "../api/endpoints";
 import type { Artifact, ChatSummary, FlashcardData } from "../api/types";
 import { Pills, SourceFocusFields, sourceSummary, type SourceSelection } from "./SourceFocusFields";
@@ -68,7 +68,6 @@ export function FlashcardDeck({ cards }: { cards: FlashcardData[] }) {
   const [order, setOrder] = useState(() => cards.map((_, i) => i));
   const [pos, setPos] = useState(0);
   const [flipped, setFlipped] = useState(false);
-  const [known, setKnown] = useState<Set<number>>(new Set());
 
   const card = cards[order[pos]];
   const go = useCallback((d: number) => {
@@ -87,22 +86,11 @@ export function FlashcardDeck({ cards }: { cards: FlashcardData[] }) {
     return () => document.removeEventListener("keydown", onKey);
   }, [onKey]);
 
-  const left = useMemo(() => order.filter((i) => !known.has(i)).length, [order, known]);
   if (!card) return <p className="muted">No cards.</p>;
-  const mark = (isKnown: boolean) => {
-    setKnown((cur) => {
-      const next = new Set(cur);
-      if (isKnown) next.add(order[pos]);
-      else next.delete(order[pos]);
-      return next;
-    });
-    if (pos < order.length - 1) go(1);
-    else setFlipped(false);
-  };
 
   return (
     <div className="fc-deck">
-      <p className="mono muted small fc-count">Card {pos + 1} of {order.length} · {known.size} known · {left} to review</p>
+      <p className="mono muted small fc-count">Card {pos + 1} of {order.length}</p>
       <button type="button" className={`fc-card${flipped ? " flipped" : ""}`} aria-label={flipped ? "Show the front" : "Show the answer"}
               onClick={() => setFlipped((f) => !f)}>
         <span className="fc-side">{flipped ? "Answer" : "Card"}</span>
@@ -114,12 +102,16 @@ export function FlashcardDeck({ cards }: { cards: FlashcardData[] }) {
         )}
         {!flipped && <span className="muted small fc-hint">Tap to flip</span>}
       </button>
+      {/* Centred: Skip and Shuffle together, then Previous and Next */}
       <div className="fc-actions">
-        <button type="button" className="btn btn-small" onClick={() => go(-1)} disabled={pos === 0}>Previous</button>
-        <button type="button" className="btn btn-small" onClick={() => mark(false)}>Review again</button>
-        <button type="button" className="btn btn-small btn-primary" onClick={() => mark(true)}>Got it</button>
-        <button type="button" className="btn btn-small" onClick={() => go(1)} disabled={pos === order.length - 1}>Next</button>
-        <button type="button" className="btn btn-small" onClick={() => { setOrder(shuffled(order)); setPos(0); setFlipped(false); }}>Shuffle</button>
+        <div className="fc-group">
+          <button type="button" className="btn btn-small" onClick={() => go(1)} disabled={pos === order.length - 1}>Skip</button>
+          <button type="button" className="btn btn-small" onClick={() => { setOrder(shuffled(order)); setPos(0); setFlipped(false); }}>Shuffle</button>
+        </div>
+        <div className="fc-group">
+          <button type="button" className="btn btn-small" onClick={() => go(-1)} disabled={pos === 0}>Previous</button>
+          <button type="button" className="btn btn-small btn-primary" onClick={() => go(1)} disabled={pos === order.length - 1}>Next</button>
+        </div>
       </div>
     </div>
   );

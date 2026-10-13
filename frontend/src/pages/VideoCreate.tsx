@@ -232,7 +232,9 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
     try {
       const from = sourceFields();
       if (!from) return;
-      const a = await videosApi.create({ ...options(), ...from, ...focusFields() });
+      // The notebook it is made in, so the notebook lists it: the notebook picked, or the one the wizard was opened from.
+      const notebook = source?.kind === "notebook" ? source.id : startNotebook;
+      const a = await videosApi.create({ ...options(), ...from, ...focusFields(), ...(notebook ? { notebook_id: notebook } : {}) });
       navigate(`/app/videos/${a.id}`);
     } catch (e) {
       setError(errorMessage(e)); // 402 also opens the upgrade popup (api/client.ts)

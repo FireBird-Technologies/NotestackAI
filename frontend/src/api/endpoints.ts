@@ -7,8 +7,7 @@ import type {
   CalendarItem,
   ChatMessage,
   ChatSummary,
-  PublicInfographicData,
-  PublicReportData,
+  PublicArtifactData,
   QuizQuestionType,
   ReportSuggestionKind,
   ReportTemplate,
@@ -163,6 +162,8 @@ export const artifactsApi = {
   retry: (id: string) => post<Artifact>(`/api/artifacts/${id}/retry`),
   /** A slide deck as a PDF (exactly as shown) or an editable PowerPoint. */
   slidesFile: (id: string, ext: "pdf" | "pptx") => apiBlob(`/api/artifacts/${id}/slides.${ext}`),
+  /** A report as the PDF a post carries when it is too long to post as text. */
+  reportPdf: (id: string) => apiBlob(`/api/artifacts/${id}/report.pdf`),
   /** A slide deck's slides as the editor has them, drawn without saving (after a slide or a text box is added,
    * removed, moved or changed to another layout). Returns them as they will be kept. */
   previewDeck: (id: string, slides: EditSlide[]) =>
@@ -341,13 +342,12 @@ export const reportsApi = {
 export const shareApi = {
   get: (id: string) => api<ShareInfo>(`/api/artifacts/${id}/share`),
   create: (id: string) => post<ShareInfo>(`/api/artifacts/${id}/share`),
-  update: (id: string, show_sources: boolean) => patch<ShareInfo>(`/api/artifacts/${id}/share`, { show_sources }),
   remove: (id: string) => del<ShareInfo>(`/api/artifacts/${id}/share`),
 };
 
 /** No sign in needed: what the public sees at a share link. */
 export const publicApi = {
-  report: (token: string) => api<PublicReportData | PublicInfographicData>(`/api/public/reports/${encodeURIComponent(token)}`),
+  artifact: (token: string) => api<PublicArtifactData>(`/api/public/s/${encodeURIComponent(token)}`),
 };
 
 export const videosApi = {

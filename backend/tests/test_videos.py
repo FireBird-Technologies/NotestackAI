@@ -26,6 +26,7 @@ from app.models import (
     Job,
     Message,
     Notebook,
+    NotebookDocument,
     Subscription,
     Topic,
     UsageCounter,
@@ -1420,3 +1421,33 @@ def test_list_restores_a_video_whose_library_item_went_missing(client, b2v, owne
     client.get(f"/api/videos/{listed[0]['id']}/status", headers=headers)
     assert "/api/v1/videos/812/status" in b2v.paths("GET")  # the same blog2video video
     assert len(client.get("/api/videos", headers=headers).json()) == 1  # restored once
+
+
+# The notebook a video is made in lists it
+
+def notebook_videos(client, headers, nb) -> list[str]:
+    return [a["id"] for a in client.get(f"/api/notebooks/{nb.id}/artifacts", headers=headers).json() if a["type"] == "video"]
+
+
+def test_a_video_is_listed_in_the_notebook_it_was_made_in(client, b2v, owner, other, db_session):
+    headers, ws = owner
+    _on_plan(db_session, ws, "studio")  # room for the five videos below
+    doc = add_doc(db_session, ws, "https://ada.example.com/p/a", "Raise prices once a year, and say why. " * 3)
+    nb = Notebook(workspace_id=ws.id, title="Pricing series")
+    db_session.add(nb)
+    db_session.flush()
+    db_session.add(NotebookDocument(notebook_id=nb.id, document_id=doc.id))
+    db_session.commit()
+    posts = make_video(client, headers, url=None, document_ids=[str(doc.id)], notebook_id=str(nb.id))
+    one = make_video(client, headers, url=None, document_id=str(doc.id), notebook_id=str(nb.id))
+    found = make_video(client, headers, url=None, document_id=str(doc.id))  # the post's only notebook
+    assert set(notebook_videos(client, headers, nb)) == {posts["id"], one["id"], found["id"]}
+    chat = add_chat(db_session, ws, [("user", "How often should I raise my prices?"),
+                                     ("assistant", "Once a year, and tell readers why the price went up.")])
+    chatted = make_video(client, headers, url=None, chat_ids=[str(chat.id)])
+    assert notebook_videos(client, headers, db_session.get(Notebook, chat.notebook_id)) == [chatted["id"]]
+    theirs = Notebook(workspace_id=other[1].id, title="Not yours")
+    db_session.add(theirs)
+    db_session.commit()
+    stray = make_video(client, headers, url=None, document_id=str(doc.id), notebook_id=str(theirs.id))
+    assert db_session.get(Artifact, uuid.UUID(stray["id"])).notebook_id == nb.id  # someone else's notebook is ignored

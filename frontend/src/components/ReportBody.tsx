@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import type { Artifact } from "../api/types";
 import { ShareDialog } from "./ShareDialog";
+import { ShareIcon } from "./icons/Icons";
 
 /** What a finished report shows in a card: its format and size, and a way in or out to share it. */
 export function ReportBody({ artifact }: { artifact: Artifact }) {
@@ -17,7 +18,7 @@ export function ReportBody({ artifact }: { artifact: Artifact }) {
       </p>
       <div className="row">
         <Link className="btn btn-small" to={`/app/reports/${artifact.id}`}>Open report</Link>
-        <button type="button" className="btn btn-small" onClick={() => setSharing(true)}>Share</button>
+        <button type="button" className="btn btn-small" onClick={() => setSharing(true)}><ShareIcon size={16} /> Share</button>
       </div>
       {sharing && <ShareDialog artifactId={artifact.id} onClose={() => setSharing(false)} />}
     </div>

@@ -11,6 +11,7 @@ import { QuizBody } from "./Quiz";
 import { StudyOverlay } from "./StudyOverlay";
 import { ReportBody } from "./ReportBody";
 import { ConfirmButton, errorMessage, formatDate, formatDuration, JobProgress, StatusPill } from "./ui";
+import { ShareButton } from "./ShareDialog";
 
 export function CitationList({
   citations,
@@ -256,6 +257,7 @@ export function ArtifactCard({
       {error && <p className="error-text">{error}</p>}
       <footer className="artifact-actions">
         {actions?.(artifact)}
+        {artifact.type !== "report" && artifact.type !== "infographic" && <ShareButton artifact={artifact} />}
         {artifact.download_url && artifact.type !== "infographic" && (
           <a className="btn btn-small" href={artifact.download_url}>
             Download

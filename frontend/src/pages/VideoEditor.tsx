@@ -12,6 +12,7 @@ import { PhoneIcon, ScreenIcon } from "../components/video/parts";
 import { usePoll } from "../hooks/usePoll";
 import { finished, jobPercent } from "../components/video/jobState";
 import { useUpgrade } from "../hooks/useUpgrade";
+import { ShareButton } from "../components/ShareDialog";
 
 const STEPS = ["Reading the source", "Writing the script", "Building scenes", "Finishing"];
 const REVIEW = new Set(["awaiting_stock_footage_review", "awaiting_script_review"]);
@@ -444,6 +445,7 @@ export default function VideoEditor() {
                 Preview · {summary?.scenes ?? project.project.scenes.length} scenes
                 {summary ? ` · ${summary.duration_seconds}s` : ""}
               </span>
+              {storedMp4 && project && <ShareButton artifact={{ ...project.artifact, url: storedMp4 }} />}
               <RenderPanel disabled={locked}
                            format={portrait ? "portrait" : "landscape"}
                            onFormat={setFormatTo}

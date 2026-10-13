@@ -1716,9 +1716,7 @@ def test_shared_report_shows_only_the_whitelist_and_can_be_revoked(client, auth,
     for leak in (pricing["path"], pricing["id"], '"quote"', '"span"', '"suggestions"', "Write a brief.",
                  str(done["id"]), '"citations"'):
         assert leak not in raw
-    assert body["sources"]["posts"][0]["title"] == "On Pricing"
-    client.patch(f"/api/artifacts/{done['id']}/share", json={"show_sources": False}, headers=auth)
-    assert "sources" not in client.get(f"/api/public/reports/{token}").json()
+    assert "sources" not in body and "On Pricing" not in raw  # a shared page never lists what it was made from
     client.patch("/api/settings", json={"allow_public_links": False}, headers=auth)
     assert client.get(f"/api/public/reports/{token}").status_code == 404  # the workspace switch ends every link
     assert client.post(f"/api/artifacts/{done['id']}/share", headers=auth).status_code == 403

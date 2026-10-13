@@ -18,6 +18,12 @@ export function safeNext(path: string | null | undefined): string {
   return path;
 }
 
+/** Where a new account goes after signing up from `next`: onboarding, except people who came to use a free tool or to
+ * read a shared preview, who go straight back to it. */
+export function afterSignUp(next: string): string {
+  return next.startsWith("/tools/") || next.startsWith("/r/") ? next : "/welcome";
+}
+
 export const authApi = {
   me: () => api<User>("/api/auth/me"),
   providers: () => api<Providers>("/api/auth/providers"),
