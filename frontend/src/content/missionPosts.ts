@@ -6,12 +6,401 @@ import type { BlogPost } from "./seoTypes";
 //   ai tools for writers           880/mo  KD 22   best ai for writing 4,400/mo KD 26
 //   notebooklm vs chatgpt          320/mo  KD 0    grounded ai 480/mo KD 8
 //   ai second brain                390/mo  KD 16   rising fast (110 to 880/mo over the year)
+//   notebooklm vs claude           170/mo  KD 0    notebooklm claude 110/mo KD 0 (rising from 30/mo in Sep 2025)
+//   notebooklm limitations         320/mo  KD 9    notebooklm mcp 720/mo KD 1 (October 2026; also notebooklm api 1,000/mo, notebooklm claude 110/mo KD 0)
 // Sister products are linked where they answer the reader's next question:
 //   blog2video.app (posts, URLs and PDFs to video), pdf2vid.com (PDF to narrated video),
 //   bloghub.app (free blog and newsletter directory).
 // House rule: no em dashes.
 
 export const missionPosts: BlogPost[] = [
+  {
+    slug: "notebooklm-vs-claude",
+    title: "NotebookLM vs Claude: Which One Should You Use for Research and Writing?",
+    description:
+      "NotebookLM vs Claude compared honestly: grounding, citations, MCP, audio and video, editing and publishing. Plus how to use both together and where Notestack fits.",
+    category: "Research",
+    publishedAt: "2026-10-13",
+    readTime: "10 min read",
+    heroEyebrow: "NotebookLM vs Claude",
+    heroTitle: "A notebook and an assistant are not the same tool",
+    heroDescription:
+      "People keep asking whether Claude can replace NotebookLM. The honest answer depends on the job. Here is how they differ and how to use them together.",
+    primaryKeyword: "notebooklm vs claude",
+    keywordVariant: "notebooklm claude",
+    relatedPaths: [
+      "/blogs/notebooklm-limitations",
+      "/blogs/notebooklm-vs-chatgpt",
+      "/blogs/notebooklm-alternatives",
+      "/notebooklm-alternative",
+    ],
+    mission: {
+      question: "Should I use NotebookLM or Claude?",
+      answer:
+        "Use Claude as a thinking and drafting partner, and a grounded notebook when every answer must come from your own documents with citations. NotebookLM is the notebook, Claude is the assistant, and they do not connect officially because NotebookLM has no MCP server. Notestack is a grounded notebook that does, with an official MCP server launching so your sources can be used from Claude.",
+    },
+    sections: [
+      {
+        heading: "They are different kinds of tool",
+        paragraphs: [
+          "The NotebookLM vs Claude question usually comes from a reasonable place. Both can read documents, answer questions and help you write, so it is natural to wonder whether one makes the other unnecessary.",
+          "But they are built around different promises. NotebookLM is a notebook: you give it a set of sources and it answers from those sources. Claude is a general assistant: it reasons, writes, codes and explains across anything, and it can work with documents you share, but it is not defined by them.",
+          "Most of the confusion goes away once you ask which promise you need kept for the task in front of you.",
+        ],
+        bullets: [
+          "**NotebookLM:** answers from the sources you uploaded",
+          "**Claude:** reasons and writes across anything, including files you share",
+          "**Neither is wrong.** They are optimised for different jobs",
+        ],
+      },
+      {
+        heading: "Where Claude is the better choice",
+        paragraphs: [
+          "Claude is the stronger thinking partner. It is good at working through a messy problem, restructuring an argument, drafting in a particular tone, reviewing code and explaining a hard idea at the level you need.",
+          "It is also where many people already spend their day. If your work lives in conversations with an assistant, you do not want to leave that window every time you need your research. Claude supports MCP, the standard that lets an assistant connect to outside tools and data, which makes it a good hub for everything else you use.",
+        ],
+        bullets: [
+          "Brainstorming, outlining and drafting",
+          "Reasoning through a problem with you step by step",
+          "Rewriting and editing in a specific voice",
+          "Connecting to other tools through MCP",
+        ],
+      },
+      {
+        heading: "Where NotebookLM is the better choice",
+        paragraphs: [
+          "NotebookLM is built for the moment when the sources are the point. Upload a set of documents, ask questions and get answers tied to them, with study guides and audio and video overviews layered on top.",
+          "For a quick, contained job such as understanding a handful of PDFs, that is hard to beat, and the setup is almost nothing. If you never need the result outside the app, it may be all you need.",
+        ],
+        bullets: [
+          "Understanding a fixed set of uploaded documents",
+          "Study guides and quick overviews",
+          "Audio and video overviews for private learning",
+        ],
+      },
+      {
+        heading: "The difference that matters most: grounding",
+        paragraphs: [
+          "A grounded tool can only use the sources you gave it, and it shows where each claim came from. A general assistant answers from what it learned in training and, when search is switched on, from the web as well. Both are useful. They answer different questions about trust.",
+          "When a wrong answer is cheap, an assistant is fine and often faster. When a wrong answer is expensive, such as a quote attributed to the wrong person, a figure from the wrong report or a claim you will publish under your name, you want an answer you can trace to an exact passage.",
+          "We make the same argument for ChatGPT in [NotebookLM vs ChatGPT](/blogs/notebooklm-vs-chatgpt), and it applies equally here. The honest test is simple: ask each tool something your documents do not answer, and see whether it says so.",
+        ],
+        callout: "Use an assistant to think. Use a grounded notebook to check.",
+      },
+      {
+        heading: "The gap nobody talks about: connecting them",
+        paragraphs: [
+          "Here is the practical problem. Plenty of people want to use NotebookLM and Claude together, which is why searches for notebooklm claude and notebooklm mcp keep growing. But there is no official NotebookLM MCP server, so your notebook cannot officially plug into Claude or ChatGPT.",
+          "That leaves copy and paste, which loses citations and goes stale, or unofficial community tools, which depend on unsupported access and can break. It also means your research, reports and videos stay stuck in one place while the rest of your work happens somewhere else.",
+          "We cover this and three other common complaints in [NotebookLM limitations](/blogs/notebooklm-limitations).",
+        ],
+      },
+      {
+        heading: "Using both: a workflow that works",
+        paragraphs: [
+          "The best setup is rarely one tool. A simple pattern is to keep the assistant for thinking and drafting and keep a grounded notebook as the source of truth it can reach into.",
+        ],
+        bullets: [
+          "**Collect:** put the documents or posts that matter into a grounded notebook",
+          "**Check:** ask the notebook questions where the answer must be traceable",
+          "**Think:** take the verified material into Claude to outline, argue and draft",
+          "**Publish:** turn the result into posts, audio or video, and edit before it goes out",
+        ],
+      },
+      {
+        heading: "Where Notestack fits",
+        paragraphs: [
+          "Notestack is the grounded notebook for people who publish. It syncs your blog, newsletter or site, indexes every post, and answers only from your own writing. It does not search the web at all, so nothing arrives that you did not write, and every answer cites the exact lines it used.",
+          "It is also built to work with the assistant you already use. This week we are launching the official Notestack MCP server, so you can bring your research, reports and videos into Claude, ChatGPT and other tools. You will also be able to connect other MCP servers to Notestack.",
+          "From the same archive you can make audio on ElevenLabs v4 voices, videos through Blog2Video where every scene and template is editable, and posts for LinkedIn that you can schedule and tune with AI. See [Notestack vs NotebookLM](/notebooklm-alternative) for a full side by side.",
+        ],
+        bullets: [
+          "Answers only from your documents, with line level citations",
+          "Official MCP server so Claude can reach your sources",
+          "Editable video, ElevenLabs v4 audio and LinkedIn scheduling",
+        ],
+      },
+      {
+        heading: "So which should you pick",
+        paragraphs: [
+          "If you want a thinking partner for drafting and reasoning, use Claude. If you want a quick, grounded read of a few uploaded documents, NotebookLM is a fine choice. If your sources are your own growing archive, you need the answers to be traceable, and you want the results available inside Claude, Notestack is built for that.",
+          "If you are still comparing the wider field, our guide to [NotebookLM alternatives](/blogs/notebooklm-alternatives) covers research tools, open source options and more, and there is a free plan on [pricing](/pricing) if you want to try Notestack on your latest posts.",
+        ],
+      },
+    ],
+    faq: [
+      {
+        question: "Can Claude replace NotebookLM?",
+        answer:
+          "For thinking, drafting and reasoning, often yes. But Claude is a general assistant, not a notebook that answers only from your sources, so if every answer must be traceable to your own documents you still want a grounded tool.",
+      },
+      {
+        question: "Can you use NotebookLM with Claude?",
+        answer:
+          "Not through an official integration, because there is no official NotebookLM MCP server. You can copy and paste between them or try unofficial community tools, but both have drawbacks. Notestack is launching an official MCP server so your sources can be used from Claude.",
+      },
+      {
+        question: "Is Claude or NotebookLM better for research?",
+        answer:
+          "It depends on the job. Claude is better for reasoning through a problem and drafting. NotebookLM is better for a grounded read of uploaded documents. For your own growing archive, Notestack answers only from your writing and cites exact lines.",
+      },
+      {
+        question: "Does Claude stay on my sources?",
+        answer:
+          "Claude can work with documents you share, but it is a general assistant and can also draw on its training and on web search when enabled. A grounded notebook such as Notestack restricts answers to your own documents and does not search the web.",
+      },
+      {
+        question: "What is MCP and why does it matter for Claude?",
+        answer:
+          "MCP, the Model Context Protocol, is a standard that lets assistants like Claude connect to outside tools and data. It matters because it lets your research live in one place and be used from the assistant you already work in.",
+      },
+      {
+        question: "What is the best NotebookLM alternative that works with Claude?",
+        answer:
+          "Notestack. It is a grounded notebook for writers with an official MCP server, so you can use your sources and reports from Claude and other MCP clients. Compare the two in [Notestack vs NotebookLM](/notebooklm-alternative).",
+      },
+      {
+        question: "Can I try Notestack for free?",
+        answer: "Yes. There is a free plan that lets you try grounded chat on your latest posts. See [pricing](/pricing).",
+      },
+    ],
+    distributionPlan: [
+      { channel: "x", angle: "Thread: NotebookLM vs Claude is the wrong question, here is the right one" },
+      { channel: "linkedin", angle: "Why a notebook and an assistant should work together, and the missing MCP link" },
+      { channel: "substack_notes", angle: "Use an assistant to think, a grounded notebook to check" },
+    ],
+  },
+  {
+    slug: "notebooklm-limitations",
+    title: "NotebookLM Limitations: 4 Complaints From Real Users and What to Do About Each",
+    description:
+      "The biggest NotebookLM limitations users raise on Reddit: it strays from your sources, has no official MCP server, locks your video and audio, and cannot publish. Here is how to work around each one.",
+    category: "Research",
+    publishedAt: "2026-10-13",
+    readTime: "12 min read",
+    heroEyebrow: "NotebookLM limitations",
+    heroTitle: "What users keep asking NotebookLM to fix",
+    heroDescription:
+      "After a month of reading r/NotebookLM, the same four complaints come up again and again. Here is what they are, why they matter and how to get around them.",
+    primaryKeyword: "notebooklm limitations",
+    keywordVariant: "notebooklm mcp",
+    relatedPaths: ["/notebooklm-alternative", "/blogs/notebooklm-alternatives", "/blogs/notebooklm-vs-chatgpt", "/blogs/notebooklm-vs-claude"],
+    mission: {
+      question: "What are the main limitations of NotebookLM?",
+      answer:
+        "Users on Reddit raise four limitations most often: answers that pull in web material they never asked for, no official MCP server to connect it to Claude or ChatGPT, video and audio you cannot edit once generated, and no way to plan or publish what you find to social media. Each has a workaround, and Notestack was built around all four.",
+    },
+    sections: [
+      {
+        heading: "Where these complaints come from",
+        paragraphs: [
+          "NotebookLM made source grounded AI mainstream, and plenty of people use it happily. But a busy community forum is also where the rough edges show up, and the r/NotebookLM subreddit is full of the same few frustrations.",
+          "This list comes from a month of reading that subreddit, replying to posts and talking to its users one on one. We were looking for patterns, not one off bugs, and four of them kept coming back in different words.",
+          "Below, each limitation gets the same treatment: what actually happens, why it matters for real work, a quick way to test it yourself, and what to do about it. If you only want the short version, the summary near the end covers all four.",
+        ],
+        bullets: [
+          "It strays beyond the sources you uploaded",
+          "It does not connect to Claude or ChatGPT",
+          "Generated video and audio cannot be edited",
+          "It stops at insight and does not help you share it",
+        ],
+      },
+      {
+        heading: "What a notebook is supposed to promise",
+        paragraphs: [
+          "A source grounded notebook makes one promise that a general chatbot does not: the answer comes from the documents you gave it, and you can check where. That promise is the whole reason to use one.",
+          "Every limitation in this post is really a way that promise gets weaker in practice. The answer drifts past your sources, the results cannot leave the app, the media cannot be corrected, or the insight never reaches an audience. Keep that frame in mind and the four complaints stop looking like separate bugs.",
+        ],
+        callout: "A notebook is only as useful as the trust you can place in it, and what you can do with it afterwards.",
+      },
+      {
+        heading: "1. It does not always stay on your sources",
+        paragraphs: [
+          "NotebookLM often pulls in material from the web that you never asked for. For casual reading that can feel helpful. For anyone trying to understand a specific set of documents, it is the opposite: you can no longer tell which sentences came from your files and which came from somewhere else.",
+          "This matters most in the situations where grounding is the point. A lawyer summarising a contract does not want a web definition mixed in. A researcher working through interview transcripts needs to quote what the participant said, not what the internet says about the topic. A writer questioning their own archive needs to know what they actually argued, not a plausible blend of their view and everyone else's.",
+          "There is also a quieter cost. Once you catch an answer drifting, you start double checking all of them, and the time a notebook was supposed to save goes into verification.",
+        ],
+        bullets: [
+          "**The first test:** ask a question you know your sources do not answer. A truly grounded tool says it cannot find it. A drifting one answers anyway",
+          "**The second test:** ask for the exact passage behind a claim. If the citation points to a whole document instead of specific lines, checking is slow",
+          "**The third test:** upload two documents that disagree and ask which is right. A grounded tool reports the disagreement instead of picking a winner from outside knowledge",
+        ],
+      },
+      {
+        heading: "How Notestack handles it: no web, exact lines",
+        paragraphs: [
+          "Notestack does not search the web at all, so every answer comes straight from your documents. There is no browsing step that could add something you did not ask for.",
+          "Answers cite exact line ranges, and those citations are read back and verified before you see them. If a claim cannot be supported by your posts, it is dropped instead of guessed, and when your sources do not contain the answer, Notestack says so.",
+          "That strictness is deliberate. It is the same argument we make in our guide to [grounded AI for writers](/blogs/grounded-ai-for-writers), and the reason the comparison with a general chatbot in [NotebookLM vs ChatGPT](/blogs/notebooklm-vs-chatgpt) comes out the way it does.",
+        ],
+        callout: "If the tool cannot browse, it cannot wander.",
+      },
+      {
+        heading: "2. No official MCP server for Claude or ChatGPT",
+        paragraphs: [
+          "MCP, the Model Context Protocol, is the standard way for AI assistants like Claude and ChatGPT to connect to outside tools and data. An MCP server is the piece that lets an assistant read your notes, query your research or call a service without you copying and pasting between windows.",
+          "There is no official NotebookLM MCP server. That is why searches like notebooklm mcp, notebooklm api and notebooklm claude keep growing: people already do their thinking inside Claude or ChatGPT and want their notebook available there. Instead, your research, reports and videos stay stuck in one place.",
+          "Community built workarounds exist, and some are clever. But anything that depends on unofficial access can break when the product changes, and you are trusting someone else's code with your documents. For research you care about, that is a fragile foundation.",
+        ],
+        bullets: [
+          "**Why it matters:** your best context ends up locked away from the assistant you use most",
+          "**Workaround today:** export what you need and paste it in, which loses citations and goes stale the moment the source changes",
+          "**Better route:** a tool that ships an official, supported server",
+        ],
+      },
+      {
+        heading: "How Notestack handles it: an official MCP server",
+        paragraphs: [
+          "This week we are launching the official Notestack MCP server, so you can bring your research, reports and videos into the tools you already use, including Claude and ChatGPT. If you are weighing a notebook against an assistant, see [NotebookLM vs Claude](/blogs/notebooklm-vs-claude).",
+          "It also works in the other direction. You will be able to connect other MCP servers to Notestack, so the notebook is not a walled garden either way.",
+          "The practical difference is that your sources stay where they are indexed and cited, and the assistant reaches in when it needs them. You keep one source of truth instead of a dozen pasted copies that drift out of date.",
+        ],
+        bullets: [
+          "Use your research from the assistant you already work in",
+          "Keep one indexed, cited archive instead of pasted copies",
+          "Connect other MCP servers back into Notestack",
+        ],
+      },
+      {
+        heading: "3. You cannot edit your videos or audio",
+        paragraphs: [
+          "With NotebookLM, what you get is what you get. The video or audio overview is generated as a finished piece. If one scene is wrong, a name is mispronounced or a line sounds off, you regenerate and hope, because there is nothing to open and change.",
+          "That is tolerable when the output is a private study aid. It stops being tolerable the moment you want to share it. Public video has to be correct, on brand and trimmed to the point, and a one shot generator gives you no hand on any of those.",
+          "Think about what even a small edit involves: fixing one statistic, swapping a template, shortening a scene, changing the voice, adding your logo. With a fixed output, every one of those is a full regeneration with no guarantee the rest stays the same.",
+        ],
+        bullets: [
+          "**Ask any video tool:** can I change one scene without redoing the rest?",
+          "**And:** can I swap the template or brand after the fact?",
+          "**And:** can I review the script before it is voiced?",
+        ],
+      },
+      {
+        heading: "How Notestack handles it: editable scenes, ElevenLabs v4 voices",
+        paragraphs: [
+          "Notestack makes videos with Blog2Video, so every scene and template is editable. You can open a video, fix the scene that is wrong and leave the rest alone.",
+          "Audio runs on ElevenLabs v4, some of the best AI voices out there, and the script is yours to review before anything is voiced. For audio overviews that means two hosts discussing your ideas, with every line tied to a passage you wrote.",
+          "If the video itself is the deliverable, a dedicated editor is the right tool anyway. [Blog2Video](https://blog2video.app) turns posts and URLs into videos you can edit scene by scene. To hear how a post would sound before committing, try the free [AI podcast generator](/tools/ai-podcast-generator).",
+        ],
+      },
+      {
+        heading: "4. Limited ways to launch or share what you find",
+        paragraphs: [
+          "NotebookLM helps you understand a pile of sources. What it does not do is help you act on that understanding in front of an audience. It does not integrate with social media APIs that let you plan posts, so showcasing an insight in a proper format means leaving the tool, rewriting it by hand and scheduling it somewhere else.",
+          "For anyone who publishes, that gap is where most of the value leaks out. An insight that never becomes a post, a thread or a short video does not build an audience, however good the research behind it was.",
+          "The usual workaround is a chain of tools: research in one place, drafting in another, a scheduler in a third. Each handoff loses context, and the posts end up sounding like they came from nowhere in particular.",
+        ],
+      },
+      {
+        heading: "How Notestack handles it: Launch Kits and scheduling",
+        paragraphs: [
+          "Notestack already integrates with the LinkedIn API, so you can schedule posts and tune them with the help of AI before they go out. We are adding more APIs every week.",
+          "Launch Kits turn a post or a notebook into threads, LinkedIn posts, Notes, Bluesky posts, SEO copy, carousels and quote cards, written in a voice profile learned from your own posts. The scheduling calendar then handles when each one goes out.",
+          "Because everything is built on the same indexed archive, a post can trace back to the exact line it came from, and you can see which topics are rising or dormant in your own writing before you decide what to share next.",
+        ],
+        bullets: [
+          "Draft and schedule LinkedIn posts from your own sources",
+          "Tune each post with AI before it goes out",
+          "More social integrations shipping every week",
+        ],
+      },
+      {
+        heading: "The four limitations at a glance",
+        paragraphs: [
+          "Here is the whole comparison in one place. For a full feature by feature breakdown, see [Notestack vs NotebookLM](/notebooklm-alternative).",
+        ],
+        bullets: [
+          "**Staying on your sources:** NotebookLM often pulls in web material you did not ask for. Notestack never searches the web and cites exact lines",
+          "**Working with Claude and ChatGPT:** NotebookLM has no official MCP server. Notestack is launching an official one this week and can connect to other MCP servers",
+          "**Editing video and audio:** NotebookLM output is fixed once generated. Notestack videos are built with Blog2Video, so every scene and template is editable, with ElevenLabs v4 audio",
+          "**Launching and sharing:** NotebookLM has no social media integration. Notestack integrates with the LinkedIn API, with scheduling, AI tuning and more integrations every week",
+        ],
+      },
+      {
+        heading: "When NotebookLM is still the right choice",
+        paragraphs: [
+          "None of this makes NotebookLM a bad product. If you upload a handful of PDFs, want a quick summary or a study guide, and never need the result outside the app, it may be all you need.",
+          "The limitations above bite when your sources are your own writing, when you live inside Claude or ChatGPT, when you need to correct and polish media before publishing it, or when the end goal is an audience rather than your own understanding.",
+        ],
+      },
+      {
+        heading: "A five question checklist for choosing",
+        paragraphs: [
+          "Before you pick a tool, answer these honestly. Several yeses is a good sign you have outgrown a one shot notebook.",
+        ],
+        bullets: [
+          "Do I need every answer to come only from my own documents, with citations I can open?",
+          "Do I want my research available inside Claude or ChatGPT?",
+          "Will I need to edit the video or audio before anyone else sees it?",
+          "Is the end goal publishing to an audience, not just understanding the material?",
+          "Are my sources a growing archive, such as a blog or newsletter, rather than a one off set of files?",
+        ],
+      },
+      {
+        heading: "Getting started with Notestack",
+        paragraphs: [
+          "Connect your Substack, Ghost, Medium or any RSS feed and Notestack indexes your posts into citable passages. Ask questions, build notebooks around a theme, and see every answer traced back to the exact lines.",
+          "From there, turn a notebook into an audio overview, a video through Blog2Video, or a Launch Kit for LinkedIn and beyond. There is a free plan so you can try it on your latest posts before deciding. See [pricing](/pricing) for what each plan adds, and the wider guide to [NotebookLM alternatives](/blogs/notebooklm-alternatives) if you are still comparing options.",
+        ],
+        callout: "Try Notestack for free at notestack.ai.",
+      },
+    ],
+    faq: [
+      {
+        question: "What are the biggest limitations of NotebookLM?",
+        answer:
+          "It pulls in web material beyond your sources, has no official MCP server for Claude or ChatGPT, produces video and audio that cannot be edited, and has no social media integration for planning or publishing posts.",
+      },
+      {
+        question: "Does NotebookLM have an MCP server?",
+        answer:
+          "No. There is no official NotebookLM MCP server. Unofficial community projects exist, but they rely on unsupported access. Notestack is launching an official MCP server so you can use your sources and reports from Claude, ChatGPT and other MCP clients.",
+      },
+      {
+        question: "What is an MCP server and why does it matter?",
+        answer:
+          "MCP, the Model Context Protocol, is a standard that lets AI assistants like Claude and ChatGPT connect to outside tools and data. An MCP server exposes a product's data to those assistants, so your research is available where you already work instead of being stuck in one app.",
+      },
+      {
+        question: "Can you use NotebookLM with Claude or ChatGPT?",
+        answer:
+          "Not through an official integration. You can export and paste content between them, or use unofficial community tools, but both lose citations or depend on unsupported access. Notestack's official MCP server is built for this.",
+      },
+      {
+        question: "Can you edit a NotebookLM video or audio overview?",
+        answer:
+          "No. What NotebookLM generates is final: you cannot edit the scenes or audio. In Notestack, videos are made with Blog2Video so every scene and template is editable, and audio runs on ElevenLabs v4 voices.",
+      },
+      {
+        question: "Does NotebookLM stay on my sources?",
+        answer:
+          "Not always. NotebookLM often pulls in material from the web that you did not ask for. Notestack does not search the web at all, so every answer comes straight from your documents and cites the exact lines it used.",
+      },
+      {
+        question: "Can NotebookLM schedule or publish to social media?",
+        answer:
+          "No. It does not integrate with social media APIs. Notestack integrates with the LinkedIn API, lets you schedule posts and tune them with AI, and is adding more integrations every week.",
+      },
+      {
+        question: "What is the best NotebookLM alternative for writers?",
+        answer:
+          "Notestack. It syncs your whole archive, answers only from it with line level citations, makes editable video and ElevenLabs audio, and turns your writing into scheduled posts. Compare them in [Notestack vs NotebookLM](/notebooklm-alternative).",
+      },
+      {
+        question: "Does Notestack search the web?",
+        answer:
+          "No. Notestack never searches the web, so every answer comes from your own documents and cites the exact lines it used.",
+      },
+      {
+        question: "Can I try Notestack for free?",
+        answer: "Yes. There is a free plan that lets you try grounded chat on your latest posts. See [pricing](/pricing).",
+      },
+    ],
+    distributionPlan: [
+      { channel: "x", angle: "Thread: the four NotebookLM complaints from r/NotebookLM and a fix for each" },
+      { channel: "linkedin", angle: "What a month in r/NotebookLM taught me about grounded AI, plus the Notestack MCP launch" },
+      { channel: "substack_notes", angle: "No web search, no wandering: why a notebook should stay on your sources" },
+    ],
+  },
   {
     slug: "notebooklm-alternatives",
     title: "NotebookLM Alternatives in 2026: Free, Open Source and for Writers",
@@ -26,7 +415,7 @@ export const missionPosts: BlogPost[] = [
       "NotebookLM made source grounded AI mainstream. It is also a bundle, and most people only need part of it. Here is how to pick the part that matters to you.",
     primaryKeyword: "notebooklm alternatives",
     keywordVariant: "alternative to notebooklm",
-    relatedPaths: ["/notebooklm-alternative", "/blogs/notebooklm-vs-chatgpt", "/blogs/best-ai-for-research", "/blogs/ai-tools-for-writers"],
+    relatedPaths: ["/notebooklm-alternative", "/blogs/notebooklm-limitations", "/blogs/notebooklm-vs-chatgpt", "/blogs/best-ai-for-research", "/blogs/ai-tools-for-writers"],
     mission: {
       question: "What is the best NotebookLM alternative for my kind of work?",
       answer:
@@ -38,6 +427,7 @@ export const missionPosts: BlogPost[] = [
         paragraphs: [
           "NotebookLM is several products in one: a place to upload sources, a chat that answers only from them, study guides, audio overviews and, more recently, video overviews. Most people who search for an alternative love one of those and are frustrated by another.",
           "So before comparing tools, name the job. Are you researching other people's documents, or working with your own writing? Do you need citations you can click, or a quick summary? Do you want to listen, watch or publish the result?",
+          "If you are already frustrated with NotebookLM, it helps to know which limits are common. Our breakdown of the [NotebookLM limitations](/blogs/notebooklm-limitations) users raise most covers sources that drift, the missing MCP server for Claude and ChatGPT, uneditable video and audio, and the lack of social publishing.",
         ],
         bullets: [
           "**Grounded chat over sources**: answers that only come from what you uploaded",
@@ -374,7 +764,7 @@ export const missionPosts: BlogPost[] = [
       "ChatGPT knows a little about everything. NotebookLM knows only what you give it. For research and writing, that difference decides whether you can trust the answer.",
     primaryKeyword: "notebooklm vs chatgpt",
     keywordVariant: "grounded ai",
-    relatedPaths: ["/blogs/notebooklm-alternatives", "/blogs/best-ai-for-research", "/blogs/grounded-ai-for-writers"],
+    relatedPaths: ["/blogs/notebooklm-alternatives", "/blogs/best-ai-for-research", "/blogs/grounded-ai-for-writers", "/blogs/notebooklm-limitations"],
     mission: {
       question: "Should I use NotebookLM or ChatGPT for research?",
       answer:
@@ -401,7 +791,7 @@ export const missionPosts: BlogPost[] = [
         heading: "Where NotebookLM wins",
         paragraphs: [
           "Once you have sources, NotebookLM is safer. Its answers stay inside your documents, it cites them, and features like audio overviews help you absorb long material.",
-          "Its limits are about workflow. You upload documents one at a time, citations point to passages but not always the exact lines, and there is no built in way to publish what you learn.",
+          "Its limits are about workflow. You upload documents one at a time, citations point to passages but not always the exact lines, and there is no built in way to publish what you learn. Users raise more, from web material creeping into answers to no official MCP server for Claude or ChatGPT, all covered in [NotebookLM limitations](/blogs/notebooklm-limitations).",
         ],
       },
       {
