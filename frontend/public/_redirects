@@ -4,3 +4,5 @@
 /auth/*   /app  200
 /welcome  /app  200
 /connect  /app  200
+# Share links (reports, decks, audio, videos...) open the read-only viewer; noindex like the app shell.
+/r/*      /app  200
