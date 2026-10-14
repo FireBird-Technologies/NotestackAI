@@ -139,7 +139,7 @@ export type ShareInfo = { shared: boolean; url: string | null; show_sources: boo
 
 /** A report as the public sees it: no ids, quotes or paths. */
 export type PublicReportData = {
-  kind?: "report";
+  kind: "report";
   title: string;
   format: "document" | "interactive";
   language: string;
@@ -161,10 +161,16 @@ export type PublicAudioData = PublicHead & {
   segments: { speaker: string; text: string; start: number; end: number }[];
 };
 export type PublicVideoData = PublicHead & { kind: "video"; video_url: string | null; preview_url: string | null };
+export type PublicMindMapData = PublicHead & { kind: "mind_map"; root: MindNode | null };
+export type PublicPendingData = PublicHead & {
+  kind: "pending" | "failed";
+  artifact_type: ArtifactType;
+  status: string;
+};
 
 /** Anything a share link can open. */
 export type PublicArtifactData = PublicReportData | PublicInfographicData | PublicFlashcardsData | PublicQuizData
-  | PublicSlidesData | PublicAudioData | PublicVideoData;
+  | PublicSlidesData | PublicAudioData | PublicVideoData | PublicMindMapData | PublicPendingData;
 
 export type ReportTemplate = { id: string; name: string; description: string; prompt: string };
 

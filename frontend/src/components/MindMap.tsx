@@ -5,6 +5,7 @@ import type { Artifact, MindNode } from "../api/types";
 import { useJob } from "../hooks/useJob";
 import { ConfirmButton, formatDate, JobProgress, Modal, StatusPill } from "./ui";
 import { Reader } from "./Reader";
+import { CardFeedback } from "./CardFeedback";
 
 /* ---------- Layout: a galaxy. The centre idea, branches orbiting it, sub-themes orbiting each branch, points
    orbiting each sub-theme. Every orbit is smaller than the one above, so zooming in always reveals a new ring. ---------- */
@@ -695,6 +696,7 @@ export function MindMapExplorer({ artifact, onClose, warp = true, startAt = "roo
         <div className="mm-meteor" aria-hidden="true" />
 
         <header className="mm-top" style={{ right: 14 + panelW }}>
+          {!embedded && <CardFeedback artifact={artifact} />}
           {embedded ? (
             onExpand && (
               <button type="button" className="mm-btn" onClick={onExpand} aria-label="Open full screen" title="Open full screen">

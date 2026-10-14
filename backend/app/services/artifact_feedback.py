@@ -1,4 +1,4 @@
-"""Thumbs up or down on generated reports, quizzes, flashcards, infographics, slide decks, audio overviews and videos: what can be rated, why a thumbs down can be
+"""Thumbs up or down on generated reports, quizzes, flashcards, Mind Constellations, infographics, slide decks, audio overviews and videos: what can be rated, why a thumbs down can be
 given, and how the ratings ride along on the artifacts the app lists."""
 
 import uuid
@@ -13,6 +13,7 @@ REASONS: dict[str, set[str]] = {
     "report": {"inaccurate", "missed_points", "structure", "tone", "too_long", "too_short", "other"},
     "quiz": {"wrong_answers", "too_easy", "too_hard", "unclear", "off_topic", "other"},
     "flashcards": {"inaccurate", "too_basic", "too_detailed", "unclear", "other"},
+    "mind_map": {"inaccurate", "missing_content", "hard_to_read", "structure", "other"},
     "infographic": {"messy_layout", "cut_off", "missing_content", "look", "hard_to_read", "other"},
     "slide_deck": {"inaccurate", "design", "cut_off", "too_long", "too_short", "other"},
     "audio_overview": {"inaccurate", "voices", "boring", "too_long", "too_short", "other"},

@@ -10,8 +10,8 @@ const Step = ({ n, children }: { n: number; children: React.ReactNode }) => (
   </li>
 );
 
-/** Setup lives in a modal so the sidebar remains the user's launch point instead of becoming another settings page. */
-export default function ConnectorModal({ onClose }: { onClose: () => void }) {
+/** Shared setup instructions: a full page from the sidebar, or a modal when launched inside a notebook. */
+export function ConnectorSetup({ showOAuthNote = true }: { showOAuthNote?: boolean }) {
   const [copied, setCopied] = useState(false);
 
   const copy = async () => {
@@ -25,7 +25,7 @@ export default function ConnectorModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <Modal title="Connect to Notestack" onClose={onClose} wide>
+    <>
       <p className="muted connector-intro">
         Use your archive and create Notestack projects from Claude or ChatGPT. Paste this MCP server address into the
         app you want to connect; Notestack will ask you to sign in and approve access.
@@ -73,10 +73,21 @@ export default function ConnectorModal({ onClose }: { onClose: () => void }) {
         </section>
       </div>
 
-      <p className="notice small connector-note">
-        Access is granted through OAuth, so you never need to copy an account token. You can disconnect an app any time
-        from Settings.
-      </p>
+      {showOAuthNote && (
+        <p className="notice small connector-note">
+          Access is granted through OAuth, so you never need to copy an account token. You can disconnect an app any time
+          from Settings.
+        </p>
+      )}
+    </>
+  );
+}
+
+/** Notebook-local launcher: keep setup close to the notebook without navigating away from it. */
+export default function ConnectorModal({ onClose }: { onClose: () => void }) {
+  return (
+    <Modal title="Connect to Notestack" onClose={onClose} wide>
+      <ConnectorSetup />
     </Modal>
   );
 }

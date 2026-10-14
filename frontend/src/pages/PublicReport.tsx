@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import { publicApi } from "../api/endpoints";
-import type { FlashcardData, PublicArtifactData, PublicAudioData, PublicSlidesData, PublicVideoData } from "../api/types";
+import type { FlashcardData, PublicArtifactData, PublicAudioData, PublicReportData, PublicSlidesData, PublicVideoData } from "../api/types";
 import { Transcript } from "../components/ArtifactCard";
 import { AudioPlayer } from "../components/AudioOverview";
 import { FlashcardDeck } from "../components/Flashcards";
@@ -14,9 +14,12 @@ import { Loading, Modal } from "../components/ui";
 import { AuthForm } from "../components/auth/AuthForm";
 import { useAuth } from "../hooks/useAuth";
 import { PreviewFrame } from "../components/video/VideoCard";
+import { MindMapExplorer } from "../components/MindMap";
+import type { Artifact } from "../api/types";
 
 const LABELS: Record<string, string> = { infographic: "Infographic", flashcards: "Flashcards", quiz: "Quiz",
-                                         slides: "Slide deck", audio: "Audio overview", video: "Video" };
+                                         slides: "Slide deck", audio: "Audio overview", video: "Video",
+                                         mind_map: "Mind Constellation" };
 
 /** The page around anything shared: the logo, what it is and its title, then it, then "Made with Notestack". */
 function PublicShell({ kind, title, wide = false, children }: { kind: string; title: string; wide?: boolean; children: ReactNode }) {
@@ -149,13 +152,19 @@ function PublicView() {
   }, []);
 
   useEffect(() => {
-    publicApi.artifact(token).then(
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const load = () => publicApi.artifact(token).then(
       (r) => {
+        if (stopped) return;
         setShared(r);
         document.title = `${r.title} | Notestack`;
+        if (r.kind === "pending") timer = setTimeout(load, 3000);
       },
-      () => setMissing(true),
+      () => { if (!stopped) setMissing(true); },
     );
+    void load();
+    return () => { stopped = true; if (timer) clearTimeout(timer); };
   }, [token]);
 
   if (missing) {
@@ -169,6 +178,22 @@ function PublicView() {
     );
   }
   if (!shared) return <main className="rp-public"><Loading label="Opening" /></main>;
+  if (shared.kind === "pending" || shared.kind === "failed") {
+    return (
+      <PublicShell kind={shared.artifact_type} title={shared.title}>
+        {shared.kind === "pending"
+          ? <Loading label="Notestack is making this artifact" />
+          : <p className="error-text">Notestack could not finish this artifact.</p>}
+      </PublicShell>
+    );
+  }
+  if (shared.kind === "mind_map") {
+    if (!shared.root) return <PublicShell kind="mind_map" title={shared.title}><p className="muted">This constellation is empty.</p></PublicShell>;
+    const artifact: Artifact = { id: token, type: "mind_map", type_label: "Mind Constellation", title: shared.title,
+      status: "ready", notebook_id: null, document_id: null, content: { root: shared.root }, storage_key: null,
+      url: null, download_url: null, slide_urls: [], created_at: shared.created_at, job: null };
+    return <MindMapExplorer artifact={artifact} embedded warp={false} onClose={() => {}} />;
+  }
   if (shared.kind === "infographic") {
     return (
       <PublicShell kind="infographic" title={shared.title} wide>
@@ -188,7 +213,7 @@ function PublicView() {
   if (shared.kind === "slides") return <PublicShell kind="slides" title={shared.title} wide><PublicSlides deck={shared} /></PublicShell>;
   if (shared.kind === "audio") return <PublicShell kind="audio" title={shared.title}><PublicAudio audio={shared} /></PublicShell>;
   if (shared.kind === "video") return <PublicShell kind="video" title={shared.title} wide><PublicVideo video={shared} /></PublicShell>;
-  const report = shared;
+  const report = shared as PublicReportData;
 
   const posts = report.sources?.posts ?? [];
   return (

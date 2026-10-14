@@ -19,8 +19,11 @@ CONTENT = {
                                      "sources": [SOURCE]}]},
     "video": {"title": "Pricing video", "video_url": "https://cdn.test/v.mp4", "preview_url": "https://b2v.test/p/1",
               "b2v_video_id": 812},
+    "mind_map": {"title": "Pricing constellation", "root": {"id": "root", "label": "Pricing", "note": "Overview",
+                  "sources": [SOURCE], "children": [{"id": "a", "label": "Value", "note": "Readers value it",
+                                                       "sources": [SOURCE], "children": []}]}},
 }
-KIND = {"flashcards": "flashcards", "quiz": "quiz", "audio_overview": "audio", "video": "video"}
+KIND = {"flashcards": "flashcards", "quiz": "quiz", "audio_overview": "audio", "video": "video", "mind_map": "mind_map"}
 
 
 @pytest.fixture()
@@ -65,11 +68,16 @@ def test_each_type_can_be_shared_and_shows_only_its_whitelist(client, auth, db_s
     assert client.get(f"/api/public/s/{token}").status_code == 404
 
 
-def test_an_unfinished_artifact_cannot_be_shared(client, auth, db_session):
+def test_an_unfinished_artifact_has_a_shareable_preview_that_turns_ready(client, auth, db_session):
     a = make(db_session, "quiz", status="generating")
-    assert client.post(f"/api/artifacts/{a.id}/share", headers=auth).status_code == 404
-    v = make(db_session, "video", status="generating", content={"title": "Rendering"})
-    assert client.post(f"/api/artifacts/{v.id}/share", headers=auth).status_code == 404
+    share = client.post(f"/api/artifacts/{a.id}/share", headers=auth)
+    assert share.status_code == 200
+    token = share.json()["url"].rsplit("/", 1)[1]
+    pending = client.get(f"/api/public/s/{token}").json()
+    assert pending["kind"] == "pending" and pending["artifact_type"] == "quiz"
+    a.status = "ready"
+    db_session.commit()
+    assert client.get(f"/api/public/s/{token}").json()["kind"] == "quiz"
 
 
 def test_turning_public_links_off_ends_every_type(client, auth, db_session):

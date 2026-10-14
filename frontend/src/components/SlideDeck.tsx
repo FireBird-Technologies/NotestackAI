@@ -856,6 +856,7 @@ export function SlideDeckViewer({ artifact, onClose, onDelete, onSaved }: {
         {big ? <CollapseIcon size={20} /> : <ExpandIcon size={20} />}
       </button>
       {pages.length > 0 && <DownloadMenu artifact={artifact} prepare={save} />}
+      <CardFeedback artifact={artifact} />
       <DeckMenu artifact={artifact} onPresent={() => void present(inView)} onDelete={onDelete} prepare={save}
                 notes={notes} onNotes={() => setNotes((n) => !n)} />
       <button type="button" className="sd-icon-btn" onClick={requestClose} title="Close" aria-label="Close">

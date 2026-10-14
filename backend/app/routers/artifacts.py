@@ -322,7 +322,7 @@ class FeedbackIn(BaseModel):
 
 @router.put("/{artifact_id}/feedback")
 def rate_artifact(artifact_id: uuid.UUID, body: FeedbackIn, ctx: Ctx = Depends(get_ctx)):
-    """Thumbs up (a positive review) or down (a negative one) on a finished report, quiz, flashcard set, infographic,
+    """Thumbs up (a positive review) or down (a negative one) on a finished report, quiz, flashcard set, Mind Constellation, infographic,
     slide deck, audio overview or video, in one table told apart by `rating` (1 / -1). Rating again replaces it; null
     removes it."""
     a = get_artifact_or_404(ctx, artifact_id)
@@ -331,7 +331,7 @@ def rate_artifact(artifact_id: uuid.UUID, body: FeedbackIn, ctx: Ctx = Depends(g
     finished = a.status == "ready" or (a.type == "video" and bool((a.content_json or {}).get("video_url")))
     if allowed is None or not finished:
         log.warning("feedback refused: artifact=%s type=%s status=%s user=%s", a.id, a.type, a.status, ctx.user.id)
-        raise HTTPException(400, "Only a finished report, quiz, flashcard set, infographic, slide deck, audio overview "
+        raise HTTPException(400, "Only a finished report, quiz, flashcard set, Mind Constellation, infographic, slide deck, audio overview "
                                  "or video can be rated")
     row = ctx.db.scalar(select(ArtifactFeedback).where(ArtifactFeedback.artifact_id == a.id, ArtifactFeedback.user_id == ctx.user.id))
     if body.rating is None:

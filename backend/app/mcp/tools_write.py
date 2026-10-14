@@ -19,13 +19,13 @@ GEN_COST = 10
 MCP_GENERATABLE = {"report", "quiz", "flashcards", "mind_map", "infographic", "slide_deck", "audio_overview", "video"}
 FLASHCARDS_SHOW = ("Make and show flashcards ONLY: never also make, invent or show a quiz or any other study material "
                    "unless they asked for it, and do not draw your own flashcard display. The cards appear to the writer as flip cards in the chat, so do not retype them. Say how many there are, "
-                   "which notebook they were made in, and give them the link from open_in_notestack to study them in Notestack. "
+                   "which notebook they were made in, and give them artifact_preview_url to study them in Notestack. "
                    "If they are still being made, use show_flashcards in a moment.")
 REPORT_SHOW = ("When it is ready the writer reads THIS Notestack report right in the chat (sections, tables, quiz and all), "
-               "so do not retype or rebuild it. Say which notebook it was made from (scope_note), and give the link from "
-               "open_in_notestack. If it is still being written, use view_report in a moment.")
+               "so do not retype or rebuild it. Say which notebook it was made from (scope_note), and give "
+               "artifact_preview_url. If it is still being written, use view_report in a moment.")
 QUIZ_SHOW = ("The writer plays Notestack's quiz in the chat, so do not retype the questions or write a quiz of your own. Say "
-             "how many questions there are, which notebook (scope_note), and give the open_in_notestack link. If it is still "
+             "how many questions there are, which notebook (scope_note), and give artifact_preview_url. If it is still "
              "being made, use show_quiz in a moment.")
 ASK_WHERE = ("Once the import is done, call list_notebooks and ask the writer in words where these posts go, or whether to make a new "
              "notebook for them. Do nothing until they answer.")
@@ -61,7 +61,7 @@ async def _generate(kind: str, where: dict, options: dict, wait_seconds: int, ra
         body["document_ids"] = selected
     art = await loopback.data("POST", "/api/artifacts/generate", access, json=body)
     art = await _wait(access, art, wait_seconds)
-    view = views.artifact_view(art) | ({"scope_note": resolved.note} if resolved.note else {})
+    view = await views.artifact_view_with_preview(art, access) | ({"scope_note": resolved.note} if resolved.note else {})
     return (view, art) if raw else view
 
 
@@ -261,7 +261,7 @@ def register(mcp: FastMCP) -> None:
         "Leave aspect_ratio and video_length alone unless the writer asked: the app makes landscape videos and a video "
         "style sets the length. Uses "
         "their video allowance. It takes minutes: the writer sees it appear and play in the chat when it is ready, so do not "
-        "wait, and do not describe or redraw it. Give them the open_in_notestack link and check with get_video if they ask. "
+        "wait, and do not describe or redraw it. Give them artifact_preview_url and check with get_video if they ask. "
         + GEN))
     @guarded("generate_video", GEN_COST)
     async def generate_video(document_ids: list[str] | None = None, notebook_id: str | None = None, archive: bool = False,
@@ -287,7 +287,7 @@ def register(mcp: FastMCP) -> None:
                 "accent_color": accent_color, "bg_color": bg_color, "text_color": text_color,
                 "custom_voice_id": custom_voice_id, "voice_accent": voice_accent, "focus_prompt": focus, "notebook_id": nid}
         art = await loopback.data("POST", "/api/videos", access, json={k: v for k, v in body.items() if v is not None})
-        view = views.artifact_view(art, content=False) | ({"scope_note": note} if note else {})
+        view = await views.artifact_view_with_preview(art, access, content=False) | ({"scope_note": note} if note else {})
         poll_url, poll_token = _video_poll(access, art["id"])
         view.update({"poll_url": poll_url, "poll_token": poll_token})
         return widgets.with_widget(
@@ -298,7 +298,7 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool(meta=widgets.VIDEO_UI, **_desc(
         "Check a video made with generate_video, and show it: the writer sees it play in the chat once it is rendered, or "
-        "that it is still being made. Give them the open_in_notestack link as well. Never recreate the video.",
+        "that it is still being made. Give them artifact_preview_url as well. Never recreate the video.",
         readOnlyHint=True))
     @guarded("get_video")
     async def get_video(artifact_id: str):
@@ -307,14 +307,19 @@ def register(mcp: FastMCP) -> None:
         # notices a completed render and persists the MP4 URL. The full project
         # endpoint can report `generated` while omitting an already-stored URL.
         info = await loopback.data("GET", f"/api/videos/{aid}/status", access)
-        link = views.web_url({"type": "video", "id": aid})
+        art = await loopback.data("GET", f"/api/artifacts/{aid}", access)
+        artifact_view = await views.artifact_view_with_preview(art, access, content=False)
+        link = artifact_view["open_in_notestack"]
         title = info.get("title") or (info.get("artifact") or {}).get("title")
         # The live preview is useful immediately while the signed poll starts and
         # watches the portable MP4 render used by restrictive chat hosts.
         ready = bool(info.get("video_url"))
         poll_url, poll_token = _video_poll(access, aid)
         view = {"artifact_id": aid, "status": "ready" if ready else "rendering",
-                "ready": ready, "open_in_notestack": link, "poll_url": poll_url, "poll_token": poll_token}
+                "ready": ready, "open_in_notestack": link,
+                "poll_url": poll_url, "poll_token": poll_token}
+        if artifact_view.get("artifact_preview_url"):
+            view["artifact_preview_url"] = artifact_view["artifact_preview_url"]
         return widgets.with_widget(
             view,
             widgets.video_payload(aid, "ready" if ready else "rendering", info.get("video_url"), title, link,
@@ -323,6 +328,15 @@ def register(mcp: FastMCP) -> None:
         )
 
     # Managing results
+
+    @mcp.tool(meta=widgets.app_only(), **_desc(
+        "Save the writer's thumbs-up or thumbs-down feedback on a finished generated artifact. This is an app-only action: "
+        "use it only when the writer presses a feedback button in the Notestack result, never choose a rating for them."))
+    @guarded("rate_artifact")
+    async def rate_artifact(artifact_id: str, rating: Literal["up", "down"]) -> dict:
+        result = await loopback.data("PUT", f"/api/artifacts/{uid(artifact_id)}/feedback", token(),
+                                     json={"rating": rating})
+        return {"artifact_id": uid(artifact_id), "feedback": result.get("feedback")}
 
     @mcp.tool(**_desc(
         "Run a supported Studio generation again after it failed. Supported types are reports, quizzes, flashcards, "
@@ -337,7 +351,7 @@ def register(mcp: FastMCP) -> None:
         return views.artifact_view(await loopback.data("POST", f"/api/artifacts/{aid}/retry", access), content=False)
 
     @mcp.tool(**_desc(
-        "Make a finished report or infographic public: anyone with the link can read it, with no sign-in. This puts the "
+        "Make a generated item public: anyone with the link can preview it, with no sign-in. This puts the "
         "writer's work on the internet. Only do it when the writer explicitly asked to share this specific item, and tell "
         "them the link is public. It fails if the writer has turned public links off in Settings.",
         openWorldHint=True))

@@ -84,7 +84,10 @@ export function PublicFooter() {
           </div>
           <div>
             <p className="eyebrow">Company</p>
-            <a href="mailto:hello@notestack.ai">Contact</a>
+            <Link to="/support">Support</Link>
+            <Link to="/privacy">Privacy</Link>
+            <Link to="/terms">Terms</Link>
+            <a href="mailto:arslan@firebird-technologies.com">Contact</a>
           </div>
         </div>
       </div>

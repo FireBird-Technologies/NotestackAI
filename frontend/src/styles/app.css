@@ -842,32 +842,58 @@ button.side-link {
   cursor: pointer;
 }
 
-.connector-side-logos {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+.connector-side-rotator {
+  display: block;
+  width: 23px;
+  height: 23px;
   margin-left: auto;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(180deg, transparent, #000 15%, #000 85%, transparent);
+  mask-image: linear-gradient(180deg, transparent, #000 15%, #000 85%, transparent);
 }
 
-.connector-side-logos > span {
+.connector-side-track {
+  display: flex;
+  flex-direction: column;
+  animation: connector-side-cycle 6s ease-in-out infinite;
+}
+
+.connector-side-app {
   display: grid;
   place-items: center;
+  flex: none;
   width: 23px;
   height: 23px;
   border-radius: 7px;
   background: var(--white);
 }
 
-.connector-side-logos img {
+.connector-side-app img {
   display: block;
   width: 14px;
   height: 14px;
   object-fit: contain;
 }
 
-.connector-side-logos img.openai {
+.connector-side-app img.openai {
   width: 21px;
   height: 21px;
+}
+
+@keyframes connector-side-cycle {
+  0%, 40% { transform: translateY(0); }
+  50%, 90% { transform: translateY(-23px); }
+  100% { transform: translateY(-46px); }
+}
+
+.connector-side-link:hover .connector-side-track {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .connector-side-track {
+    animation: none;
+  }
 }
 
 .side-link:hover {

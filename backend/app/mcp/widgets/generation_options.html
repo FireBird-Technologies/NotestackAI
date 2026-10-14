@@ -75,14 +75,31 @@
   #told a { color: #7fb2ff; margin-left: auto; text-decoration: none; font-weight: 600; } #told a:hover { text-decoration: underline; }
   .spin { flex: none; width: 15px; height: 15px; border-radius: 50%; border: 2px solid var(--line-strong); border-top-color: var(--blue); animation: sp .8s linear infinite; } @keyframes sp { to { transform: rotate(360deg); } }
   #msg { padding: 36px 16px; text-align: center; color: var(--text-2); font-size: .95rem; }
-  #player { margin-top: 14px; display: none; } #player iframe { width: 100%; border: 0; border-radius: 14px; background: transparent; min-height: 380px; }
+  #player { margin-top: 14px; display: none; } #player iframe { display: block; width: 100%; height: 380px; border: 0; border-radius: 14px; background: transparent; }
   #pending, #media { display: none; }
   #pending { min-height: 260px; align-items: center; justify-content: center; flex-direction: column; gap: 14px; color: var(--text-2); text-align: center; }
   #pending .spin { width: 24px; height: 24px; }
   #pending.err { color: #ffb4b4; }
   #media { text-align: center; }
   #media img { display: block; max-width: 100%; max-height: 720px; margin: 0 auto; border-radius: 14px; object-fit: contain; }
-  #media audio { display: block; width: min(720px, 100%); margin: 28px auto; }
+  #media .audio-card { width: min(720px, 100%); margin: 0 auto; padding: 18px; border: 1px solid var(--line-strong); border-radius: 18px; background: linear-gradient(145deg, rgba(33,124,255,.14), rgba(255,255,255,.035)); text-align: left; }
+  #media .audio-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  #media .audio-mark { flex: none; width: 42px; height: 42px; display: grid; place-items: center; border-radius: 50%; background: var(--blue); box-shadow: 0 0 20px var(--blue-35); font-size: 1.05rem; }
+  #media .audio-copy { min-width: 0; } #media .audio-copy b { display: block; font-size: .95rem; } #media .audio-copy span { display: block; margin-top: 2px; color: var(--text-3); font-size: .78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #media .audio-controls { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: center; gap: 12px; }
+  #media .audio-toggle { width: 42px; height: 42px; padding: 0; border: 0; border-radius: 50%; background: #fff; color: #050505; font-size: 1rem; cursor: pointer; }
+  #media .audio-range { width: 100%; accent-color: var(--blue); cursor: pointer; }
+  #media .audio-time { min-width: 82px; color: var(--text-2); font-variant-numeric: tabular-nums; font-size: .78rem; text-align: right; }
+  .result-link { display: grid; gap: 5px; width: min(720px, 100%); margin: 14px auto 0; padding: 11px 14px; border: 1px solid var(--blue-35); border-radius: 12px; background: rgba(33,124,255,.08); text-align: left; }
+  .result-link span { color: var(--text-3); font-size: .72rem; text-transform: uppercase; letter-spacing: .07em; }
+  .result-link a { color: #8fbbff; font-size: .84rem; line-height: 1.4; overflow-wrap: anywhere; text-decoration: none; }
+  .result-link a:hover { text-decoration: underline; }
+  #feedback { display: none; align-items: center; justify-content: flex-end; gap: 8px; padding-top: 14px; color: var(--text-3); font-size: .8rem; }
+  #feedback.on { display: flex; }
+  #feedback button { width: 36px; height: 36px; padding: 0; border-radius: 50%; border: 1px solid var(--line-strong); background: var(--surface); color: var(--text-2); cursor: pointer; font-size: 1rem; }
+  #feedback button:hover { border-color: var(--blue-60); color: #fff; } #feedback button.on { border-color: var(--blue); background: var(--blue-20); color: #fff; box-shadow: var(--glow-sm); }
+  #feedback button:disabled { cursor: wait; opacity: .6; }
+  #feedback-status { min-width: 48px; }
   #media .preview-card { padding: 22px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); text-align: left; }
   #media .preview-card b { display: block; margin-bottom: 7px; }
   #media .preview-url { display: block; width: 100%; padding: 11px 14px; border: 1px solid var(--blue-35); border-radius: 10px; background: rgba(33,124,255,.08); color: #8fbbff; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
@@ -152,6 +169,8 @@
 </div>
 <div id="out">
   <div id="pending"></div><div id="cards"></div><div id="quizv"></div><div id="player"></div><div id="media"></div>
+  <div id="artifact-link"></div>
+  <div id="feedback"><span>Was this useful?</span><button id="thumb-up" type="button" aria-label="Thumbs up" title="Thumbs up">&#128077;</button><button id="thumb-down" type="button" aria-label="Thumbs down" title="Thumbs down">&#128078;</button><span id="feedback-status" aria-live="polite"></span></div>
   <div id="doc"><div id="dochead"><b id="doctitle"></b></div><div id="docbody" class="doc"></div></div>
 </div>
 <script>
@@ -202,10 +221,14 @@
     return saved && (saved.privateContent || saved);
   }
   function remember(id, state, v) {
+    var open = (v && (v.open_in_notestack || v.open_url)) || resUrl || null;
+    var preview = v && v.preview_url || null;
     var saved = { version: 1, make: data.make, artifact_id: id, status: state,
-                  open_url: (v && (v.open_in_notestack || v.open_url)) || resUrl || null };
+                  open_url: open, preview_url: preview };
     if (window.openai && window.openai.setWidgetState) {
-      window.openai.setWidgetState({ modelContent: "Notestack " + data.make + " artifact is " + state + ".",
+      window.openai.setWidgetState({ modelContent: "Notestack " + data.make + " artifact is " + state + "." +
+                                      (open ? " Artifact preview URL: " + open + "." : "") +
+                                      (preview ? " Preview: " + preview + "." : ""),
                                      privateContent: saved, imageIds: [] });
     }
     if (data.state_url && data.state_token) {
@@ -470,7 +493,7 @@
   }
   function clearResult() {
     ["pending", "player", "cards", "quizv", "media"].forEach(function (i) { $(i).style.display = "none"; $(i).textContent = ""; });
-    $("doc").style.display = "none"; $("docbody").textContent = ""; $("out").classList.remove("on"); document.body.classList.remove("single-result"); frame = null;
+    $("doc").style.display = "none"; $("docbody").textContent = ""; $("artifact-link").textContent = ""; $("feedback").classList.remove("on"); $("feedback-status").textContent = ""; $("out").classList.remove("on"); document.body.classList.remove("single-result"); frame = null;
   }
   function finishSurface() { document.body.classList.add("single-result"); reportSize(); }
   function showOut(id) { $(id).style.display = "block"; $("out").classList.add("on"); }
@@ -561,13 +584,59 @@
     draw();
   }
 
+  function appendNotestackLink(box, v) {
+    var url = (v && (v.artifact_preview_url || v.open_in_notestack || v.open_url)) || resUrl;
+    if (!url) return false;
+    var row = el("div", "result-link"), label = el("span", "", "Shareable preview URL"), link = el("a", "", url);
+    link.href = url; link.target = "_blank"; link.rel = "noopener";
+    link.addEventListener("click", function (e) {
+      e.preventDefault(); request("ui/open-link", { url: url }).catch(function () { window.open(url, "_blank"); });
+    });
+    row.appendChild(label); row.appendChild(link); box.appendChild(row); return true;
+  }
+  function showArtifactLink(v) { var box = $("artifact-link"); box.textContent = ""; return appendNotestackLink(box, v); }
+  function showFeedback(v) {
+    var id = v && (v.id || v.artifact_id); if (!id) return;
+    var picked = v.feedback && v.feedback.rating;
+    var up = $("thumb-up"), down = $("thumb-down"), status = $("feedback-status");
+    $("feedback").classList.add("on"); up.classList.toggle("on", picked === "up"); down.classList.toggle("on", picked === "down");
+    function rate(value) {
+      up.disabled = down.disabled = true; status.textContent = "Saving...";
+      call("rate_artifact", { artifact_id: id, rating: value }).then(function () {
+        picked = value; up.classList.toggle("on", value === "up"); down.classList.toggle("on", value === "down"); status.textContent = "Saved";
+      }, function () { status.textContent = "Could not save"; }).then(function () { up.disabled = down.disabled = false; reportSize(); });
+    }
+    up.onclick = function () { rate("up"); }; down.onclick = function () { rate("down"); };
+  }
+  function clock(seconds) {
+    if (!isFinite(seconds) || seconds < 0) return "0:00";
+    var whole = Math.floor(seconds), minutes = Math.floor(whole / 60), rest = String(whole % 60);
+    return minutes + ":" + (rest.length < 2 ? "0" : "") + rest;
+  }
+  function showAudio(box, v) {
+    var src = v.url || v.download_url, card = el("div", "audio-card"), head = el("div", "audio-head");
+    head.appendChild(el("div", "audio-mark", "\u266b"));
+    var copy = el("div", "audio-copy"); copy.appendChild(el("b", "", v.title || "Audio overview")); copy.appendChild(el("span", "", "Made from your Notestack sources"));
+    head.appendChild(copy); card.appendChild(head);
+    var audio = document.createElement("audio"); audio.preload = "metadata"; audio.src = src; audio.hidden = true; card.appendChild(audio);
+    var controls = el("div", "audio-controls"), toggle = el("button", "audio-toggle", "\u25b6"), range = document.createElement("input"), time = el("span", "audio-time", "0:00 / 0:00");
+    toggle.type = "button"; toggle.setAttribute("aria-label", "Play audio"); range.type = "range"; range.className = "audio-range"; range.min = "0"; range.max = "1000"; range.value = "0"; range.setAttribute("aria-label", "Audio position");
+    toggle.addEventListener("click", function () { if (audio.paused) audio.play().catch(function () {}); else audio.pause(); });
+    audio.addEventListener("play", function () { toggle.textContent = "\u275a\u275a"; toggle.setAttribute("aria-label", "Pause audio"); });
+    audio.addEventListener("pause", function () { toggle.textContent = "\u25b6"; toggle.setAttribute("aria-label", "Play audio"); });
+    audio.addEventListener("ended", function () { toggle.textContent = "\u25b6"; range.value = "0"; });
+    function updateAudio() { range.value = audio.duration ? String(Math.round(audio.currentTime / audio.duration * 1000)) : "0"; time.textContent = clock(audio.currentTime) + " / " + clock(audio.duration); }
+    audio.addEventListener("loadedmetadata", updateAudio); audio.addEventListener("durationchange", updateAudio); audio.addEventListener("timeupdate", updateAudio);
+    range.addEventListener("input", function () { if (audio.duration) audio.currentTime = Number(range.value) / 1000 * audio.duration; });
+    controls.appendChild(toggle); controls.appendChild(range); controls.appendChild(time); card.appendChild(controls); box.appendChild(card);
+  }
   function showMedia(v) {
     var box = $("media"); box.textContent = ""; finishSurface(); showOut("media");
     if (data.make === "infographic" && v.url) {
       var image = document.createElement("img"); image.src = v.url; image.alt = v.title || "Notestack infographic"; box.appendChild(image); reportSize(); return;
     }
     if (data.make === "audio_overview" && (v.url || v.download_url)) {
-      var audio = document.createElement("audio"); audio.controls = true; audio.preload = "metadata"; audio.src = v.url || v.download_url; box.appendChild(audio); reportSize(); return;
+      showAudio(box, v); reportSize(); return;
     }
     if (data.make === "slide_deck" && v.slide_urls && v.slide_urls.length) {
       var slides = v.slide_urls.slice(), i = 0;
@@ -580,7 +649,9 @@
       }
       drawSlide(); return;
     }
-    box.appendChild(el("p", "sub", "The finished output is available through the Notestack link above.")); reportSize();
+    var linked = !!((v && (v.artifact_preview_url || v.open_in_notestack || v.open_url)) || resUrl);
+    box.insertBefore(el("p", "sub", linked ? "The finished output is available in Notestack." : "The finished output is saved in Notestack, but no open link was returned."), box.firstChild);
+    reportSize();
   }
   function showVideoPreview(v) {
     if (!v.preview_url) return;
@@ -682,12 +753,17 @@
       if (v.status === "ready") {
         remember(id, "ready", v);
         clearResult(); result(nice().charAt(0).toUpperCase() + nice().slice(1) + " made", v.open_in_notestack || v.open_url);
+        showArtifactLink(v);
+        showFeedback(v);
+        var context = "The writer's " + data.make + " was made in Notestack and is ready.";
+        if (v.artifact_preview_url || v.open_in_notestack || v.open_url) context += " Artifact preview URL: " + (v.artifact_preview_url || v.open_in_notestack || v.open_url);
+        if (v.preview_url) context += " Preview: " + v.preview_url;
+        request("ui/update-model-context", { content: [{ type: "text", text: context }] }).catch(function () {});
         if (data.make === "report") play(id);
         else if (data.make === "flashcards") view("show_flashcards", id, showCards);
         else if (data.make === "quiz") view("show_quiz", id, showQuiz);
         else if (!play(id, data.make === "video" ? v : null)) {
           showMedia(v);
-          request("ui/update-model-context", { content: [{ type: "text", text: "The writer's " + data.make + " was made in Notestack and is ready: " + (v.open_in_notestack || "") }] }).catch(function () {});
         }
       } else if (v.error) {
         remember(id, "failed", v);

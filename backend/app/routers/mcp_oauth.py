@@ -112,9 +112,19 @@ def list_grants(user: User = Depends(get_current_user), db: Session = Depends(ge
         select(McpGrant, McpClient).join(McpClient, McpClient.client_id == McpGrant.client_id)
         .where(McpGrant.user_id == user.id, McpGrant.revoked_at.is_(None)).order_by(McpGrant.created_at.desc())
     ).all()
-    return [{"id": str(g.id), "client_name": (c.info.get("client_name") or "An app")[:80], "scopes": g.scopes,
-             "created_at": g.created_at.isoformat(), "last_used_at": g.last_used_at.isoformat() if g.last_used_at else None}
-            for g, c in rows]
+    # Old data may contain duplicate grants from reconnecting an app. Rows are newest first, so expose only the latest
+    # connection for each logical app.
+    seen: set[tuple[str, tuple[str, ...]]] = set()
+    out = []
+    for grant, client in rows:
+        key = provider.client_key(client.info)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({"id": str(grant.id), "client_name": (client.info.get("client_name") or "An app")[:80],
+                    "scopes": grant.scopes, "created_at": grant.created_at.isoformat(),
+                    "last_used_at": grant.last_used_at.isoformat() if grant.last_used_at else None})
+    return out
 
 
 @router.delete("/grants/{grant_id}")
@@ -122,7 +132,15 @@ def revoke_grant(grant_id: uuid.UUID, user: User = Depends(get_current_user), db
     grant = db.scalar(select(McpGrant).where(McpGrant.id == grant_id, McpGrant.user_id == user.id))
     if not grant:
         raise HTTPException(404, "Connected app not found")
-    if not grant.revoked_at:
-        grant.revoked_at = datetime.now(UTC)
-        db.commit()
+    client = db.get(McpClient, grant.client_id)
+    key = provider.client_key(client.info) if client else None
+    now = datetime.now(UTC)
+    rows = db.execute(
+        select(McpGrant, McpClient).join(McpClient, McpClient.client_id == McpGrant.client_id)
+        .where(McpGrant.user_id == user.id, McpGrant.revoked_at.is_(None))
+    ).all()
+    for connected, connected_client in rows:
+        if connected.id == grant.id or (key is not None and provider.client_key(connected_client.info) == key):
+            connected.revoked_at = now
+    db.commit()
     return {"ok": True}

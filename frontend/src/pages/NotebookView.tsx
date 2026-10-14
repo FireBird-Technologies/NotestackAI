@@ -179,25 +179,6 @@ function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, quizOpe
     <div className="stack">
       <span className="vw-label">Create</span>
       <div className="nbv-make">
-        <button
-          type="button"
-          className="nbv-make-connector"
-          aria-haspopup="dialog"
-          aria-expanded={connectorOpen}
-          onClick={() => setConnectorOpen(true)}
-        >
-          <span className="nbv-make-connector-copy">
-            <ConnectorIcon size={20} />
-            <span className="nbv-stars-text">
-              <strong>Connector</strong>
-              <small>Connect to Claude or ChatGPT</small>
-            </span>
-          </span>
-          <span className="nbv-connector-logos" aria-hidden="true">
-            <span><img src="/anthropic.svg" alt="" /></span>
-            <span><img className="openai" src="/openai.png" alt="" /></span>
-          </span>
-        </button>
         <button className="nbv-make-stars" disabled={off} onClick={() => setMapDialog(true)}>
           <span className="nbv-stars-text">
             <strong>Mind Constellation</strong>
@@ -236,6 +217,34 @@ function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, quizOpe
         {/* Launch: the composer, to post something from the Library (or just words) to LinkedIn */}
         <button onClick={() => setLaunching(true)}>
           <RocketIcon size={18} /> <span className="nbv-make-text">Launch</span>
+        </button>
+        <button
+          type="button"
+          className="nbv-make-connector"
+          aria-haspopup="dialog"
+          aria-expanded={connectorOpen}
+          onClick={() => setConnectorOpen(true)}
+        >
+          <span className="nbv-make-connector-copy">
+            <ConnectorIcon size={20} />
+            <strong>Connect your app</strong>
+          </span>
+          <span className="nbv-connector-rotator" aria-hidden="true">
+            <span className="nbv-connector-app-track">
+              <span className="nbv-connector-app">
+                <span className="nbv-connector-logo"><img className="openai" src="/openai.png" alt="" /></span>
+                ChatGPT
+              </span>
+              <span className="nbv-connector-app">
+                <span className="nbv-connector-logo"><img src="/anthropic.svg" alt="" /></span>
+                Claude
+              </span>
+              <span className="nbv-connector-app">
+                <span className="nbv-connector-logo"><img className="openai" src="/openai.png" alt="" /></span>
+                ChatGPT
+              </span>
+            </span>
+          </span>
         </button>
       </div>
       {launching && <ScheduleModal platform="linkedin" posts={[]} onClose={() => setLaunching(false)} />}

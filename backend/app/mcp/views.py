@@ -2,6 +2,8 @@
 
 import json
 
+from mcp.server.auth.provider import AccessToken
+
 from app.config import settings
 from app.mcp.common import shown
 
@@ -10,10 +12,11 @@ MAX_CONTENT_CHARS = 60_000
 # Made to be looked at or listened to, in Notestack. An assistant shown the raw data redraws it badly, so it gets an
 # outline to talk about and the link to the real thing.
 VISUAL = {"mind_map", "infographic", "slide_deck", "audio_overview", "quote_card", "carousel", "video"}
-SHOW_IT = ("This is a visual or audio made in Notestack, and Notestack's own version is the real one. Give the writer the "
-           "link in open_in_notestack (and the url or download_url when present). Do not redraw or recreate it yourself; "
+SHOW_IT = ("This is a visual or audio made in Notestack, and Notestack's own version is the real one. Always give the writer "
+           "artifact_preview_url, even when it is displayed in the chat (and the url or download_url when present). Do not redraw or recreate it yourself; "
            "you may describe it using the outline.")
 MAX_OUTLINE_LINES = 80
+SHAREABLE = {"report", "infographic", "audio_overview", "video", "slide_deck", "flashcards", "quiz", "mind_map"}
 
 
 def web_url(art: dict) -> str:
@@ -22,11 +25,11 @@ def web_url(art: dict) -> str:
         return f"{base}/app/reports/{art['id']}"
     if art.get("type") == "video":
         return f"{base}/app/videos/{art['id']}"
-    if art.get("type") == "mind_map":
-        return f"{base}/app/artifacts/{art['id']}"  # opens the constellation itself, full screen
-    if art.get("notebook_id"):
-        return f"{base}/app/notebooks/{art['notebook_id']}"
-    return f"{base}/app/archive"
+    if art.get("type") == "launch_kit":
+        return f"{base}/app/launchpad/kits/{art['id']}"
+    # This must identify the generated thing itself. In particular, never send an MCP user to the notebook and make
+    # them hunt for a slide deck, audio overview, quiz, flashcards, infographic or Mind Constellation.
+    return f"{base}/app/artifacts/{art['id']}"
 
 
 def job_view(job: dict | None) -> dict | None:
@@ -52,9 +55,11 @@ def artifact_view(art: dict, *, content: bool = True) -> dict:
     out["title"] = shown(out.get("title"))
     out["job"] = job_view(art.get("job"))
     out["open_in_notestack"] = web_url(art)
+    if art.get("feedback") is not None:
+        out["feedback"] = art["feedback"]
     if art.get("type") == "report" and art.get("status") == "ready":
         out["present_it"] = ("This report was made by Notestack and is saved in the writer's Notestack. Show its title and "
-                             "sections from content, name the notebook it came from, and give them the open_in_notestack link. "
+                             "sections from content, name the notebook it came from, and give them artifact_preview_url. "
                              "Do not write a separate report yourself.")
     if art.get("type") in VISUAL:
         out["show_it"] = SHOW_IT
@@ -72,6 +77,26 @@ def artifact_view(art: dict, *, content: bool = True) -> dict:
     return {k: v for k, v in out.items() if v is not None}
 
 
+async def artifact_view_with_preview(art: dict, access: AccessToken, *, content: bool = True) -> dict:
+    """Return the model view with the frontend's real Share URL, never an authenticated /app route.
+
+    Sharing is idempotent: the API reuses the frontend-created token when one already exists. The public page exists
+    immediately and shows progress until a pending artifact is ready.
+    """
+    view = artifact_view(art, content=content)
+    if art.get("type") not in SHAREABLE:
+        return view
+    from app.mcp import loopback  # late import keeps the small view helpers independent of the transport
+
+    share = await loopback.data("POST", f"/api/artifacts/{art['id']}/share", access)
+    preview = share["url"]
+    view["artifact_preview_url"] = preview
+    # Widgets historically consume open_in_notestack. Point it at the same public preview so no embedded result can
+    # accidentally surface the private /app URL while model-facing code migrates to artifact_preview_url.
+    view["open_in_notestack"] = preview
+    return view
+
+
 def document_row(d: dict) -> dict:
     return {k: d.get(k) for k in ("id", "title", "url", "published_at", "source_title", "words", "locked")}
 
@@ -84,5 +109,5 @@ def flashcards_view(view: dict, payload: dict) -> dict:
     if payload.get("cards"):
         out["shown_in_chat"] = ("The writer is looking at these flashcards as flip cards in the chat. Show nothing else: no "
                                 "list of the cards, no quiz, no other display. Say how many there are, which notebook "
-                                "(scope_note), and give the open_in_notestack link.")
+                                "(scope_note), and give artifact_preview_url.")
     return out

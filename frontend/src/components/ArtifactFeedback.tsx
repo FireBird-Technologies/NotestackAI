@@ -7,7 +7,7 @@ import { Stars } from "./CardFeedback";
 import { errorMessage } from "./ui";
 
 /** What can be rated: finished reports, quizzes, flashcard sets, infographics, slide decks, audio overviews and videos. */
-export const RATEABLE = ["report", "quiz", "flashcards", "infographic", "slide_deck", "audio_overview", "video"];
+export const RATEABLE = ["report", "quiz", "flashcards", "mind_map", "infographic", "slide_deck", "audio_overview", "video"];
 
 /** Why a thumbs down, per kind (the ids the server keeps; see services/artifact_feedback.py). */
 export const REASONS: Record<string, { id: string; label: string }[]> = {
@@ -33,6 +33,13 @@ export const REASONS: Record<string, { id: string; label: string }[]> = {
     { id: "too_basic", label: "Too basic" },
     { id: "too_detailed", label: "Too detailed" },
     { id: "unclear", label: "Unclear wording" },
+    { id: "other", label: "Something else" },
+  ],
+  mind_map: [
+    { id: "inaccurate", label: "Inaccurate" },
+    { id: "missing_content", label: "Missing key ideas" },
+    { id: "hard_to_read", label: "Hard to read" },
+    { id: "structure", label: "Poorly structured" },
     { id: "other", label: "Something else" },
   ],
   infographic: [
