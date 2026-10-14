@@ -657,11 +657,11 @@ async def test_connect_then_use_the_tools_over_http(http, client, auth, run_jobs
 
     init = await rpc("initialize", {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "t", "version": "1"}})
     assert init["serverInfo"]["name"] == "Notestack" and "find_content" in init["instructions"]
-    assert "IDs out of user-facing replies" in init["instructions"] and "refer to items by title" in init["instructions"]
+    assert "omit internal identifiers" in init["instructions"] and "refer to items by title" in init["instructions"]
     # Claude cannot read posts itself, so questions about the writer's words go through ask_notebook
-    assert "ask_notebook" in init["instructions"] and "remain grounded" in init["instructions"]
-    assert "add_source" in init["instructions"]
-    assert "appropriate Notestack widget" in init["instructions"]
+    assert "ask_notebook" in init["instructions"] and "returns citations" in init["instructions"]
+    assert "choose_options" in init["instructions"]
+    assert "in-chat view" in init["instructions"]
     assert "artifact_preview_url" in init["instructions"]
     listed = {x["name"] for x in (await rpc("tools/list", id_=2))["tools"]}
     assert {"find_content", "ask_notebook", "generate_report", "share_artifact"} <= listed
