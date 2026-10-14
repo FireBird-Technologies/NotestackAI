@@ -60,12 +60,19 @@ async def test_every_tool_is_there_and_explains_itself(mcp):  # noqa: F811
     assert set(listed) == EXPECTED
     for name, t in listed.items():
         assert len(t.description) > 30 and t.annotations is not None, name
+        assert isinstance(t.annotations.readOnlyHint, bool), name
+        assert isinstance(t.annotations.destructiveHint, bool), name
+        assert isinstance(t.annotations.openWorldHint, bool), name
     generators = [n for n in listed if n.startswith("generate_")]
     assert len(generators) == 8
     for n in generators:
         assert "plan_limit" in listed[n].description and "Only generate when the writer asked" in listed[n].description, n
         assert listed[n].annotations.readOnlyHint is False and listed[n].annotations.destructiveHint is False, n
     assert "public" in listed["share_artifact"].description and listed["share_artifact"].annotations.openWorldHint is True
+    for n in ("add_source", "import_url", "sync_source", "get_video"):
+        assert listed[n].annotations.openWorldHint is True, n
+    for n in ("unshare_artifact", "remove_report_block"):
+        assert listed[n].annotations.destructiveHint is True, n
     for n in ("find_content", "list_notebooks", "list_artifacts", "get_usage"):
         assert listed[n].annotations.readOnlyHint is True, n
     for n in ("get_artifact", "get_topic", "get_notebook", "ask_notebook"):
@@ -107,6 +114,7 @@ async def test_the_browsing_tools_describe_the_workspace(client, auth, run_jobs,
     nb = client.post("/api/notebooks", json={"title": "Habits", "document_ids": [posts[0]["id"]]}, headers=auth).json()
     notebooks = (await call(mcp, "list_notebooks"))["notebooks"]
     assert [n["title"] for n in notebooks] == ["Habits"] and notebooks[0]["document_count"] == 1
+    assert "id" not in notebooks[0]
     opened = await call(mcp, "get_notebook", notebook_id=nb["id"])
     assert opened["title"] == "Habits" and [p["id"] for p in opened["posts"]] == [posts[0]["id"]]
     sources = (await call(mcp, "list_sources"))["sources"]
@@ -325,8 +333,8 @@ async def test_with_nothing_named_the_writer_is_asked_to_choose(client, auth, ru
         args = {"question": "hi"} if name == "ask_notebook" else {}
         out = await call(mcp, name, **args)
         assert out["error"] == "choose_scope" and ("choose_options" in out["message"] or "choose_notebook" in out["message"]), name
-        assert any(n["notebook_id"] == made["id"] for n in out["notebooks"])
-    named = await call(mcp, "generate_quiz", notebook_id=made["id"])
+        assert any(n["title"] == "Claude Research" and "notebook_id" not in n for n in out["notebooks"])
+    named = await call(mcp, "generate_quiz", notebook_title="Claude Research")
     assert named["notebook_id"] == made["id"] and "'Claude Research'" in named["scope_note"]  # a named one is used, and said
 
 
@@ -705,21 +713,21 @@ def test_a_map_still_being_made_tells_the_widget_so():
 @pytest.mark.anyio
 async def test_the_map_tools_link_to_the_widget_and_it_is_served(mcp):  # noqa: F811
     listed = {t.name: t for t in await mcp.list_tools()}
-    assert listed["generate_mind_map"].meta == {"ui": {"resourceUri": WIDGET, "visibility": ["app"]}}
+    assert listed["generate_mind_map"].meta == {"ui": {"resourceUri": WIDGET}}
     assert listed["show_mind_map"].meta == {"ui": {"resourceUri": WIDGET}}
     cards = {"ui": {"resourceUri": widgets.FLASHCARDS_URI}}
-    assert listed["generate_flashcards"].meta == widgets.app_only(cards) and listed["show_flashcards"].meta == cards
+    assert listed["generate_flashcards"].meta == cards and listed["show_flashcards"].meta == cards
     quiz = {"ui": {"resourceUri": widgets.QUIZ_URI}}
-    assert listed["generate_quiz"].meta == widgets.app_only(quiz) and listed["show_quiz"].meta == quiz
+    assert listed["generate_quiz"].meta == quiz and listed["show_quiz"].meta == quiz
     infographic = {"ui": {"resourceUri": widgets.INFOGRAPHIC_URI}}
-    assert listed["generate_infographic"].meta == widgets.app_only(infographic) and listed["show_infographic"].meta == infographic
+    assert listed["generate_infographic"].meta == infographic and listed["show_infographic"].meta == infographic
     viewers = {"generate_mind_map", "show_mind_map", "generate_flashcards", "show_flashcards", "generate_quiz", "show_quiz",
                "generate_infographic", "show_infographic", "choose_notebook", "choose_options", "choose_video_options",
                "generate_slide_deck", "generate_audio_overview", "generate_video", "get_video", "view_report", "generate_report",
                "rate_artifact"}
     assert listed["rate_artifact"].meta == widgets.app_only()
     assert all(t.meta is None for n, t in listed.items() if n not in viewers)
-    assert all(listed[name].meta["ui"]["visibility"] == ["app"] for name in listed if name.startswith("generate_"))
+    assert all("visibility" not in (listed[name].meta or {}).get("ui", {}) for name in listed if name.startswith("generate_"))
     resources = await mcp.list_resources()
     served = {widgets.MIND_MAP_URI, widgets.FLASHCARDS_URI, widgets.QUIZ_URI, widgets.INFOGRAPHIC_URI, widgets.PICKER_URI, widgets.REPORT_URI,
               widgets.VIDEO_URI, widgets.VIDEO_OPTIONS_URI, widgets.OPTIONS_URI}
@@ -1018,7 +1026,7 @@ async def test_generation_form_restores_the_artifact_it_created(client, auth, as
 @pytest.mark.anyio
 async def test_video_tools_open_the_players_and_the_options_form(mcp):  # noqa: F811
     listed = {t.name: t for t in await mcp.list_tools()}
-    assert listed["generate_video"].meta == widgets.app_only({"ui": {"resourceUri": widgets.VIDEO_URI}})
+    assert listed["generate_video"].meta == {"ui": {"resourceUri": widgets.VIDEO_URI}}
     assert listed["get_video"].meta == {"ui": {"resourceUri": widgets.VIDEO_URI}}
     assert listed["choose_video_options"].meta == {"ui": {"resourceUri": widgets.VIDEO_OPTIONS_URI}}
     assert listed["choose_notebook"].meta == {"ui": {"resourceUri": widgets.PICKER_URI}}
@@ -1040,6 +1048,16 @@ def test_the_new_pages_are_self_contained():
         assert "innerHTML" not in page and "eval(" not in page and "e.source !== window.parent" in page, name
         if name == "video_player":
             assert "<iframe" not in page and 'id="preview" type="button"' in page
+
+
+def test_generation_form_keeps_the_existing_artifact_until_a_replacement_is_ready():
+    from pathlib import Path
+
+    page = (Path(__file__).parent.parent / "app" / "mcp" / "widgets" / "generation_options.html").read_text()
+    click = page[page.index('$("go").addEventListener'):]
+    before_start = click[:click.index("function start()")]
+    assert "clearResult()" not in before_start
+    assert 'if (v.status === "ready")' in page and "clearResult(); result(" in page
 
 
 @pytest.mark.anyio
