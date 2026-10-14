@@ -4,8 +4,9 @@ import time
 import uuid
 from contextlib import AsyncExitStack, asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
 
 from app.config import settings
 from app.llm.provider import configure_default
@@ -97,6 +98,14 @@ async def request_id(request: Request, call_next):
 @app.get("/api/health")
 def health():
     return {"ok": True, "llm": settings.llm_model, "billing_enabled": settings.billing_enabled}
+
+
+@app.get("/.well-known/openai-apps-challenge", response_class=PlainTextResponse)
+def openai_apps_challenge():
+    """Domain verification for OpenAI apps: the token from the developer portal, as plain text."""
+    if not settings.openai_apps_challenge:
+        raise HTTPException(404)
+    return settings.openai_apps_challenge.strip()
 
 
 # video_templates (custom templates) is switched off: users pick only from the built-in templates.
