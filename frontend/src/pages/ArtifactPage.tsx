@@ -2,13 +2,15 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { artifactsApi } from "../api/endpoints";
 import type { Artifact } from "../api/types";
+import { ArtifactCard } from "../components/ArtifactCard";
+import { AudioOverviewCard } from "../components/AudioOverview";
 import { MindMapExplorer } from "../components/MindMap";
+import { SlideDeckViewer } from "../components/SlideDeck";
 import { JobProgress, Loading } from "../components/ui";
 import { useJob } from "../hooks/useJob";
 
-/** One finished artifact, opened straight away: /app/artifacts/:id. A Mind Constellation opens in the full screen
- *  explorer; a report goes to its page; the rest open in their notebook. This is where an app that made something
- *  for the writer (Claude, over MCP) sends them to see it. */
+/** One generated artifact, opened straight away from its stable preview URL. Reports and editable videos have their own
+ * full pages; a constellation and slide deck open their viewers; every other kind renders its own preview card here. */
 export default function ArtifactPage() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
@@ -24,8 +26,8 @@ export default function ArtifactPage() {
   if (!artifact) return <Loading label="Opening" />;
   const back = artifact.notebook_id ? `/app/notebooks/${artifact.notebook_id}` : "/app/archive";
   if (artifact.type === "report") return <Navigate to={`/app/reports/${artifact.id}`} replace />;
-  if (artifact.type !== "mind_map") return <Navigate to={back} replace />;
-  if (artifact.status === "failed") return <p className="error-text">This Mind Constellation could not be made. <Link to={back}>Back to the notebook</Link></p>;
+  if (artifact.type === "video") return <Navigate to={`/app/videos/${artifact.id}`} replace />;
+  if (artifact.status === "failed") return <div className="page-wrap stack"><Link to={back} className="vw-back">Back</Link><ArtifactCard artifact={artifact} /></div>;
   if (artifact.status !== "ready") {
     return (
       <div className="stack">
@@ -34,5 +36,25 @@ export default function ArtifactPage() {
       </div>
     );
   }
-  return <MindMapExplorer artifact={artifact} onClose={() => navigate(back)} />;
+  if (artifact.type === "mind_map") return <MindMapExplorer artifact={artifact} onClose={() => navigate(back)} />;
+  if (artifact.type === "slide_deck") {
+    return <SlideDeckViewer artifact={artifact} onClose={() => navigate(back)} onSaved={setArtifact} onDelete={async () => {
+      await artifactsApi.remove(artifact.id);
+      navigate(back);
+    }} />;
+  }
+  if (artifact.type === "audio_overview") {
+    return (
+      <div className="page-wrap stack">
+        <Link to={back} className="vw-back">Back</Link>
+        <AudioOverviewCard artifact={artifact} onRemoved={() => navigate(back)} />
+      </div>
+    );
+  }
+  return (
+    <div className="page-wrap stack">
+      <Link to={back} className="vw-back">Back</Link>
+      <ArtifactCard artifact={artifact} />
+    </div>
+  );
 }

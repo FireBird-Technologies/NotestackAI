@@ -4,6 +4,7 @@ import type { Artifact, ChatSummary, FlashcardData } from "../api/types";
 import { Pills, SourceFocusFields, sourceSummary, type SourceSelection } from "./SourceFocusFields";
 import { ArtifactFeedback } from "./ArtifactFeedback";
 import { StudyOverlay } from "./StudyOverlay";
+import { ViewButton } from "./cardActions";
 import { Modal } from "./ui";
 
 const LEVELS = [
@@ -134,7 +135,7 @@ export function FlashcardsBody({ artifact }: { artifact: Artifact }) {
   return (
     <div className="artifact-body">
       <p className="muted">{c.card_count ?? 0} cards · from {from}</p>
-      <button type="button" className="btn btn-small" onClick={() => setOpen(true)}>Study cards</button>
+      <ViewButton label="Study cards" onClick={() => setOpen(true)} />
       {open && <FlashcardsPlayer artifact={artifact} onClose={() => setOpen(false)} />}
     </div>
   );

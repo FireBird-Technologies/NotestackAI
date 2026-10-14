@@ -25,9 +25,11 @@ import VideoEditor from "./pages/VideoEditor";
 import TopicMap from "./pages/TopicMap";
 import { ToolPage, ToolsHub } from "./pages/Tools";
 import Connect from "./pages/Connect";
+import Connector from "./pages/Connector";
 import Welcome from "./pages/Welcome";
 import { SupportWidget } from "./components/support/SupportWidget";
 import StartRoute from "./pages/StartRoute";
+import { PrivacyPolicy, SupportPage, TermsOfService } from "./pages/Legal";
 
 function PricingPage() {
   return (
@@ -55,6 +57,9 @@ export default function App() {
       <Route path="/tools/:slug" element={<ToolPage />} />
       <Route path="/blogs" element={<Blog />} />
       <Route path="/blogs/:slug" element={<BlogPostPage />} />
+      <Route path="/privacy" element={<PrivacyPolicy />} />
+      <Route path="/terms" element={<TermsOfService />} />
+      <Route path="/support" element={<SupportPage />} />
       <Route path="/r/:token" element={<PublicReport />} />
       <Route path="/auth" element={<AuthPage />} />
       <Route path="/auth/callback" element={<AuthCallback />} />
@@ -83,6 +88,7 @@ export default function App() {
         <Route path="launchpad/kits/:id" element={<LaunchKitPage />} />
         <Route path="archive" element={<Archive />} />
         <Route path="voices" element={<Voices />} />
+        <Route path="connector" element={<Connector />} />
         <Route path="resurface" element={<Resurface />} />
         <Route path="settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/app/notebooks" replace />} />

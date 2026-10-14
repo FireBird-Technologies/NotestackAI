@@ -630,6 +630,18 @@ def test_an_audio_overview_is_listed_to_download_but_never_posted(client, auth, 
     assert r.status_code == 400 and "Audio can't be posted" in r.json()["detail"]
 
 
+def test_a_mind_constellation_is_never_listed_or_posted(client, auth, ws, db_session):
+    """A map is downloaded (image or PDF), not launched: it isn't offered to attach and can't be scheduled."""
+    mind = Artifact(workspace_id=ws.id, type="mind_map", status="ready",
+                    content_json={"title": "Mind Constellation: All posts", "root": {"id": "r", "label": "Pricing"}})
+    db_session.add(mind)
+    db_session.commit()
+    assert str(mind.id) not in {a["id"] for a in client.get("/api/launchpad/postable", headers=auth).json()}
+    acct = account(db_session, ws, "linkedin", scopes=LI_SCOPES)
+    r = schedule(client, auth, "linkedin", acct, artifact_id=str(mind.id))
+    assert r.status_code == 400 and "can't be posted" in r.json()["detail"]
+
+
 def test_a_video_or_image_can_go_out_without_a_caption(client, auth, ws, db_session, monkeypatch):
     """An upload starts with no words (they are the writer's to add): a post that carries media may stay that way.
     Without media, a post still needs words."""

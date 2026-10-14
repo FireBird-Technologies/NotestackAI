@@ -13,6 +13,7 @@ import { usePoll } from "../hooks/usePoll";
 import { finished, jobPercent } from "../components/video/jobState";
 import { useUpgrade } from "../hooks/useUpgrade";
 import { ShareButton } from "../components/ShareDialog";
+import { CardFeedback } from "../components/CardFeedback";
 
 const STEPS = ["Reading the source", "Writing the script", "Building scenes", "Finishing"];
 const REVIEW = new Set(["awaiting_stock_footage_review", "awaiting_script_review"]);
@@ -461,6 +462,7 @@ export default function VideoEditor() {
                 {summary ? ` · ${summary.duration_seconds}s` : ""}
               </span>
               {storedMp4 && project && <ShareButton artifact={{ ...project.artifact, url: storedMp4 }} />}
+              {project && <CardFeedback artifact={project.artifact} />}
               <RenderPanel disabled={locked}
                            format={portrait ? "portrait" : "landscape"}
                            onFormat={setFormatTo}

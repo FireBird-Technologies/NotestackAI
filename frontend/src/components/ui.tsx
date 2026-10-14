@@ -220,6 +220,7 @@ export function ConfirmButton({
   className = "btn btn-small btn-danger",
   label,
   busyLabel = "Working...",
+  nativeTitle = true,
 }: {
   /** What the button says while the confirmed action runs. */
   busyLabel?: string;
@@ -229,6 +230,8 @@ export function ConfirmButton({
   className?: string;
   /** Accessible name and tooltip, for an icon-only button. */
   label?: string;
+  /** False where the page shows its own hover label (a notebook card's icons): no browser tooltip as well. */
+  nativeTitle?: boolean;
 }) {
   const [armed, setArmed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -243,7 +246,7 @@ export function ConfirmButton({
       className={`${className}${armed ? " armed" : ""}`}
       disabled={busy}
       aria-label={label ? (armed ? confirmLabel : label) : undefined}
-      title={label ? (armed ? confirmLabel : label) : undefined}
+      title={label && nativeTitle ? (armed ? confirmLabel : label) : undefined}
       onClick={async () => {
         if (!armed) return setArmed(true);
         setBusy(true);

@@ -8,16 +8,17 @@ LAYOUTS = ("title", "agenda", "section", "points", "two_column", "stat", "quote"
 FORMATS = ("detailed", "presenter")
 LENGTHS = {"short": (6, 8), "default": (9, 11), "long": (12, 16)}  # slides in the deck, opening and closing included
 
-# Characters per field. Detailed slides explain; presenter slides only cue the speaker.
+# Characters per field. Detailed slides explain: a heading, a lead that describes the slide, and a few ideas each
+# explained in full. Presenter slides are scanned at a glance: a short heading and more, shorter bullets.
 LIMITS = {
-    "detailed": {"title": 80, "subtitle": 170, "kicker": 32, "heading": 90, "lead": 240, "term": 44, "text": 220,
-                 "points": (2, 5), "label": 40, "item": 120, "items": 4, "value": 16, "stat_label": 120,
+    "detailed": {"title": 80, "subtitle": 170, "kicker": 32, "heading": 90, "lead": 280, "term": 44, "text": 220,
+                 "points": (2, 4), "label": 40, "item": 120, "items": 4, "value": 16, "stat_label": 120,
                  "quote": 260, "by": 70, "takeaway": 150, "takeaways": 3, "closing": 140, "agenda": 64,
-                 "agenda_items": 14, "notes": 1500},
-    "presenter": {"title": 70, "subtitle": 130, "kicker": 32, "heading": 64, "lead": 130, "term": 36, "text": 80,
-                  "points": (2, 4), "label": 32, "item": 70, "items": 4, "value": 16, "stat_label": 90,
+                 "agenda_items": 14},
+    "presenter": {"title": 60, "subtitle": 110, "kicker": 32, "heading": 48, "lead": 90, "term": 36, "text": 64,
+                  "points": (4, 6), "label": 32, "item": 70, "items": 4, "value": 16, "stat_label": 90,
                   "quote": 200, "by": 70, "takeaway": 90, "takeaways": 3, "closing": 110, "agenda": 56,
-                  "agenda_items": 14, "notes": 1500},
+                  "agenda_items": 14},
 }
 
 _TAGS = re.compile(r"<[^>]*>")
@@ -132,7 +133,7 @@ def empty_slide(layout: str = "points") -> dict:
     return {"layout": layout, "variant": "", "kicker": "", "heading": "", "lead": "", "points": [],
             "left": {"label": "", "items": []}, "right": {"label": "", "items": []},
             "stat": {"value": "", "label": ""}, "quote": {"text": "", "by": ""}, "takeaways": [], "closing": "",
-            "notes": "", "sources": [], "shrink": 0}
+            "sources": [], "shrink": 0}
 
 
 def clamp_slide(raw: object, fmt: str) -> dict | None:
@@ -157,7 +158,6 @@ def clamp_slide(raw: object, fmt: str) -> dict | None:
     s["quote"] = {"text": clip(quote.get("text"), lim["quote"]).strip("\"'“”"), "by": clip(quote.get("by"), lim["by"])}
     s["takeaways"] = [t for t in (clip(t, lim["takeaway"]) for t in _list(r.get("takeaways"))) if t][: lim["takeaways"]]
     s["closing"] = clip(r.get("closing"), lim["closing"])
-    s["notes"] = clip(r.get("notes"), lim["notes"])
     s["sources"] = _sources(r.get("sources"))
     try:
         s["shrink"] = max(0, min(int(r.get("shrink") or 0), 4))

@@ -156,7 +156,7 @@ class MessageFeedback(IdMixin, TimestampMixin, Base):
 
 
 class ArtifactFeedback(IdMixin, TimestampMixin, Base):
-    """A thumbs up or down on one generated report, quiz, flashcard set or infographic, with a snapshot of what it was
+    """A thumbs up or down, with the user's feedback, on one generated artifact (any type), with a snapshot of what it was
     (title, prompt, sources, options) taken when it was rated, so the ratings stay useful after it is deleted (the link
     then becomes null). One row per artifact and person: rating again replaces it."""
 

@@ -29,7 +29,8 @@ GEN = (
     "is a plan_limit error, explain it to the writer and give them the upgrade_url link to upgrade their plan; do not retry. Show only what was asked for."
 )
 VISUAL = (
-    "The result is a visual made in Notestack: give the writer the link from open_in_notestack (and the image or "
+    "The result is a visual made in Notestack: always give the writer artifact_preview_url, even when it is displayed "
+    "inside the chat (and give the image or "
     "download link when there is one). Do not redraw or recreate it yourself."
 )
 SCOPE_HELP = (

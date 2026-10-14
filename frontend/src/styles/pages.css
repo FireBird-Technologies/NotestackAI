@@ -3120,6 +3120,13 @@ select.input,
   box-shadow: none;
 }
 
+.nbv-history-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .nbv-history-back {
   display: flex;
   align-items: center;
@@ -3178,7 +3185,9 @@ select.input,
 
 .nbv-new-chat,
 .nbv-close-history,
-.nbv-show-history {
+.nbv-show-history,
+.nbv-close-tools,
+.nbv-show-tools {
   display: grid;
   flex: 0 0 auto;
   place-items: center;
@@ -3196,19 +3205,42 @@ select.input,
 
 .nbv-new-chat:hover:not(:disabled),
 .nbv-close-history:hover,
-.nbv-show-history:hover {
+.nbv-show-history:hover,
+.nbv-close-tools:hover,
+.nbv-show-tools:hover {
   background: var(--surface-2);
   color: var(--white);
 }
 
 .nbv-new-chat:focus-visible,
 .nbv-close-history:focus-visible,
-.nbv-show-history:focus-visible {
+.nbv-show-history:focus-visible,
+.nbv-close-tools:focus-visible,
+.nbv-show-tools:focus-visible {
   outline-offset: 1px;
 }
 
 .nbv-show-history {
   margin-right: 2px;
+}
+
+/* The right column's head: "Create" and the button that closes the column; reopened from the chat's title bar */
+.nbv-tools-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.nbv-show-tools {
+  margin-left: auto;
+}
+
+/* Tools closed: the chat takes the right column's room (stacked layout: no row left for it) */
+.nbv.nbv-tools-closed {
+  grid-template-areas:
+    "history"
+    "chat";
 }
 
 .nbv-new-chat:disabled,
@@ -3329,17 +3361,17 @@ select.input,
 
   .nbv {
     position: relative; /* the resize handles are placed over the boundaries */
-    grid-template-columns: var(--nbv-left, clamp(16rem, 20vw, 20rem)) minmax(0, 1fr);
+    grid-template-columns: var(--nbv-left, calc(clamp(16rem, 20vw, 20rem) + 1rem)) minmax(0, 1fr);
     grid-template-areas:
       "history chat"
       "history side";
     column-gap: 0;
   }
 
+  /* A gap between the chats panel and the chat, the same as between the chat and the tools (.nbv-side) */
   .nbv-history {
     max-height: calc(100vh - var(--main-pad-top) - var(--main-pad-bottom));
-    border-right: 0;
-    border-radius: var(--radius) 0 0 var(--radius);
+    margin-right: 1rem;
   }
 
   .shell.notebook-focus .nbv-history {
@@ -3353,11 +3385,12 @@ select.input,
   }
 
   .nbv-chat {
-    border-radius: 0 var(--radius) var(--radius) 0;
+    border-radius: var(--radius);
   }
 
+  /* Under the chat, beside the chats panel: the panel's own margin is the gap */
   .nbv-side {
-    margin-left: 1rem;
+    margin-left: 0;
   }
 
   .nbv-history-closed {
@@ -3373,6 +3406,14 @@ select.input,
 
   .nbv-history-closed .nbv-side {
     margin-left: 0;
+  }
+
+  .nbv.nbv-tools-closed {
+    grid-template-areas: "history chat";
+  }
+
+  .nbv.nbv-history-closed.nbv-tools-closed {
+    grid-template-areas: "chat";
   }
 
 }
@@ -3397,7 +3438,7 @@ select.input,
   }
 
   .nbv {
-    grid-template-columns: var(--nbv-left, clamp(16rem, 20vw, 20rem)) minmax(0, 1fr) var(--nbv-right, clamp(18rem, 24vw, 24rem));
+    grid-template-columns: var(--nbv-left, calc(clamp(16rem, 20vw, 20rem) + 1rem)) minmax(0, 1fr) var(--nbv-right, clamp(18rem, 24vw, 24rem));
     grid-template-areas: "history chat side";
   }
 
@@ -3406,8 +3447,20 @@ select.input,
     grid-template-areas: "chat side";
   }
 
+  /* Beside the chat: the gap between them */
+  .nbv .nbv-side,
   .nbv.nbv-history-closed .nbv-side {
     margin-left: 1rem;
+  }
+
+  .nbv.nbv-tools-closed {
+    grid-template-columns: var(--nbv-left, calc(clamp(16rem, 20vw, 20rem) + 1rem)) minmax(0, 1fr);
+    grid-template-areas: "history chat";
+  }
+
+  .nbv.nbv-history-closed.nbv-tools-closed {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "chat";
   }
 }
 
@@ -4575,6 +4628,16 @@ details.map-legend[open] summary {
   min-height: 12rem;
   overflow-y: auto;
   scrollbar-width: thin;
+  /* One column exactly the panel's width: a card never grows past it (a wide player or title shrinks to fit). A few
+     pixels of room each side (taken back by the margin) so a card growing on hover isn't clipped. */
+  grid-template-columns: minmax(0, 1fr);
+  overflow-x: hidden;
+  margin-inline: -8px;
+  padding-inline: 8px;
+  padding-bottom: 8px;
+  /* The top rule drawn inset by that room, so it still lines up with the label above */
+  border-top-color: transparent;
+  background: linear-gradient(var(--line), var(--line)) 8px 0 / calc(100% - 16px) 1px no-repeat;
 }
 
 .nbv-side {
@@ -7359,6 +7422,20 @@ a.rp-src-main:hover .rp-src-out {
   min-width: min(100%, 360px);
 }
 
+/* An audio overview opened from its card: the player, then the whole transcript, scrolling within the modal */
+.ao-preview {
+  display: grid;
+  gap: 14px;
+}
+
+.ao-preview .eyebrow {
+  margin: 4px 0 0;
+}
+
+.ao-preview .transcript {
+  max-height: min(55vh, 520px);
+}
+
 .pub-audio .transcript {
   gap: 20px;
   max-height: none;
@@ -7420,77 +7497,22 @@ a.rp-src-main:hover .rp-src-out {
   font-size: 0.8rem;
 }
 
-/* A notebook's Posts header: Connect source and Add posts side by side, and imports under way below it. When the
-   pane is too narrow for both, they fold into one "+ Add" with a menu. */
-.nbv-posts {
-  container-type: inline-size;
-}
-
-.nbv-posts-actions {
-  display: flex;
-  gap: 6px;
-}
-
-.nbv-add-menu {
-  position: relative;
-  display: none;
-}
-
-@container (max-width: 400px) {
-  .nbv-posts-actions:has(> :nth-child(2)) {
-    display: none;
-  }
-
-  .nbv-add-menu {
-    display: inline-flex;
-  }
-}
-
-.nbv-add-chev {
-  margin-left: 2px;
-  transition: transform 0.15s;
-}
-
-.nbv-add-chev.open {
-  transform: rotate(180deg);
-}
-
-.nbv-add-list {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  z-index: 20;
-  display: grid;
-  min-width: 180px;
-  padding: 6px;
-  border: 1px solid var(--line-strong);
-  border-radius: 12px;
-  background: var(--black);
-  box-shadow: var(--glow-sm);
-}
-
-.nbv-add-list button {
-  padding: 8px 10px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  font-size: 0.875rem;
-  text-align: left;
-  cursor: pointer;
-}
-
-.nbv-add-list button:hover,
-.nbv-add-list button:focus-visible {
-  background: var(--blue-10);
-  outline: none;
-}
-
 .nbv-import {
   display: grid;
-  gap: 4px;
+  gap: 6px;
   margin: 8px 0;
+  padding: 12px 0;
+}
+
+/* An import under way stands out from the posts list: a taller bar and brighter text. */
+.nbv-import .ascent-compact .ascent-track {
+  height: 6px;
+}
+
+.nbv-import .ascent-meta {
+  margin-top: 12px;
+  color: var(--text);
+  font-size: 0.8rem;
 }
 
 .pub-slides-stage {
@@ -7629,6 +7651,7 @@ a.rp-src-main:hover .rp-src-out {
 
 .rp-path {
   position: absolute;
+  z-index: 2;
   left: 11px;
   top: 6px;
   bottom: 0;
@@ -7655,6 +7678,7 @@ a.rp-src-main:hover .rp-src-out {
 
 .rp-slot.rp-stop {
   position: relative;
+  z-index: 1;
   margin-bottom: 24px;
   padding: 0;
   border-top: 0;
@@ -7672,6 +7696,7 @@ a.rp-src-main:hover .rp-src-out {
 
 .rp-node {
   position: absolute;
+  z-index: 1;
   left: -36px;
   top: 2px;
   width: 16px;
@@ -7780,10 +7805,10 @@ a.rp-src-main:hover .rp-src-out {
   grid-column: 1 / -1;
 }
 
-/* The notebook repeats the global connector entry where creation starts. It opens the same setup modal as the sidebar. */
+/* The notebook keeps a connector shortcut below its creation tools and opens setup in-place as a modal. */
 .nbv-make .nbv-make-connector {
   grid-column: 1 / -1;
-  min-height: 72px;
+  min-height: 54px;
   border-color: var(--blue-35);
   background:
     radial-gradient(1px 1px at 58% 24%, #fff 50%, transparent 52%),
@@ -7792,22 +7817,38 @@ a.rp-src-main:hover .rp-src-out {
     linear-gradient(135deg, #05070d, #08101f);
 }
 
-.nbv-make .nbv-make-connector-copy,
-.nbv-make .nbv-make-connector .nbv-stars-text {
+.nbv-make .nbv-make-connector-copy {
   display: flex;
   align-items: center;
   min-width: 0;
 }
 
 .nbv-make .nbv-make-connector-copy {
-  flex: 1 1 auto;
+  position: relative;
+  z-index: 2;
+  flex: none;
   gap: 12px;
-  overflow: hidden;
+  padding-right: 14px;
+  border-right: 1px solid var(--blue-35);
 }
 
 .nbv-make .nbv-make-connector-copy > svg.icon {
   flex: none;
   color: var(--text-2);
+}
+
+.nbv-make .nbv-make-connector-copy strong {
+  font: 600 1rem var(--font-display);
+  white-space: nowrap;
+}
+
+.nbv-connector-rotator {
+  position: relative;
+  height: 32px;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(180deg, transparent, #000 18%, #000 82%, transparent);
+  mask-image: linear-gradient(180deg, transparent, #000 18%, #000 82%, transparent);
 }
 
 .nbv-make .nbv-make-connector .nbv-stars-text {
@@ -7819,55 +7860,87 @@ a.rp-src-main:hover .rp-src-out {
 .nbv-make .nbv-make-connector .nbv-stars-text strong {
   overflow: hidden;
   max-width: 100%;
-  font: 600 1rem var(--font-display);
+  font: 600 0.9rem var(--font-display);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .nbv-make .nbv-make-connector .nbv-stars-text small {
   max-width: 100%;
+  font-size: 0.74rem;
   overflow: hidden;
+  -webkit-mask-image: linear-gradient(180deg, transparent, #000 18%, #000 82%, transparent);
+  mask-image: linear-gradient(180deg, transparent, #000 18%, #000 82%, transparent);
+}
+
+.nbv-connector-app-track,
+.nbv-connector-app {
+  display: flex;
+}
+
+.nbv-connector-app-track {
+  flex-direction: column;
+  animation: connector-app-cycle 6s ease-in-out infinite;
+}
+
+.nbv-connector-app {
+  align-items: center;
+  flex: none;
+  gap: 7px;
+  height: 32px;
   color: var(--text-2);
-  text-overflow: ellipsis;
+  font: 500 0.9rem var(--font-display);
   white-space: nowrap;
 }
 
-.nbv-connector-logos {
-  display: inline-flex;
-  flex: none;
-  gap: 5px;
-}
-
-.nbv-connector-logos > span {
+.nbv-connector-logo {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
+  flex: none;
+  width: 25px;
+  height: 25px;
+  border-radius: 7px;
   background: var(--white);
 }
 
-.nbv-connector-logos img {
-  width: 16px;
-  height: 16px;
+.nbv-connector-logo img {
+  width: 15px;
+  height: 15px;
   object-fit: contain;
 }
 
-.nbv-connector-logos img.openai {
-  width: 24px;
-  height: 24px;
+.nbv-connector-logo img.openai {
+  width: 22px;
+  height: 22px;
+}
+
+@keyframes connector-app-cycle {
+  0%, 40% { transform: translateY(0); }
+  50%, 90% { transform: translateY(-32px); }
+  100% { transform: translateY(-64px); }
 }
 
 .nbv-make > button.nbv-make-connector {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 12px;
-  padding: 10px 14px;
+  padding: 6px 14px;
+  overflow: hidden;
 }
 
 .nbv-make > button.nbv-make-connector:hover:not(:disabled) {
   border-color: var(--blue-60);
   box-shadow: 0 0 16px var(--blue-20);
+}
+
+.nbv-make > button.nbv-make-connector:hover .nbv-connector-app-track {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nbv-connector-app-track {
+    animation: none;
+  }
 }
 
 /* Mind Constellation: a little night sky of its own, stars that twinkle and a slow shine across it */
@@ -7988,13 +8061,13 @@ a.rp-src-main:hover .rp-src-out {
 }
 
 .nbv-make .nbv-make-stars .nbv-stars-text strong {
-  font: 600 1.05rem var(--font-display);
+  font: 600 0.9rem var(--font-display);
   letter-spacing: 0.01em;
 }
 
 .nbv-make .nbv-make-stars .nbv-stars-text small {
   color: var(--text-2);
-  font: 0.78rem var(--font-body);
+  font: 0.74rem var(--font-body);
 }
 
 @keyframes nbv-stars-float {
@@ -8088,7 +8161,7 @@ a.rp-src-main:hover .rp-src-out {
 
 /* Mind Constellation, calmer: blue and black only, the text on one line, the constellation tucked at the right */
 .nbv-make .nbv-make-stars {
-  min-height: 72px;
+  min-height: 54px;
   justify-content: space-between;
   padding: 0 18px;
   border-color: var(--blue-35);
@@ -8114,7 +8187,7 @@ a.rp-src-main:hover .rp-src-out {
 }
 
 .nbv-make .nbv-make-stars .nbv-stars-text strong {
-  font: 600 1rem var(--font-display);
+  font: 600 0.9rem var(--font-display);
   white-space: nowrap;
 }
 
@@ -9095,27 +9168,6 @@ a.rp-src-main:hover .rp-src-out {
   transition: opacity 0.15s;
 }
 
-.sd-notes-edit {
-  min-height: 84px;
-  resize: vertical;
-  line-height: 1.6;
-}
-
-.sd-notes {
-  display: grid;
-  gap: 6px;
-  margin-top: 8px;
-  padding: 14px 18px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  line-height: 1.6;
-}
-
-.sd-notes p {
-  margin: 0;
-}
-
 /* Presenting: the slide fills the screen, letterboxed in its own sky colour; the controls fade when the mouse rests. */
 .sd-present {
   position: fixed;
@@ -9126,7 +9178,7 @@ a.rp-src-main:hover .rp-src-out {
 }
 
 .sd-present.light {
-  background: #e9eef9;
+  background: #ffffff;
 }
 
 .sd-present-stage {
@@ -9772,6 +9824,17 @@ body.nbv-resizing iframe {
   align-items: center;
 }
 
+/* The report page's rating: its question, then the thumbs (each opens the review popup) */
+.rp-rate {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rp-rate .card-fb {
+  margin-left: 0;
+}
+
 .afb-label {
   margin-right: 4px;
 }
@@ -10283,6 +10346,57 @@ body.nbv-resizing iframe {
   margin: 0;
 }
 
+.connector-page {
+  width: 100%;
+  max-width: none;
+  min-height: calc(100vh - 96px);
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.connector-page-body {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.connector-page-card {
+  padding: clamp(18px, 3vw, 28px);
+}
+
+.connector-setup-card,
+.connector-settings-card {
+  align-content: start;
+}
+
+.connector-section-heading {
+  display: grid;
+  gap: 5px;
+  padding-bottom: 4px;
+}
+
+.connector-section-heading h2 {
+  margin: 0;
+}
+
+.connector-section-kicker {
+  color: var(--blue);
+  font-size: 0.68rem;
+  letter-spacing: 0.24em;
+}
+
+.connector-settings-card .row.between {
+  align-items: center;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+@media (max-width: 980px) {
+  .connector-page-body {
+    grid-template-columns: 1fr;
+  }
+}
+
 .connector-url-card {
   display: flex;
   align-items: center;
@@ -10400,10 +10514,79 @@ body.nbv-resizing iframe {
   color: var(--blue);
 }
 
-/* A card's download: just the icon, a round button the height of the others */
-.artifact .artifact-actions .btn.btn-icon-only {
+/* A card's actions are all icons: round buttons the height of the others, in one row */
+.artifact .artifact-actions .btn.btn-icon-only,
+.artifact .artifact-body .btn.btn-icon-only {
   width: 30px;
   padding: 0;
+}
+
+/* A card's icons say what they do on hover: their name in a small label above them, at once (no browser tooltip). The
+   thumbs give a shorter name of their own (data-tip). */
+.artifact .btn-icon-only[aria-label],
+.artifact .card-fb-btn[data-tip] {
+  position: relative;
+}
+
+.artifact .btn-icon-only[aria-label]::after,
+.artifact .card-fb-btn[data-tip]::after {
+  content: attr(aria-label);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  z-index: 30;
+  padding: 4px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--black);
+  color: var(--text);
+  font-family: var(--font-body, inherit);
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, 2px);
+  transition: opacity 0.12s, transform 0.12s;
+}
+
+.artifact .card-fb-btn[data-tip]::after {
+  content: attr(data-tip);
+}
+
+.artifact .btn-icon-only[aria-label]:hover::after,
+.artifact .btn-icon-only[aria-label]:focus-visible::after,
+.artifact .card-fb-btn[data-tip]:hover::after,
+.artifact .card-fb-btn[data-tip]:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+/* A notebook card's content fits its width: a long title wraps, the player shrinks */
+.nbv-made > .artifact:not(.artifact-inline) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* A card with a view opens it on a click anywhere (a video card opens its page, an audio card plays). Pointed at, it
+   grows a little from its border, which turns blue with a glow. */
+.artifact-clickable {
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.artifact-clickable:hover {
+  transform: scale(1.015);
+  border-color: var(--blue-60);
+  box-shadow: 0 0 0 1px var(--blue-35), var(--glow-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .artifact-clickable:hover {
+    transform: none;
+  }
 }
 
 /* The PDF preview (components/PdfPreview): thumbnails on the left (15%), the pages on the right, one Download button */
@@ -10553,10 +10736,15 @@ body.nbv-resizing iframe {
   transform: none;
 }
 
-/* The thumbs are the same on every card: the inline cards' "every button 40px, full row" rules must not reach them */
+/* The thumbs are the same on every card, on a row of their own under the actions, at the right. The inline cards'
+   "every button 40px" rules must not reach them. */
 .artifact .card-fb {
-  flex: 0 0 auto;
-  margin-left: auto;
+  justify-self: end;
+}
+
+.artifact-inline > .card-fb {
+  flex: 0 0 100%;
+  justify-content: flex-end;
 }
 
 .artifact .card-fb .card-fb-btn {
@@ -10571,43 +10759,6 @@ body.nbv-resizing iframe {
 .artifact .card-fb .card-fb-btn svg {
   width: 14px;
   height: 14px;
-}
-
-/* The thumbs up's rating: five stars, the chosen ones filled in blue */
-.card-fb-stars {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.card-fb-star {
-  display: inline-grid;
-  place-items: center;
-  padding: 2px;
-  border: 0;
-  background: none;
-  cursor: pointer;
-}
-
-.card-fb-star svg {
-  fill: none;
-  stroke: var(--text-3);
-  stroke-width: 1.5;
-  stroke-linejoin: round;
-  transition: fill 0.12s, stroke 0.12s;
-}
-
-.card-fb-star.on svg {
-  fill: var(--blue);
-  stroke: var(--blue);
-}
-
-.card-fb-star:hover svg {
-  stroke: var(--blue);
-}
-
-.card-fb-stars .mono {
-  margin-left: 6px;
 }
 
 /* The thumbs inside a viewer (quiz results, a report...): the review opens right below them */
@@ -10670,23 +10821,18 @@ body.nbv-resizing iframe {
   width: 30px;
 }
 
-/* On every card the download comes last among the buttons (after Delete), then the thumbs at the far right. The card's
-   own markup varies (a link, the infographic's menu, the deck's menu), so the order is set here. */
-.artifact .btn-icon-only,
-.artifact .ig-dl,
-.artifact .artifact-actions > .sd-menu-wrap {
-  order: 90;
-}
+/* A card's icons in one order on every card, wherever each is rendered (an inline card's body buttons and footer share
+   one row): view, download, present, share, launch, then retry and delete last; the thumbs on their row below. */
+.artifact .card-act-view { order: 1; }
+.artifact .card-act-download { order: 2; }
+.artifact .card-act-present { order: 3; }
+.artifact .card-act-share { order: 4; }
+.artifact .card-act-launch { order: 5; }
+.artifact .card-act-retry { order: 6; }
+.artifact .card-delete { order: 7; }
+.artifact .card-fb { order: 8; }
 
-.artifact .card-fb {
-  order: 100;
-}
-
-/* A card's delete: a bin icon, just before the download; red when pointed at; "Delete?" to confirm (it widens) */
-.artifact .card-delete {
-  order: 80;
-}
-
+/* A card's delete: a bin icon, the last action; red when pointed at; "Delete?" to confirm (it widens) */
 .artifact .btn.card-delete:hover,
 .artifact .btn.card-delete.armed {
   border-color: #e5675a;

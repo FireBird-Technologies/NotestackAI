@@ -3,6 +3,7 @@ import type { GenerateBody } from "../api/endpoints";
 import type { Artifact, ChatSummary, QuizQuestion, QuizQuestionType } from "../api/types";
 import { ArtifactFeedback, FeedbackActions } from "./ArtifactFeedback";
 import { CheckIcon, ChevronIcon } from "./icons/Icons";
+import { ViewButton } from "./cardActions";
 import { Pills, SourceFocusFields, sourceSummary, type SourceSelection } from "./SourceFocusFields";
 import { StudyOverlay } from "./StudyOverlay";
 import { Modal } from "./ui";
@@ -380,7 +381,7 @@ export function QuizBody({ artifact }: { artifact: Artifact }) {
   return (
     <div className="artifact-body">
       <p className="muted">{c.question_count ?? 0} questions · {c.difficulty ?? "medium"} · from {from}</p>
-      <button type="button" className="btn btn-small" onClick={() => setPlaying(true)}>Start quiz</button>
+      <ViewButton label="Start quiz" onClick={() => setPlaying(true)} />
       {playing && <QuizPlayer artifact={artifact} onClose={() => setPlaying(false)} />}
     </div>
   );

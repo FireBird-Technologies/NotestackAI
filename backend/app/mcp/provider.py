@@ -58,6 +58,13 @@ def _scopes(requested: list[str] | None, client: OAuthClientInformationFull) -> 
     return [s for s in policy.SCOPES if s in wanted]
 
 
+def client_key(info: dict) -> tuple[str, tuple[str, ...]]:
+    """Stable identity for one app even when it dynamically registers again."""
+    name = str(info.get("client_name") or "An app").strip().casefold()
+    redirects = tuple(sorted(str(uri).strip().rstrip("/") for uri in (info.get("redirect_uris") or [])))
+    return name, redirects
+
+
 class NotestackProvider:
     # Registration
 
@@ -142,11 +149,22 @@ class NotestackProvider:
             if not user:
                 db.rollback()
                 raise TokenError("invalid_grant", "That account is no longer active.")
+            # Reconnecting the same logical app replaces its older connection. Some MCP clients dynamically register
+            # again and receive a new client_id, so compare their displayed identity and redirect addresses too.
+            now = _now()
+            this_client = client_key(client.model_dump(mode="json"))
+            previous = db.execute(
+                select(McpGrant, McpClient).join(McpClient, McpClient.client_id == McpGrant.client_id)
+                .where(McpGrant.user_id == user.id, McpGrant.revoked_at.is_(None))
+            ).all()
+            for old_grant, old_client in previous:
+                if client_key(old_client.info) == this_client:
+                    old_grant.revoked_at = now
             refresh = tokens.random_token()
             grant = McpGrant(
                 user_id=user.id, client_id=client.client_id, scopes=list(authorization_code.scopes),
                 resource=authorization_code.resource, refresh_hash=tokens.digest(refresh),
-                refresh_expires_at=_now() + timedelta(days=settings.mcp_refresh_ttl_days), last_used_at=_now(),
+                refresh_expires_at=now + timedelta(days=settings.mcp_refresh_ttl_days), last_used_at=now,
             )
             db.add(grant)
             db.flush()

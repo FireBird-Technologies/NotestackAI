@@ -3,11 +3,12 @@ import { createPortal } from "react-dom";
 import { artifactsApi } from "../api/endpoints";
 import type { AnswerFeedback as Feedback, Artifact } from "../api/types";
 import { Thumb } from "./AnswerFeedback";
-import { Stars } from "./CardFeedback";
 import { errorMessage } from "./ui";
 
-/** What can be rated: finished reports, quizzes, flashcard sets, infographics, slide decks, audio overviews and videos. */
-export const RATEABLE = ["report", "quiz", "flashcards", "infographic", "slide_deck", "audio_overview", "video"];
+/** What can be rated: everything the app makes, once it has finished (the server keeps the same list:
+ * services/artifact_feedback.py REASONS). */
+export const RATEABLE = ["report", "quiz", "flashcards", "infographic", "slide_deck", "audio_overview", "video", "mind_map",
+  "summary", "quote_card", "carousel", "launch_kit"];
 
 /** Why a thumbs down, per kind (the ids the server keeps; see services/artifact_feedback.py). */
 export const REASONS: Record<string, { id: string; label: string }[]> = {
@@ -33,6 +34,13 @@ export const REASONS: Record<string, { id: string; label: string }[]> = {
     { id: "too_basic", label: "Too basic" },
     { id: "too_detailed", label: "Too detailed" },
     { id: "unclear", label: "Unclear wording" },
+    { id: "other", label: "Something else" },
+  ],
+  mind_map: [
+    { id: "inaccurate", label: "Inaccurate" },
+    { id: "missing_content", label: "Missing key ideas" },
+    { id: "hard_to_read", label: "Hard to read" },
+    { id: "structure", label: "Poorly structured" },
     { id: "other", label: "Something else" },
   ],
   infographic: [
@@ -67,6 +75,44 @@ export const REASONS: Record<string, { id: string; label: string }[]> = {
     { id: "too_short", label: "Too short" },
     { id: "other", label: "Something else" },
   ],
+  mind_map: [
+    { id: "inaccurate", label: "Inaccurate" },
+    { id: "missed_ideas", label: "Missed key ideas" },
+    { id: "poor_links", label: "Ideas linked oddly" },
+    { id: "too_few", label: "Too few stars" },
+    { id: "too_many", label: "Too many stars" },
+    { id: "other", label: "Something else" },
+  ],
+  summary: [
+    { id: "inaccurate", label: "Inaccurate" },
+    { id: "missed_points", label: "Missed key points" },
+    { id: "unclear", label: "Unclear" },
+    { id: "too_long", label: "Too long" },
+    { id: "too_short", label: "Too short" },
+    { id: "other", label: "Something else" },
+  ],
+  quote_card: [
+    { id: "wrong_quote", label: "Wrong quote" },
+    { id: "design", label: "Poor design" },
+    { id: "hard_to_read", label: "Hard to read" },
+    { id: "other", label: "Something else" },
+  ],
+  carousel: [
+    { id: "inaccurate", label: "Inaccurate" },
+    { id: "design", label: "Poor design" },
+    { id: "cut_off", label: "Text cut off" },
+    { id: "too_long", label: "Too long" },
+    { id: "too_short", label: "Too short" },
+    { id: "other", label: "Something else" },
+  ],
+  launch_kit: [
+    { id: "inaccurate", label: "Inaccurate" },
+    { id: "tone", label: "Wrong tone" },
+    { id: "weak_hooks", label: "Weak hooks" },
+    { id: "too_long", label: "Too long" },
+    { id: "too_short", label: "Too short" },
+    { id: "other", label: "Something else" },
+  ],
 };
 
 // A rating is shown wherever its artifact is (the card, the viewer, the results), so they share one copy.
@@ -92,13 +138,12 @@ export function useRating(artifact: Artifact): Feedback | null {
 export const FeedbackActions = createContext<HTMLElement | null>(null);
 
 /** Thumbs up and down inside a viewer (a report, a quiz's results, flashcards, an infographic), inline: a thumb opens the
- * review right below (stars for a thumbs up, feedback for both). "Save review" shows once something differs from what
+ * feedback box right below. "Save review" shows once something differs from what
  * is saved; saving keeps everything open and says "Review saved" for 2 seconds. Nothing is saved until then. */
 export function ArtifactFeedback({ artifact, label, compact = false }: { artifact: Artifact; label?: ReactNode; compact?: boolean }) {
   const saved = useRating(artifact);
   const slot = useContext(FeedbackActions);
   const [choice, setChoice] = useState<"up" | "down" | null>(saved?.rating ?? null);
-  const [stars, setStars] = useState(saved?.stars ?? 2);
   const [comment, setComment] = useState(saved?.comment ?? "");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
@@ -114,19 +159,16 @@ export function ArtifactFeedback({ artifact, label, compact = false }: { artifac
     setChoice(r);
     setDone(false);
     // Back on the saved thumb: its saved review; on the other one, a fresh start.
-    setStars(r === saved?.rating && saved?.stars ? saved.stars : 2);
     setComment(r === saved?.rating ? saved?.comment ?? "" : "");
   };
-  const changed = !!choice && (choice !== saved?.rating || comment.trim() !== (saved?.comment ?? "")
-    || (choice === "up" && stars !== (saved?.stars ?? 2)));
+  const changed = !!choice && (choice !== saved?.rating || comment.trim() !== (saved?.comment ?? ""));
 
   const save = async () => {
     if (!choice) return;
     setBusy(true);
     setError(null);
     try {
-      const res = await artifactsApi.rate(artifact.id, { rating: choice, ...(choice === "up" ? { stars } : {}),
-                                                         comment: comment.trim() || undefined });
+      const res = await artifactsApi.rate(artifact.id, { rating: choice, comment: comment.trim() || undefined });
       put(artifact.id, res.feedback);
       setDone(true);
     } catch (e) {
@@ -164,7 +206,6 @@ export function ArtifactFeedback({ artifact, label, compact = false }: { artifac
       </div>
       {choice && (
         <div className="afb-form">
-          {choice === "up" && <Stars value={stars} onChange={(n) => { setStars(n); setDone(false); }} />}
           <textarea className="input afb-text" rows={3} maxLength={1000} value={comment}
                     placeholder={choice === "up" ? "What worked well? (optional)" : "What should be better? (optional)"}
                     onChange={(e) => { setComment(e.target.value); setDone(false); }} />

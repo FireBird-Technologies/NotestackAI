@@ -1,4 +1,4 @@
-"""What a shared artifact (a report, infographic, audio overview, video, slide deck, flashcard set or quiz) shows to
+"""What a shared artifact (a report, infographic, audio overview, video, slide deck, flashcard set, quiz or mind map) shows to
 someone with the link.
 
 The public view is built from a whitelist, field by field, never by filtering the stored content: a field added to a
@@ -114,6 +114,12 @@ def public_flashcards(artifact: Artifact) -> dict:
 
 def public_quiz(artifact: Artifact) -> dict:
     return {**_head(artifact, "quiz"), "questions": _questions((artifact.content_json or {}).get("questions"), 100)}
+
+
+def public_mind_map(artifact: Artifact) -> dict:
+    """The map's tree as labels and notes only (no sources, no quotes), as a shared report shows its maps."""
+    root = (artifact.content_json or {}).get("root")
+    return {**_head(artifact, "mind_map"), "root": _node(root) if isinstance(root, dict) else None}
 
 
 def public_slides(artifact: Artifact) -> dict:

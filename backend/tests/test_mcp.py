@@ -203,7 +203,7 @@ async def test_the_approval_screen_tells_the_writer_who_is_asking(http, auth):  
     assert shown["client_name"] == "Official Claude" and shown["redirect_host"] == "evil.example"
     assert shown["trust"] == "unverified"  # a name anyone can type is not proof; the address is
     assert [(s["scope"], s["requested"], s["required"]) for s in shown["scopes"]] == [
-        ("mcp:read", True, True), ("mcp:write", True, False), ("mcp:share", False, False)]
+        ("mcp:read", True, True), ("mcp:write", True, False), ("mcp:share", True, False)]
 
 
 @pytest.mark.anyio
@@ -247,7 +247,7 @@ async def test_a_request_can_only_be_decided_once(http, auth):  # noqa: F811
 async def test_the_full_sign_in_gives_the_app_tokens(http, auth):  # noqa: F811
     t = await sign_in(http, auth)
     assert t["token_type"].lower() == "bearer" and t["expires_in"] == 3600 and t["refresh_token"]
-    assert set(t["scope"].split()) == {"mcp:read", "mcp:write"}
+    assert set(t["scope"].split()) == {"mcp:read", "mcp:write", "mcp:share"}
     assert t["query"]["state"] == ["st8"]
 
 
@@ -342,7 +342,8 @@ async def test_a_refresh_token_belongs_to_one_app(http, auth):  # noqa: F811
 async def test_the_writer_can_list_and_end_a_connection(http, auth, live):  # noqa: F811
     t = await sign_in(http, auth)
     listed = (await http.get("/api/mcp/grants", headers=auth)).json()
-    assert len(listed) == 1 and listed[0]["client_name"] == "Claude" and listed[0]["scopes"] == ["mcp:read", "mcp:write"]
+    assert len(listed) == 1 and listed[0]["client_name"] == "Claude"
+    assert listed[0]["scopes"] == ["mcp:read", "mcp:write", "mcp:share"]
     assert "token" not in json.dumps(listed).lower()
     rpc = {"jsonrpc": "2.0", "id": 1, "method": "tools/list"}
     h = {**bearer(t["access_token"]), "Accept": "application/json, text/event-stream", "Content-Type": "application/json"}
@@ -352,6 +353,28 @@ async def test_the_writer_can_list_and_end_a_connection(http, auth, live):  # no
     assert (await http.get("/api/mcp/grants", headers=auth)).json() == []
     assert (await http.post("/token", data={"grant_type": "refresh_token", "client_id": t["client_id"],
                                              "refresh_token": t["refresh_token"]})).status_code == 400
+
+
+@pytest.mark.anyio
+async def test_reconnecting_an_app_replaces_the_old_connection(http, auth, live, db_session):  # noqa: F811
+    first = await sign_in(http, auth)
+    second = await sign_in(http, auth)  # a fresh dynamic client registration with the same app identity
+
+    listed = (await http.get("/api/mcp/grants", headers=auth)).json()
+    assert len(listed) == 1
+    assert listed[0]["id"] == str(db_session.query(McpGrant).filter(McpGrant.revoked_at.is_(None)).one().id)
+
+    rpc = {"jsonrpc": "2.0", "id": 1, "method": "tools/list"}
+    first_headers = {**bearer(first["access_token"]), "Accept": "application/json, text/event-stream",
+                     "Content-Type": "application/json"}
+    second_headers = {**bearer(second["access_token"]), "Accept": "application/json, text/event-stream",
+                      "Content-Type": "application/json"}
+    assert (await http.post("/mcp", json=rpc, headers=first_headers)).status_code == 401
+    assert (await http.post("/mcp", json=rpc, headers=second_headers)).status_code == 200
+
+    assert (await http.delete(f"/api/mcp/grants/{listed[0]['id']}", headers=auth)).status_code == 200
+    assert (await http.post("/mcp", json=rpc, headers=second_headers)).status_code == 401
+    assert (await http.get("/api/mcp/grants", headers=auth)).json() == []
 
 
 @pytest.mark.anyio
@@ -402,14 +425,14 @@ async def test_the_writer_decides_what_an_app_may_do(http, auth):  # noqa: F811
     read_only = await sign_in(http, auth, scopes=["mcp:read"])
     assert read_only["scope"] == "mcp:read"
     with_share = await sign_in(http, auth, scopes=["mcp:read", "mcp:write", "mcp:share"])
-    assert set(with_share["scope"].split()) == {"mcp:read", "mcp:write", "mcp:share"}  # more than the app asked for
-    assert "mcp:share" not in policy.ADVERTISED  # apps are never told to ask for it
+    assert set(with_share["scope"].split()) == {"mcp:read", "mcp:write", "mcp:share"}
+    assert "mcp:share" in policy.ADVERTISED  # generated results always carry their frontend Share URL
 
 
 @pytest.mark.anyio
-async def test_resource_metadata_asks_for_read_and_edit_only(http):
+async def test_resource_metadata_asks_for_read_edit_and_share(http):
     res = (await http.get("/.well-known/oauth-protected-resource/mcp")).json()
-    assert res["scopes_supported"] == ["mcp:read", "mcp:write"]
+    assert res["scopes_supported"] == ["mcp:read", "mcp:write", "mcp:share"]
 
 
 @pytest.mark.anyio
@@ -470,7 +493,7 @@ def as_writer(monkeypatch, client, auth, db_session):  # noqa: F811
     """Run a tool as the signed-in test user with full permissions, as the auth layer would set it."""
     me = client.get("/api/auth/me", headers=auth).json()
     tv = db_session.get(User, uuid.UUID(me["id"])).token_version
-    access = AccessToken(token="x", client_id="t", scopes=["mcp:read", "mcp:write"], subject=me["id"], claims={"tv": tv, "gid": "g"})
+    access = AccessToken(token="x", client_id="t", scopes=["mcp:read", "mcp:write", "mcp:share"], subject=me["id"], claims={"tv": tv, "gid": "g"})
     monkeypatch.setattr(common, "get_access_token", lambda: access)
     return access
 
@@ -638,6 +661,8 @@ async def test_connect_then_use_the_tools_over_http(http, client, auth, run_jobs
     # Claude cannot read posts itself, so questions about the writer's words go through ask_notebook
     assert "ask_notebook" in init["instructions"] and "cannot read the text of their posts" in init["instructions"]
     assert "add_source" in init["instructions"]
+    assert "show Notestack's own preview" in init["instructions"]
+    assert "shareable preview URL" in init["instructions"] and "artifact_preview_url" in init["instructions"]
     listed = {x["name"] for x in (await rpc("tools/list", id_=2))["tools"]}
     assert {"find_content", "ask_notebook", "generate_report", "share_artifact"} <= listed
     assert "get_document" not in listed

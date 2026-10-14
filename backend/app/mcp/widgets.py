@@ -34,7 +34,7 @@ VIDEO_UI = {"ui": {"resourceUri": VIDEO_URI}}
 VIDEO_OPTIONS_URI = "ui://notestack/video-options-v8"
 VIDEO_OPTIONS_UI = {"ui": {"resourceUri": VIDEO_OPTIONS_URI}}
 
-OPTIONS_URI = "ui://notestack/generation-options-v55"
+OPTIONS_URI = "ui://notestack/generation-options-v56"
 OPTIONS_UI = {"ui": {"resourceUri": OPTIONS_URI}}
 _OPTIONS_HTML = Path(__file__).with_name("widgets") / "generation_options.html"
 

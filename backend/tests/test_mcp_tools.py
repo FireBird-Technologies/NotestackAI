@@ -50,7 +50,7 @@ EXPECTED = {
     "create_notebook", "add_documents_to_notebook", "remove_document_from_notebook", "add_source", "import_url",
     "sync_source", "generate_report", "generate_quiz", "generate_flashcards", "generate_mind_map", "generate_infographic",
     "generate_slide_deck", "generate_audio_overview", "show_mind_map", "retry_artifact", "share_artifact",
-    "unshare_artifact", "add_report_block", "remove_report_block", "choose_notebook", "choose_video_options", "choose_options", "show_report",
+    "unshare_artifact", "rate_artifact", "add_report_block", "remove_report_block", "choose_notebook", "choose_video_options", "choose_options", "show_report",
 }
 
 
@@ -183,10 +183,12 @@ async def test_artifacts_are_listed_light_and_opened_trimmed(client, auth, as_wr
     listed = await call(mcp, "list_artifacts", type="quiz")
     assert listed["total"] == 1 and "content" not in listed["items"][0] and listed["items"][0]["id"] == str(quiz.id)
     opened = await call(mcp, "get_artifact", artifact_id=str(quiz.id))
-    assert opened["content"]["questions"] == [{"q": "why?"}] and opened["open_in_notestack"].endswith("/app/archive")
+    assert opened["content"]["questions"] == [{"q": "why?"}]
+    assert "/r/" in opened["open_in_notestack"]
+    assert opened["artifact_preview_url"] == opened["open_in_notestack"]
     big = await call(mcp, "get_artifact", artifact_id=str(huge.id))
     assert "content" not in big and len(big["content_preview"]) < 20_000 and "Open it in Notestack" in big["content_truncated"]
-    assert big["open_in_notestack"].endswith(f"/app/reports/{huge.id}")
+    assert "/r/" in big["artifact_preview_url"] and big["open_in_notestack"] == big["artifact_preview_url"]
 
 
 def test_inline_html_never_reaches_the_assistant():
@@ -462,10 +464,11 @@ async def test_sharing_respects_the_workspaces_privacy_setting(client, auth, mon
 
 
 @pytest.mark.anyio
-async def test_only_finished_reports_can_be_shared(client, auth, monkeypatch, mcp, db_session):  # noqa: F811
+async def test_pending_reports_get_a_shareable_preview(client, auth, monkeypatch, mcp, db_session):  # noqa: F811
     pending = make_artifact(db_session, status="pending")
     writer_with(monkeypatch, client, auth, db_session, ["mcp:read", "mcp:write", "mcp:share"])
-    assert (await call(mcp, "share_artifact", artifact_id=str(pending.id)))["error"] == "not_found"
+    shared = await call(mcp, "share_artifact", artifact_id=str(pending.id))
+    assert shared["shared"] is True and "/r/" in shared["url"]
 
 
 # Report visuals
@@ -630,8 +633,16 @@ def test_a_mind_map_comes_as_an_outline_and_a_link_not_raw_data():
         "    - Bitter Lesson", "  - Control risks: What can go wrong"]
     assert "SECRET RAW QUOTE" not in json.dumps(view) and "content" not in view and "content_preview" not in view
     assert view["open_in_notestack"].endswith("/app/artifacts/m1") and "redraw" in view["show_it"]  # straight to the map
-    assert views.web_url({"id": "q1", "type": "quiz", "notebook_id": "nb1"}).endswith("/app/notebooks/nb1")
+    assert views.web_url({"id": "q1", "type": "quiz", "notebook_id": "nb1"}).endswith("/app/artifacts/q1")
     assert "outline" not in views.artifact_view(art, content=False)  # lists stay light
+
+
+@pytest.mark.anyio
+async def test_the_mcp_app_can_rate_every_generated_kind(as_writer, mcp, db_session):  # noqa: F811
+    for kind in tools_write.MCP_GENERATABLE:
+        art = make_artifact(db_session, kind, content={"title": kind})
+        rated = await call(mcp, "rate_artifact", artifact_id=str(art.id), rating="up")
+        assert rated["artifact_id"] == str(art.id) and rated["feedback"]["rating"] == "up", kind
 
 
 @pytest.mark.anyio
@@ -704,7 +715,9 @@ async def test_the_map_tools_link_to_the_widget_and_it_is_served(mcp):  # noqa: 
     assert listed["generate_infographic"].meta == widgets.app_only(infographic) and listed["show_infographic"].meta == infographic
     viewers = {"generate_mind_map", "show_mind_map", "generate_flashcards", "show_flashcards", "generate_quiz", "show_quiz",
                "generate_infographic", "show_infographic", "choose_notebook", "choose_options", "choose_video_options",
-               "generate_slide_deck", "generate_audio_overview", "generate_video", "get_video", "view_report", "generate_report"}
+               "generate_slide_deck", "generate_audio_overview", "generate_video", "get_video", "view_report", "generate_report",
+               "rate_artifact"}
+    assert listed["rate_artifact"].meta == widgets.app_only()
     assert all(t.meta is None for n, t in listed.items() if n not in viewers)
     assert all(listed[name].meta["ui"]["visibility"] == ["app"] for name in listed if name.startswith("generate_"))
     resources = await mcp.list_resources()
@@ -739,7 +752,7 @@ async def test_show_mind_map_sends_the_map_to_the_widget_and_words_to_the_model(
     assert "x" * 200 not in seen_by_model  # notes are cut short in the outline; the full text is the widget's
     assert "SECRET" not in seen_by_model and "q" * 50 not in seen_by_model
     assert result.structuredContent["kind"] == "mind_map" and result.structuredContent["root"]["label"] == "Agentic AI"
-    assert result.structuredContent["open_url"].endswith(f"/app/artifacts/{art.id}")
+    assert "/r/" in result.structuredContent["open_url"]
     assert "Do not redraw" in json.loads(seen_by_model)["show_it"]
 
 
@@ -871,10 +884,12 @@ async def test_a_finished_report_is_presented_from_notestack_with_its_notebook(c
     _blog(client, auth, run_jobs)
     nb = client.post("/api/notebooks/archive", headers=auth).json()
     made = await call(mcp, "generate_report", report_format="interactive", instructions="detailed", wait_seconds=0, notebook_id=nb["id"])
-    assert made["type"] == "report" and made["open_in_notestack"].endswith(f"/app/reports/{made['id']}")
+    assert made["type"] == "report" and made["status"] == "pending" and "/r/" in made["artifact_preview_url"]
     assert f"Used their notebook '{nb['title']}'" in made["scope_note"]
     done = make_artifact(db_session, "report", content={"title": "R", "blocks": []})
-    assert "Do not write a separate report" in (await call(mcp, "get_artifact", artifact_id=str(done.id)))["present_it"]
+    finished = await call(mcp, "get_artifact", artifact_id=str(done.id))
+    assert "/r/" in finished["artifact_preview_url"] and finished["open_in_notestack"] == finished["artifact_preview_url"]
+    assert "Do not write a separate report" in finished["present_it"]
     named = client.post("/api/notebooks", json={"title": "Weekly", "document_ids": []}, headers=auth).json()
     out = await call(mcp, "generate_quiz", notebook_id=named["id"])
     assert "'Weekly'" in out["scope_note"]
@@ -1090,7 +1105,8 @@ async def test_view_report_shows_notestacks_report_and_refuses_other_items(clien
     art = make_artifact(db_session, "report", content={"title": "R", "format": "document", "blocks": REPORT_BLOCKS[:2]})
     result = await call_raw(mcp, "view_report", artifact_id=str(art.id))
     assert result.structuredContent["kind"] == "report" and len(result.structuredContent["blocks"]) == 2
-    assert json.loads(result.content[0].text)["open_in_notestack"].endswith(f"/app/reports/{art.id}")
+    model = json.loads(result.content[0].text)
+    assert "/r/" in model["artifact_preview_url"] and model["open_in_notestack"] == model["artifact_preview_url"]
     quiz = make_artifact(db_session, "quiz", content={"title": "Q", "questions": []})
     assert (await call(mcp, "view_report", artifact_id=str(quiz.id)))["error"] == "not_a_report"
 
@@ -1142,6 +1158,14 @@ def test_the_generation_form_becomes_an_output_only_view_and_renders_visual_medi
     assert 'request("ui/message"' not in page  # form actions stay inside the App; no user bubble can expose call arguments
     assert 'data.make === "infographic"' in page and 'data.make === "audio_overview"' in page
     assert 'data.make === "slide_deck"' in page and 'v.slide_urls' in page
+    assert '"Shareable preview URL"' in page and "appendNotestackLink(box, v)" in page
+    assert 'id="artifact-link"' in page and "showArtifactLink(v)" in page
+    assert "available through the Notestack link above" not in page
+    assert 'className = "audio-range"' in page and "showAudio(box, v)" in page
+    assert "audio.controls = true" not in page
+    assert 'context += " Artifact preview URL: "' in page and 'context += " Preview: "' in page
+    assert 'call("rate_artifact"' in page and 'id="thumb-up"' in page and 'id="thumb-down"' in page
+    assert "min-height: 380px" not in page
     assert 'infographic: "show_infographic"' in page
     assert 'placeholder="Search all notebooks"' in page and 'class="grid notebook-grid"' in page
 

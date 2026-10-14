@@ -17,6 +17,7 @@ from app.services.share import (
     public_audio,
     public_flashcards,
     public_infographic,
+    public_mind_map,
     public_quiz,
     public_report,
     public_slides,
@@ -42,7 +43,7 @@ def _limit(request: Request) -> None:
     window.append(now)
 
 
-SHAREABLE = ("report", "infographic", "audio_overview", "video", "slide_deck", "flashcards", "quiz")
+SHAREABLE = ("report", "infographic", "audio_overview", "video", "slide_deck", "flashcards", "quiz", "mind_map")
 
 
 def _ready(a: Artifact) -> bool:
@@ -50,10 +51,10 @@ def _ready(a: Artifact) -> bool:
     return a.type in SHAREABLE and (a.status == "ready" or (a.type == "video" and bool(video_file(a) or video_preview(a))))
 
 
-def _report(ctx: Ctx, artifact_id: uuid.UUID) -> Artifact:
-    """A finished shareable artifact of this workspace."""
+def _shareable(ctx: Ctx, artifact_id: uuid.UUID) -> Artifact:
+    """A shareable artifact of this workspace, including one that is still being generated."""
     a = get_artifact_or_404(ctx, artifact_id)
-    if not _ready(a):
+    if a.type not in SHAREABLE:
         raise HTTPException(404, "Not found")
     return a
 
@@ -73,7 +74,7 @@ def _mint_preview(ctx: Ctx, a: Artifact) -> None:
 PUBLIC_VIEWS = {"infographic": lambda a, s: public_infographic(a), "report": public_report,
                 "audio_overview": lambda a, s: public_audio(a), "video": lambda a, s: public_video(a),
                 "slide_deck": lambda a, s: public_slides(a), "flashcards": lambda a, s: public_flashcards(a),
-                "quiz": lambda a, s: public_quiz(a)}
+                "quiz": lambda a, s: public_quiz(a), "mind_map": lambda a, s: public_mind_map(a)}
 
 
 def _share(ctx: Ctx, a: Artifact) -> ArtifactShare | None:
@@ -87,13 +88,13 @@ def _out(share: ArtifactShare | None) -> dict:
 
 @router.get("/api/artifacts/{artifact_id}/share")
 def get_share(artifact_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
-    return _out(_share(ctx, _report(ctx, artifact_id)))
+    return _out(_share(ctx, _shareable(ctx, artifact_id)))
 
 
 @router.post("/api/artifacts/{artifact_id}/share")
 def create_share(artifact_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
     """Turn the link on (the same link if it already is)."""
-    a = _report(ctx, artifact_id)
+    a = _shareable(ctx, artifact_id)
     if not ctx.workspace.allow_public_links:
         raise HTTPException(403, "Public links are turned off for this workspace. Turn them on in Settings, Privacy.")
     if a.type == "video" and not video_preview(a):
@@ -116,7 +117,7 @@ class ShareIn(BaseModel):
 
 @router.patch("/api/artifacts/{artifact_id}/share")
 def update_share(artifact_id: uuid.UUID, body: ShareIn, ctx: Ctx = Depends(get_ctx)):
-    share = _share(ctx, _report(ctx, artifact_id))
+    share = _share(ctx, _shareable(ctx, artifact_id))
     if not share:
         raise HTTPException(404, "This is not shared")
     share.show_sources = body.show_sources
@@ -127,7 +128,7 @@ def update_share(artifact_id: uuid.UUID, body: ShareIn, ctx: Ctx = Depends(get_c
 @router.delete("/api/artifacts/{artifact_id}/share")
 def delete_share(artifact_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
     """Turn the link off for good: the old address stops working, and sharing again makes a new one."""
-    share = _share(ctx, _report(ctx, artifact_id))
+    share = _share(ctx, _shareable(ctx, artifact_id))
     if share:
         ctx.db.delete(share)
         ctx.db.commit()
@@ -144,6 +145,10 @@ def public(token: str, request: Request, response: Response, db: Session = Depen
     share = db.scalar(select(ArtifactShare).where(ArtifactShare.token == token[:64]))
     artifact = db.get(Artifact, share.artifact_id) if share else None
     workspace = db.get(Workspace, share.workspace_id) if share else None
-    if not share or not artifact or not _ready(artifact) or not workspace or not workspace.allow_public_links:
+    if not share or not artifact or artifact.type not in SHAREABLE or not workspace or not workspace.allow_public_links:
         raise HTTPException(404, "This link does not work")
+    if not _ready(artifact):
+        return {"kind": "failed" if artifact.status == "failed" else "pending",
+                "artifact_type": artifact.type, "title": str((artifact.content_json or {}).get("title") or "Notestack artifact")[:300],
+                "status": artifact.status}
     return PUBLIC_VIEWS[artifact.type](artifact, share)
