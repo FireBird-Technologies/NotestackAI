@@ -162,13 +162,15 @@ export const artifactsApi = {
   /** An infographic drawn as a PNG. */
   image: (id: string, layout: "landscape" | "portrait" = "landscape") => apiBlob(`/api/artifacts/${id}/image${qs({ layout })}`),
   /** Thumbs up or down (null takes it back) on a finished report, quiz, flashcard set or infographic. */
-  rate: (id: string, body: { rating: "up" | "down" | null; stars?: number; reasons?: string[]; comment?: string }) =>
+  rate: (id: string, body: { rating: "up" | "down" | null; reasons?: string[]; comment?: string }) =>
     put<{ feedback: AnswerFeedback | null }>(`/api/artifacts/${id}/feedback`, body),
   retry: (id: string) => post<Artifact>(`/api/artifacts/${id}/retry`),
   /** A slide deck as a PDF (exactly as shown) or an editable PowerPoint. */
   slidesFile: (id: string, ext: "pdf" | "pptx") => apiBlob(`/api/artifacts/${id}/slides.${ext}`),
   /** A report as the PDF a post carries when it is too long to post as text. */
   reportPdf: (id: string) => apiBlob(`/api/artifacts/${id}/report.pdf`),
+  /** A Mind Constellation as a document of its points and their details. */
+  mindMapPdf: (id: string) => apiBlob(`/api/artifacts/${id}/mind-map.pdf`),
   /** A slide deck's slides as the editor has them, drawn without saving (after a slide or a text box is added,
    * removed, moved or changed to another layout). Returns them as they will be kept. */
   previewDeck: (id: string, slides: EditSlide[]) =>
@@ -191,7 +193,6 @@ export type EditSlide = {
   quote: { text: string; by: string };
   takeaways: string[];
   closing: string;
-  notes: string;
   sources: { title?: string; path: string; line_start: number; line_end: number }[];
   shrink?: number;
 };

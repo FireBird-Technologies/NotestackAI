@@ -17,6 +17,7 @@ from app.services.share import (
     public_audio,
     public_flashcards,
     public_infographic,
+    public_mind_map,
     public_quiz,
     public_report,
     public_slides,
@@ -42,7 +43,7 @@ def _limit(request: Request) -> None:
     window.append(now)
 
 
-SHAREABLE = ("report", "infographic", "audio_overview", "video", "slide_deck", "flashcards", "quiz")
+SHAREABLE = ("report", "infographic", "audio_overview", "video", "slide_deck", "flashcards", "quiz", "mind_map")
 
 
 def _ready(a: Artifact) -> bool:
@@ -73,7 +74,7 @@ def _mint_preview(ctx: Ctx, a: Artifact) -> None:
 PUBLIC_VIEWS = {"infographic": lambda a, s: public_infographic(a), "report": public_report,
                 "audio_overview": lambda a, s: public_audio(a), "video": lambda a, s: public_video(a),
                 "slide_deck": lambda a, s: public_slides(a), "flashcards": lambda a, s: public_flashcards(a),
-                "quiz": lambda a, s: public_quiz(a)}
+                "quiz": lambda a, s: public_quiz(a), "mind_map": lambda a, s: public_mind_map(a)}
 
 
 def _share(ctx: Ctx, a: Artifact) -> ArtifactShare | None:

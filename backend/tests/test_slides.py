@@ -133,15 +133,14 @@ def _deck(fmt: str = "detailed") -> dict:
     return deck
 
 
-def test_powerpoint_has_every_slide_as_editable_text_with_notes():
+def test_powerpoint_has_every_slide_as_editable_text_and_no_speaker_notes():
     deck = _deck()
     data = export.build_pptx(deck, "light-space", "detailed", 3)
     prs = Presentation(io.BytesIO(data))
     assert len(prs.slides) == len(deck["slides"]) and prs.slide_width == 12192000
     texts = [" ".join(sh.text_frame.text for sh in s.shapes if sh.has_text_frame) for s in prs.slides]
     assert "Why tiers work" in texts[2] and "Anchoring" in texts[2] and "middle one feel fair" in texts[2]
-    notes = prs.slides[2].notes_slide.notes_text_frame.text
-    assert "Say points" in notes and "On Pricing (lines 1-2)" in notes
+    assert not any(s.has_notes_slide and s.notes_slide.notes_text_frame.text for s in prs.slides)
 
 
 @pytest.mark.skipif(not chrome(), reason="no Chrome to print with")
@@ -511,7 +510,7 @@ def test_edited_deck_is_saved_fitted_and_downloaded(client, auth, run_jobs, feed
     assert len(done["content"]["slide_slots"]) == len(slides) and "heading" in done["content"]["slide_slots"][0]
     pi = next(i for i, s in enumerate(slides) if s["points"] and s["layout"] == "points")
     slides[0]["heading"] = "A brand new title"
-    slides[0]["notes"] = "Say hello first."
+    slides[0]["notes"] = "Say hello first."  # speaker notes are not kept
     slides[pi]["points"][0]["text"] = "Edited point " + "very long " * 60
     slides[-1]["takeaways"][1] = "  An <b>edited</b> takeaway  "
     url = f"/api/artifacts/{done['id']}/deck"
@@ -519,7 +518,7 @@ def test_edited_deck_is_saved_fitted_and_downloaded(client, auth, run_jobs, feed
     assert saved.status_code == 200, saved.text
     after = saved.json()["content"]
     s = after["deck"]["slides"]
-    assert s[0]["heading"] == "A brand new title" and s[0]["notes"] == "Say hello first."
+    assert s[0]["heading"] == "A brand new title" and "notes" not in s[0]
     assert s[pi]["points"][0]["text"].startswith("Edited point") and len(s[pi]["points"][0]["text"]) <= LIMITS["detailed"]["text"]
     assert s[-1]["takeaways"][1] == "An edited takeaway"  # plain text only
     before = done["content"]["deck"]["slides"]

@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import type { Artifact } from "../api/types";
+import { ViewButton } from "./cardActions";
 import { ShareDialog } from "./ShareDialog";
 import { DownloadIcon, ShareIcon } from "./icons/Icons";
 import { artifactsApi } from "../api/endpoints";
@@ -36,10 +36,12 @@ export function ReportBody({ artifact }: { artifact: Artifact }) {
         {visuals > 0 ? ` · ${visuals} visual${visuals === 1 ? "" : "s"}` : ""}
       </p>
       <div className="row">
-        <Link className="btn btn-small" to={`/app/reports/${artifact.id}`}>View</Link>
-        <button type="button" className="btn btn-small" onClick={() => setSharing(true)}><ShareIcon size={16} /> Share</button>
-        <button type="button" className="btn btn-small btn-icon-only" disabled={saving} onClick={download}
-                aria-label={saving ? "Preparing the PDF" : "Download PDF"} title={saving ? "Preparing the PDF..." : "Download PDF"}>
+        <ViewButton label="View" to={`/app/reports/${artifact.id}`} />
+        <button type="button" className="btn btn-small btn-icon-only card-act-share" onClick={() => setSharing(true)} aria-label="Share">
+          <ShareIcon size={16} />
+        </button>
+        <button type="button" className="btn btn-small btn-icon-only card-act-download" disabled={saving} onClick={download}
+                aria-label={saving ? "Preparing the PDF" : "Download PDF"}>
           {saving ? <span className="nbv-send-spinner" aria-hidden="true" /> : <DownloadIcon size={16} />}
         </button>
       </div>

@@ -935,8 +935,8 @@ class OutlineDeck(dspy.Signature):
 
 class SlidePoint(BaseModel):
     term: str = Field(default="", description="Detailed: the idea's name in 1 to 4 words. Presenter: leave empty")
-    text: str = Field(description="Detailed: one or two sentences that explain the idea, at most 30 words. "
-                                  "Presenter: a highlight of at most 8 words")
+    text: str = Field(description="Detailed: one or two sentences that explain the idea in full, at most 30 words. "
+                                  "Presenter: a short bullet of at most 8 words")
 
 
 class SlideColumn(BaseModel):
@@ -956,25 +956,26 @@ class SlideQuote(BaseModel):
 
 class SlideOut(BaseModel):
     kicker: str = Field(description="1 to 3 words above the heading: the slide's topic")
-    heading: str = Field(description="The headline, at most 9 words (presenter: 7)")
-    lead: str = Field(default="", description="Detailed: 1 or 2 sentences framing the slide, at most 35 words. "
-                                              "Presenter: one short line or empty")
-    points: list[SlidePoint] = Field(default_factory=list, description="For points slides: detailed 3 to 5, presenter 2 to 4")
+    heading: str = Field(description="The headline: detailed at most 9 words, presenter a short title of at most 5")
+    lead: str = Field(default="", description="Detailed: 2 or 3 sentences describing what the slide shows, at most 45 "
+                                              "words. Presenter: empty, or one line of at most 10 words")
+    points: list[SlidePoint] = Field(default_factory=list, description="For points slides: detailed 2 to 4 ideas, each "
+                                                                       "named and explained; presenter 4 to 6 short bullets")
     left: SlideColumn | None = Field(default=None, description="For two_column slides: the first side")
     right: SlideColumn | None = Field(default=None, description="For two_column slides: the second side")
     stat: SlideStat | None = Field(default=None, description="For stat slides")
     quote: SlideQuote | None = Field(default=None, description="For quote slides")
-    notes: str = Field(description="Speaker notes: what to say over this slide, 60 to 150 words, explaining it fully")
     sources: list[SourceRef] = Field(default_factory=list, description="The lines this slide's words come from")
 
 
 class WriteSlide(dspy.Signature):
     """Write one slide of a deck, using only the source lines given: never add facts, numbers or names from outside them.
     The slide must make the point its plan describes and fit the deck's flow. Detailed format: the slide is read on
-    its own, so explain each idea: a clear heading, a lead that frames it, and points that each name an idea and
-    explain it in a full sentence (why it matters or how it works, not just what it is). Presenter format: the slide
-    supports a speaker, so keep it sparse: a short heading and a few highlights of a handful of words, and put the
-    full explanation in the speaker notes. Say only what this slide is for: the other slides in the outline cover
+    its own, so describe it in detail: a clear heading, a lead of 2 or 3 sentences that describes what the slide
+    shows, and a few points that each name an idea and explain it in a full sentence (why it matters or how it works,
+    not just what it is). Presenter format: the slide is scanned at a glance while someone speaks, so make it point
+    focused: a short title of a few words, no lead or one short line, and more bullets (4 to 6 on a points slide),
+    each a crisp highlight of a handful of words. Say only what this slide is for: the other slides in the outline cover
     the rest, so do not repeat them. Apply the request's audience, tone and style to this slide, and anything it
     asks of this part of the deck, as far as the source lines support it. Fill only the fields the layout uses. Keep
     every line plain text: no markdown, no bullets characters, no numbering. Write in the language requested. Never
@@ -1020,7 +1021,6 @@ class DeckClosing(BaseModel):
     takeaways: list[str] = Field(description="Exactly 3 takeaways, each a full sentence of at most 20 words "
                                              "(presenter: 10)")
     closing: str = Field(description="The one idea to remember, at most 12 words: a strong last line, not a thank you")
-    notes: str = Field(description="Speaker notes for the close, 50 to 120 words")
 
 
 class WriteClosing(dspy.Signature):

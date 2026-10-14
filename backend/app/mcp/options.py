@@ -36,7 +36,7 @@ KINDS = {
         {"key": "deck_length", "label": "Length", "type": "chips", "default": "default",
          "options": [{"value": "short", "label": "Short"}, {"value": "default", "label": "Default"}, {"value": "long", "label": "Long"}]},
         {"key": "theme", "label": "Theme", "type": "cards", "default": "dark-space",
-         "options": [{"value": "dark-space", "label": "Night stellar", "hint": "Dark sky"}, {"value": "light-space", "label": "Moon light", "hint": "Pale daylight sky"}]},
+         "options": [{"value": "dark-space", "label": "Night stellar", "hint": "Dark sky"}, {"value": "light-space", "label": "Moon light", "hint": "White sky"}]},
         INSTRUCTIONS]),
     "audio_overview": ("Set up your audio overview", "generate_audio_overview", [
         {"key": "format", "label": "Format", "type": "cards", "default": "deep_dive",

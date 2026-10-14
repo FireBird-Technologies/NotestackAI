@@ -1,5 +1,5 @@
 """The two deck themes. Both are space themes in the app's own palette (black, #217cff, white): one on a night sky, one
-on a pale daylight sky. Colours are plain hex so the HTML and the PowerPoint use exactly the same values."""
+on a plain white sky. Colours are plain hex so the HTML and the PowerPoint use exactly the same values."""
 
 from dataclasses import dataclass
 
@@ -35,8 +35,8 @@ THEMES: dict[str, Theme] = {t.id: t for t in (
         bg1="#000000", bg2="#0a1736", ink="#ffffff", mute="#b4bccc", accent="#4d94ff", accent2="#217cff",
         card="#0b1326", cardline="#1f3156", line="#26385c", band="#0e1c3d", bandink="#ffffff", star="#ffffff")),
     Theme("light-space", "Moon light", False, Palette(
-        bg1="#c3cddf", bg2="#dfe5ef", ink="#0b1a3a", mute="#36435f", accent="#1858c4", accent2="#0b3d91",
-        card="#e9eef6", cardline="#b3bfd5", line="#a7b4cc", band="#0b1a3a", bandink="#ffffff", star="#0b1a3a")),
+        bg1="#ffffff", bg2="#ffffff", ink="#0b1a3a", mute="#36435f", accent="#1858c4", accent2="#0b3d91",
+        card="#f5f5f5", cardline="#d6d6d6", line="#d0d0d0", band="#0b1a3a", bandink="#ffffff", star="#0b1a3a")),
 )}
 DEFAULT_THEME = "dark-space"
 

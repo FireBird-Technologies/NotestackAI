@@ -98,7 +98,7 @@ def _aware(dt: datetime) -> datetime:
 
 
 # audio can't be posted; "upload" is a file the user brought from their computer
-POSTABLE = ("video", "quote_card", "carousel", "summary", "launch_kit", "mind_map", "upload", "slide_deck", "report",
+POSTABLE = ("video", "quote_card", "carousel", "summary", "launch_kit", "upload", "slide_deck", "report",
             "infographic")
 # Listed on the Launchpad too, but only to download: X and LinkedIn take no audio files (check_postable refuses it)
 LISTED = (*POSTABLE, "audio_overview")

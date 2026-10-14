@@ -180,6 +180,30 @@ export const ShareIcon = (p: P) => (
   </Icon>
 );
 
+/** An open eye: view. */
+export const EyeIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" />
+    <circle cx="12" cy="12" r="3" />
+  </Icon>
+);
+
+/** A desktop monitor on its stand: present. */
+export const DesktopIcon = (p: P) => (
+  <Icon {...p}>
+    <rect x="2.5" y="4" width="19" height="12.5" rx="2" />
+    <path d="M12 16.5V20M8 20h8" />
+  </Icon>
+);
+
+/** A circular arrow: try again. */
+export const RetryIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M20 12a8 8 0 1 1-2.35-5.65" />
+    <path d="M20 4v4.5h-4.5" />
+  </Icon>
+);
+
 /** A stack of media with a play mark on the front: the Library (what you made, your videos and your voices). */
 export const LibraryIcon = (p: P) => (
   <Icon {...p}>
@@ -294,6 +318,23 @@ export const MoreIcon = (p: P) => (
     <circle cx="12" cy="5.5" r="1.1" fill="currentColor" />
     <circle cx="12" cy="12" r="1.1" fill="currentColor" />
     <circle cx="12" cy="18.5" r="1.1" fill="currentColor" />
+  </Icon>
+);
+
+/** A framed picture, a sun over hills: an image file. */
+export const ImageIcon = (p: P) => (
+  <Icon {...p}>
+    <rect x="3" y="4" width="18" height="16" rx="2.5" />
+    <circle cx="9" cy="9.5" r="1.8" />
+    <path d="M3.5 17.5l5-5 4 4 3-3 5 5" />
+  </Icon>
+);
+
+/** A framed M and down arrow: a Markdown file. */
+export const MarkdownIcon = (p: P) => (
+  <Icon {...p}>
+    <rect x="2.5" y="5" width="19" height="14" rx="2.5" />
+    <path d="M6 15V9l2.5 3L11 9v6M16 9v6M13.8 12.8L16 15l2.2-2.2" />
   </Icon>
 );
 

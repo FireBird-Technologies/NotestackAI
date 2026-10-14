@@ -2035,14 +2035,14 @@ def test_artifacts_can_be_rated_with_a_thumb_and_reasons(client, auth, run_jobs,
     assert client.get(f"/api/artifacts/{art['id']}", headers=auth).json()["feedback"] is None
 
     up = client.put(url, json={"rating": "up"}, headers=auth).json()["feedback"]
-    assert up == {"rating": "up", "stars": 2, "reasons": [], "comment": None}  # no stars given: 2
+    assert up == {"rating": "up", "reasons": [], "comment": None}
     listed = client.get(f"/api/notebooks/{nb['id']}/artifacts", headers=auth).json()
     assert next(a for a in listed if a["id"] == art["id"])["feedback"]["rating"] == "up"
 
     # Rating again replaces it; unknown reasons are dropped, known ones for this kind kept; a thumbs up carries none
     down = client.put(url, json={"rating": "down", "reasons": ["messy_layout", "nonsense", "wrong_answers"],
                                  "comment": "  Boxes overlap  "}, headers=auth).json()["feedback"]
-    assert down == {"rating": "down", "stars": None, "reasons": ["messy_layout"], "comment": "Boxes overlap"}
+    assert down == {"rating": "down", "reasons": ["messy_layout"], "comment": "Boxes overlap"}
     assert client.get("/api/artifacts?type=infographic", headers=auth).json()["items"][0]["feedback"]["rating"] == "down"
     rows = client.get("/api/artifacts/feedback/export?rating=down", headers=auth).json()
     assert len(rows) == 1 and rows[0]["type"] == "infographic" and rows[0]["snapshot"]["layout"] == "composed"
@@ -2051,9 +2051,8 @@ def test_artifacts_can_be_rated_with_a_thumb_and_reasons(client, auth, run_jobs,
     assert client.put(url, json={"rating": None}, headers=auth).json() == {"feedback": None}
     assert client.get(f"/api/artifacts/{art['id']}", headers=auth).json()["feedback"] is None
 
-    # Only reports, quizzes, flashcards and infographics are rated
+    # Any kind can be rated once it has finished (test_every_kind_of_artifact_can_be_rated); not before
     summary = client.post("/api/artifacts/generate", json={"type": "summary", "notebook_id": nb["id"]}, headers=auth).json()
-    assert "feedback" not in summary
     assert client.put(f"/api/artifacts/{summary['id']}/feedback", json={"rating": "up"}, headers=auth).status_code == 400
 
 
@@ -2117,9 +2116,29 @@ def test_landing_opens_the_latest_notebook(client, auth, run_jobs, feed):
     assert client.get("/api/notebooks/landing", headers=auth).json()["notebook_id"] == nb["id"]
 
 
+def test_every_kind_of_artifact_can_be_rated(client, auth, db_session):
+    """Each type the app makes takes a thumbs up or down with feedback, saved in the same table."""
+    from typing import get_args
+
+    from app.models import ArtifactFeedback
+    from app.routers.artifacts import ArtifactType
+    from app.services.artifact_feedback import REASONS
+
+    assert set(get_args(ArtifactType)) <= set(REASONS)
+    ws = db_session.query(Workspace).first()
+    for kind in get_args(ArtifactType):
+        a = Artifact(workspace_id=ws.id, type=kind, status="ready", content_json={"title": kind})
+        db_session.add(a)
+        db_session.commit()
+        r = client.put(f"/api/artifacts/{a.id}/feedback", json={"rating": "up", "comment": f"good {kind}"}, headers=auth)
+        assert r.status_code == 200, kind
+    rows = {(f.artifact_type, f.rating, f.comment) for f in db_session.query(ArtifactFeedback)}
+    assert rows == {(k, 1, f"good {k}") for k in get_args(ArtifactType)}
+
+
 def test_decks_audio_and_videos_take_positive_and_negative_reviews(client, auth, db_session):
-    """One table for both: a thumbs up is a positive review stored as its stars (1 to 5, 2 by default), a thumbs down a
-    negative one (rating -1)."""
+    """One table for both: a thumbs up is a positive review (rating 1), a thumbs down a negative one (rating -1), each
+    with the user's feedback. No stars."""
     from app.models import ArtifactFeedback
 
     ws = db_session.query(Workspace).first()
@@ -2129,19 +2148,17 @@ def test_decks_audio_and_videos_take_positive_and_negative_reviews(client, auth,
                      content_json={"title": "Clip", "provider": "blog2video", "video_url": "https://cdn.test/v.mp4"})
     db_session.add_all([deck, audio, video])
     db_session.commit()
-    r = client.put(f"/api/artifacts/{deck.id}/feedback", json={"rating": "up", "stars": 4, "comment": "Clear and tidy"},
-                   headers=auth)
+    r = client.put(f"/api/artifacts/{deck.id}/feedback", json={"rating": "up", "comment": "Clear and tidy"}, headers=auth)
     assert r.status_code == 200
-    assert r.json()["feedback"] == {"rating": "up", "stars": 4, "reasons": [], "comment": "Clear and tidy"}
+    assert r.json()["feedback"] == {"rating": "up", "reasons": [], "comment": "Clear and tidy"}
     r = client.put(f"/api/artifacts/{audio.id}/feedback",
                    json={"rating": "down", "reasons": ["voices", "nonsense"], "comment": "Robotic"}, headers=auth)
     assert r.json()["feedback"]["reasons"] == ["voices"]
     assert client.put(f"/api/artifacts/{video.id}/feedback", json={"rating": "down"}, headers=auth).status_code == 200
     rows = {(f.artifact_type, f.rating, f.comment) for f in db_session.query(ArtifactFeedback)}
-    assert rows == {("slide_deck", 4, "Clear and tidy"), ("audio_overview", -1, "Robotic"), ("video", -1, None)}
-    assert client.put(f"/api/artifacts/{audio.id}/feedback", json={"rating": "up", "stars": 6}, headers=auth).status_code == 422
-    client.put(f"/api/artifacts/{audio.id}/feedback", json={"rating": "up"}, headers=auth)  # no stars given: 2
-    assert db_session.query(ArtifactFeedback).filter_by(artifact_id=audio.id).one().rating == 2
+    assert rows == {("slide_deck", 1, "Clear and tidy"), ("audio_overview", -1, "Robotic"), ("video", -1, None)}
+    client.put(f"/api/artifacts/{audio.id}/feedback", json={"rating": "up", "stars": 4}, headers=auth)  # stars ignored
+    assert db_session.query(ArtifactFeedback).filter_by(artifact_id=audio.id).one().rating == 1
     client.put(f"/api/artifacts/{deck.id}/feedback", json={"rating": "down", "comment": "On second look, too long"},
                headers=auth)  # rating again replaces it
     assert db_session.query(ArtifactFeedback).filter_by(artifact_id=deck.id).one().rating == -1

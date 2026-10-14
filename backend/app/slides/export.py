@@ -323,12 +323,6 @@ def _add_el(slide, e: El, pal: Palette) -> None:
         sh.line.fill.background()
 
 
-def _notes(slide_data: dict) -> str:
-    notes = slide_data.get("notes") or ""
-    srcs = [f"{s.get('title') or s['path']} (lines {s['line_start']}-{s['line_end']})" for s in slide_data.get("sources") or []]
-    return notes + (("\n\nSources: " + "; ".join(dict.fromkeys(srcs))) if srcs else "")
-
-
 def build_pptx(deck: dict, theme: str, fmt: str, seed: int) -> bytes:
     """The deck as an editable PowerPoint: text boxes you can type in, over each slide's drawn background."""
     theme = theme_id(theme)
@@ -345,9 +339,6 @@ def build_pptx(deck: dict, theme: str, fmt: str, seed: int) -> bytes:
             slide.shapes.add_picture(io.BytesIO(background(d, t.pal, t.dark)), 0, 0, _emu(W), _emu(H))
             for e in c.elements:
                 _add_el(slide, e, t.pal)
-            note = _notes(c.slide)
-            if note:
-                slide.notes_slide.notes_text_frame.text = note
         prs.core_properties.title = deck.get("title") or "Slide deck"
         buf = io.BytesIO()
         prs.save(buf)

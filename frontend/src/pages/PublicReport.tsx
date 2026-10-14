@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import { publicApi } from "../api/endpoints";
-import type { FlashcardData, PublicArtifactData, PublicAudioData, PublicSlidesData, PublicVideoData } from "../api/types";
+import type { Artifact, FlashcardData, PublicArtifactData, PublicAudioData, PublicMindMapData, PublicSlidesData, PublicVideoData } from "../api/types";
+import { MindMapExplorer } from "../components/MindMap";
 import { Transcript } from "../components/ArtifactCard";
 import { AudioPlayer } from "../components/AudioOverview";
 import { FlashcardDeck } from "../components/Flashcards";
@@ -16,7 +17,8 @@ import { useAuth } from "../hooks/useAuth";
 import { PreviewFrame } from "../components/video/VideoCard";
 
 const LABELS: Record<string, string> = { infographic: "Infographic", flashcards: "Flashcards", quiz: "Quiz",
-                                         slides: "Slide deck", audio: "Audio overview", video: "Video" };
+                                         slides: "Slide deck", audio: "Audio overview", video: "Video",
+                                         mind_map: "Mind Constellation" };
 
 /** The page around anything shared: the logo, what it is and its title, then it, then "Made with Notestack". */
 function PublicShell({ kind, title, wide = false, children }: { kind: string; title: string; wide?: boolean; children: ReactNode }) {
@@ -34,6 +36,23 @@ function PublicShell({ kind, title, wide = false, children }: { kind: string; ti
         <span className="muted">Made with</span> <HomeLink>Notestack</HomeLink>
       </footer>
     </main>
+  );
+}
+
+/** A shared Mind Constellation: the map in a frame on the page, as a shared report shows its maps; the corner button
+ * opens it full screen. */
+function PublicMindMap({ map, token }: { map: PublicMindMapData; token: string }) {
+  const [open, setOpen] = useState(false);
+  // The explorer reads an artifact's content: the shared tree is that content here.
+  const asArtifact = useMemo(() => ({ id: `shared:${token}`, title: map.title, content: { root: map.root } }) as unknown as Artifact,
+                             [map, token]);
+  if (!map.root) return <p className="muted">This Mind Constellation is empty.</p>;
+  return (
+    <>
+      <MindMapExplorer artifact={asArtifact} embedded warp={false} onClose={() => undefined} onExpand={() => setOpen(true)} />
+      <p className="muted small rp-map-hint">Drag to move around, click a star to read it. Hold Ctrl or Cmd and scroll to zoom.</p>
+      {open && <MindMapExplorer artifact={asArtifact} onClose={() => setOpen(false)} />}
+    </>
   );
 }
 
@@ -188,6 +207,7 @@ function PublicView() {
   if (shared.kind === "slides") return <PublicShell kind="slides" title={shared.title} wide><PublicSlides deck={shared} /></PublicShell>;
   if (shared.kind === "audio") return <PublicShell kind="audio" title={shared.title}><PublicAudio audio={shared} /></PublicShell>;
   if (shared.kind === "video") return <PublicShell kind="video" title={shared.title} wide><PublicVideo video={shared} /></PublicShell>;
+  if (shared.kind === "mind_map") return <PublicShell kind="mind_map" title={shared.title} wide><PublicMindMap map={shared} token={token} /></PublicShell>;
   const report = shared;
 
   const posts = report.sources?.posts ?? [];
