@@ -9774,6 +9774,17 @@ body.nbv-resizing iframe {
   align-items: center;
 }
 
+/* The report page's rating: its question, then the thumbs (each opens the review popup) */
+.rp-rate {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rp-rate .card-fb {
+  margin-left: 0;
+}
+
 .afb-label {
   margin-right: 4px;
 }

@@ -2,14 +2,15 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { artifactsApi, notebooksApi, reportsApi } from "../api/endpoints";
 import type { Artifact, Citation, ReportSuggestion } from "../api/types";
-import { ArtifactFeedback } from "../components/ArtifactFeedback";
+import { CardFeedback } from "../components/CardFeedback";
 import { ReportAddDialog } from "../components/ReportAddDialog";
 import { ShareDialog } from "../components/ShareDialog";
 import { Reader } from "../components/Reader";
 import { reportMarkdown, ReportView } from "../components/ReportView";
-import { ConfirmButton, errorMessage, JobProgress, Loading } from "../components/ui";
+import { ConfirmDeleteModal, errorMessage, JobProgress, Loading } from "../components/ui";
 import { useJob } from "../hooks/useJob";
-import { ShareIcon } from "../components/icons/Icons";
+import { DownloadIcon, MarkdownIcon, PdfIcon, ShareIcon } from "../components/icons/Icons";
+import { FloatingMenu, useMenu } from "../components/SlideDeck";
 
 /** One report, full page: /app/reports/:id. */
 export default function ReportPage() {
@@ -22,6 +23,10 @@ export default function ReportPage() {
   const [addFailed, setAddFailed] = useState<string | null>(null);
   const [reading, setReading] = useState<{ id: string; start: number; end: number } | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const downloads = useMenu();
+  const [savingPdf, setSavingPdf] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false); // the "Delete report?" warning is open
 
   const load = useCallback(() => artifactsApi.get(id).then(setArtifact, () => setError("Report not found.")), [id]);
   useEffect(() => {
@@ -59,13 +64,31 @@ export default function ReportPage() {
   const blockFailed = (artifact.adding ?? []).find((a) => a.status === "failed")?.error ?? null;
   const back = artifact.notebook_id ? `/app/notebooks/${artifact.notebook_id}` : "/app/archive";
 
-  const download = () => {
-    const url = URL.createObjectURL(new Blob([reportMarkdown(artifact.content)], { type: "text/markdown" }));
+  const save = (blob: Blob, name: string) => {
+    const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${artifact.title.slice(0, 60)}.md`;
+    a.download = name;
     a.click();
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  };
+  const downloadMarkdown = () => {
+    downloads.setOpen(false);
+    save(new Blob([reportMarkdown(artifact.content)], { type: "text/markdown" }), `${artifact.title.slice(0, 60)}.md`);
+  };
+  /** The report's text as a PDF, printed by the server (its embedded visuals are left out). */
+  const downloadPdf = async () => {
+    downloads.setOpen(false);
+    setSavingPdf(true);
+    setPdfError(null);
+    try {
+      const name = artifact.title.replace(/[^\w\- ]+/g, "").trim().slice(0, 80) || "Report";
+      save(await artifactsApi.reportPdf(artifact.id), `${name}.pdf`);
+    } catch (e) {
+      setPdfError(errorMessage(e, "The PDF could not be made. Try again."));
+    } finally {
+      setSavingPdf(false);
+    }
   };
   const startAdd = async (s: ReportSuggestion) => {
     setAddFailed(null);
@@ -117,17 +140,34 @@ export default function ReportPage() {
         <h1>{artifact.title}</h1>
         {artifact.status === "ready" && (
           <div className="row">
-            <button type="button" className="btn btn-small btn-primary" onClick={() => setSharing(true)}><ShareIcon size={16} /> Share</button>
-            <button type="button" className="btn btn-small" onClick={download}>Download Markdown</button>
-            <ArtifactFeedback artifact={artifact} label="How is this report?" compact />
-            <ConfirmButton onConfirm={async () => {
-              try {
-                await artifactsApi.remove(artifact.id);
-                navigate(back);
-              } catch (e) {
-                setError(errorMessage(e));
-              }
-            }}>Delete</ConfirmButton>
+            <button type="button" className="btn btn-small" onClick={() => setSharing(true)}><ShareIcon size={16} /> Share</button>
+            <div className="sd-menu-wrap" ref={downloads.ref}>
+              <button type="button" className="btn btn-small" aria-haspopup="menu" aria-expanded={downloads.open}
+                      disabled={savingPdf} onClick={() => downloads.setOpen((o) => !o)}>
+                {savingPdf ? <span className="nbv-send-spinner" aria-hidden="true" /> : <DownloadIcon size={16} />}
+                {savingPdf ? " Preparing the PDF..." : " Download"}
+              </button>
+              {downloads.open && (
+                <FloatingMenu menu={downloads}>
+                  <button type="button" role="menuitem" onClick={downloadMarkdown}><MarkdownIcon size={20} /> Markdown (.md)</button>
+                  <button type="button" role="menuitem" onClick={() => void downloadPdf()}><PdfIcon size={20} /> PDF document (.pdf)</button>
+                </FloatingMenu>
+              )}
+              {pdfError && <span className="sd-menu-error error-text small" role="alert">{pdfError}</span>}
+            </div>
+            {/* A thumb opens the review in a popup (the same as on the notebook's cards) */}
+            <span className="rp-rate">
+              <span className="muted small">How is this report?</span>
+              <CardFeedback artifact={artifact} />
+            </span>
+            <button type="button" className="btn btn-small btn-danger" onClick={() => setDeleting(true)}>Delete</button>
+            {deleting && (
+              <ConfirmDeleteModal heading="Delete report?" name={artifact.title} onCancel={() => setDeleting(false)}
+                                  onConfirm={async () => {
+                                    await artifactsApi.remove(artifact.id); // a failure shows in the warning
+                                    navigate(back);
+                                  }} />
+            )}
           </div>
         )}
       </header>
