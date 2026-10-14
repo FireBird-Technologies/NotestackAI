@@ -167,6 +167,7 @@ class Settings(BaseSettings):
     mcp_refresh_ttl_days: int = 30
     mcp_template_preview_base_url: str = ""  # where template preview pictures live: {base}/<template-id>.png. Empty = use the app's own pictures
     mcp_media_domains: str = ""  # extra https hosts a video may play from in the chat view, comma separated (e.g. a CDN)
+    openai_apps_challenge: str = ""  # token OpenAI asks to be served at /.well-known/openai-apps-challenge to verify the domain
 
     # Billing (Stripe). With BILLING_ENABLED=false everyone gets Studio limits and checkout is off.
     billing_enabled: bool = False
