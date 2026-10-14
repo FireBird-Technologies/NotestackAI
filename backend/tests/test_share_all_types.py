@@ -17,10 +17,13 @@ CONTENT = {
     "audio_overview": {"title": "Pricing talk", "duration_s": 61.5,
                        "segments": [{"speaker": "A", "text": "Let's talk pricing.", "start": 0, "end": 3,
                                      "sources": [SOURCE]}]},
+    "mind_map": {"title": "Pricing map", "root": {"id": "r", "label": "Pricing", "note": "The centre.", "sources": [SOURCE],
+                                                  "children": [{"id": "c1", "label": "Tiers", "note": "", "sources": [SOURCE],
+                                                                "children": []}]}},
     "video": {"title": "Pricing video", "video_url": "https://cdn.test/v.mp4", "preview_url": "https://b2v.test/p/1",
               "b2v_video_id": 812},
 }
-KIND = {"flashcards": "flashcards", "quiz": "quiz", "audio_overview": "audio", "video": "video"}
+KIND = {"flashcards": "flashcards", "quiz": "quiz", "audio_overview": "audio", "video": "video", "mind_map": "mind_map"}
 
 
 @pytest.fixture()
@@ -58,6 +61,9 @@ def test_each_type_can_be_shared_and_shows_only_its_whitelist(client, auth, db_s
     if kind == "audio_overview":
         assert body["audio_url"] and body["duration"] == 61.5
         assert body["segments"] == [{"speaker": "A", "text": "Let's talk pricing.", "start": 0, "end": 3}]
+    if kind == "mind_map":
+        assert body["root"]["label"] == "Pricing" and body["root"]["sources"] == []
+        assert body["root"]["children"][0]["label"] == "Tiers"
     if kind == "video":
         assert body["video_url"] == "https://cdn.test/v.mp4" and body["preview_url"] == "https://b2v.test/p/1"
     assert client.get(f"/api/public/reports/{token}").json()["kind"] == body["kind"]  # the old address works too

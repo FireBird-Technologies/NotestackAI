@@ -6,6 +6,7 @@ import { ArtifactFeedback } from "./ArtifactFeedback";
 import { ShareDialog } from "./ShareDialog";
 import { errorMessage, Modal } from "./ui";
 import { DownloadIcon, ShareIcon } from "./icons/Icons";
+import { ViewButton } from "./cardActions";
 
 /** The looks: black and blue, and white with orbits. The AI composes the page itself in the look chosen
  * (backend/app/infographics/design.py); the thumbnails are rendered from a sample (backend/scripts/render_theme_thumbnails.py). */
@@ -70,16 +71,16 @@ function useInfographicDownload(artifact: Artifact) {
 }
 
 /** The Download button with its menu: landscape, portrait or both. */
-function DownloadMenu({ busy, onPick }: { busy: Which | null; onPick: (which: Which) => void }) {
+function DownloadMenu({ busy, onPick, inCard = false }: { busy: Which | null; onPick: (which: Which) => void; inCard?: boolean }) {
   const [open, setOpen] = useState(false);
   const pick = (which: Which) => {
     setOpen(false);
     onPick(which);
   };
   return (
-    <div className="ig-dl">
+    <div className={`ig-dl${inCard ? " card-act-download" : ""}`}>
       <button type="button" className="btn btn-small btn-icon-only" disabled={busy !== null} aria-expanded={open} aria-haspopup="menu"
-              aria-label={busy ? "Preparing the download" : "Download"} title={busy ? "Preparing..." : "Download"}
+              aria-label={busy ? "Preparing the download" : "Download"} title={inCard ? undefined : busy ? "Preparing..." : "Download"}
               onClick={() => setOpen((o) => !o)}>
         {busy ? <span className="nbv-send-spinner" aria-hidden="true" /> : <DownloadIcon size={16} />}
       </button>
@@ -281,9 +282,11 @@ export function InfographicBody({ artifact }: { artifact: Artifact }) {
       <p className="muted">{c.theme ? `${INFOGRAPHIC_THEMES.find((t) => t.id === c.theme)?.name ?? c.theme} look · ` : ""}from {sourceSummary(c.source)}</p>
       {dl.error && <p className="error-text small" role="alert">{dl.error}</p>}
       <div className="row">
-        <button type="button" className="btn btn-small" onClick={() => setOpen(true)}>Open</button>
-        <DownloadMenu busy={dl.busy} onPick={dl.download} />
-        <button type="button" className="btn btn-small" onClick={() => setSharing(true)}><ShareIcon size={16} /> Share</button>
+        <ViewButton label="Open" onClick={() => setOpen(true)} />
+        <DownloadMenu busy={dl.busy} onPick={dl.download} inCard />
+        <button type="button" className="btn btn-small btn-icon-only card-act-share" onClick={() => setSharing(true)} aria-label="Share">
+          <ShareIcon size={16} />
+        </button>
       </div>
       {open && <InfographicViewer artifact={artifact} onClose={() => setOpen(false)} onDownload={dl.download} />}
       {sharing && <ShareDialog artifactId={artifact.id} what="infographic" onClose={() => setSharing(false)} />}

@@ -3,12 +3,13 @@ import { useNavigate } from "react-router-dom";
 import type { Artifact } from "../../api/types";
 import { ScheduleModal } from "../ScheduleModal";
 import { Modal } from "../ui";
+import { RocketIcon } from "../icons/Icons";
 import { AudioOnlyModal } from "./Attachment";
 
 /** What can go out on X / LinkedIn: images (a slide deck's slides, an infographic), videos, a report (its text, or a
  * PDF on LinkedIn), your uploads and text. Not audio (neither platform takes audio files; the Library explains that),
- * and not quizzes or flashcards. */
-const POSTABLE = new Set(["video", "quote_card", "carousel", "summary", "launch_kit", "mind_map", "slide_deck", "report",
+ * and not quizzes, flashcards or Mind Constellations. */
+const POSTABLE = new Set(["video", "quote_card", "carousel", "summary", "launch_kit", "slide_deck", "report",
   "infographic", "upload"]);
 
 /** A blog2video video with no MP4 yet: it can be launched once it is rendered. */
@@ -24,12 +25,14 @@ export function canPost(a: Artifact): boolean {
 
 /** "Launch": opens the composer with this item attached and its text filled in. A video not rendered yet asks to render
  * it first, and on yes opens the video's page with the render started. */
-export function PostButton({ artifactId, artifact, className = "btn btn-small", label = "Launch" }: {
+export function PostButton({ artifactId, artifact, className = "btn btn-small", label = "Launch", iconOnly = false }: {
   artifactId: string;
   /** The item, when the caller has it: tells whether a video still has to be rendered. */
   artifact?: Artifact;
   className?: string;
   label?: string;
+  /** Just a rocket (a notebook card's actions), the label as its hover label. */
+  iconOnly?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
@@ -37,7 +40,13 @@ export function PostButton({ artifactId, artifact, className = "btn btn-small", 
   const audio = artifact?.type === "audio_overview";
   return (
     <>
-      <button type="button" className={className} onClick={() => setOpen(true)}>{label}</button>
+      {iconOnly ? (
+        <button type="button" className={`${className} btn-icon-only card-act-launch`} aria-label={label} onClick={() => setOpen(true)}>
+          <RocketIcon size={16} />
+        </button>
+      ) : (
+        <button type="button" className={className} onClick={() => setOpen(true)}>{label}</button>
+      )}
       {open && audio && <AudioOnlyModal title={artifact!.title} downloadUrl={artifact!.download_url} onClose={() => setOpen(false)} />}
       {open && !unrendered && !audio && <ScheduleModal platform="linkedin" posts={[]} artifactId={artifactId} onClose={() => setOpen(false)} />}
       {open && unrendered && (

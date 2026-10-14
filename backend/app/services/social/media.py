@@ -1,8 +1,8 @@
 """What a scheduled post carries from the artifact it was made from: images (quote cards, carousel slides, a slide
 deck's slides or an infographic, drawn when the post goes out), a PDF (a report too long for one post, LinkedIn only) or one
 video (an audiogram, or a blog2video video), or a file the user uploaded from their computer (an `upload`: one image or
-one MP4). Summaries, launch kits and mind maps post as text; audio overviews can't
-be posted (X and LinkedIn take no audio files).
+one MP4). Summaries and launch kits post as text; audio overviews can't
+be posted (X and LinkedIn take no audio files), and Mind Constellations aren't posted (they are downloaded instead).
 
 Videos are streamed to a temporary file (never held whole in memory) and read in slices by the uploaders; the files are
 removed when the post is done (media_for is a context manager). Sizes are checked before anything is sent."""
@@ -22,7 +22,7 @@ from app.services.social import SocialError
 
 MAX_IMAGES = {"x": 4, "linkedin": 20}
 X_VIDEO_SECONDS = 140  # X's limit for videos from standard accounts (2:20)
-TEXT_ONLY = {"summary", "launch_kit", "mind_map"}
+TEXT_ONLY = {"summary", "launch_kit"}
 MEDIA_PLATFORMS = {"x", "linkedin"}
 MB = 1024 * 1024
 # What the user can upload from their computer to post: LinkedIn takes JPG, PNG and GIF images and MP4 videos.
@@ -101,6 +101,8 @@ def check_postable(a: Artifact, platform: str) -> None:
     """400 when this artifact can't go out on this platform, so it is refused when scheduled, not at post time."""
     if a.type == "audio_overview":
         raise HTTPException(400, "Audio can't be posted: X and LinkedIn don't take audio files.")
+    if a.type == "mind_map":
+        raise HTTPException(400, "A Mind Constellation can't be posted. Download it as an image or PDF instead.")
     if a.type == "launch_kit":  # a post is written from a kit (kit_id); the kit itself is never an attachment
         raise HTTPException(400, "A launch kit can't be attached. Attach a video, quote card or carousel instead.")
     if a.type not in TEXT_ONLY and a.type not in ("quote_card", "carousel", "video", "upload", "slide_deck", "report",

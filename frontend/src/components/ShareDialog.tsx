@@ -8,7 +8,7 @@ import { ShareIcon } from "./icons/Icons";
 /** What can be shared by link, and what each is called in the dialog. */
 const SHARE_WHAT: Partial<Record<Artifact["type"], string>> = {
   report: "report", infographic: "infographic", audio_overview: "audio overview", video: "video", slide_deck: "slide deck",
-  flashcards: "flashcard set", quiz: "quiz",
+  flashcards: "flashcard set", quiz: "quiz", mind_map: "Mind Constellation",
 };
 
 /** The artifact's link, made if there is none yet: one request per artifact at a time, so opening the dialog twice
@@ -29,16 +29,18 @@ export function canShare(a: Artifact): boolean {
   return !!SHARE_WHAT[a.type] && (a.status === "ready" || (a.type === "video" && !!a.url));
 }
 
-/** A Share button that opens the share dialog: for any finished artifact that can be shared, else nothing. */
-export function ShareButton({ artifact, className = "btn btn-small" }: { artifact: Artifact; className?: string }) {
+/** A Share button that opens the share dialog: for any finished artifact that can be shared, else nothing. `iconOnly`
+ * shows just the icon (a notebook card's actions). */
+export function ShareButton({ artifact, className = "btn btn-small", iconOnly = false }: { artifact: Artifact; className?: string; iconOnly?: boolean }) {
   const [open, setOpen] = useState(false);
   if (!canShare(artifact)) return null;
   return (
     <>
-      <button type="button" className={className} onClick={(e) => {
+      <button type="button" className={iconOnly ? `${className} btn-icon-only card-act-share` : className}
+              aria-label={iconOnly ? "Share" : undefined} onClick={(e) => {
         e.stopPropagation();
         setOpen(true);
-      }}><ShareIcon size={16} /> Share</button>
+      }}><ShareIcon size={16} />{!iconOnly && " Share"}</button>
       {open && <ShareDialog artifactId={artifact.id} what={SHARE_WHAT[artifact.type]} onClose={() => setOpen(false)} />}
     </>
   );

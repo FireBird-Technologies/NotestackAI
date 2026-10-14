@@ -86,8 +86,6 @@ export type Citation = {
 export type ChatSummary = { id: string; title: string | null; updated_at: string | null };
 export type AnswerFeedback = {
   rating: "up" | "down";
-  /** A thumbs up's rating, 1 to 5 (artifacts only). */
-  stars?: number | null;
   reasons: string[];
   comment: string | null;
 };
@@ -161,10 +159,12 @@ export type PublicAudioData = PublicHead & {
   segments: { speaker: string; text: string; start: number; end: number }[];
 };
 export type PublicVideoData = PublicHead & { kind: "video"; video_url: string | null; preview_url: string | null };
+/** A Mind Constellation as the public sees it: labels and notes only (no sources). */
+export type PublicMindMapData = PublicHead & { kind: "mind_map"; root: MindNode | null };
 
 /** Anything a share link can open. */
 export type PublicArtifactData = PublicReportData | PublicInfographicData | PublicFlashcardsData | PublicQuizData
-  | PublicSlidesData | PublicAudioData | PublicVideoData;
+  | PublicSlidesData | PublicAudioData | PublicVideoData | PublicMindMapData;
 
 export type ReportTemplate = { id: string; name: string; description: string; prompt: string };
 

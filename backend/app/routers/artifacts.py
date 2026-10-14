@@ -272,8 +272,8 @@ def list_artifacts(
 @router.get("/feedback/export")
 def export_artifact_feedback(ctx: Ctx = Depends(get_ctx), rating: Literal["up", "down"] | None = None, type: str | None = None,
                              limit: int = 200):
-    """The ratings of generated reports, quizzes, flashcards and infographics, newest first, with what each one was, to see
-    which kinds do well and which do not."""
+    """The ratings of generated artifacts (thumbs up 1, thumbs down -1, with the feedback), newest first, with what each
+    one was, to see which kinds do well and which do not."""
     q = select(ArtifactFeedback).where(ArtifactFeedback.workspace_id == ctx.workspace.id)
     if rating:
         q = q.where(ArtifactFeedback.rating > 0 if rating == "up" else ArtifactFeedback.rating < 0)
@@ -283,7 +283,7 @@ def export_artifact_feedback(ctx: Ctx = Depends(get_ctx), rating: Literal["up", 
     log.info("feedback exported: rows=%d rating=%s type=%s user=%s workspace=%s", len(rows), rating, type, ctx.user.id,
              ctx.workspace.id)
     return [{"id": str(f.id), "artifact_id": str(f.artifact_id) if f.artifact_id else None, "type": f.artifact_type,
-             "rating": "up" if f.rating > 0 else "down", "stars": f.rating if f.rating > 0 else None, "reasons": f.reasons, "comment": f.comment, "snapshot": f.snapshot,
+             "rating": "up" if f.rating > 0 else "down", "reasons": f.reasons, "comment": f.comment, "snapshot": f.snapshot,
              "rated_at": f.updated_at.isoformat() if f.updated_at else None} for f in rows]
 
 
@@ -310,29 +310,23 @@ def _offer_visuals_once(ctx: Ctx, a: Artifact) -> None:
     ctx.db.commit()
 
 
-DEFAULT_STARS = 2  # a thumbs up with no stars given
-
-
 class FeedbackIn(BaseModel):
     rating: Literal["up", "down"] | None  # null takes the rating back
-    stars: int | None = Field(None, ge=1, le=5)  # a thumbs up's rating, 1 to 5 (2 when not given)
     reasons: list[str] = []
     comment: str | None = Field(None, max_length=1000)
 
 
 @router.put("/{artifact_id}/feedback")
 def rate_artifact(artifact_id: uuid.UUID, body: FeedbackIn, ctx: Ctx = Depends(get_ctx)):
-    """Thumbs up (a positive review) or down (a negative one) on a finished report, quiz, flashcard set, infographic,
-    slide deck, audio overview or video, in one table told apart by `rating` (1 / -1). Rating again replaces it; null
-    removes it."""
+    """Thumbs up (a positive review) or down (a negative one) on any finished artifact, with the user's feedback, in one
+    table told apart by `rating` (1 / -1). Rating again replaces it; null removes it."""
     a = get_artifact_or_404(ctx, artifact_id)
     allowed = artifact_feedback.REASONS.get(a.type)
     # A blog2video video counts once it has its MP4, whatever its status says.
     finished = a.status == "ready" or (a.type == "video" and bool((a.content_json or {}).get("video_url")))
     if allowed is None or not finished:
         log.warning("feedback refused: artifact=%s type=%s status=%s user=%s", a.id, a.type, a.status, ctx.user.id)
-        raise HTTPException(400, "Only a finished report, quiz, flashcard set, infographic, slide deck, audio overview "
-                                 "or video can be rated")
+        raise HTTPException(400, "Only something finished can be rated")
     row = ctx.db.scalar(select(ArtifactFeedback).where(ArtifactFeedback.artifact_id == a.id, ArtifactFeedback.user_id == ctx.user.id))
     if body.rating is None:
         if row:
@@ -344,11 +338,8 @@ def rate_artifact(artifact_id: uuid.UUID, body: FeedbackIn, ctx: Ctx = Depends(g
         row = ArtifactFeedback(workspace_id=ctx.workspace.id, artifact_id=a.id, user_id=ctx.user.id)
         ctx.db.add(row)
     row.artifact_type = a.type
-    # One column tells them apart: a thumbs up keeps its stars (1 to 5), a thumbs down is -1.
-    if body.rating == "up":
-        row.rating = body.stars or (row.rating if row.rating and row.rating > 0 else DEFAULT_STARS)
-    else:
-        row.rating = -1
+    # One column tells them apart: a thumbs up is 1, a thumbs down -1.
+    row.rating = 1 if body.rating == "up" else -1
     row.reasons = [r for r in dict.fromkeys(body.reasons) if r in allowed] if body.rating == "down" else []
     row.comment = (body.comment or "").strip() or None
     row.snapshot = artifact_feedback.snapshot(a)
@@ -409,6 +400,23 @@ def report_file(artifact_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
     return Response(data, media_type="application/pdf", headers={"Content-Disposition": f'inline; filename="{name}.pdf"'})
 
 
+@router.get("/{artifact_id}/mind-map.pdf")
+def mind_map_file(artifact_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
+    """A finished Mind Constellation as a document: its points with their notes and the posts they came from."""
+    from app.services.mind_map_export import mind_map_pdf
+
+    a = get_artifact_or_404(ctx, artifact_id)
+    if a.type != "mind_map" or a.status != "ready":
+        raise HTTPException(404, "This Mind Constellation has nothing to show yet.")
+    try:
+        data = mind_map_pdf(a)
+    except ImageUnavailable as exc:
+        raise HTTPException(503, str(exc)) from exc
+    name = re.sub(r"[^\w\- ]+", "", str((a.content_json or {}).get("title") or "Mind Constellation")).strip()[:80]
+    return Response(data, media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="{name or "Mind Constellation"}.pdf"'})
+
+
 class DeckIn(BaseModel):
     # The deck's slides as the editor has them, in the stored shape (app.slides.content.empty_slide); coerced on arrival
     slides: list[dict] = Field(min_length=1, max_length=60)
@@ -436,7 +444,7 @@ def preview_deck(artifact_id: uuid.UUID, body: DeckIn, ctx: Ctx = Depends(get_ct
 
 @router.put("/{artifact_id}/deck")
 def save_deck(artifact_id: uuid.UUID, body: DeckIn, ctx: Ctx = Depends(get_ctx)):
-    """The editor's slides kept: text, speaker notes, and which slides there are, in what order and layout. The deck is
+    """The editor's slides kept: text, and which slides there are, in what order and layout. The deck is
     fitted again (with the Chrome check), so the slides, the PDF and the PowerPoint all show it."""
     a = _editable_deck(ctx, artifact_id)
     try:
