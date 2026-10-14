@@ -17,16 +17,12 @@ MAX_WAIT = 50
 DONE = {"ready", "failed"}
 GEN_COST = 10
 MCP_GENERATABLE = {"report", "quiz", "flashcards", "mind_map", "infographic", "slide_deck", "audio_overview", "video"}
-FLASHCARDS_SHOW = ("Make and show flashcards ONLY: never also make, invent or show a quiz or any other study material "
-                   "unless they asked for it, and do not draw your own flashcard display. The cards appear to the writer as flip cards in the chat, so do not retype them. Say how many there are, "
-                   "which notebook they were made in, and give them artifact_preview_url to study them in Notestack. "
-                   "If they are still being made, use show_flashcards in a moment.")
-REPORT_SHOW = ("When it is ready the writer reads THIS Notestack report right in the chat (sections, tables, quiz and all), "
-               "so do not retype or rebuild it. Say which notebook it was made from (scope_note), and give "
-               "artifact_preview_url. If it is still being written, use view_report in a moment.")
-QUIZ_SHOW = ("The writer plays Notestack's quiz in the chat, so do not retype the questions or write a quiz of your own. Say "
-             "how many questions there are, which notebook (scope_note), and give artifact_preview_url. If it is still "
-             "being made, use show_quiz in a moment.")
+FLASHCARDS_SHOW = ("When ready, the result includes the card count, source scope, an in-chat card view, and "
+                   "artifact_preview_url. show_flashcards retrieves a pending result later.")
+REPORT_SHOW = ("When ready, the result includes the source scope, an in-chat report view, and artifact_preview_url. "
+               "view_report retrieves a pending result later.")
+QUIZ_SHOW = ("When ready, the result includes the question count, source scope, an in-chat quiz view, and "
+             "artifact_preview_url. show_quiz retrieves a pending result later.")
 ASK_WHERE = ("Once the import is done, call list_notebooks and ask the writer in words where these posts go, or whether to make a new "
              "notebook for them. Do nothing until they answer.")
 
@@ -143,8 +139,7 @@ def register(mcp: FastMCP) -> None:
                 "source_id": source_id, "document_ids": document_ids, "archive": archive}
 
     @mcp.tool(meta=widgets.REPORT_UI, **_desc(
-        "Make the writer's report in Notestack. ALWAYS use this when they ask for a report, summary document or write-up of "
-        "their posts, and never write your own report, HTML page, file or artifact: it would not exist in their Notestack. "
+        "Create a report from selected posts. "
         "report_format is 'document' (written sections) or 'interactive' (with embedded visuals and a quiz: use it when they "
         "ask for an interactive, detailed or visual report). Pass a template_id from list_report_templates, or your own "
         "instructions (put what they asked for there, such as 'detailed'), or topic to focus on. It waits up to 45 seconds; "
@@ -163,8 +158,8 @@ def register(mcp: FastMCP) -> None:
         return widgets.with_widget(view, widgets.report_view_payload(art, view["open_in_notestack"]))
 
     @mcp.tool(meta=widgets.QUIZ_UI, **_desc(
-        "Make a quiz from the writer's posts, and only a quiz: never add flashcards or anything else they did not ask for. "
-        "It waits up to 40 seconds so Notestack's own finished quiz can be played straight away in the chat (a host without "
+        "Create a quiz from selected posts. "
+        "It waits up to 40 seconds so the finished quiz can be played in the chat (a host without "
         "that shows the questions as text). " + QUIZ_SHOW + " count is fewer, standard or more; difficulty easy, medium or hard; "
         "question_types any of multiple_choice, multiple_select, fill_blank, short_answer; topic narrows what to ask "
         "about. " + SCOPE_HELP + " " + GEN))
@@ -182,7 +177,7 @@ def register(mcp: FastMCP) -> None:
         return widgets.with_widget(view, widgets.quiz_payload(art, view["open_in_notestack"]))
 
     @mcp.tool(meta=widgets.FLASHCARDS_UI, **_desc(
-        "Make a set of flashcards from the writer's posts. count is fewer, standard or more; difficulty easy, medium or "
+        "Create a set of flashcards from selected posts. count is fewer, standard or more; difficulty easy, medium or "
         "hard; topic narrows it. It waits up to 40 seconds by default so the finished set can be shown straight away as "
         "flip cards in the chat (a host without that shows the cards as text). " + FLASHCARDS_SHOW + " "
         + SCOPE_HELP + " " + GEN))
@@ -199,7 +194,7 @@ def register(mcp: FastMCP) -> None:
         return widgets.with_widget(views.flashcards_view(view, payload), payload)
 
     @mcp.tool(meta=widgets.MIND_MAP_UI, **_desc(
-        "Draw a concept map (a 'Mind Constellation') of the writer's posts, optionally centred on a focus. It usually takes "
+        "Create a concept map (a 'Mind Constellation') from selected posts, optionally centred on a focus. It usually takes "
         "under a minute: it waits up to 40 seconds by default so the finished map can be shown straight away as an "
         "interactive picture in the chat (a host without that shows the outline and link instead). "
         + VISUAL + " If it is still being made, use show_mind_map in a moment. " + SCOPE_HELP + " " + GEN))
@@ -213,7 +208,7 @@ def register(mcp: FastMCP) -> None:
         return widgets.with_widget(view, widgets.mind_map_payload(art, view["open_in_notestack"]))
 
     @mcp.tool(meta=widgets.INFOGRAPHIC_UI, **_desc(
-        "Design an infographic from the writer's posts. theme picks the look (midnight or paper); ig_style the layout; "
+        "Create an infographic from selected posts. theme picks the look (midnight or paper); ig_style the layout; "
         "instructions say what to emphasise. Uses their infographic allowance. The finished infographic is shown in the "
         "result, with a Notestack link as a secondary action. "
         + VISUAL + " " + SCOPE_HELP + " " + GEN))
@@ -229,7 +224,7 @@ def register(mcp: FastMCP) -> None:
         return widgets.with_widget(view, widgets.infographic_payload(art, view["open_in_notestack"]))
 
     @mcp.tool(**_desc(
-        "Build a slide deck from the writer's posts. deck_format is 'detailed' (readable alone) or 'presenter' (shown behind "
+        "Create a slide deck from selected posts. deck_format is 'detailed' (readable alone) or 'presenter' (shown behind "
         "a speaker); deck_length short, default or long; theme 'dark-space' or 'light-space'. PDF and PowerPoint links are on "
         "the result once it is ready. " + VISUAL + " " + SCOPE_HELP + " " + GEN))
     @guarded("generate_slide_deck", GEN_COST)
@@ -244,7 +239,7 @@ def register(mcp: FastMCP) -> None:
             "instructions": instructions, "document_ids": [uid(i) for i in post_ids] if post_ids else None}, wait_seconds)
 
     @mcp.tool(**_desc(
-        "Produce a podcast-style audio discussion of the writer's posts. format is deep_dive, brief, critique or debate (a "
+        "Create a podcast-style audio discussion from selected posts. format is deep_dive, brief, critique or debate (a "
         "debate needs hosts=2); hosts 1 or 2; minutes 1 to 30. It is slow, often over a minute, so do not wait for it. It "
         "uses audio minutes from their plan. " + VISUAL + " " + SCOPE_HELP + " " + GEN))
     @guarded("generate_audio_overview", GEN_COST)
@@ -259,18 +254,13 @@ def register(mcp: FastMCP) -> None:
             "instructions": instructions, "document_ids": [uid(i) for i in post_ids] if post_ids else None}, wait_seconds)
 
     @mcp.tool(meta=widgets.VIDEO_UI, **_desc(
-        "Make a narrated, animated VIDEO from the writer's posts with Notestack's own video maker. Always use this when "
-        "the writer asks for a video: never build a video yourself with code or other tools. FIRST call choose_options with make video "
-        "so the writer can pick the template, style, shape, length and voice, and wait for their answer (skip it only if they "
-        "already stated their choices); then pass document_ids or the notebook_id they chose. template, video_style and "
-        "custom_voice_id are ids from choose_video_options (pass the writer's choices exactly); accent_color, bg_color and "
+        "Create a narrated animated video from selected posts. template, video_style, and custom_voice_id are identifiers "
+        "returned by choose_video_options; accent_color, bg_color and "
         "text_color are #rrggbb; voice_gender female or male as the voice, or none for no voiceover; voice_accent american or "
         "british; content_language a code like 'en' (leave out to detect it); focus says what it should be mainly about. "
-        "Leave aspect_ratio and video_length alone unless the writer asked: the app makes landscape videos and a video "
-        "style sets the length. Uses "
-        "their video allowance. It takes minutes: the writer sees it appear and play in the chat when it is ready, so do not "
-        "wait, and do not describe or redraw it. Give them artifact_preview_url and check with get_video if they ask. "
-        + GEN))
+        "aspect_ratio is landscape or portrait; video_length is short or medium. Rendering continues in the background. "
+        "The result includes artifact_preview_url, and get_video returns current status and playback URLs. Uses the "
+        "account's video allowance. " + SCOPE_HELP + " " + GEN))
     @guarded("generate_video", GEN_COST)
     async def generate_video(document_ids: list[str] | None = None, notebook_id: str | None = None,
                              notebook_title: str | None = None, archive: bool = False,
@@ -307,8 +297,7 @@ def register(mcp: FastMCP) -> None:
         )
 
     @mcp.tool(meta=widgets.VIDEO_UI, **_desc(
-        "Check the rendering status of a Notestack video and display the available preview or finished video. "
-        "The result includes artifact_preview_url for opening the same artifact in Notestack.",
+        "Return the current rendering status and available playback URLs for one video artifact.",
         openWorldHint=True))
     @guarded("get_video")
     async def get_video(artifact_id: str):

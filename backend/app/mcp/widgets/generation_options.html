@@ -813,7 +813,10 @@
       args.notebook_id = nb; if (docs) args.document_ids = docs;
     }
     if (data.make !== "video") args.wait_seconds = 0;
-    $("go").disabled = true; clearResult(); enterOutput("Making " + nice()); status("Starting your " + nice(), null, "busy");
+    /* Keep the current artifact visible while a replacement starts. It is cleared
+       only after the new artifact is ready, inside watch(). A rejected tool call
+       must never erase the result the writer already has. */
+    $("go").disabled = true; enterOutput("Making " + nice()); status("Starting your " + nice(), null, "busy");
     function start() { call(data.tool, args).then(function (res) {
       var v = parse(res) || {};
       if (res.isError || v.error) {

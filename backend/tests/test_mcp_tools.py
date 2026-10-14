@@ -66,8 +66,13 @@ async def test_every_tool_is_there_and_explains_itself(mcp):  # noqa: F811
     generators = [n for n in listed if n.startswith("generate_")]
     assert len(generators) == 8
     for n in generators:
-        assert "plan_limit" in listed[n].description and "Only generate when the writer asked" in listed[n].description, n
+        assert "plan_limit" in listed[n].description and "after the user requests it" in listed[n].description, n
+        lowered = listed[n].description.lower()
+        for phrase in ("always use", "never build", "other tools", "notestack's own", "real one"):
+            assert phrase not in lowered, (n, phrase)
         assert listed[n].annotations.readOnlyHint is False and listed[n].annotations.destructiveHint is False, n
+    assert all(phrase not in listed["get_video"].description.lower()
+               for phrase in ("always use", "never build", "other tools", "notestack's own", "real one"))
     assert "public" in listed["share_artifact"].description and listed["share_artifact"].annotations.openWorldHint is True
     for n in ("add_source", "import_url", "sync_source", "get_video"):
         assert listed[n].annotations.openWorldHint is True, n
@@ -204,7 +209,7 @@ def test_inline_html_never_reaches_the_assistant():
            "html_landscape": "<p>", "slides_html": ["<s>"], "slide_slots": [1], "points": ["a"]}, "job": None}
     view = views.artifact_view(art)
     assert "content" not in view and "<div>" not in json.dumps(view)  # a visual: links and a note, not its data
-    assert "do not redraw" in view["show_it"].lower() or "Do not redraw" in view["show_it"]
+    assert "artifact_preview_url" in view["show_it"]
     text = views.artifact_view({**art, "type": "quiz", "content": {"title": "T", "html": "<p>", "questions": ["q"]}})
     assert text["content"] == {"title": "T", "questions": ["q"]} and "show_it" not in text
 
@@ -640,7 +645,7 @@ def test_a_mind_map_comes_as_an_outline_and_a_link_not_raw_data():
         "- Agentic AI: The big idea", "  - Self-organizing agents: They coordinate themselves",
         "    - Bitter Lesson", "  - Control risks: What can go wrong"]
     assert "SECRET RAW QUOTE" not in json.dumps(view) and "content" not in view and "content_preview" not in view
-    assert view["open_in_notestack"].endswith("/app/artifacts/m1") and "redraw" in view["show_it"]  # straight to the map
+    assert view["open_in_notestack"].endswith("/app/artifacts/m1") and "artifact_preview_url" in view["show_it"]
     assert views.web_url({"id": "q1", "type": "quiz", "notebook_id": "nb1"}).endswith("/app/artifacts/q1")
     assert "outline" not in views.artifact_view(art, content=False)  # lists stay light
 
@@ -657,7 +662,7 @@ async def test_the_mcp_app_can_rate_every_generated_kind(as_writer, mcp, db_sess
 async def test_visual_tools_tell_the_assistant_to_point_at_notestack(mcp):  # noqa: F811
     listed = {t.name: t.description for t in await mcp.list_tools()}
     for name in ("generate_mind_map", "generate_infographic", "generate_slide_deck", "generate_audio_overview"):
-        assert "Do not redraw or recreate it yourself" in listed[name], name
+        assert "artifact_preview_url" in listed[name], name
     assert "do not redraw it" in listed["get_artifact"]
     for name in ("generate_report", "generate_quiz", "generate_flashcards"):
         assert "redraw" not in listed[name], name  # these are text: the assistant can use them
@@ -761,7 +766,7 @@ async def test_show_mind_map_sends_the_map_to_the_widget_and_words_to_the_model(
     assert "SECRET" not in seen_by_model and "q" * 50 not in seen_by_model
     assert result.structuredContent["kind"] == "mind_map" and result.structuredContent["root"]["label"] == "Agentic AI"
     assert "/r/" in result.structuredContent["open_url"]
-    assert "Do not redraw" in json.loads(seen_by_model)["show_it"]
+    assert "artifact_preview_url" in json.loads(seen_by_model)["show_it"]
 
 
 @pytest.mark.anyio
@@ -897,12 +902,12 @@ async def test_a_finished_report_is_presented_from_notestack_with_its_notebook(c
     done = make_artifact(db_session, "report", content={"title": "R", "blocks": []})
     finished = await call(mcp, "get_artifact", artifact_id=str(done.id))
     assert "/r/" in finished["artifact_preview_url"] and finished["open_in_notestack"] == finished["artifact_preview_url"]
-    assert "Do not write a separate report" in finished["present_it"]
+    assert "saved report" in finished["present_it"]
     named = client.post("/api/notebooks", json={"title": "Weekly", "document_ids": []}, headers=auth).json()
     out = await call(mcp, "generate_quiz", notebook_id=named["id"])
     assert "'Weekly'" in out["scope_note"]
     listed = {t.name: t for t in await mcp.list_tools()}
-    assert "never write your own report" in listed["generate_report"].description
+    assert "Create a report from selected posts" in listed["generate_report"].description
 
 
 QUESTIONS = [
@@ -1030,7 +1035,7 @@ async def test_video_tools_open_the_players_and_the_options_form(mcp):  # noqa: 
     assert listed["get_video"].meta == {"ui": {"resourceUri": widgets.VIDEO_URI}}
     assert listed["choose_video_options"].meta == {"ui": {"resourceUri": widgets.VIDEO_OPTIONS_URI}}
     assert listed["choose_notebook"].meta == {"ui": {"resourceUri": widgets.PICKER_URI}}
-    assert "choose_video_options" in listed["generate_video"].description and "never build a video yourself" in listed["generate_video"].description
+    assert "choose_video_options" in listed["generate_video"].description and "get_video" in listed["generate_video"].description
     resources = {str(r.uri): r for r in await mcp.list_resources()}
     assert "domains" not in json.dumps(resources[widgets.VIDEO_URI].meta or {}) and \
         resources[widgets.VIDEO_URI].meta["ui"]["csp"]["resourceDomains"]
