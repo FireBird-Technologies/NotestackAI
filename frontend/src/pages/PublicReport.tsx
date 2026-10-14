@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import { publicApi } from "../api/endpoints";
-import type { Artifact, FlashcardData, PublicArtifactData, PublicAudioData, PublicMindMapData, PublicSlidesData, PublicVideoData } from "../api/types";
+import type { Artifact, FlashcardData, PublicArtifactData, PublicAudioData, PublicMindMapData, PublicReportData, PublicSlidesData, PublicVideoData } from "../api/types";
 import { MindMapExplorer } from "../components/MindMap";
 import { Transcript } from "../components/ArtifactCard";
 import { AudioPlayer } from "../components/AudioOverview";
@@ -168,13 +168,19 @@ function PublicView() {
   }, []);
 
   useEffect(() => {
-    publicApi.artifact(token).then(
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const load = () => publicApi.artifact(token).then(
       (r) => {
+        if (stopped) return;
         setShared(r);
         document.title = `${r.title} | Notestack`;
+        if (r.kind === "pending") timer = setTimeout(load, 3000);
       },
-      () => setMissing(true),
+      () => { if (!stopped) setMissing(true); },
     );
+    void load();
+    return () => { stopped = true; if (timer) clearTimeout(timer); };
   }, [token]);
 
   if (missing) {
@@ -188,6 +194,15 @@ function PublicView() {
     );
   }
   if (!shared) return <main className="rp-public"><Loading label="Opening" /></main>;
+  if (shared.kind === "pending" || shared.kind === "failed") {
+    return (
+      <PublicShell kind={shared.artifact_type} title={shared.title}>
+        {shared.kind === "pending"
+          ? <Loading label="Notestack is making this artifact" />
+          : <p className="error-text">Notestack could not finish this artifact.</p>}
+      </PublicShell>
+    );
+  }
   if (shared.kind === "infographic") {
     return (
       <PublicShell kind="infographic" title={shared.title} wide>
@@ -208,7 +223,7 @@ function PublicView() {
   if (shared.kind === "audio") return <PublicShell kind="audio" title={shared.title}><PublicAudio audio={shared} /></PublicShell>;
   if (shared.kind === "video") return <PublicShell kind="video" title={shared.title} wide><PublicVideo video={shared} /></PublicShell>;
   if (shared.kind === "mind_map") return <PublicShell kind="mind_map" title={shared.title} wide><PublicMindMap map={shared} token={token} /></PublicShell>;
-  const report = shared;
+  const report = shared as PublicReportData;
 
   const posts = report.sources?.posts ?? [];
   return (

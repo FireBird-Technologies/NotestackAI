@@ -30,9 +30,14 @@ export default defineConfig(({ mode }) => {
     envPrefix: ["VITE_", "GOOGLE_CLIENT_ID"],
     server: {
       port: 5173,
+      // Local MCP testing uses one ngrok origin for both the browser app and the protocol endpoint.
+      // Vite serves the UI and forwards every MCP/OAuth path to the API.
+      allowedHosts: true,
       // In dev the app calls /api on this origin (VITE_API_URL unset) and the backend is reached
       // through this proxy: frontend/.env locally, http://api:8000 under docker-compose.
-      proxy: { "/api": env.VITE_API_PROXY || "http://localhost:8000" },
+      proxy: Object.fromEntries([
+        "/api", "/mcp", "/authorize", "/token", "/register", "/revoke", "/.well-known",
+      ].map((path) => [path, env.VITE_API_PROXY || "http://localhost:8000"])),
     },
   };
 });

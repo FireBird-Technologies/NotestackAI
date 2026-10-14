@@ -1,4 +1,4 @@
-"""What a shared artifact (a report, infographic, audio overview, video, slide deck, flashcard set or quiz) shows to
+"""What a shared artifact (a report, infographic, audio overview, video, slide deck, flashcard set, quiz or mind map) shows to
 someone with the link.
 
 The public view is built from a whitelist, field by field, never by filtering the stored content: a field added to a

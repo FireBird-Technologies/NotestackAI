@@ -100,10 +100,12 @@ def register(mcp: FastMCP) -> None:
         "flashcards, a launch kit's posts) and download links. Use it after any generate tool and check every few "
         "seconds while the status is pending or generating. Links expire, so do not save them. If the status is "
         "failed, retry_artifact can run it again. For a visual (mind map, infographic, slide deck, audio) you get an outline "
-        "and links, not the picture: give the writer the open_in_notestack link and do not redraw it. " + DATA))
+        "and links, not the picture: give the writer artifact_preview_url and do not redraw it. " + DATA))
     @guarded("get_artifact")
     async def get_artifact(artifact_id: str) -> dict:
-        return views.artifact_view(await loopback.data("GET", f"/api/artifacts/{uid(artifact_id)}", token()))
+        access = token()
+        return await views.artifact_view_with_preview(
+            await loopback.data("GET", f"/api/artifacts/{uid(artifact_id)}", access), access)
 
     @mcp.tool(meta=widgets.MIND_MAP_UI, **_desc(
         "Show a finished Mind Constellation to the writer as an interactive picture in the chat (they can click the stars "
@@ -115,32 +117,32 @@ def register(mcp: FastMCP) -> None:
         art = await loopback.data("GET", f"/api/artifacts/{uid(artifact_id)}", token())
         if art["type"] != "mind_map":
             raise ToolError("not_a_mind_map", f"That is a {art.get('type_label') or art['type']}, not a Mind Constellation.")
-        view = views.artifact_view(art)
+        view = await views.artifact_view_with_preview(art, token())
         return widgets.with_widget(view, widgets.mind_map_payload(art, view["open_in_notestack"]))
 
     @mcp.tool(meta=widgets.INFOGRAPHIC_UI, **_desc(
         "Show a finished Notestack infographic directly in the chat. Use it when generate_infographic said it was still "
         "being made, or when the writer asks to see an infographic they already have. The exact Notestack page is shown "
-        "in a sandboxed view; do not recreate it. Give them the open_in_notestack link too. " + DATA))
+        "in a sandboxed view; do not recreate it. Give them artifact_preview_url too. " + DATA))
     @guarded("show_infographic")
     async def show_infographic(artifact_id: str):
         art = await loopback.data("GET", f"/api/artifacts/{uid(artifact_id)}", token())
         if art["type"] != "infographic":
             raise ToolError("not_an_infographic", f"That is a {art.get('type_label') or art['type']}, not an infographic.")
-        view = views.artifact_view(art, content=False)
+        view = await views.artifact_view_with_preview(art, token(), content=False)
         return widgets.with_widget(view, widgets.infographic_payload(art, view["open_in_notestack"]))
 
     @mcp.tool(meta=widgets.FLASHCARDS_UI, **_desc(
         "Show a finished set of flashcards to the writer as flip cards in the chat. Use it when generate_flashcards said "
         "they were still being made, or when the writer asks to see a set they already have (find it with list_artifacts, "
-        "type flashcards). A host without that shows the cards as text. Always give them the open_in_notestack link too. "
+        "type flashcards). A host without that shows the cards as text. Always give them artifact_preview_url too. "
         + DATA))
     @guarded("show_flashcards")
     async def show_flashcards(artifact_id: str):
         art = await loopback.data("GET", f"/api/artifacts/{uid(artifact_id)}", token())
         if art["type"] != "flashcards":
             raise ToolError("not_flashcards", f"That is a {art.get('type_label') or art['type']}, not a set of flashcards.")
-        view = views.artifact_view(art)
+        view = await views.artifact_view_with_preview(art, token())
         payload = widgets.flashcards_payload(art, view["open_in_notestack"])
         return widgets.with_widget(views.flashcards_view(view, payload), payload)
 
@@ -152,33 +154,33 @@ def register(mcp: FastMCP) -> None:
         art = await loopback.data("GET", f"/api/artifacts/{uid(artifact_id)}", token())
         if art["type"] != "report":
             raise ToolError("not_a_report", f"That is a {art.get('type_label') or art['type']}, not a report.")
-        view = views.artifact_view(art, content=False)
+        view = await views.artifact_view_with_preview(art, token(), content=False)
         return widgets.with_widget(view, widgets.report_payload(art, view["open_in_notestack"]))
 
     @mcp.tool(meta=widgets.REPORT_UI, **_desc(
         "Show a finished Notestack report in the chat: its title and every section, with its tables, timelines, key terms and "
         "embedded quiz, flashcards and map. Use it when generate_report said it was still being written, or when the writer "
         "asks to read a report they already have (find it with list_artifacts, type report). The writer reads it there, so "
-        "do not retype or rebuild it, and give them the open_in_notestack link too. Never write a report yourself. " + DATA))
+        "do not retype or rebuild it, and give them artifact_preview_url too. Never write a report yourself. " + DATA))
     @guarded("view_report")
     async def view_report(artifact_id: str):
         art = await loopback.data("GET", f"/api/artifacts/{uid(artifact_id)}", token())
         if art["type"] != "report":
             raise ToolError("not_a_report", f"That is a {art.get('type_label') or art['type']}, not a report.")
-        view = views.artifact_view(art, content=False)
+        view = await views.artifact_view_with_preview(art, token(), content=False)
         return widgets.with_widget(view, widgets.report_view_payload(art, view["open_in_notestack"]))
 
     @mcp.tool(meta=widgets.QUIZ_UI, **_desc(
         "Play a finished Notestack quiz in the chat, one question at a time with answers and explanations. Use it when "
         "generate_quiz said it was still being made, or when the writer asks to take a quiz they already have (find it with "
         "list_artifacts, type quiz). Never write a quiz yourself: only Notestack's own is shown. Give them the "
-        "open_in_notestack link too. " + DATA))
+        "artifact_preview_url too. " + DATA))
     @guarded("show_quiz")
     async def show_quiz(artifact_id: str):
         art = await loopback.data("GET", f"/api/artifacts/{uid(artifact_id)}", token())
         if art["type"] != "quiz":
             raise ToolError("not_a_quiz", f"That is a {art.get('type_label') or art['type']}, not a quiz.")
-        view = views.artifact_view(art)
+        view = await views.artifact_view_with_preview(art, token())
         return widgets.with_widget(view, widgets.quiz_payload(art, view["open_in_notestack"]))
 
     @mcp.tool(meta=widgets.PICKER_UI, **_desc(

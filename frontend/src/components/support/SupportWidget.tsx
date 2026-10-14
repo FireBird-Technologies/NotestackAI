@@ -27,8 +27,9 @@ function readDismissed(): boolean {
   }
 }
 
-/** The bottom right help button. Hidden on the sign in screens. While the chat is closed it can be dragged anywhere
- * on the screen; opening the chat brings it back to its corner, beside the panel. */
+/** The bottom right help button. Hidden where it would distract from focused or unauthenticated pages (the sign in
+ * screens, onboarding, legal pages and shared previews). While the chat is closed it can be dragged anywhere on the
+ * screen; opening the chat brings it back to its corner, beside the panel. */
 export function SupportWidget() {
   const { pathname } = useLocation();
   const [open, setOpen] = useState(false);
@@ -52,8 +53,10 @@ export function SupportWidget() {
     return () => window.clearTimeout(t);
   }, []);
 
-  // Not on sign in, onboarding, or a shared preview link (/r/…), which is for people without an account.
-  if (pathname.startsWith("/auth") || pathname === "/welcome" || pathname.startsWith("/r/")) return null;
+  const isLegalPage = pathname === "/privacy" || pathname === "/terms" || pathname === "/support";
+
+  // Not on sign in, onboarding, legal documents, or a shared preview link (/r/…), which is for people without an account.
+  if (pathname.startsWith("/auth") || pathname === "/welcome" || isLegalPage || pathname.startsWith("/r/")) return null;
 
   const onPointerDown = (e: ReactPointerEvent<HTMLButtonElement>) => {
     if (open || e.button !== 0) return; // only the closed button moves

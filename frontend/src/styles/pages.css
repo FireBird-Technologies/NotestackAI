@@ -7651,6 +7651,7 @@ a.rp-src-main:hover .rp-src-out {
 
 .rp-path {
   position: absolute;
+  z-index: 2;
   left: 11px;
   top: 6px;
   bottom: 0;
@@ -7677,6 +7678,7 @@ a.rp-src-main:hover .rp-src-out {
 
 .rp-slot.rp-stop {
   position: relative;
+  z-index: 1;
   margin-bottom: 24px;
   padding: 0;
   border-top: 0;
@@ -7694,6 +7696,7 @@ a.rp-src-main:hover .rp-src-out {
 
 .rp-node {
   position: absolute;
+  z-index: 1;
   left: -36px;
   top: 2px;
   width: 16px;
@@ -7802,7 +7805,7 @@ a.rp-src-main:hover .rp-src-out {
   grid-column: 1 / -1;
 }
 
-/* The notebook repeats the global connector entry where creation starts. It opens the same setup modal as the sidebar. */
+/* The notebook keeps a connector shortcut below its creation tools and opens setup in-place as a modal. */
 .nbv-make .nbv-make-connector {
   grid-column: 1 / -1;
   min-height: 54px;
@@ -7814,22 +7817,38 @@ a.rp-src-main:hover .rp-src-out {
     linear-gradient(135deg, #05070d, #08101f);
 }
 
-.nbv-make .nbv-make-connector-copy,
-.nbv-make .nbv-make-connector .nbv-stars-text {
+.nbv-make .nbv-make-connector-copy {
   display: flex;
   align-items: center;
   min-width: 0;
 }
 
 .nbv-make .nbv-make-connector-copy {
-  flex: 1 1 auto;
+  position: relative;
+  z-index: 2;
+  flex: none;
   gap: 12px;
-  overflow: hidden;
+  padding-right: 14px;
+  border-right: 1px solid var(--blue-35);
 }
 
 .nbv-make .nbv-make-connector-copy > svg.icon {
   flex: none;
   color: var(--text-2);
+}
+
+.nbv-make .nbv-make-connector-copy strong {
+  font: 600 1rem var(--font-display);
+  white-space: nowrap;
+}
+
+.nbv-connector-rotator {
+  position: relative;
+  height: 32px;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(180deg, transparent, #000 18%, #000 82%, transparent);
+  mask-image: linear-gradient(180deg, transparent, #000 18%, #000 82%, transparent);
 }
 
 .nbv-make .nbv-make-connector .nbv-stars-text {
@@ -7850,47 +7869,78 @@ a.rp-src-main:hover .rp-src-out {
   max-width: 100%;
   font-size: 0.74rem;
   overflow: hidden;
+  -webkit-mask-image: linear-gradient(180deg, transparent, #000 18%, #000 82%, transparent);
+  mask-image: linear-gradient(180deg, transparent, #000 18%, #000 82%, transparent);
+}
+
+.nbv-connector-app-track,
+.nbv-connector-app {
+  display: flex;
+}
+
+.nbv-connector-app-track {
+  flex-direction: column;
+  animation: connector-app-cycle 6s ease-in-out infinite;
+}
+
+.nbv-connector-app {
+  align-items: center;
+  flex: none;
+  gap: 7px;
+  height: 32px;
   color: var(--text-2);
-  text-overflow: ellipsis;
+  font: 500 0.9rem var(--font-display);
   white-space: nowrap;
 }
 
-.nbv-connector-logos {
-  display: inline-flex;
-  flex: none;
-  gap: 5px;
-}
-
-.nbv-connector-logos > span {
+.nbv-connector-logo {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
+  flex: none;
+  width: 25px;
+  height: 25px;
+  border-radius: 7px;
   background: var(--white);
 }
 
-.nbv-connector-logos img {
-  width: 16px;
-  height: 16px;
+.nbv-connector-logo img {
+  width: 15px;
+  height: 15px;
   object-fit: contain;
 }
 
-.nbv-connector-logos img.openai {
-  width: 24px;
-  height: 24px;
+.nbv-connector-logo img.openai {
+  width: 22px;
+  height: 22px;
+}
+
+@keyframes connector-app-cycle {
+  0%, 40% { transform: translateY(0); }
+  50%, 90% { transform: translateY(-32px); }
+  100% { transform: translateY(-64px); }
 }
 
 .nbv-make > button.nbv-make-connector {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 12px;
   padding: 6px 14px;
+  overflow: hidden;
 }
 
 .nbv-make > button.nbv-make-connector:hover:not(:disabled) {
   border-color: var(--blue-60);
   box-shadow: 0 0 16px var(--blue-20);
+}
+
+.nbv-make > button.nbv-make-connector:hover .nbv-connector-app-track {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nbv-connector-app-track {
+    animation: none;
+  }
 }
 
 /* Mind Constellation: a little night sky of its own, stars that twinkle and a slow shine across it */
@@ -10294,6 +10344,57 @@ body.nbv-resizing iframe {
 .connector-intro,
 .connector-note {
   margin: 0;
+}
+
+.connector-page {
+  width: 100%;
+  max-width: none;
+  min-height: calc(100vh - 96px);
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.connector-page-body {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.connector-page-card {
+  padding: clamp(18px, 3vw, 28px);
+}
+
+.connector-setup-card,
+.connector-settings-card {
+  align-content: start;
+}
+
+.connector-section-heading {
+  display: grid;
+  gap: 5px;
+  padding-bottom: 4px;
+}
+
+.connector-section-heading h2 {
+  margin: 0;
+}
+
+.connector-section-kicker {
+  color: var(--blue);
+  font-size: 0.68rem;
+  letter-spacing: 0.24em;
+}
+
+.connector-settings-card .row.between {
+  align-items: center;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+@media (max-width: 980px) {
+  .connector-page-body {
+    grid-template-columns: 1fr;
+  }
 }
 
 .connector-url-card {

@@ -36,6 +36,13 @@ export const REASONS: Record<string, { id: string; label: string }[]> = {
     { id: "unclear", label: "Unclear wording" },
     { id: "other", label: "Something else" },
   ],
+  mind_map: [
+    { id: "inaccurate", label: "Inaccurate" },
+    { id: "missing_content", label: "Missing key ideas" },
+    { id: "hard_to_read", label: "Hard to read" },
+    { id: "structure", label: "Poorly structured" },
+    { id: "other", label: "Something else" },
+  ],
   infographic: [
     { id: "messy_layout", label: "Messy layout" },
     { id: "cut_off", label: "Text cut off or overlapping" },

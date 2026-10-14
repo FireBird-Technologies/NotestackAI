@@ -692,6 +692,7 @@ export function MindMapExplorer({ artifact, onClose, warp = true, startAt = "roo
         <div className="mm-meteor" aria-hidden="true" />
 
         <header className="mm-top" style={{ right: 14 + panelW }}>
+          {!embedded && <CardFeedback artifact={artifact} />}
           {embedded ? (
             onExpand && (
               <button type="button" className="mm-btn" onClick={onExpand} aria-label="Open full screen" title="Open full screen">

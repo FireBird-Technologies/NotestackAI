@@ -11,11 +11,13 @@ LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
 APP_SCHEMES = {"cursor", "vscode", "vscode-insiders"}  # desktop editors that catch the sign-in on their own scheme
 
 SCOPES = ["mcp:read", "mcp:write", "mcp:share"]
-ADVERTISED = ["mcp:read", "mcp:write"]  # what apps are told to ask for; sharing is only ever added by the writer
+# Generated results are returned with the same public preview link as the frontend Share button, so connected apps need
+# sharing permission up front. Existing grants keep their old scopes until the writer reconnects them.
+ADVERTISED = SCOPES
 SCOPE_LABELS = {
     "mcp:read": "Search your posts, topics and notebooks, and ask questions about your writing",
     "mcp:write": "Create notebooks, import sources and generate reports, quizzes, audio and more",
-    "mcp:share": "Make a report public, with a link anyone can open",
+    "mcp:share": "Create shareable preview links for generated items",
 }
 
 

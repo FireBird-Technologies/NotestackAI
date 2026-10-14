@@ -14,6 +14,7 @@ REASONS: dict[str, set[str]] = {
     "report": {"inaccurate", "missed_points", "structure", "tone", "too_long", "too_short", "other"},
     "quiz": {"wrong_answers", "too_easy", "too_hard", "unclear", "off_topic", "other"},
     "flashcards": {"inaccurate", "too_basic", "too_detailed", "unclear", "other"},
+    "mind_map": {"inaccurate", "missing_content", "hard_to_read", "structure", "other"},
     "infographic": {"messy_layout", "cut_off", "missing_content", "look", "hard_to_read", "other"},
     "slide_deck": {"inaccurate", "design", "cut_off", "too_long", "too_short", "other"},
     "audio_overview": {"inaccurate", "voices", "boring", "too_long", "too_short", "other"},
