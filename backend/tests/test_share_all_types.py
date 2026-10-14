@@ -22,9 +22,6 @@ CONTENT = {
                                                                 "children": []}]}},
     "video": {"title": "Pricing video", "video_url": "https://cdn.test/v.mp4", "preview_url": "https://b2v.test/p/1",
               "b2v_video_id": 812},
-    "mind_map": {"title": "Pricing constellation", "root": {"id": "root", "label": "Pricing", "note": "Overview",
-                  "sources": [SOURCE], "children": [{"id": "a", "label": "Value", "note": "Readers value it",
-                                                       "sources": [SOURCE], "children": []}]}},
 }
 KIND = {"flashcards": "flashcards", "quiz": "quiz", "audio_overview": "audio", "video": "video", "mind_map": "mind_map"}
 
