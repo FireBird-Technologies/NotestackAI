@@ -16,9 +16,13 @@
   place-items: center;
   cursor: pointer;
   box-shadow: var(--glow-md);
-  transition: transform 0.15s ease;
+  /* Dragged, it sits this far from its corner (SupportWidget); opening the chat glides it back */
+  transform: translate(var(--sup-dx, 0px), var(--sup-dy, 0px));
+  transition: transform 0.25s ease;
 }
-.sup-fab:hover { transform: scale(1.06); }
+.sup-fab:hover { transform: translate(var(--sup-dx, 0px), var(--sup-dy, 0px)) scale(1.06); }
+.sup-fab.is-movable { cursor: grab; touch-action: none; }
+.sup-fab.is-dragging { cursor: grabbing; transition: none; transform: translate(var(--sup-dx, 0px), var(--sup-dy, 0px)) scale(1.08); }
 .sup-fab:focus-visible { outline: 2px solid var(--white); outline-offset: 3px; }
 
 .sup-bubble {

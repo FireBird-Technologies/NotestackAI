@@ -6,7 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProp
 
 export const PANE_MIN = { left: 220, right: 300 } as const;
 const CHAT_MIN = 440;
-const GUTTER = 16; // the space between the chat and the right panel (.nbv-side's margin)
+const GUTTER = 16; // the space between the chat and each side panel (.nbv-history's and .nbv-side's margin)
 const KEYS = { left: "ns_nbv_left", right: "ns_nbv_right" } as const;
 
 type Side = "left" | "right";
@@ -45,12 +45,12 @@ function useMedia(query: string): boolean {
 /** Where the panes are now: the container's width and the two boundaries (px from its left edge). */
 type Frame = { width: number; leftEdge: number | null; rightEdge: number | null };
 
-export function usePaneWidths(container: RefObject<HTMLElement | null>, opts: { leftOpen: boolean }) {
+export function usePaneWidths(container: RefObject<HTMLElement | null>, opts: { leftOpen: boolean; rightOpen: boolean }) {
   const [saved, setSaved] = useState<Widths>(() => ({ left: read("left"), right: read("right") }));
   const [frame, setFrame] = useState<Frame>({ width: 0, leftEdge: null, rightEdge: null });
   // The left panel sits beside the chat from 900px; the right one from 1350px (below that it stacks under the chat).
   const leftActive = useMedia("(min-width: 900px)") && opts.leftOpen;
-  const rightActive = useMedia("(min-width: 1350px)");
+  const rightActive = useMedia("(min-width: 1350px)") && opts.rightOpen;
 
   // Measure the real boundaries after layout changes, so the handles sit exactly on them (state only changes when a
   // number does, so this cannot loop).
@@ -62,7 +62,7 @@ export function usePaneWidths(container: RefObject<HTMLElement | null>, opts: { 
     const side = el.querySelector<HTMLElement>(":scope > .nbv-side");
     const next: Frame = {
       width: Math.round(box.width),
-      leftEdge: history ? Math.round(history.getBoundingClientRect().right - box.left) : null,
+      leftEdge: history ? Math.round(history.getBoundingClientRect().right - box.left + GUTTER / 2) : null,
       rightEdge: side ? Math.round(side.getBoundingClientRect().left - box.left - GUTTER / 2) : null,
     };
     setFrame((cur) => (cur.width === next.width && cur.leftEdge === next.leftEdge && cur.rightEdge === next.rightEdge ? cur : next));
@@ -85,13 +85,13 @@ export function usePaneWidths(container: RefObject<HTMLElement | null>, opts: { 
 
   const { width } = frame;
   // What each panel measures by default (the stylesheet's width), when nothing is saved for it.
-  const measuredLeft = frame.leftEdge ?? 0;
+  const measuredLeft = frame.leftEdge !== null ? frame.leftEdge - GUTTER / 2 : 0;
   const measuredRight = frame.rightEdge !== null ? width - frame.rightEdge - GUTTER / 2 : 0;
   const wantLeft = leftActive ? (saved.left ?? measuredLeft) : 0;
   const wantRight = rightActive ? (saved.right ?? measuredRight) : 0;
   // Each panel: at least its minimum, and never so wide that the chat gets less than CHAT_MIN.
-  const maxLeft = Math.max(PANE_MIN.left, width - CHAT_MIN - (rightActive ? wantRight + GUTTER : 0));
-  const maxRight = Math.max(PANE_MIN.right, width - CHAT_MIN - GUTTER - (leftActive ? wantLeft : 0));
+  const maxLeft = Math.max(PANE_MIN.left, width - CHAT_MIN - GUTTER - (rightActive ? wantRight + GUTTER : 0));
+  const maxRight = Math.max(PANE_MIN.right, width - CHAT_MIN - GUTTER - (leftActive ? wantLeft + GUTTER : 0));
   const fit = (v: number, max: number, min: number) => Math.max(min, Math.min(v, max));
   const left = leftActive && saved.left !== null && width ? fit(saved.left, maxLeft, PANE_MIN.left) : null;
   const right = rightActive && saved.right !== null && width ? fit(saved.right, maxRight, PANE_MIN.right) : null;
@@ -102,7 +102,7 @@ export function usePaneWidths(container: RefObject<HTMLElement | null>, opts: { 
   }, []);
 
   const style: CSSProperties = {
-    ...(left !== null ? { ["--nbv-left" as string]: `${Math.round(left)}px` } : {}),
+    ...(left !== null ? { ["--nbv-left" as string]: `${Math.round(left + GUTTER)}px` } : {}),
     ...(right !== null ? { ["--nbv-right" as string]: `${Math.round(right + GUTTER)}px` } : {}),
   };
 
@@ -136,7 +136,7 @@ export function PaneResizer({ side, panes, container, label }: {
   const fromPointer = (clientX: number) => {
     const box = container.current?.getBoundingClientRect();
     if (!box) return value;
-    return clamp(side === "left" ? clientX - box.left : box.right - clientX - GUTTER / 2);
+    return clamp(side === "left" ? clientX - box.left - GUTTER / 2 : box.right - clientX - GUTTER / 2);
   };
 
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {

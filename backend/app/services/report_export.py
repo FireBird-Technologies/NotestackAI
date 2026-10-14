@@ -96,6 +96,8 @@ def _prose(text: str) -> str:
 
 
 def _block_html(b: dict) -> str:
+    """One block of the PDF. The PDF is the report's text only: its written sections, callouts, key terms, timelines and
+    tables. Embedded artifacts (a Mind Constellation, flashcards, a quiz, an infographic) are left out."""
     kind, title = b.get("type"), html.escape(_clean(b.get("title")))
     head = f"<h2>{title}</h2>" if title else ""
     if kind == "prose":
@@ -113,12 +115,6 @@ def _block_html(b: dict) -> str:
         cells = "".join(f"<th>{_inline(h)}</th>" for h in b.get("headers") or [])
         rows = "".join("<tr>" + "".join(f"<td>{_inline(x)}</td>" for x in r) + "</tr>" for r in b.get("rows") or [])
         return f"{head}<table><thead><tr>{cells}</tr></thead><tbody>{rows}</tbody></table>"
-    if kind == "flashcards":
-        return (head or "<h2>Flashcards</h2>") + "<dl>" + "".join(
-            f"<dt>{_inline(x.get('front'))}</dt><dd>{_inline(x.get('back'))}</dd>" for x in b.get("cards") or []) + "</dl>"
-    if kind == "quiz":
-        return (head or "<h2>Quiz</h2>") + "<ol>" + "".join(
-            f"<li>{_inline(q.get('question'))}</li>" for q in b.get("questions") or []) + "</ol>"
     return ""
 
 

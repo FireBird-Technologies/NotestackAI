@@ -12,9 +12,10 @@ import { StudyOverlay } from "./StudyOverlay";
 import { ReportBody } from "./ReportBody";
 import { ConfirmButton, errorMessage, formatDate, formatDuration, JobProgress, StatusPill } from "./ui";
 import { ShareButton } from "./ShareDialog";
-import { DownloadIcon } from "./icons/Icons";
+import { ChevronIcon, DownloadIcon, RetryIcon } from "./icons/Icons";
 import { CardFeedback } from "./CardFeedback";
 import { TrashIcon } from "./icons/Icons";
+import { cardClick, openCardView, ViewButton } from "./cardActions";
 
 export function CitationList({
   citations,
@@ -92,6 +93,9 @@ export function Transcript({ segments, onSeek }: { segments: Segment[]; onSeek: 
 /** Cards whose buttons (Open, Share, Delete...) sit together on one line, all the same size. */
 const INLINE_ACTIONS = ["summary", "report", "quiz", "flashcards", "mind_map", "launch_kit", "infographic"];
 
+/** Cards with a view behind an eye button, which a click anywhere on the card opens too. */
+const VIEWABLE = INLINE_ACTIONS;
+
 /** A summary in its card is a title and a way in: it opens full screen (like the Mind Constellation) and can be minimised. */
 function SummaryBody({ artifact, onCite }: { artifact: Artifact; onCite?: (c: Citation) => void }) {
   const [open, setOpen] = useState(false);
@@ -100,7 +104,7 @@ function SummaryBody({ artifact, onCite }: { artifact: Artifact; onCite?: (c: Ci
   return (
     <div className="artifact-body">
       {themes.length > 0 && <p className="muted">{themes.length} themes · {(c.citations ?? []).length} citations</p>}
-      <button type="button" className="btn btn-small" onClick={() => setOpen(true)}>Open summary</button>
+      <ViewButton label="Open summary" onClick={() => setOpen(true)} />
       {open && (
         <StudyOverlay title={artifact.title} onClose={() => setOpen(false)}>
           {themes.length > 0 && (
@@ -132,8 +136,10 @@ export function Body({ artifact, onCite }: { artifact: Artifact; onCite?: (c: Ci
           {artifact.url && <audio ref={setAudioEl} controls preload="metadata" src={artifact.url} className="player" />}
           {c.segments?.length > 0 && (
             <>
-              <button type="button" className="link-btn" onClick={() => setShowTranscript((v) => !v)}>
+              <button type="button" className="link-btn ao-transcript-toggle" aria-expanded={showTranscript}
+                onClick={() => setShowTranscript((v) => !v)}>
                 {showTranscript ? "Hide transcript" : `Show transcript (${c.segments.length} lines)`}
+                <ChevronIcon size={16} className={`chevron${showTranscript ? " open" : ""}`} />
               </button>
               {showTranscript && (
                 <Transcript
@@ -186,9 +192,7 @@ export function Body({ artifact, onCite }: { artifact: Artifact; onCite?: (c: Ci
       return (
         <div className="artifact-body">
           <p className="muted">{c.node_count ?? 0} stars across {c.post_count ?? 0} posts.</p>
-          <button type="button" className="btn btn-small" onClick={() => setExploring(true)}>
-            Open Mind Constellation
-          </button>
+          <ViewButton label="Open Mind Constellation" onClick={() => setExploring(true)} />
           {exploring && <MindMapExplorer artifact={artifact} onClose={() => setExploring(false)} />}
         </div>
       );
@@ -206,9 +210,7 @@ export function Body({ artifact, onCite }: { artifact: Artifact; onCite?: (c: Ci
           <p className="muted">
             {c.claims?.length ?? 0} claims, {c.hooks?.length ?? 0} hooks, posts for 4 platforms, SEO pack and carousel.
           </p>
-          <Link className="btn btn-small" to={`/app/launchpad/kits/${artifact.id}`}>
-            Open Launch Kit
-          </Link>
+          <ViewButton label="Open Launch Kit" to={`/app/launchpad/kits/${artifact.id}`} />
         </div>
       );
     default:
@@ -241,8 +243,12 @@ export function ArtifactCard({
   const running = job && (job.status === "queued" || job.status === "running");
   const failedMessage = artifact.status === "failed" ? (artifact.content.error as string | undefined) ?? job?.error : null;
 
+  // A finished card that has a view opens it on a click anywhere (its eye is the button for it).
+  const viewable = artifact.status === "ready" && VIEWABLE.includes(artifact.type);
+
   return (
-    <article className={`artifact card artifact-${artifact.type}${INLINE_ACTIONS.includes(artifact.type) ? " artifact-inline" : ""}`}>
+    <article className={`artifact card artifact-${artifact.type}${INLINE_ACTIONS.includes(artifact.type) ? " artifact-inline" : ""}${viewable ? " artifact-clickable" : ""}`}
+             onClick={viewable ? cardClick(openCardView) : undefined}>
       <header className="artifact-head">
         <div>
           <p className="eyebrow">{artifact.type_label}</p>
@@ -260,14 +266,15 @@ export function ArtifactCard({
       {error && <p className="error-text">{error}</p>}
       <footer className="artifact-actions">
         {actions?.(artifact)}
-        {artifact.type !== "report" && artifact.type !== "infographic" && <ShareButton artifact={artifact} />}
+        {artifact.type !== "report" && artifact.type !== "infographic" && <ShareButton artifact={artifact} iconOnly />}
         {artifact.download_url && artifact.type !== "infographic" && (
-          <a className="btn btn-small btn-icon-only" href={artifact.download_url} aria-label="Download" title="Download"><DownloadIcon size={16} /></a>
+          <a className="btn btn-small btn-icon-only card-act-download" href={artifact.download_url} aria-label="Download"><DownloadIcon size={16} /></a>
         )}
         {artifact.status === "failed" && (
           <button
             type="button"
-            className="btn btn-small"
+            className="btn btn-small btn-icon-only card-act-retry"
+            aria-label="Retry"
             onClick={async () => {
               setError(null);
               try {
@@ -277,12 +284,12 @@ export function ArtifactCard({
               }
             }}
           >
-            Retry
+            <RetryIcon size={16} />
           </button>
         )}
         {onRemoved && (
           <ConfirmButton
-            className="btn btn-small btn-icon-only card-delete" label="Delete" confirmLabel="Delete?" busyLabel=""
+            className="btn btn-small btn-icon-only card-delete" label="Delete" confirmLabel="Delete?" busyLabel="" nativeTitle={false}
             onConfirm={async () => {
               // A blog2video video is also removed from blog2video.
               await (artifact.provider === "blog2video" ? videosApi.remove(artifact.id) : artifactsApi.remove(artifact.id));
@@ -292,9 +299,9 @@ export function ArtifactCard({
             <TrashIcon size={16} />
           </ConfirmButton>
         )}
-        {/* Bottom right: a positive or negative review */}
-        <CardFeedback artifact={artifact} />
       </footer>
+      {/* A row of its own under the actions: a positive or negative review */}
+      <CardFeedback artifact={artifact} />
     </article>
   );
 }

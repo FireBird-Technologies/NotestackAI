@@ -117,7 +117,7 @@ def public_quiz(artifact: Artifact) -> dict:
 
 
 def public_mind_map(artifact: Artifact) -> dict:
-    """A Mind Constellation without its private post references or quoted source lines."""
+    """The map's tree as labels and notes only (no sources, no quotes), as a shared report shows its maps."""
     root = (artifact.content_json or {}).get("root")
     return {**_head(artifact, "mind_map"), "root": _node(root) if isinstance(root, dict) else None}
 

@@ -19,7 +19,8 @@ export const LAYOUTS: { id: string; name: string }[] = [
 
 export const MAX_SLIDES = 30;
 
-const max = (fmt: DeckFmt) => ({ points: fmt === "presenter" ? 4 : 5, agenda: 14, takeaways: 3, items: 4 });
+// Presenter slides carry more, shorter bullets; detailed ones fewer ideas, each explained (LIMITS "points").
+const max = (fmt: DeckFmt) => ({ points: fmt === "presenter" ? 6 : 4, agenda: 14, takeaways: 3, items: 4 });
 
 const clone = (s: EditSlide): EditSlide => JSON.parse(JSON.stringify(s)) as EditSlide;
 
@@ -28,7 +29,7 @@ export function newSlide(layout: string, fmt: DeckFmt): EditSlide {
   const blank: EditSlide = {
     layout: "section", variant: "", kicker: "", heading: "New slide", lead: "", points: [],
     left: { label: "", items: [] }, right: { label: "", items: [] }, stat: { value: "", label: "" },
-    quote: { text: "", by: "" }, takeaways: [], closing: "", notes: "", sources: [],
+    quote: { text: "", by: "" }, takeaways: [], closing: "", sources: [],
   };
   return convert(blank, layout, fmt);
 }

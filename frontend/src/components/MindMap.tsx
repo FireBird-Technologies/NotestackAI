@@ -3,9 +3,13 @@ import { createPortal } from "react-dom";
 import { artifactsApi } from "../api/endpoints";
 import type { Artifact, MindNode } from "../api/types";
 import { useJob } from "../hooks/useJob";
-import { ConfirmButton, formatDate, JobProgress, Modal, StatusPill } from "./ui";
+import { ConfirmButton, errorMessage, formatDate, JobProgress, Modal, StatusPill } from "./ui";
 import { Reader } from "./Reader";
+import { ShareButton } from "./ShareDialog";
 import { CardFeedback } from "./CardFeedback";
+import { cardClick, ViewButton } from "./cardActions";
+import { DownloadIcon, ImageIcon, MarkdownIcon, PdfIcon, RetryIcon, TrashIcon } from "./icons/Icons";
+import { FloatingMenu, useMenu } from "./SlideDeck";
 
 /* ---------- Layout: a galaxy. The centre idea, branches orbiting it, sub-themes orbiting each branch, points
    orbiting each sub-theme. Every orbit is smaller than the one above, so zooming in always reveals a new ring. ---------- */
@@ -255,15 +259,7 @@ export function MindMapExplorer({ artifact, onClose, warp = true, startAt = "roo
 }) {
   const root = artifact.content.root as MindNode | undefined;
   const storeKey = `ns_mindmap_shape_${artifact.id}`;
-  const [shape, setShape] = useState<Shape>(() => {
-    try {
-      const saved = localStorage.getItem(storeKey) as Shape | null;
-      if (saved && SHAPES.some((x) => x.id === saved)) return saved;
-    } catch {
-      /* no storage: use the map's own shape */
-    }
-    return shapeFor(artifact.id);
-  });
+  const [shape, setShape] = useState<Shape>(() => savedShape(artifact.id));
   const seed = useMemo(() => hashSeed(artifact.id), [artifact.id]);
   const layoutData = useMemo(() => (root ? place(root, shape, seed) : { nodes: [], edges: [], extent: MIN_ROOT }), [root, shape, seed]);
   const placed = layoutData.nodes;
@@ -820,9 +816,154 @@ export function MindMapExplorer({ artifact, onClose, warp = true, startAt = "roo
   return embedded ? view : createPortal(view, document.body);
 }
 
-/* ---------- The right-rail list: every mind map in this notebook, one row each ---------- */
+/* ---------- A map in the notebook's list of what was made: a card like the others ---------- */
 
-export function MindMapRow({
+/* ---------- Download: the map as a Markdown outline, as a PDF document of its points and their details (printed by
+   the server), or the whole constellation as one still picture (every star labelled, in the shape the explorer
+   shows) as a PNG ---------- */
+
+/** The map as a Markdown outline (each star a bullet, its note under it). */
+function mapOutline(title: string, root: MindNode): string {
+  const lines = [`# ${title}`, ""];
+  const walk = (n: MindNode, depth: number) => {
+    const pad = "  ".repeat(depth);
+    lines.push(`${pad}- **${n.label}**`);
+    if (n.note) lines.push(`${pad}  ${n.note.replace(/\s*\n\s*/g, " ")}`);
+    n.children.forEach((c) => walk(c, depth + 1));
+  };
+  walk(root, 0);
+  return `${lines.join("\n")}\n`;
+}
+
+/** The shape the explorer shows this map in: the one picked there, else the map's own. */
+function savedShape(id: string): Shape {
+  try {
+    const saved = localStorage.getItem(`ns_mindmap_shape_${id}`) as Shape | null;
+    if (saved && SHAPES.some((x) => x.id === saved)) return saved;
+  } catch {
+    /* no storage: use the map's own shape */
+  }
+  return shapeFor(id);
+}
+
+const EXPORT_LABEL = [34, 22, 14, 9.5]; // label size per level, in world units: the deepest stars stay readable
+const EXPORT_FONT = "Inter, 'Helvetica Neue', Arial, sans-serif";
+const EXPORT_MAX_PX = 3600; // the picture's longer side, at most
+const xmlEscape = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+/** The whole map drawn once, every label showing: an SVG of `w` x `h` pixels. */
+function mapSvg(title: string, root: MindNode, id: string): { svg: string; w: number; h: number } {
+  const { nodes, edges, extent } = place(root, savedShape(id), hashSeed(id));
+  const labelLines = (p: Placed) => wrap(p.level === 0 ? p.node.label.toUpperCase() : p.node.label, p.level >= 2 ? 16 : 14, 3);
+  // The world's bounds, with room for each star's glow and its label under it.
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const p of nodes) {
+    const fs = EXPORT_LABEL[p.level], r = RADIUS[p.level];
+    const half = Math.max(r * 2.6, (Math.max(...labelLines(p).map((l) => l.length)) * fs * 0.6) / 2);
+    x0 = Math.min(x0, p.x - half);
+    x1 = Math.max(x1, p.x + half);
+    y0 = Math.min(y0, p.y - r * 2.6);
+    y1 = Math.max(y1, p.y + r + fs * (0.4 + 1.2 * labelLines(p).length));
+  }
+  const pad = 90;
+  x0 -= pad; y0 -= pad; x1 += pad; y1 += pad;
+  const titleFs = Math.max(28, (x1 - x0) * 0.022);
+  const band = titleFs * 3; // the title and a line under it, above the map
+  y0 -= band;
+  const ww = x1 - x0, wh = y1 - y0;
+  const scale = Math.min(EXPORT_MAX_PX / ww, EXPORT_MAX_PX / wh, 4);
+  const w = Math.round(ww * scale), h = Math.round(wh * scale);
+
+  const out: string[] = [];
+  const grads = [...ACCENTS, CORE].map((c, i) =>
+    `<radialGradient id="g${i}"><stop offset="0%" stop-color="${c}" stop-opacity="0.95"/><stop offset="30%" stop-color="${c}" stop-opacity="0.4"/><stop offset="100%" stop-color="${c}" stop-opacity="0"/></radialGradient>`);
+  out.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="${x0} ${y0} ${ww} ${wh}">`);
+  out.push(`<defs>${grads.join("")}</defs>`);
+  out.push(`<rect x="${x0}" y="${y0}" width="${ww}" height="${wh}" fill="#04060c"/>`);
+  // a sky of faint stars, then a soft cloud behind the whole map and each theme
+  for (let i = 0; i < 260; i++) {
+    const sx = x0 + seeded(i + 11) * ww, sy = y0 + seeded(i + 611) * wh, sr = (0.5 + seeded(i + 1211) * 1.3) / scale * 1.6;
+    out.push(`<circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="${sr.toFixed(2)}" fill="${seeded(i + 77) > 0.7 ? "#a9c8ff" : "#fff"}" opacity="${(0.25 + seeded(i + 1811) * 0.5).toFixed(2)}"/>`);
+  }
+  out.push(`<circle cx="0" cy="0" r="${extent * 1.7}" fill="url(#g7)" opacity="0.22"/>`);
+  for (const p of nodes.filter((q) => q.level === 1)) {
+    out.push(`<circle cx="${p.x}" cy="${p.y}" r="${TOPIC_ORBIT * 2.3}" fill="url(#g${p.branch % ACCENTS.length})" opacity="0.25"/>`);
+  }
+  // the constellation lines
+  for (const e of edges) {
+    const sw = [0, 2.4, 1.5, 0.9][e.to.level];
+    out.push(`<line x1="${e.a.x}" y1="${e.a.y}" x2="${e.b.x}" y2="${e.b.y}" stroke="${accentOf(e.to)}" stroke-width="${sw}" stroke-linecap="round" opacity="${e.faint ? 0.2 : 0.55}"/>`);
+  }
+  // the stars, deepest first so the outer ones' labels stay on top
+  for (const p of [...nodes].reverse()) {
+    const r = RADIUS[p.level], c = accentOf(p), gi = p.level === 0 ? 7 : p.branch % ACCENTS.length;
+    out.push(`<circle cx="${p.x}" cy="${p.y}" r="${r * 2.6}" fill="url(#g${gi})"/>`);
+    out.push(`<circle cx="${p.x}" cy="${p.y}" r="${r * (p.level === 0 ? 0.5 : 0.55)}" fill="${p.level === 0 ? "#ffffff" : c}"/>`);
+  }
+  for (const p of nodes) {
+    const fs = EXPORT_LABEL[p.level];
+    const fill = p.level <= 1 ? "#ffffff" : p.level === 2 ? "#dbe6ff" : "#a9bbd9";
+    const weight = p.level <= 1 ? 600 : 500;
+    const top = p.y + RADIUS[p.level] + fs * 1.05;
+    const spans = labelLines(p).map((l, i) => `<tspan x="${p.x}" y="${(top + i * fs * 1.2).toFixed(1)}">${xmlEscape(l)}</tspan>`).join("");
+    out.push(`<text text-anchor="middle" font-family="${EXPORT_FONT}" font-size="${fs}" font-weight="${weight}" fill="${fill}"${p.level === 0 ? ' letter-spacing="2"' : ""}>${spans}</text>`);
+  }
+  // the title, above the map
+  const stars = nodes.length;
+  out.push(`<text x="${x0 + pad}" y="${y0 + titleFs * 1.4}" font-family="${EXPORT_FONT}" font-size="${titleFs}" font-weight="700" fill="#ffffff">${xmlEscape(title)}</text>`);
+  out.push(`<text x="${x0 + pad}" y="${y0 + titleFs * 2.3}" font-family="${EXPORT_FONT}" font-size="${titleFs * 0.5}" fill="#8fa3c4">Mind Constellation · ${stars} stars · Notestack</text>`);
+  out.push("</svg>");
+  return { svg: out.join(""), w, h };
+}
+
+/** The map's picture on a canvas. */
+async function mapCanvas(title: string, root: MindNode, id: string): Promise<HTMLCanvasElement> {
+  const { svg, w, h } = mapSvg(title, root, id);
+  const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml;charset=utf-8" }));
+  try {
+    const img = new Image();
+    await new Promise<void>((ok, fail) => {
+      img.onload = () => ok();
+      img.onerror = () => fail(new Error("The map could not be drawn."));
+      img.src = url;
+    });
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
+    return canvas;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+const canvasBlob = (canvas: HTMLCanvasElement, type: string, quality?: number) =>
+  new Promise<Blob>((ok, fail) => canvas.toBlob((b) => (b ? ok(b) : fail(new Error("The picture could not be made."))), type, quality));
+
+function saveBlob(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+type MapFormat = "md" | "png" | "pdf";
+
+/** Saves the map as a file: its outline, its points and details as a PDF, or its picture as a PNG. */
+async function downloadMap(format: MapFormat, title: string, root: MindNode, id: string) {
+  const name = title.replace(/[^\w\- ]+/g, "").trim().slice(0, 80) || "Mind Constellation";
+  if (format === "md") return saveBlob(new Blob([mapOutline(title, root)], { type: "text/markdown" }), `${name}.md`);
+  if (format === "pdf") return saveBlob(await artifactsApi.mindMapPdf(id), `${name}.pdf`);
+  const canvas = await mapCanvas(title, root, id);
+  saveBlob(await canvasBlob(canvas, "image/png"), `${name}.png`);
+}
+
+/** A Mind Constellation in the notebook's list, as a card like the notebook's other outputs: what it is, its title and
+ * date, its state, then its size and the actions (open, download, share, delete) and the thumbs. Not launchable.
+ * A click on the card opens it. */
+export function MindMapCard({
   artifact: initial,
   autoOpen,
   onOpen,
@@ -834,6 +975,7 @@ export function MindMapRow({
   onRemoved: (id: string) => void;
 }) {
   const [artifact, setArtifact] = useState(initial);
+  const [error, setError] = useState<string | null>(null);
   const job = useJob(artifact.job, () => {
     artifactsApi.get(artifact.id).then((a) => {
       setArtifact(a);
@@ -845,47 +987,90 @@ export function MindMapRow({
   const failed = artifact.status === "failed" ? (artifact.content.error as string | undefined) ?? job?.error ?? "Could not build this map." : null;
   const nodes = artifact.content.node_count as number | undefined;
   const posts = artifact.content.post_count as number | undefined;
+  const root = artifact.content.root as MindNode | undefined;
+  const title = artifact.title.replace(/^(?:Mind map|Idea Galaxy|Idea Constellation|Mind Constellation): /, "");
+
+  const menu = useMenu();
+  const [saving, setSaving] = useState<MapFormat | null>(null);
+  const download = async (format: MapFormat) => {
+    menu.setOpen(false);
+    if (!root) return;
+    setError(null);
+    setSaving(format);
+    try {
+      await downloadMap(format, title, root, artifact.id);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setSaving(null);
+    }
+  };
+
   return (
-    <div className={`mm-row${ready ? " is-ready" : ""}`}>
-      <button type="button" className="mm-row-main" disabled={!ready} onClick={() => onOpen(artifact)}>
-        <span className="mm-row-art" aria-hidden="true">
-          <svg viewBox="0 0 40 40" width="38" height="38">
-            <circle cx="20" cy="20" r="14" fill="none" stroke="currentColor" strokeOpacity=".35" strokeDasharray="2 3" />
-            <circle cx="20" cy="20" r="4" fill="currentColor" />
-            <circle cx="32" cy="14" r="2.4" fill="currentColor" />
-            <circle cx="9" cy="26" r="2.4" fill="currentColor" />
-            <circle cx="22" cy="33" r="1.8" fill="currentColor" />
-          </svg>
-        </span>
-        <span className="mm-row-text">
-          <strong>{artifact.title.replace(/^(?:Mind map|Idea Galaxy|Idea Constellation|Mind Constellation): /, "")}</strong>
-          <span className="muted small">
-            {ready ? `${nodes ?? 0} stars${posts ? ` · ${posts} posts` : ""} · ` : ""}
-            {formatDate(artifact.created_at)}
-          </span>
-        </span>
-      </button>
-      {!ready && !failed && <StatusPill status={running ? (job!.status === "queued" ? "queued" : "working") : artifact.status} />}
-      <ConfirmButton
-        className="mm-row-del"
-        confirmLabel="Sure?"
-        onConfirm={async () => {
-          await artifactsApi.remove(artifact.id);
-          onRemoved(artifact.id);
-        }}
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13" />
-        </svg>
-        <span className="sr-only">Delete {artifact.title}</span>
-      </ConfirmButton>
-      {running && job && (
-        <div className="mm-row-progress">
-          <JobProgress job={job} compact />
+    <article className={`artifact card artifact-mind_map${ready ? " artifact-clickable" : ""}`}
+             onClick={ready ? cardClick(() => onOpen(artifact)) : undefined}>
+      <header className="artifact-head">
+        <div>
+          <p className="eyebrow">Mind Constellation</p>
+          <h3>{title}</h3>
+          <p className="mono muted">{formatDate(artifact.created_at, true)}</p>
         </div>
-      )}
-      {failed && <p className="error-text small mm-row-progress">{failed}</p>}
-    </div>
+        <StatusPill status={running ? (job!.status === "queued" ? "queued" : "working") : artifact.status} />
+      </header>
+      {running && job && <JobProgress job={job} compact />}
+      {failed && <p className="error-text">{failed}</p>}
+      {ready && <p className="muted">{nodes ?? 0} stars{posts ? ` · from ${posts} post${posts === 1 ? "" : "s"}` : ""}</p>}
+      {error && <p className="error-text">{error}</p>}
+      <footer className="artifact-actions">
+        {ready && (
+          <>
+            <ViewButton label="Open Mind Constellation" onClick={() => onOpen(artifact)} />
+            {root && (
+              <div className="sd-menu-wrap card-act-download" ref={menu.ref}>
+                <button type="button" className="btn btn-small btn-icon-only" aria-haspopup="menu" aria-expanded={menu.open}
+                        disabled={saving !== null} aria-label={saving ? "Preparing the download" : "Download"}
+                        onClick={() => menu.setOpen((o) => !o)}>
+                  {saving ? <span className="nbv-send-spinner" aria-hidden="true" /> : <DownloadIcon size={16} />}
+                </button>
+                {menu.open && (
+                  <FloatingMenu menu={menu}>
+                    <button type="button" role="menuitem" onClick={() => void download("md")}>
+                      <MarkdownIcon size={20} /> Markdown outline (.md)
+                    </button>
+                    <button type="button" role="menuitem" onClick={() => void download("png")}>
+                      <ImageIcon size={20} /> Image (.png)
+                    </button>
+                    <button type="button" role="menuitem" onClick={() => void download("pdf")}>
+                      <PdfIcon size={20} /> PDF document (.pdf)
+                    </button>
+                  </FloatingMenu>
+                )}
+              </div>
+            )}
+            <ShareButton artifact={artifact} iconOnly />
+          </>
+        )}
+        {failed && (
+          <button type="button" className="btn btn-small btn-icon-only card-act-retry" aria-label="Retry" onClick={async () => {
+            setError(null);
+            try {
+              setArtifact(await artifactsApi.retry(artifact.id));
+            } catch (e) {
+              setError(errorMessage(e));
+            }
+          }}><RetryIcon size={16} /></button>
+        )}
+        <ConfirmButton className="btn btn-small btn-icon-only card-delete" label="Delete" confirmLabel="Delete?" busyLabel="" nativeTitle={false}
+                       onConfirm={async () => {
+                         await artifactsApi.remove(artifact.id);
+                         onRemoved(artifact.id);
+                       }}>
+          <TrashIcon size={16} />
+        </ConfirmButton>
+      </footer>
+      {/* A row of its own under the actions: a positive or negative review */}
+      <CardFeedback artifact={artifact} />
+    </article>
   );
 }
 

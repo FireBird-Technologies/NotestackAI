@@ -5,7 +5,8 @@ import { addActions, convert, type DeckFmt, LAYOUTS, MAX_SLIDES, newSlide, probl
 import type { Artifact, ChatSummary } from "../api/types";
 import { Dropdown } from "./Dropdown";
 import { useJob } from "../hooks/useJob";
-import { CheckIcon, CollapseIcon, DownloadIcon, ExpandIcon, MoreIcon, PdfIcon, PlayIcon, PptxIcon, ShareIcon, TrashIcon } from "./icons/Icons";
+import { CheckIcon, CollapseIcon, DownloadIcon, ExpandIcon, MoreIcon, PdfIcon, PlayIcon, PptxIcon, DesktopIcon, RetryIcon, ShareIcon, TrashIcon } from "./icons/Icons";
+import { cardClick, ViewButton } from "./cardActions";
 import { LANGUAGES, Pills, SourceFocusFields, sourceSummary, type SourceSelection } from "./SourceFocusFields";
 import { ConfirmButton, ConfirmDeleteModal, errorMessage, formatDate, JobProgress, Modal, StatusPill } from "./ui";
 import { canShare, ShareButton, ShareDialog } from "./ShareDialog";
@@ -334,7 +335,7 @@ export function SlideFrame({ html, title, fit = "width", hidden = false, editing
   );
 }
 
-type DeckSlide = { layout: string; heading: string; notes?: string; sources?: { title?: string; path: string; line_start: number; line_end: number }[] };
+type DeckSlide = { layout: string; heading: string; sources?: { title?: string; path: string; line_start: number; line_end: number }[] };
 
 function deckOf(artifact: Artifact): { pages: string[]; slides: DeckSlide[] } {
   const c = artifact.content;
@@ -418,7 +419,7 @@ export function SlidePresenter({ artifact, start = 0, onClose }: { artifact: Art
 
 /** A small menu under an icon button. Closes on a click outside or Escape (an Escape that closes the menu does not
  * also close the popup it sits in). */
-function useMenu() {
+export function useMenu() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null); // the button's wrapper
   const menuRef = useRef<HTMLDivElement>(null); // the floating menu (rendered in <body>)
@@ -454,7 +455,7 @@ function useMenu() {
 
 /** A menu under its button, drawn in <body> so a scrolling list or a popup can never clip it. Opens below and to the
  * left of the button's right edge, and above it when there is no room below. */
-function FloatingMenu({ menu, children }: { menu: ReturnType<typeof useMenu>; children: ReactNode }) {
+export function FloatingMenu({ menu, children }: { menu: ReturnType<typeof useMenu>; children: ReactNode }) {
   const [pos, setPos] = useState<CSSProperties>({ visibility: "hidden" });
   useLayoutEffect(() => {
     const button = menu.ref.current?.getBoundingClientRect();
@@ -508,19 +509,21 @@ function deckTitle(artifact: Artifact): string {
 }
 
 /** Download, in the popup's header: a menu of PDF or PowerPoint. */
-function DownloadMenu({ artifact, prepare, buttonClass = "sd-icon-btn", iconSize = 20 }: {
+function DownloadMenu({ artifact, prepare, buttonClass = "sd-icon-btn", iconSize = 20, inCard = false }: {
   artifact: Artifact;
   prepare?: () => Promise<boolean>;
   /** The button's look: the viewer's header icon by default; a card's round icon button there. */
   buttonClass?: string;
   iconSize?: number;
+  /** On a card, whose icons show their own hover label: no browser tooltip as well. */
+  inCard?: boolean;
 }) {
   const menu = useMenu();
   const dl = useDeckDownload(artifact, prepare);
   return (
-    <div className="sd-menu-wrap" ref={menu.ref}>
+    <div className={`sd-menu-wrap${inCard ? " card-act-download" : ""}`} ref={menu.ref}>
       <button type="button" className={buttonClass} aria-haspopup="menu" aria-expanded={menu.open} disabled={dl.busy !== null}
-              title={dl.busy ? "Preparing the file..." : "Download"} aria-label={dl.busy ? "Preparing the file" : "Download"}
+              title={inCard ? undefined : dl.busy ? "Preparing the file..." : "Download"} aria-label={dl.busy ? "Preparing the file" : "Download"}
               onClick={() => menu.setOpen((o) => !o)}>
         {dl.busy ? <span className="nbv-send-spinner" aria-hidden="true" /> : <DownloadIcon size={iconSize} />}
       </button>
@@ -539,16 +542,14 @@ function DownloadMenu({ artifact, prepare, buttonClass = "sd-icon-btn", iconSize
   );
 }
 
-/** Everything a deck can do, behind its three dots (the row's and the popup's): rename, download, present, speaker
- * notes (in the popup) and delete (asks once more first). */
-function DeckMenu({ artifact, onRename, onPresent, onDelete, notes, onNotes, prepare }: {
+/** Everything a deck can do, behind its three dots (the row's and the popup's): rename, download, present, share and
+ * delete (asks once more first). */
+function DeckMenu({ artifact, onRename, onPresent, onDelete, prepare }: {
   artifact: Artifact;
   prepare?: () => Promise<boolean>;
   onRename?: () => void;
   onPresent: () => void;
   onDelete: () => Promise<void>;
-  notes?: boolean;
-  onNotes?: () => void;
 }) {
   const menu = useMenu();
   const dl = useDeckDownload(artifact, prepare);
@@ -573,11 +574,6 @@ function DeckMenu({ artifact, onRename, onPresent, onDelete, notes, onNotes, pre
           {canShare(artifact) && (
             <button type="button" role="menuitem" onClick={pick(() => setSharing(true))}><ShareIcon size={20} /> Share</button>
           )}
-          {onNotes && (
-            <button type="button" role="menuitemcheckbox" aria-checked={notes} onClick={pick(onNotes)}>
-              <SpeakerNotesIcon /> {notes ? "Hide speaker notes" : "Show speaker notes"}
-            </button>
-          )}
           <button type="button" role="menuitem" className="danger" onClick={pick(() => setConfirming(true))}>
             <TrashIcon size={20} /> Delete
           </button>
@@ -600,12 +596,6 @@ function SvgIcon({ children }: { children: ReactNode }) {
   );
 }
 
-const SpeakerNotesIcon = () => (
-  <SvgIcon>
-    <path d="M5 4h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-7l-4 3.5V17H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" />
-    <path d="M7.5 9h9M7.5 12.5h6" />
-  </SvgIcon>
-);
 const PencilIcon = () => (
   <SvgIcon>
     <path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4zM13.5 6.5l4 4" />
@@ -690,8 +680,7 @@ function AddSlide({ after, busy, full, onAdd }: { after: number; busy: boolean; 
 /** The deck in a popup: its actions along the top (edit, present, a larger preview, download, more) and every slide
  * below, one after another. A click on a slide presents from it. The pencil opens edit mode: every text on the slides
  * is a framed text box to type in (with a remove button where the slide can do without it), each slide has its
- * controls (layout, text boxes to add, move, duplicate, delete), slides can be added between them, and the speaker
- * notes are editable too. Save keeps it all; leaving edit mode or closing with unsaved changes asks first. Presenting
+ * controls (layout, text boxes to add, move, duplicate, delete), and slides can be added between them. Save keeps it all; leaving edit mode or closing with unsaved changes asks first. Presenting
  * or downloading saves first, so both show the edited deck. */
 export function SlideDeckViewer({ artifact, onClose, onDelete, onSaved }: {
   artifact: Artifact;
@@ -702,7 +691,6 @@ export function SlideDeckViewer({ artifact, onClose, onDelete, onSaved }: {
 }) {
   const stored = deckOf(artifact);
   const [big, setBig] = useState(false);
-  const [notes, setNotes] = useState(false);
   const [presenting, setPresenting] = useState<number | null>(null);
   const [inView, setInView] = useState(0);
   const [draft, setDraft] = useState<Draft | null>(null); // edit mode when set
@@ -830,7 +818,7 @@ export function SlideDeckViewer({ artifact, onClose, onDelete, onSaved }: {
     }, { root, threshold: [0, 0.25, 0.5, 0.75, 1] });
     root.querySelectorAll("[data-i]").forEach((el) => io.observe(el));
     return () => io.disconnect();
-  }, [pages.length, notes, editing]);
+  }, [pages.length, editing]);
 
   const actions = (
     <div className="sd-head-actions" role="toolbar" aria-label="Slide deck">
@@ -857,8 +845,7 @@ export function SlideDeckViewer({ artifact, onClose, onDelete, onSaved }: {
       </button>
       {pages.length > 0 && <DownloadMenu artifact={artifact} prepare={save} />}
       <CardFeedback artifact={artifact} />
-      <DeckMenu artifact={artifact} onPresent={() => void present(inView)} onDelete={onDelete} prepare={save}
-                notes={notes} onNotes={() => setNotes((n) => !n)} />
+      <DeckMenu artifact={artifact} onPresent={() => void present(inView)} onDelete={onDelete} prepare={save} />
       <button type="button" className="sd-icon-btn" onClick={requestClose} title="Close" aria-label="Close">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
           <path d="M6 6l12 12M18 6L6 18" />
@@ -884,7 +871,6 @@ export function SlideDeckViewer({ artifact, onClose, onDelete, onSaved }: {
           <ol className={`sd-stack${busy ? " sd-busy" : ""}`} ref={stack} aria-label="Slides" aria-busy={busy}>
             {pages.map((html, k) => {
               const s = slides[k];
-              const sources = [...new Map((s?.sources ?? []).map((x) => [x.title || x.path, x])).values()];
               const e = draft?.slides[k];
               return (
                 <li key={k} data-i={k}>
@@ -902,28 +888,6 @@ export function SlideDeckViewer({ artifact, onClose, onDelete, onSaved }: {
                                 onEdit={(field, text) => typed(k, field, text)}
                                 removable={e ? removable(e) : []} onRemove={(field) => e && change(k, removeField(e, field))} />
                   </div>
-                  {notes && (
-                    <div className="sd-notes">
-                      {e ? (
-                        <>
-                          <label className="vw-label" htmlFor={`sd-notes-${artifact.id}-${k}`}>Slide {k + 1} notes</label>
-                          <textarea id={`sd-notes-${artifact.id}-${k}`} className="textarea sd-notes-edit" rows={3} maxLength={1500}
-                                    placeholder="No notes for this slide yet." value={e.notes}
-                                    onChange={(ev) => typed(k, "notes", ev.target.value)} />
-                        </>
-                      ) : (
-                        <>
-                          <span className="vw-label">Slide {k + 1}</span>
-                          <p>{s?.notes || <span className="muted">No notes for this slide.</span>}</p>
-                        </>
-                      )}
-                      {sources.length > 0 && (
-                        <p className="muted small">
-                          From {sources.map((x) => `${x.title || x.path} (lines ${x.line_start} to ${x.line_end})`).join("; ")}
-                        </p>
-                      )}
-                    </div>
-                  )}
                   {draft && (
                     <AddSlide after={k} busy={busy || saving} full={draft.slides.length >= MAX_SLIDES}
                               onAdd={(layout) => insert(k + 1, newSlide(layout, fmt))} />
@@ -994,7 +958,8 @@ export function SlideDeckRow({ artifact: initial, onRemoved }: { artifact: Artif
   // The same card as the notebook's other outputs (a report, a quiz): what it is, its title and date, its state, then
   // what's in it and the ways in.
   return (
-    <article className="artifact card artifact-slide_deck">
+    <article className={`artifact card artifact-slide_deck${ready ? " artifact-clickable" : ""}`}
+             onClick={ready ? cardClick(() => setOpen(true)) : undefined}>
       <header className="artifact-head">
         <div>
           <p className="eyebrow">Slide deck</p>
@@ -1015,27 +980,29 @@ export function SlideDeckRow({ artifact: initial, onRemoved }: { artifact: Artif
       <footer className="artifact-actions">
         {ready && (
           <>
-            <button type="button" className="btn btn-small" onClick={() => setOpen(true)}>View</button>
-            <button type="button" className="btn btn-small" onClick={() => setPresenting(true)}>Present</button>
-            <PostButton artifactId={artifact.id} artifact={artifact} />
-            <ShareButton artifact={artifact} />
-            <DownloadMenu artifact={artifact} buttonClass="btn btn-small btn-icon-only" iconSize={16} />
+            <ViewButton label="View" onClick={() => setOpen(true)} />
+            <button type="button" className="btn btn-small btn-icon-only card-act-present" onClick={() => setPresenting(true)} aria-label="Present">
+              <DesktopIcon size={16} />
+            </button>
+            <PostButton artifactId={artifact.id} artifact={artifact} iconOnly />
+            <ShareButton artifact={artifact} iconOnly />
+            <DownloadMenu artifact={artifact} buttonClass="btn btn-small btn-icon-only" iconSize={16} inCard />
           </>
         )}
         {failed && (
-          <button type="button" className="btn btn-small" onClick={async () => {
+          <button type="button" className="btn btn-small btn-icon-only card-act-retry" aria-label="Retry" onClick={async () => {
             setError(null);
             try {
               setArtifact(await artifactsApi.retry(artifact.id));
             } catch (e) {
               setError(errorMessage(e));
             }
-          }}>Retry</button>
+          }}><RetryIcon size={16} /></button>
         )}
-        <ConfirmButton onConfirm={remove} className="btn btn-small btn-icon-only card-delete" label="Delete" confirmLabel="Delete?" busyLabel=""><TrashIcon size={16} /></ConfirmButton>
-        {/* Bottom right: a positive or negative review */}
-        <CardFeedback artifact={artifact} />
+        <ConfirmButton onConfirm={remove} className="btn btn-small btn-icon-only card-delete" label="Delete" confirmLabel="Delete?" busyLabel="" nativeTitle={false}><TrashIcon size={16} /></ConfirmButton>
       </footer>
+      {/* A row of its own under the actions: a positive or negative review */}
+      <CardFeedback artifact={artifact} />
       {open && <SlideDeckViewer artifact={artifact} onClose={() => setOpen(false)} onDelete={remove} onSaved={setArtifact} />}
       {presenting && <SlidePresenter artifact={artifact} onClose={() => setPresenting(false)} />}
     </article>

@@ -133,8 +133,7 @@ def _fallback_slide(plan: dict, sources: list[str]) -> dict:
     body = " ".join(re.sub(r"^\s*\d+\|\s?", "", line) for s in sources for line in s.splitlines()[1:])
     sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", body) if len(s.strip()) > 30][:3]
     return {"layout": "points" if len(sentences) >= 2 else "section", "heading": plan.get("heading"),
-            "kicker": "", "lead": plan.get("purpose") or "", "points": [{"term": "", "text": s} for s in sentences],
-            "notes": plan.get("purpose") or ""}
+            "kicker": "", "lead": plan.get("purpose") or "", "points": [{"term": "", "text": s} for s in sentences]}
 
 
 def _claims(slide: dict) -> list[tuple[tuple, str]]:
@@ -344,7 +343,7 @@ def build_slide_deck(db: Session, job: Job, artifact: Artifact) -> dict:
     subtitle, takeaways, last_line = _check_frame(db, job, ws, slides, subtitle, takeaways, closing.get("closing") or "")
 
     opening = {"layout": "title", "kicker": outline.get("opening_kicker") or "", "heading": outline.get("title") or material.title,
-               "lead": subtitle, "notes": subtitle}
+               "lead": subtitle}
     deck_slides = [opening]
     if has_agenda(length):
         # A long deck's agenda lists its parts (its section slides); otherwise every slide.
@@ -355,7 +354,7 @@ def build_slide_deck(db: Session, job: Job, artifact: Artifact) -> dict:
     deck_slides += slides
     deck_slides.append({"layout": "closing", "kicker": closing.get("kicker") or "",
                         "heading": closing.get("heading") or opening["heading"], "takeaways": takeaways,
-                        "closing": last_line or opening["lead"], "notes": closing.get("notes") or ""})
+                        "closing": last_line or opening["lead"]})
 
     update_job(db, job, progress=0.9, message="Laying out the slides")
     deck = clamp_deck({"title": opening["heading"], "subtitle": opening["lead"], "slides": deck_slides}, fmt)
