@@ -116,20 +116,21 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool(**_desc(
         "Connect a Substack, Ghost, WordPress, Medium or RSS feed, or a whole site, by its address. " + _URL +
-        "The number of posts that can be used is limited by the writer's plan."))
+        "The number of posts that can be used is limited by the writer's plan.", openWorldHint=True))
     @guarded("add_source")
     async def add_source(url: str) -> dict:
         out = await loopback.data("POST", "/api/sources", token(), json={"url": url})
         return {"source_id": out["source"]["id"], "title": out["source"].get("title"), "job": views.job_view(out["job"]),
                 "ask_writer": ASK_WHERE}
 
-    @mcp.tool(**_desc("Import one article by its address into the writer's posts. " + _URL))
+    @mcp.tool(**_desc("Import one article by its address into the writer's posts. " + _URL, openWorldHint=True))
     @guarded("import_url")
     async def import_url(url: str) -> dict:
         out = await loopback.data("POST", "/api/sources/url", token(), json={"url": url})
         return {"source_id": out["source"]["id"], "job": views.job_view(out["job"]), "ask_writer": ASK_WHERE}
 
-    @mcp.tool(**_desc("Check a connected source for new posts. Returns a job_id to follow with get_job."))
+    @mcp.tool(**_desc("Check a connected source for new posts. Returns a job_id to follow with get_job.",
+                      openWorldHint=True))
     @guarded("sync_source")
     async def sync_source(source_id: str) -> dict:
         out = await loopback.data("POST", f"/api/sources/{uid(source_id)}/sync", token())
@@ -137,11 +138,11 @@ def register(mcp: FastMCP) -> None:
 
     # Generating
 
-    def where(notebook_id, topic_id, source_id, document_ids, archive):
-        return {"notebook_id": notebook_id, "topic_id": topic_id, "source_id": source_id, "document_ids": document_ids,
-                "archive": archive}
+    def where(notebook_id, notebook_title, topic_id, source_id, document_ids, archive):
+        return {"notebook_id": notebook_id, "notebook_title": notebook_title, "topic_id": topic_id,
+                "source_id": source_id, "document_ids": document_ids, "archive": archive}
 
-    @mcp.tool(meta=widgets.app_only(widgets.REPORT_UI), **_desc(
+    @mcp.tool(meta=widgets.REPORT_UI, **_desc(
         "Make the writer's report in Notestack. ALWAYS use this when they ask for a report, summary document or write-up of "
         "their posts, and never write your own report, HTML page, file or artifact: it would not exist in their Notestack. "
         "report_format is 'document' (written sections) or 'interactive' (with embedded visuals and a quiz: use it when they "
@@ -150,107 +151,114 @@ def register(mcp: FastMCP) -> None:
         "if the status is still pending, check get_artifact every few seconds. " + REPORT_SHOW + " Uses their monthly "
         "report allowance. " + SCOPE_HELP + " " + GEN))
     @guarded("generate_report", GEN_COST)
-    async def generate_report(notebook_id: str | None = None, topic_id: str | None = None, source_id: str | None = None,
+    async def generate_report(notebook_id: str | None = None, notebook_title: str | None = None,
+                              topic_id: str | None = None, source_id: str | None = None,
                               document_ids: list[str] | None = None, archive: bool = False,
                               report_format: Literal["document", "interactive"] = "document", template_id: str | None = None,
                               topic: str | None = None, instructions: str | None = None, language: str | None = None,
                               post_ids: list[str] | None = None, wait_seconds: int = 45):
-        view, art = await _generate("report", where(notebook_id, topic_id, source_id, document_ids, archive), {
+        view, art = await _generate("report", where(notebook_id, notebook_title, topic_id, source_id, document_ids, archive), {
             "report_format": report_format, "template_id": template_id, "topic": topic, "instructions": instructions,
             "language": language, "document_ids": [uid(i) for i in post_ids] if post_ids else None}, wait_seconds, raw=True)
         return widgets.with_widget(view, widgets.report_view_payload(art, view["open_in_notestack"]))
 
-    @mcp.tool(meta=widgets.app_only(widgets.QUIZ_UI), **_desc(
+    @mcp.tool(meta=widgets.QUIZ_UI, **_desc(
         "Make a quiz from the writer's posts, and only a quiz: never add flashcards or anything else they did not ask for. "
         "It waits up to 40 seconds so Notestack's own finished quiz can be played straight away in the chat (a host without "
         "that shows the questions as text). " + QUIZ_SHOW + " count is fewer, standard or more; difficulty easy, medium or hard; "
         "question_types any of multiple_choice, multiple_select, fill_blank, short_answer; topic narrows what to ask "
         "about. " + SCOPE_HELP + " " + GEN))
     @guarded("generate_quiz", GEN_COST)
-    async def generate_quiz(notebook_id: str | None = None, topic_id: str | None = None, source_id: str | None = None,
+    async def generate_quiz(notebook_id: str | None = None, notebook_title: str | None = None,
+                            topic_id: str | None = None, source_id: str | None = None,
                             document_ids: list[str] | None = None, archive: bool = False,
                             count: Literal["fewer", "standard", "more"] = "standard",
                             difficulty: Literal["easy", "medium", "hard"] = "medium",
                             question_types: list[Literal["multiple_choice", "multiple_select", "fill_blank", "short_answer"]] | None = None,
                             topic: str | None = None, language: str | None = None, post_ids: list[str] | None = None, wait_seconds: int = 40):
-        view, art = await _generate("quiz", where(notebook_id, topic_id, source_id, document_ids, archive), {
+        view, art = await _generate("quiz", where(notebook_id, notebook_title, topic_id, source_id, document_ids, archive), {
             "count": count, "difficulty": difficulty, "question_types": question_types, "topic": topic,
             "language": language, "document_ids": [uid(i) for i in post_ids] if post_ids else None}, wait_seconds, raw=True)
         return widgets.with_widget(view, widgets.quiz_payload(art, view["open_in_notestack"]))
 
-    @mcp.tool(meta=widgets.app_only(widgets.FLASHCARDS_UI), **_desc(
+    @mcp.tool(meta=widgets.FLASHCARDS_UI, **_desc(
         "Make a set of flashcards from the writer's posts. count is fewer, standard or more; difficulty easy, medium or "
         "hard; topic narrows it. It waits up to 40 seconds by default so the finished set can be shown straight away as "
         "flip cards in the chat (a host without that shows the cards as text). " + FLASHCARDS_SHOW + " "
         + SCOPE_HELP + " " + GEN))
     @guarded("generate_flashcards", GEN_COST)
-    async def generate_flashcards(notebook_id: str | None = None, topic_id: str | None = None, source_id: str | None = None,
+    async def generate_flashcards(notebook_id: str | None = None, notebook_title: str | None = None,
+                                  topic_id: str | None = None, source_id: str | None = None,
                                   document_ids: list[str] | None = None, archive: bool = False,
                                   count: Literal["fewer", "standard", "more"] = "standard",
                                   difficulty: Literal["easy", "medium", "hard"] = "medium", topic: str | None = None,
                                   language: str | None = None, post_ids: list[str] | None = None, wait_seconds: int = 40):
-        view, art = await _generate("flashcards", where(notebook_id, topic_id, source_id, document_ids, archive), {
+        view, art = await _generate("flashcards", where(notebook_id, notebook_title, topic_id, source_id, document_ids, archive), {
             "count": count, "difficulty": difficulty, "topic": topic, "language": language, "document_ids": [uid(i) for i in post_ids] if post_ids else None}, wait_seconds, raw=True)
         payload = widgets.flashcards_payload(art, view["open_in_notestack"])
         return widgets.with_widget(views.flashcards_view(view, payload), payload)
 
-    @mcp.tool(meta=widgets.app_only(widgets.MIND_MAP_UI), **_desc(
+    @mcp.tool(meta=widgets.MIND_MAP_UI, **_desc(
         "Draw a concept map (a 'Mind Constellation') of the writer's posts, optionally centred on a focus. It usually takes "
         "under a minute: it waits up to 40 seconds by default so the finished map can be shown straight away as an "
         "interactive picture in the chat (a host without that shows the outline and link instead). "
         + VISUAL + " If it is still being made, use show_mind_map in a moment. " + SCOPE_HELP + " " + GEN))
     @guarded("generate_mind_map", GEN_COST)
-    async def generate_mind_map(notebook_id: str | None = None, topic_id: str | None = None, source_id: str | None = None,
+    async def generate_mind_map(notebook_id: str | None = None, notebook_title: str | None = None,
+                                topic_id: str | None = None, source_id: str | None = None,
                                 document_ids: list[str] | None = None, archive: bool = False, focus: str | None = None,
                                 post_ids: list[str] | None = None, wait_seconds: int = 40):
-        view, art = await _generate("mind_map", where(notebook_id, topic_id, source_id, document_ids, archive),
+        view, art = await _generate("mind_map", where(notebook_id, notebook_title, topic_id, source_id, document_ids, archive),
                                     {"focus": focus, "document_ids": [uid(i) for i in post_ids] if post_ids else None}, wait_seconds, raw=True)
         return widgets.with_widget(view, widgets.mind_map_payload(art, view["open_in_notestack"]))
 
-    @mcp.tool(meta=widgets.app_only(widgets.INFOGRAPHIC_UI), **_desc(
+    @mcp.tool(meta=widgets.INFOGRAPHIC_UI, **_desc(
         "Design an infographic from the writer's posts. theme picks the look (midnight or paper); ig_style the layout; "
         "instructions say what to emphasise. Uses their infographic allowance. The finished infographic is shown in the "
         "result, with a Notestack link as a secondary action. "
         + VISUAL + " " + SCOPE_HELP + " " + GEN))
     @guarded("generate_infographic", GEN_COST)
-    async def generate_infographic(notebook_id: str | None = None, topic_id: str | None = None, source_id: str | None = None,
+    async def generate_infographic(notebook_id: str | None = None, notebook_title: str | None = None,
+                                   topic_id: str | None = None, source_id: str | None = None,
                                    document_ids: list[str] | None = None, archive: bool = False, theme: str | None = None,
                                    ig_style: Literal["auto", "flowchart", "timeline", "compare", "hierarchy", "overview"] | None = None,
                                    instructions: str | None = None, post_ids: list[str] | None = None, wait_seconds: int = 0):
-        view, art = await _generate("infographic", where(notebook_id, topic_id, source_id, document_ids, archive), {
+        view, art = await _generate("infographic", where(notebook_id, notebook_title, topic_id, source_id, document_ids, archive), {
             "theme": theme, "ig_style": ig_style, "instructions": instructions,
             "document_ids": [uid(i) for i in post_ids] if post_ids else None}, wait_seconds, raw=True)
         return widgets.with_widget(view, widgets.infographic_payload(art, view["open_in_notestack"]))
 
-    @mcp.tool(meta=widgets.app_only(), **_desc(
+    @mcp.tool(**_desc(
         "Build a slide deck from the writer's posts. deck_format is 'detailed' (readable alone) or 'presenter' (shown behind "
         "a speaker); deck_length short, default or long; theme 'dark-space' or 'light-space'. PDF and PowerPoint links are on "
         "the result once it is ready. " + VISUAL + " " + SCOPE_HELP + " " + GEN))
     @guarded("generate_slide_deck", GEN_COST)
-    async def generate_slide_deck(notebook_id: str | None = None, topic_id: str | None = None, source_id: str | None = None,
+    async def generate_slide_deck(notebook_id: str | None = None, notebook_title: str | None = None,
+                                  topic_id: str | None = None, source_id: str | None = None,
                                   document_ids: list[str] | None = None, archive: bool = False,
                                   deck_format: Literal["detailed", "presenter"] = "detailed",
                                   deck_length: Literal["short", "default", "long"] = "default", theme: str | None = None,
                                   language: str | None = None, instructions: str | None = None, post_ids: list[str] | None = None, wait_seconds: int = 0) -> dict:
-        return await _generate("slide_deck", where(notebook_id, topic_id, source_id, document_ids, archive), {
+        return await _generate("slide_deck", where(notebook_id, notebook_title, topic_id, source_id, document_ids, archive), {
             "deck_format": deck_format, "deck_length": deck_length, "theme": theme, "language": language,
             "instructions": instructions, "document_ids": [uid(i) for i in post_ids] if post_ids else None}, wait_seconds)
 
-    @mcp.tool(meta=widgets.app_only(), **_desc(
+    @mcp.tool(**_desc(
         "Produce a podcast-style audio discussion of the writer's posts. format is deep_dive, brief, critique or debate (a "
         "debate needs hosts=2); hosts 1 or 2; minutes 1 to 30. It is slow, often over a minute, so do not wait for it. It "
         "uses audio minutes from their plan. " + VISUAL + " " + SCOPE_HELP + " " + GEN))
     @guarded("generate_audio_overview", GEN_COST)
-    async def generate_audio_overview(notebook_id: str | None = None, topic_id: str | None = None, source_id: str | None = None,
+    async def generate_audio_overview(notebook_id: str | None = None, notebook_title: str | None = None,
+                                      topic_id: str | None = None, source_id: str | None = None,
                                       document_ids: list[str] | None = None, archive: bool = False,
                                       format: Literal["deep_dive", "brief", "critique", "debate"] = "deep_dive",
                                       hosts: Literal[1, 2] = 2, minutes: int = 6, language: str | None = None,
                                       instructions: str | None = None, post_ids: list[str] | None = None, wait_seconds: int = 0) -> dict:
-        return await _generate("audio_overview", where(notebook_id, topic_id, source_id, document_ids, archive), {
+        return await _generate("audio_overview", where(notebook_id, notebook_title, topic_id, source_id, document_ids, archive), {
             "format": format, "hosts": hosts, "minutes": max(1, min(minutes, 30)), "language": language,
             "instructions": instructions, "document_ids": [uid(i) for i in post_ids] if post_ids else None}, wait_seconds)
 
-    @mcp.tool(meta=widgets.app_only(widgets.VIDEO_UI), **_desc(
+    @mcp.tool(meta=widgets.VIDEO_UI, **_desc(
         "Make a narrated, animated VIDEO from the writer's posts with Notestack's own video maker. Always use this when "
         "the writer asks for a video: never build a video yourself with code or other tools. FIRST call choose_options with make video "
         "so the writer can pick the template, style, shape, length and voice, and wait for their answer (skip it only if they "
@@ -264,7 +272,8 @@ def register(mcp: FastMCP) -> None:
         "wait, and do not describe or redraw it. Give them artifact_preview_url and check with get_video if they ask. "
         + GEN))
     @guarded("generate_video", GEN_COST)
-    async def generate_video(document_ids: list[str] | None = None, notebook_id: str | None = None, archive: bool = False,
+    async def generate_video(document_ids: list[str] | None = None, notebook_id: str | None = None,
+                             notebook_title: str | None = None, archive: bool = False,
                              template: str | None = None, video_style: str | None = None,
                              aspect_ratio: Literal["landscape", "portrait"] = "landscape",
                              video_length: Literal["short", "medium"] = "short",
@@ -273,7 +282,8 @@ def register(mcp: FastMCP) -> None:
                              bg_color: str | None = None, text_color: str | None = None, custom_voice_id: str | None = None,
                              voice_accent: Literal["american", "british"] | None = None):
         access = token()
-        resolved = await scope.resolve(access, notebook_id=notebook_id, document_ids=document_ids, archive=archive)
+        resolved = await scope.resolve(access, notebook_id=notebook_id, notebook_title=notebook_title,
+                                       document_ids=document_ids, archive=archive)
         nid, note = resolved.notebook_id, resolved.note
         if resolved.document_ids:
             ids = resolved.document_ids[:200]
@@ -297,9 +307,9 @@ def register(mcp: FastMCP) -> None:
         )
 
     @mcp.tool(meta=widgets.VIDEO_UI, **_desc(
-        "Check a video made with generate_video, and show it: the writer sees it play in the chat once it is rendered, or "
-        "that it is still being made. Give them artifact_preview_url as well. Never recreate the video.",
-        readOnlyHint=True))
+        "Check the rendering status of a Notestack video and display the available preview or finished video. "
+        "The result includes artifact_preview_url for opening the same artifact in Notestack.",
+        openWorldHint=True))
     @guarded("get_video")
     async def get_video(artifact_id: str):
         aid, access = uid(artifact_id), token()
@@ -360,7 +370,8 @@ def register(mcp: FastMCP) -> None:
         share = await loopback.data("POST", f"/api/artifacts/{uid(artifact_id)}/share", token())
         return {"shared": True, **{k: v for k, v in share.items() if k in ("url", "token", "show_sources")}}
 
-    @mcp.tool(**_desc("Turn a public link off. The old address stops working for good; sharing again makes a new one."))
+    @mcp.tool(**_desc("Turn a public link off. The old address stops working for good; sharing again makes a new one.",
+                      destructiveHint=True))
     @guarded("unshare_artifact")
     async def unshare_artifact(artifact_id: str) -> dict:
         await loopback.data("DELETE", f"/api/artifacts/{uid(artifact_id)}/share", token())
@@ -380,7 +391,8 @@ def register(mcp: FastMCP) -> None:
                                   json={k: v for k, v in body.items() if v is not None})
         return views.artifact_view(art, content=False)
 
-    @mcp.tool(**_desc("Remove one visual from a report by its block_id (listed in the report's content from get_artifact)."))
+    @mcp.tool(**_desc("Remove one visual from a report by its block_id (listed in the report's content from get_artifact).",
+                      destructiveHint=True))
     @guarded("remove_report_block")
     async def remove_report_block(artifact_id: str, block_id: str) -> dict:
         if not block_id or len(block_id) > 40 or not all(c.isalnum() or c in "_-" for c in block_id):

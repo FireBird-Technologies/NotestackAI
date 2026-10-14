@@ -36,7 +36,7 @@ VISUAL = (
 SCOPE_HELP = (
     "ALWAYS let the writer choose what to use before generating, unless they already named it or chose earlier in this "
     "conversation: call choose_options (one form: they pick a notebook or tick posts, then the settings). A call with nothing named "
-    "returns choose_scope: do that, never pick for them. Then pass one scope: notebook_id, topic_id, source_id, "
+    "returns choose_scope: do that, never pick for them. Then pass one scope: notebook_title (preferred), notebook_id, topic_id, source_id, "
     "document_ids, or archive=true (all their posts). A notebook_id may be paired with document_ids to use only those "
     "selected posts without creating another notebook. Topic, source and loose-post choices use the built-in All posts "
     "notebook with a post filter."
