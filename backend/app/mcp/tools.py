@@ -25,7 +25,7 @@ ASK_NOTEBOOK = (
     "The way to answer any question about what the writer wrote: what they said, how their thinking changed, whether "
     "they contradicted themselves, a comparison across posts. You cannot read their posts directly, so use this. It "
     "answers using only their own posts, with citations (post title, URL, line range and the quoted words). If the "
-    "writer has not said which notebook, call list_notebooks and ask them in words which one (offer the first as the default), then pass that notebook_id. To compare or "
+    "writer has not said which notebook, call list_notebooks and ask them in words which one (offer the first as the default), then pass its visible title as notebook_title. To compare or "
     "summarise several posts, ask for that in the question. Pass the returned chat_id to ask a follow-up in the same "
     "conversation: one conversation's questions stay together in one Notestack chat, titled with the app's name. "
     "It only answers questions: it does not make a report, quiz, flashcards, video or anything else, so do not use its "
@@ -57,7 +57,9 @@ def _has(text, needle: str) -> bool:
 
 
 def register(mcp: FastMCP) -> None:
-    @mcp.tool(description=FIND_CONTENT, annotations={"readOnlyHint": True, "openWorldHint": False})
+    @mcp.tool(description=FIND_CONTENT, annotations={
+        "readOnlyHint": True, "destructiveHint": False, "openWorldHint": False,
+    })
     @guarded("find_content")
     async def find_content(query: str, kinds: list[str] | None = None, limit: int = 10) -> dict:
         wanted = [k for k in (kinds or KINDS) if k in KINDS] or list(KINDS)
@@ -86,9 +88,10 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool(description=ASK_NOTEBOOK, annotations={"readOnlyHint": False, "destructiveHint": False, "openWorldHint": False})
     @guarded("ask_notebook", cost=3)
-    async def ask_notebook(question: str, notebook_id: str | None = None, chat_id: str | None = None) -> dict:
+    async def ask_notebook(question: str, notebook_id: str | None = None, notebook_title: str | None = None,
+                           chat_id: str | None = None) -> dict:
         access = token()
-        resolved = await scope.resolve(access, notebook_id=notebook_id)
+        resolved = await scope.resolve(access, notebook_id=notebook_id, notebook_title=notebook_title)
         nid = resolved.notebook_id
         label = _label(access)
         continued = bool(chat_id)

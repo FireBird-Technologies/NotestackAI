@@ -34,7 +34,7 @@ VIDEO_UI = {"ui": {"resourceUri": VIDEO_URI}}
 VIDEO_OPTIONS_URI = "ui://notestack/video-options-v8"
 VIDEO_OPTIONS_UI = {"ui": {"resourceUri": VIDEO_OPTIONS_URI}}
 
-OPTIONS_URI = "ui://notestack/generation-options-v56"
+OPTIONS_URI = "ui://notestack/generation-options-v58"
 OPTIONS_UI = {"ui": {"resourceUri": OPTIONS_URI}}
 _OPTIONS_HTML = Path(__file__).with_name("widgets") / "generation_options.html"
 
@@ -264,12 +264,10 @@ def _api_domains() -> list[str]:
 
 
 def _csp(*, display_modes: list[str] | None = None, description: str | None = None,
-         frame_domains: list[str] | None = None, connect_domains: list[str] | None = None) -> dict:
+         resource_domains: list[str] | None = None, connect_domains: list[str] | None = None) -> dict:
     """What a page may load, plus presentation hints a host needs before it loads the page."""
-    csp = {"resourceDomains": _media_domains() + _preview_domains() +
-           ["https://fonts.googleapis.com", "https://fonts.gstatic.com"]}
-    if frame_domains:
-        csp["frameDomains"] = frame_domains
+    csp = {"resourceDomains": ["https://fonts.googleapis.com", "https://fonts.gstatic.com"] +
+           (resource_domains or [])}
     if connect_domains:
         csp["connectDomains"] = connect_domains
     meta = {"ui": {"csp": csp}}
@@ -282,8 +280,9 @@ def _csp(*, display_modes: list[str] | None = None, description: str | None = No
 
 def _media_domains() -> list[str]:
     """Where a rendered video may be played from inside the chat view (the host only allows what the page declares)."""
-    hosts = ["https://*.r2.dev", "https://*.r2.cloudflarestorage.com", "https://*.cloudflarestorage.com",
-             settings.b2v_app_url.rstrip("/")]
+    # Keep this allowlist exact. Production adds its specific public media origin
+    # through MCP_MEDIA_DOMAINS; broad storage-provider wildcards fail App review.
+    hosts = [settings.b2v_app_url.rstrip("/")]
     return hosts + [d.strip() for d in settings.mcp_media_domains.split(",") if d.strip()]
 
 
@@ -382,20 +381,20 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.resource(VIDEO_URI, name="video", title="Video", mime_type=MIME,
                   description="Plays a finished video in the chat, or shows that it is still being made.",
-                  meta=_csp(frame_domains=[settings.b2v_app_url.rstrip("/")], connect_domains=_api_domains()))
+                  meta=_csp(resource_domains=_media_domains() + _preview_domains(), connect_domains=_api_domains()))
     def video() -> str:
         return _themed(_VIDEO_HTML.read_text(encoding="utf-8"))
 
     @mcp.resource(VIDEO_OPTIONS_URI, name="video-options", title="Video options", mime_type=MIME,
                   description="Lets the writer choose the template, shape, length and voice of a video.",
-                  meta=_csp())
+                  meta=_csp(resource_domains=_preview_domains() + [settings.b2v_app_url.rstrip("/")]))
     def video_options() -> str:
         return _themed(_VIDEO_OPTIONS_HTML.read_text(encoding="utf-8"))
 
 
     @mcp.resource(OPTIONS_URI, name="generation-options", title="Choose settings", mime_type=MIME,
                   description="Lets the writer choose the settings (difficulty, template, look, length...) for what is made.",
-                  meta=_csp(frame_domains=[settings.b2v_app_url.rstrip("/")], connect_domains=_api_domains()))
+                  meta=_csp(resource_domains=_media_domains() + _preview_domains(), connect_domains=_api_domains()))
     def generation_options() -> str:
         """The form page, with the quiz, flashcards and mind map pages inside it so a finished one plays right there."""
         players = {k: _themed((Path(__file__).with_name("widgets") / f).read_text(encoding="utf-8"))

@@ -51,22 +51,34 @@ async def default_notebook(access: AccessToken) -> Resolved:
         "If it cannot be shown, ask in one numbered question: 1) use a notebook (listed below) or 2) choose posts "
         "(find_content, then document_ids). If the writer already chose earlier in this conversation, reuse that choice. For a report also "
         "offer the templates from list_report_templates and the document or interactive format in the same question.",
-        notebooks=[{"notebook_id": n["id"], "title": shown(n["title"]), "posts": n.get("document_count"),
+        notebooks=[{"title": shown(n["title"]), "posts": n.get("document_count"),
                     "is_archive": n["is_archive"]} for n in notebooks],
         choose_posts="find_content (kinds posts), then document_ids; or topic_id / source_id if they pick a theme or publication")
 
 
-async def resolve(access: AccessToken, *, notebook_id: str | None = None, topic_id: str | None = None,
+async def resolve(access: AccessToken, *, notebook_id: str | None = None, notebook_title: str | None = None,
+                  topic_id: str | None = None,
                   source_id: str | None = None, document_ids: list[str] | None = None, archive: bool = False) -> Resolved:
-    picked = [name for name, v in (("notebook_id", notebook_id), ("topic_id", topic_id), ("source_id", source_id),
+    picked = [name for name, v in (("notebook", notebook_id or notebook_title), ("topic_id", topic_id), ("source_id", source_id),
                                     ("archive", archive or None)) if v]
-    if document_ids and not notebook_id and not archive:
+    if document_ids and not (notebook_id or notebook_title) and not archive:
         picked.append("document_ids")
     if not picked:
         return await default_notebook(access)
     if len(picked) > 1:
-        raise ToolError("pick_one", "Say what to use with at most one of notebook_id, topic_id, source_id, document_ids "
+        raise ToolError("pick_one", "Say what to use with at most one notebook, topic_id, source_id, document_ids "
                                     "or archive=true.", given=picked)
+    if notebook_title:
+        wanted = notebook_title.strip().casefold()
+        matches = [n for n in await loopback.data("GET", "/api/notebooks", access)
+                   if n["title"].strip().casefold() == wanted or shown(n["title"]).strip().casefold() == wanted]
+        if not matches:
+            raise ToolError("not_found", f"No notebook titled '{notebook_title}' was found.", status=404)
+        if len(matches) > 1:
+            raise ToolError("ambiguous_notebook", "More than one notebook has that title. Ask the writer to rename one.")
+        nb = matches[0]
+        ids = sorted({uid(i) for i in document_ids}) if document_ids else None
+        return Resolved(nb["id"], f"Used their notebook '{shown(nb['title'])}'. Tell the writer which notebook is being used.", ids)
     if notebook_id:
         nb = await loopback.data("GET", f"/api/notebooks/{uid(notebook_id)}", access)
         ids = sorted({uid(i) for i in document_ids}) if document_ids else None
