@@ -272,12 +272,15 @@ class Fake:
     def __init__(self, monkeypatch, docs, groups, ask=None, fail=(), quiz_themes=()):
         self.docs, self.calls, self.sections, self.fail = docs, [], [], set(fail)
         self.quiz_themes = list(quiz_themes)
-        self.groups, self.ask, self.plan_inputs, self.report_inputs = groups, ask, None, None
+        self.groups, self.ask, self.plan_inputs, self.report_inputs, self.visual_inputs = groups, ask, None, None, None
         monkeypatch.setattr(run, "predict", self.predict)
         monkeypatch.setattr(run, "predict_many", self.predict_many)
 
     def predict(self, sig, *, db, workspace_id, job=None, lm=None, **inputs):
         name = sig.__name__
+        if name == "ExtractReportVisuals":
+            self.visual_inputs = inputs
+            return {"candidates": []}
         self.calls.append(name)
         if name == "GroupThemes":
             ids = [line.split(" | ")[0] for line in inputs["ideas"]]
@@ -409,6 +412,7 @@ def test_more_than_twenty_posts_are_all_used(client, owner, db_session, run_jobs
     c = _content(client, owner, art)
     assert c["plan"]["posts_total"] == 30 and len(c["source"]["document_ids"]) == 30
     assert {t["name"]: t["posts"] for t in c["plan"]["themes"]} == {"Pricing": 20, "Audience Growth": 5, "Writing Craft": 5}
+    assert len(fake.visual_inputs["material"]) == 30  # the data scan covers the full selected set, not just the prose limit
     assert fake.calls[0] == "GroupThemes"
 
 

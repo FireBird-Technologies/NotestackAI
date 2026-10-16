@@ -337,6 +337,21 @@ def register(mcp: FastMCP) -> None:
                                      json={"rating": rating})
         return {"artifact_id": uid(artifact_id), "feedback": result.get("feedback")}
 
+    @mcp.tool(meta=widgets.app_only(), **_desc(
+        "Remember or look up which artifact a Notestack form made, so it can reopen after the chat is reloaded. This is an "
+        "app-only action used by the Notestack form when it cannot reach the API directly; never call it yourself."))
+    @guarded("widget_state")
+    async def widget_state(state: str) -> dict:
+        import httpx
+
+        from app.main import app  # late: main mounts the MCP server, which imports this module
+
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://notestack.internal") as c:
+            resp = await c.post("/api/mcp/widget-state", content=state, headers={"Content-Type": "text/plain"})
+        if resp.status_code >= 400:
+            raise ToolError("widget_state_unavailable", "Could not save or restore this result.")
+        return resp.json()
+
     @mcp.tool(**_desc(
         "Run a supported Studio generation again after it failed. Supported types are reports, quizzes, flashcards, "
         "Mind Constellations, infographics, slide decks, audio overviews and videos. Launch kits, carousels, quote cards "
@@ -367,11 +382,14 @@ def register(mcp: FastMCP) -> None:
         return {"shared": False}
 
     @mcp.tool(**_desc(
-        "Add a visual to a finished interactive report: kind is mind_map, flashcards, quiz or infographic; brief says what "
+        "Add a visual to a finished interactive report: kind is mind_map, flashcards, quiz, infographic, plot, table or "
+        "timeline; brief says what "
         "it should show; after_block_id places it after a section (from get_artifact). It runs as a background job, so check "
         "get_artifact for the report. An infographic uses the infographic allowance."))
     @guarded("add_report_block", GEN_COST)
-    async def add_report_block(artifact_id: str, kind: Literal["mind_map", "flashcards", "quiz", "infographic"],
+    async def add_report_block(
+        artifact_id: str,
+        kind: Literal["mind_map", "flashcards", "quiz", "infographic", "plot", "table", "timeline"],
                                brief: str = "", theme: str | None = None, after_block_id: str | None = None,
                                suggestion_id: str | None = None) -> dict:
         body = {"kind": kind, "brief": brief[:500], "theme": theme, "after_block_id": after_block_id,

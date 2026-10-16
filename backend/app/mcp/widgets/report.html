@@ -25,7 +25,7 @@
   .callout { border-left: 3px solid #5b86ff; }
   dt { font-weight: 600; color: #fff; margin-top: 8px; font-size: 14px; } dd { margin: 2px 0 0; color: rgba(255,255,255,.72); font-size: 13.5px; line-height: 1.5; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; } th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,.1); vertical-align: top; } th { color: #fff; }
-  .tl { margin: 0; padding: 0; list-style: none; } .tl li { padding: 6px 0 6px 12px; border-left: 2px solid #3a63e0; margin-left: 4px; font-size: 13.5px; } .tl b { color: #fff; } .tl span { color: #8fa6e6; font-size: 12px; display: block; }
+  .tl { display: grid; gap: 8px; margin: 0; padding: 2px 0; list-style: none; } .tl li { position: relative; display: grid; grid-template-columns: 68px minmax(0,1fr); gap: 10px; align-items: start; padding: 10px 12px; border: 1px solid rgba(255,255,255,.1); border-radius: 9px; background: rgba(255,255,255,.025); font-size: 13px; line-height: 1.5; color: rgba(255,255,255,.68); } .tl b { display: block; color: #fff; font-size: 13.5px; } .tl span { align-self: start; width: max-content; max-width: 68px; padding: 2px 7px; border: 1px solid rgba(33,124,255,.35); border-radius: 999px; background: rgba(33,124,255,.09); color: #9fc5ff; font: 11px ui-monospace,monospace; }
   .map ul { margin: 2px 0; padding-left: 18px; font-size: 13.5px; color: #dbe5ff; line-height: 1.5; } .map > ul { padding-left: 4px; list-style: none; }
   .fc { display: block; width: 100%; text-align: left; margin: 0 0 6px; padding: 9px 11px; border-radius: 8px; font: inherit; font-size: 13.5px; color: #fff; background: #0b1230; border: 1px solid rgba(157,184,255,.3); cursor: pointer; }
   .fc em { display: none; font-style: normal; margin-top: 6px; color: #aee9c9; } .fc.open em { display: block; }
@@ -162,7 +162,7 @@
     var t = b.type;
     if (t === "prose") return markdown(b.text, into);
     var card = el("div", "card" + (t === "callout" ? " callout" : ""), null, into);
-    if (b.title || t !== "callout") el("h4", "", b.title || ({ key_terms: "Key terms", table: "Table", timeline: "Timeline", mind_map: "Mind map", flashcards: "Flashcards", quiz: "Quiz", infographic: "Infographic" }[t] || ""), card);
+    if (b.title || t !== "callout") el("h4", "", b.title || ({ key_terms: "Key terms", plot: "Plot", table: "Table", timeline: "Timeline", mind_map: "Mind map", flashcards: "Flashcards", quiz: "Quiz", infographic: "Infographic" }[t] || ""), card);
     if (t === "callout") { markdown(b.text, card); return; }
     if ((t === "mind_map" || t === "flashcards" || t === "quiz" || t === "infographic") && mountPlayer(b, card)) return;
     if (t === "key_terms") { var dl = el("dl", "", null, card); (b.terms || []).forEach(function (x) { el("dt", "", x.term, dl); el("dd", "", x.definition, dl); }); return; }
@@ -172,7 +172,12 @@
       var body = el("tbody", "", null, tb); (b.rows || []).forEach(function (r) { var tr = el("tr", "", null, body); r.forEach(function (c) { el("td", "", c, tr); }); });
       return;
     }
-    if (t === "timeline") { var tl = el("ul", "tl", null, card); (b.events || []).forEach(function (x) { var li = el("li", "", null, tl); el("span", "", x.when, li); el("b", "", x.title, li); if (x.detail) li.appendChild(document.createTextNode(" " + x.detail)); }); return; }
+    if (t === "timeline") { var tl = el("ul", "tl", null, card); (b.events || []).forEach(function (x) { var li = el("li", "", null, tl); el("span", "", x.when, li); var copy = el("div", "", null, li); var same = String(x.title || "").toLowerCase().replace(/[^a-z0-9]+/g, "") === String(x.when || "").toLowerCase().replace(/[^a-z0-9]+/g, ""); if (!same || !x.detail) el("b", "", x.title, copy); if (x.detail) el("div", "", x.detail, copy); }); return; }
+    if (t === "plot") {
+      var pt = el("table", "", null, card), ph = el("tr", "", null, el("thead", "", null, pt));
+      el("th", "", b.x_label || "Label", ph); el("th", "", (b.y_label || "Value") + (b.unit ? " (" + b.unit + ")" : ""), ph);
+      var pb = el("tbody", "", null, pt); (b.points || []).forEach(function (p) { var pr = el("tr", "", null, pb); el("td", "", p.label, pr); el("td", "", p.display_value || String(p.value), pr); }); return;
+    }
     if (t === "mind_map") { var mm = el("div", "map", null, card); if (b.root) outline(b.root, mm); return; }
     if (t === "flashcards") {
       (b.cards || []).forEach(function (c) { var f = el("button", "fc", c.front, card); f.type = "button"; el("em", "", c.back, f); f.addEventListener("click", function () { f.classList.toggle("open"); reportSize(); }); });
@@ -195,7 +200,7 @@
     }
     if (t === "infographic") { el("div", "note", "This infographic is a picture. Open the report in Notestack to see it.", card); return; }
   }
-  var LABEL = { mind_map: "Mind Constellation", flashcards: "Flashcards", quiz: "Quiz", infographic: "Infographic" };
+  var LABEL = { mind_map: "Mind Constellation", plot: "Plot", table: "Data table", timeline: "Timeline", infographic: "Infographic" };
   function addingFor(id) { return (data.adding || []).filter(function (a) { return a.suggestion_id === id; })[0]; }
   function suggestion(s, into) {
     var state = addingFor(s.id), busy = state && (state.status === "queued" || state.status === "running");
