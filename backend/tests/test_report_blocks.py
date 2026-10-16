@@ -14,7 +14,7 @@ def _content(blocks, suggestions=None):
     return {"blocks": blocks, "suggestions": suggestions or []}
 
 
-def test_removing_a_visual_restores_its_add_offer():
+def test_removing_an_old_quiz_does_not_restore_a_quiz_suggestion():
     content = _content([
         {"id": "b1", "type": "prose", "text": "intro"},
         {"id": "b2", "type": "quiz", "after": "b1", "title": "Quiz"},
@@ -23,8 +23,7 @@ def test_removing_a_visual_restores_its_add_offer():
     out = remove_block(content, "b2")
     assert out is not None
     assert [b["id"] for b in out["blocks"]] == ["b1", "b3"]
-    assert [s["kind"] for s in out["suggestions"]] == ["quiz"]
-    assert out["suggestions"][0]["after_block_id"] == "b1"
+    assert out["suggestions"] == []
 
 
 def test_removing_leaves_an_existing_suggestion_of_the_same_kind_alone():

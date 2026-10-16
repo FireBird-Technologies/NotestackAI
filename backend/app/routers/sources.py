@@ -1,4 +1,5 @@
 import uuid
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
@@ -205,6 +206,7 @@ def serialize_document(d: Document, source: Source | None = None) -> dict:
         "path": d.path,
         "source_id": str(d.source_id) if d.source_id else None,
         "source_title": source.title if source else None,
+        "added_at": d.created_at.isoformat() if d.created_at else None,
         "published_at": d.published_at.isoformat() if d.published_at else None,
         "words": meta.get("words") or len((d.clean_text or "").split()),
         "evergreen_score": d.evergreen_score,
@@ -218,6 +220,7 @@ def list_documents(
     q: str = "",
     source_id: uuid.UUID | None = None,
     indexed_only: bool = False,
+    sort: Literal["published", "added"] = "published",
     limit: int = 500,
     offset: int = 0,
 ):
@@ -234,8 +237,10 @@ def list_documents(
     if indexed_only:
         query = query.where(Document.path.is_not(None))
     total = ctx.db.scalar(select(func.count()).select_from(query.subquery()))
+    order = ((Document.created_at.desc(), Document.published_at.desc().nulls_last()) if sort == "added" else
+             (Document.published_at.desc().nulls_last(), Document.created_at.desc()))
     rows = ctx.db.execute(
-        query.order_by(Document.published_at.desc().nulls_last(), Document.created_at.desc())
+        query.order_by(*order)
         .offset(max(offset, 0)).limit(min(limit, 5000))
     ).all()
     return {"total": total, "items": [serialize_document(d, s) for d, s in rows]}

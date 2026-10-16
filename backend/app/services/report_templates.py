@@ -48,8 +48,8 @@ INTERACTIVE = {
     "description": "An interactive report with embedded studio content",
     "prompt": ("Create an interactive report on {about}. Explain it clearly in well organised sections, starting "
                "with an Introduction and ending with a Summary, and give every section a relevant, specific heading. "
-               "Suggest where a visual would help the reader, such as a mind map of how the ideas connect, flashcards "
-               "for the key terms, a short quiz, a comparison table or a timeline."),
+               "Suggest where a visual would help the reader, such as a mind map or infographic. When the selected "
+               "sources contain verified numbers, tables or dated events, offer a grounded plot, table or timeline."),
 }
 
 DEFAULT_ABOUT = "the selected sources"

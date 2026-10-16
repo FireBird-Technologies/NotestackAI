@@ -54,6 +54,14 @@ def _block(b: dict) -> dict | None:
         return {**base, "events": [{"when": _s(e.get("when"), 80), "title": _s(e.get("title"), 200),
                                     "detail": _s(e.get("detail"), 800)}
                                    for e in b.get("events") or [] if isinstance(e, dict)][:40]}
+    if kind == "plot":
+        return {**base, "plot_kind": b.get("plot_kind") if b.get("plot_kind") in ("bar", "line", "scatter", "pie") else "bar",
+                "x_label": _s(b.get("x_label"), 80), "y_label": _s(b.get("y_label"), 80),
+                "unit": _s(b.get("unit"), 40),
+                "points": [{"label": _s(p.get("label"), 160), "value": p.get("value"),
+                            "display_value": _s(p.get("display_value"), 80), "detail": _s(p.get("detail"), 300)}
+                           for p in b.get("points") or []
+                           if isinstance(p, dict) and isinstance(p.get("value"), int | float)][:40]}
     if kind == "mind_map" and isinstance(b.get("root"), dict):
         return {**base, "root": _node(b["root"])}
     if kind == "infographic":  # only a finished one, as the page our own template built (never the model's markup)

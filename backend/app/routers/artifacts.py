@@ -301,10 +301,10 @@ def _offer_visuals_once(ctx: Ctx, a: Artifact) -> None:
     if a.type != "report" or a.status != "ready" or c.get("format") != "interactive" or c.get("suggestions_offered") \
             or not c.get("blocks"):
         return
-    from app.pipeline.report import EMBED_KINDS, fill_suggestions, merge_suggestions
+    from app.pipeline.report import PLANNED_KINDS, fill_suggestions, merge_suggestions
 
     has_posts = bool((c.get("source") or {}).get("document_ids"))
-    kinds = [k for k in EMBED_KINDS if k != "mind_map" or has_posts]
+    kinds = [k for k in PLANNED_KINDS if k != "mind_map" or has_posts]
     a.content_json = {**c, "suggestions": merge_suggestions(fill_suggestions(list(c.get("suggestions") or []), c["blocks"], kinds)),
                       "suggestions_offered": True}
     ctx.db.commit()

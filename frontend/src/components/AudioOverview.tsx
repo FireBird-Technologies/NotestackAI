@@ -350,9 +350,8 @@ export function AudioOverviewCard({ artifact: initial, onRemoved }: { artifact: 
           }}><RetryIcon size={16} /></button>
         )}
         <ConfirmButton onConfirm={remove} className="btn btn-small btn-icon-only card-delete" label="Delete" confirmLabel="Delete?" busyLabel="" nativeTitle={false}><TrashIcon size={16} /></ConfirmButton>
+        <CardFeedback artifact={artifact} />
       </footer>
-      {/* A row of its own under the actions: a positive or negative review */}
-      <CardFeedback artifact={artifact} />
       {viewing !== null && <AudioPreview artifact={artifact} startAt={viewing} onClose={() => setViewing(null)} />}
     </article>
   );

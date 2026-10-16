@@ -27,17 +27,19 @@ from app.llm.signatures import (
     WriteThemedSection,
 )
 from app.models import Artifact, Document, Job, Notebook
-from app.pipeline import report_blueprint, report_evidence, report_themes
+from app.pipeline import report_blueprint, report_evidence, report_themes, report_visuals
 from app.pipeline.flashcards import make_cards
 from app.pipeline.generate import NothingToDo, mind_map_content
 from app.pipeline.material import Material, load_material
+from app.pipeline.passages import passages_for, tools_for, verify_refs
 from app.pipeline.quiz import make_questions
 from app.services.artifacts import start_artifact
 from app.services.jobs import update_job
 from app.services.renderer import PermanentJobError
 from app.services.report_templates import default_instructions
 
-EMBED_KINDS = ("mind_map", "flashcards", "quiz", "infographic")  # every visual a reader can add with one click
+EMBED_KINDS = ("mind_map", "flashcards", "quiz", "infographic", "plot", "table", "timeline")
+PLANNED_KINDS = ("mind_map", "infographic")  # data visuals come only from the verified source-data pass
 MAX_PLANNED_VISUALS = 4  # suggestions an interactive report's plan can make
 MAX_SECTIONS = 8
 SAME_LANGUAGE = "the same language as the sources"  # no language picked: write as the material is written
@@ -70,7 +72,7 @@ def merge_suggestions(*groups: list[dict]) -> list[dict]:
     seen, out = set(), []
     for g in groups:
         for s in g:
-            key = (s["after_block_id"], s["kind"])
+            key = (s["after_block_id"], s["kind"], s.get("candidate_id") or "")
             if key not in seen:
                 seen.add(key)
                 out.append({**s, "id": f"s{len(out) + 1}"})
@@ -79,32 +81,42 @@ def merge_suggestions(*groups: list[dict]) -> list[dict]:
 
 FALLBACK_BRIEFS = {
     "infographic": ("A one page picture of the main ideas of this report.", "A quick picture of the whole report."),
-    "flashcards": (MOVED_BRIEF["flashcards"], "Cards to learn the key terms and facts."),
-    "quiz": (MOVED_BRIEF["quiz"], "A short quiz to check understanding."),
     "mind_map": ("How the main ideas of this report connect.", "See how the ideas fit together."),
 }
-MIN_SUGGESTIONS = 3  # a report always offers at least this many visuals (fewer only when fewer kinds are allowed)
 
 
 def fill_suggestions(suggestions: list[dict], blocks: list[dict], kinds: list[str]) -> list[dict]:
-    """An interactive report always offers something to add (a document never does). Whatever the plan or the writer suggested is
-    kept; then an infographic is added if there is none, and flashcards, a quiz and a mind map in turn until there are
-    MIN_SUGGESTIONS, each after a different section. Plain code, so it never depends on the model remembering to suggest."""
+    """Keep valid planned suggestions and ensure an interactive report offers an infographic. Data visuals are added
+    separately only after their values have been verified against source lines."""
     prose = [b for b in blocks if b.get("type") == "prose"]
     if not prose:
         return suggestions
     inner = prose[1:-1] or prose  # not the introduction or the summary, when there are others
-    place = {"infographic": inner[-1]["id"], "flashcards": inner[0]["id"], "quiz": inner[len(inner) // 2]["id"],
-             "mind_map": prose[0]["id"]}
+    place = {"infographic": inner[-1]["id"], "mind_map": prose[0]["id"]}
     out = list(suggestions)
     have = {s["kind"] for s in out}
-    for kind in ("infographic", "flashcards", "quiz", "mind_map"):
-        if kind in kinds and kind not in have and (kind == "infographic" or len(out) < MIN_SUGGESTIONS):
+    for kind in ("infographic",):
+        if kind in kinds and kind not in have:
             brief, why = FALLBACK_BRIEFS[kind]
             out.append({"id": "", "after_block_id": place[kind], "kind": kind, "brief": brief, "why": why})
             have.add(kind)
             log.info("report: no %s suggested by the plan, offering one after %s", kind, place[kind])
     return out
+
+
+def ensure_data_suggestion(candidates: list[dict], blocks: list[dict], suggestions: list[dict]) -> list[dict]:
+    """Keep at least one verified dataset beside the best surviving prose section."""
+    if not candidates or any(s.get("candidate_id") for s in suggestions):
+        return suggestions
+    prose = [b for b in blocks if b.get("type") == "prose"]
+    candidate = candidates[0]
+    at = report_visuals.best_section(candidate, prose)
+    if at is None:
+        return suggestions
+    block = candidate["block"]
+    return [*suggestions, {"id": "", "after_block_id": prose[at]["id"], "kind": block["type"],
+                           "candidate_id": candidate["id"], "brief": block.get("title") or "Source data",
+                           "why": "This verified source data directly supports this section."}]
 
 
 def split_prose(markdown: str) -> list[dict]:
@@ -132,6 +144,22 @@ def source_rows_for(docs: list[Document]) -> list[dict]:
     return [{"title": d.title, "url": d.url, "document_id": str(d.id)} for d in docs]
 
 
+def visual_material_for_docs(workspace_id: uuid.UUID, docs: list[Document], title: str) -> Material:
+    """Full selected-post material for the pre-plan data scan, including reports whose prose uses stored themes."""
+    corpus = Corpus(workspace_id)
+    text = passages_for(corpus, docs)
+    tools = tools_for(corpus, docs)
+    by_path = {d.path: d for d in docs}
+
+    def refs(items) -> list[dict]:
+        return [{"document_id": str(by_path[r["path"]].id), "path": r["path"], "title": r["title"],
+                 "line_start": r["line_start"], "line_end": r["line_end"], "quote": r["quote"]}
+                for r in verify_refs(tools, items or []) if r["path"] in by_path]
+
+    return Material(title=title, text=text, source={"kind": "posts", "document_ids": [str(d.id) for d in docs],
+                                                    "count": len(docs)}, docs=docs, refs=refs, tools=tools)
+
+
 def write_document(db: Session, workspace_id: uuid.UUID, job: Job | None, material: Material, instructions: str,
                    language: str) -> tuple[str, str]:
     """(title, Markdown) for a written report. Nothing is cited; a marker the model wrote anyway is removed."""
@@ -144,15 +172,17 @@ def write_document(db: Session, workspace_id: uuid.UUID, job: Job | None, materi
 
 
 def write_interactive(db: Session, workspace_id: uuid.UUID, job: Job, material: Material, instructions: str,
-                      language: str) -> tuple[str, list[dict], list[dict]] | None:
+                      language: str, data_candidates: list[dict] | None = None) -> tuple[str, list[dict], list[dict]] | None:
     """(title, blocks, suggestions) for an interactive report: a plan of sections, each written on its
     own (in parallel). The plan also says where a visual would fit; those spots come back as suggestions, and nothing
     is built until the reader clicks Add. None when planning fails, so the caller can write a plain document."""
-    kinds = [k for k in EMBED_KINDS if k != "mind_map" or not material.is_chat]
+    data_candidates = data_candidates or []
+    kinds = [k for k in PLANNED_KINDS if k != "mind_map" or not material.is_chat]
     update_job(db, job, progress=0.25, message="Planning the report")
     try:
         plan = run.predict(PlanInteractiveReport, db=db, workspace_id=workspace_id, job=job, lm=report_lm(),
                            title=material.title, material=material.text, request=instructions,
+                           data_opportunities=report_visuals.opportunity_lines(data_candidates),
                            allowed_kinds=kinds, language=language)
     except Exception:
         log.warning("report plan failed", exc_info=True)
@@ -162,22 +192,39 @@ def write_interactive(db: Session, workspace_id: uuid.UUID, job: Job, material: 
         return None
     report_title = (plan.get("report_title") or material.title).strip()
 
-    # A planned section that is really a quiz or flashcards is not written as text: it becomes a suggestion.
+    # A rogue quiz/flashcard section is neither written nor suggested in an interactive report.
     kept_secs: list[dict] = []
     moved: list[tuple[int, str, dict]] = []
     for x in sections:
         kind = visual_kind(x["heading"])
-        if kind and kind in kinds and kept_secs:
-            moved.append((len(kept_secs) - 1, kind, x))
+        if kind and kept_secs:
+            log.info("discarding %s section %r from interactive report", kind, x["heading"])
         else:
             kept_secs.append(x)
     sections = kept_secs
+
+    valid_ids = {str(c.get("id")) for c in data_candidates}
+    used_data: set[str] = set()
+    for sec in sections:
+        cid = str(sec.get("data_candidate_id") or "")
+        if cid not in valid_ids or cid in used_data:
+            sec["data_candidate_id"] = None
+        else:
+            sec["data_candidate_id"] = cid
+            used_data.add(cid)
+    if data_candidates and not used_data:
+        choices = list(range(1, len(sections) - 1)) if len(sections) > 2 else list(range(len(sections)))
+        at = report_visuals.best_section(data_candidates[0], [sections[i] for i in choices]) if choices else None
+        if at is not None:
+            sections[choices[at]]["data_candidate_id"] = str(data_candidates[0]["id"])
 
     update_job(db, job, progress=0.4, message=f"Writing {len(sections)} sections")
     written = run.predict_many(
         WriteReportSection,
         [{"title": material.title, "report_title": report_title, "heading": x["heading"].strip(),
           "brief": (x.get("brief") or "").strip(), "request": instructions, "material": material.text,
+          "verified_data": report_visuals.evidence(report_visuals.candidate_by_id(data_candidates,
+                                                                                   x.get("data_candidate_id"))),
           "language": language} for x in sections],
         db=db, workspace_id=workspace_id, lm=report_lm())
 
@@ -200,6 +247,13 @@ def write_interactive(db: Session, workspace_id: uuid.UUID, job: Job, material: 
             suggestions.append({"id": f"s{len(suggestions) + 1}", "after_block_id": blocks[-1]["id"],
                                 "kind": embed["kind"], "brief": embed["brief"].strip()[:300],
                                 "why": (embed.get("why") or "").strip()[:300]})
+        candidate = report_visuals.candidate_by_id(data_candidates, sec.get("data_candidate_id"))
+        if candidate:
+            data_block = candidate["block"]
+            suggestions.append({"id": "", "after_block_id": blocks[-1]["id"], "kind": data_block["type"],
+                                "candidate_id": candidate["id"],
+                                "brief": data_block.get("title") or "Source data",
+                                "why": "This verified source data directly supports this section."})
     if not any(b["type"] == "prose" for b in blocks):
         return None
     for idx, kind, sec in moved:
@@ -207,6 +261,7 @@ def write_interactive(db: Session, workspace_id: uuid.UUID, job: Job, material: 
         suggestions.append({"id": "", "after_block_id": after, "kind": kind,
                             "brief": (sec.get("brief") or MOVED_BRIEF[kind]).strip()[:300],
                             "why": "Offered here for you to add, not written into the text."})
+    suggestions = ensure_data_suggestion(data_candidates, blocks, suggestions)
     return report_title, blocks, merge_suggestions(fill_suggestions(suggestions, blocks, kinds))
 
 
@@ -240,6 +295,7 @@ class ThemedRun:
     instructions: str
     language: str
     title: str
+    data_candidates: list[dict] = field(default_factory=list)
 
     @property
     def by_id(self) -> dict[str, report_themes.Theme]:
@@ -250,7 +306,8 @@ class ThemedRun:
         return [by_id[i].name for i in s.theme_ids if i in by_id]
 
     def sections_info(self) -> list[dict]:
-        return [{"heading": s.heading, "role": s.role, "depth": s.depth, "theme_ids": s.theme_ids, "must_cover": s.must_cover}
+        return [{"heading": s.heading, "role": s.role, "depth": s.depth, "theme_ids": s.theme_ids, "must_cover": s.must_cover,
+                 "data_candidate_id": s.data_candidate_id}
                 for s in self.bp.sections]
 
     def finish(self, title: str, blocks: list[dict], suggestions: list[dict], used_posts: list[str],
@@ -259,7 +316,8 @@ class ThemedRun:
         used = [d for d in self.docs if d.path in set(used_posts)] or self.docs
         log.info("report sources: job=%s posts_total=%d posts_used=%d", self.job.id, len(self.docs), len(used))
         plan = {"planner": "themes", "storyline": self.bp.storyline, "posts_total": len(self.docs), "posts_used": len(used),
-                "themes": [report_themes.theme_summary(t) for t in self.themes], "sections": self.sections_info(),
+                "themes": [{**report_themes.theme_summary(t), "data_candidate_ids": [c["id"] for c in self.data_candidates
+                            if t.id in (c.get("theme_ids") or [])]} for t in self.themes], "sections": self.sections_info(),
                 "connections": self.bp.connections}
         return Themed(title=title, blocks=blocks, suggestions=suggestions, plan=plan, failed=failed,
                       source={"kind": "posts", "document_ids": [str(d.id) for d in self.docs], "count": len(self.docs),
@@ -310,7 +368,9 @@ def _section_input(ctx: ThemedRun, s: report_blueprint.Section, evidence: list[s
             "connections": report_blueprint.connection_lines(ctx.bp, ctx.themes), "request": ctx.instructions,
             "language": ctx.language, "heading": s.heading, "role": s.role, "depth": s.depth, "brief": s.brief,
             "must_cover": must, "covered_elsewhere": s.covered_elsewhere,
-            "bridges": report_blueprint.connection_lines(ctx.bp, ctx.themes, s.heading), "evidence": evidence}
+            "bridges": report_blueprint.connection_lines(ctx.bp, ctx.themes, s.heading), "evidence": evidence,
+            "verified_data": report_visuals.evidence(report_visuals.candidate_by_id(ctx.data_candidates,
+                                                                                     s.data_candidate_id))}
 
 
 def _write_sections(ctx: ThemedRun, inputs: list[dict]) -> list[dict | None]:
@@ -404,6 +464,13 @@ def _themed_interactive(ctx: ThemedRun, moved: list[tuple[report_blueprint.Secti
             used_kinds.add(embed["kind"])
             suggestions.append({"id": f"s{len(suggestions) + 1}", "after_block_id": blocks[-1]["id"], "kind": embed["kind"],
                                 "brief": embed["brief"].strip()[:300], "why": (embed.get("why") or "").strip()[:300]})
+        candidate = report_visuals.candidate_by_id(ctx.data_candidates, s.data_candidate_id)
+        if candidate:
+            data_block = candidate["block"]
+            suggestions.append({"id": "", "after_block_id": blocks[-1]["id"], "kind": data_block["type"],
+                                "candidate_id": candidate["id"],
+                                "brief": data_block.get("title") or "Source data",
+                                "why": "This verified source data directly supports this section."})
     for after, kind, sec in moved:
         suggestions.append({"id": "", "after_block_id": anchor.get(id(after)) or blocks[0]["id"], "kind": kind,
                             "brief": (sec.brief or MOVED_BRIEF[kind]).strip()[:300],
@@ -413,12 +480,13 @@ def _themed_interactive(ctx: ThemedRun, moved: list[tuple[report_blueprint.Secti
         log.warning("report sections left out after a retry: %s", failed)
     log.info("report interactive written: blocks=%d suggestions=%d moved_to_suggestions=%d failed=%d", len(blocks),
              len(suggestions), len(moved), len(failed))
-    suggestions = fill_suggestions(suggestions, blocks, list(EMBED_KINDS))
+    suggestions = ensure_data_suggestion(ctx.data_candidates, blocks, suggestions)
+    suggestions = fill_suggestions(suggestions, blocks, list(PLANNED_KINDS))
     return ctx.finish(ctx.bp.title, blocks, merge_suggestions(suggestions), used, failed)
 
 
 def write_themed(db: Session, workspace_id: uuid.UUID, job: Job, docs: list[Document], title: str, instructions: str,
-                 language: str, interactive: bool) -> Themed | None:
+                 language: str, interactive: bool, data_candidates: list[dict] | None = None) -> Themed | None:
     """The report from the posts' themes: group their stored ideas into weighted themes, plan the whole report, build each
     section's evidence from several posts, then write. A document is written in one piece from the plan; an interactive report
     section by section, each knowing the storyline, the outline and what the others cover, with the introduction and the
@@ -440,28 +508,36 @@ def write_themed(db: Session, workspace_id: uuid.UUID, job: Job, docs: list[Docu
         ideas = report_themes.collect_ideas(docs, corpus)
         report_themes.progress(db, job, 0.2, f"Finding the themes in {len(docs)} posts")
         themes, relations = report_themes.group_themes(db, job, workspace_id, title, instructions, ideas)
+        report_visuals.assign_themes(data_candidates or [], themes)
         report_themes.progress(db, job, 0.3, "Planning the report")
-        kinds = list(EMBED_KINDS) if interactive else []
-        bp = report_blueprint.plan_blueprint(db, job, workspace_id, title, instructions, themes, relations, kinds, language)
+        kinds = list(PLANNED_KINDS) if interactive else []
+        bp = report_blueprint.plan_blueprint(db, job, workspace_id, title, instructions, themes, relations, kinds, language,
+                                             data_candidates or [])
         log.info("themed report planned: job=%s themes=%d sections=%d seconds=%.1f", job.id, len(themes), len(bp.sections),
                  time.monotonic() - started)
         moved: list[tuple[report_blueprint.Section, str, report_blueprint.Section]] = []
-        if interactive:  # a planned section that is really a quiz or flashcards is a suggestion, not text
+        if interactive:  # a rogue quiz/flashcard section is folded into nearby prose, never offered as a suggestion
             kept: list[report_blueprint.Section] = []
             for s in bp.sections:
                 kind = visual_kind(s.heading)
                 if kind and kept:
-                    log.info("report section %r is a %s, so it becomes a suggestion after %r", s.heading, kind, kept[-1].heading)
-                    moved.append((kept[-1], kind, s))
+                    log.info("discarding %s section %r from interactive report", kind, s.heading)
                     if kept[-1].role == "body":  # what the section was about is still said, in the section before it
                         kept[-1].theme_ids += [i for i in s.theme_ids if i not in kept[-1].theme_ids]
                 else:
                     kept.append(s)
             bp.sections = kept
+            assigned = {s.data_candidate_id for s in bp.sections if s.data_candidate_id}
+            if data_candidates and not assigned:
+                eligible = [s for s in bp.sections if s.role in ("body", "synthesis")]
+                at = report_visuals.best_section(data_candidates[0], [vars(s) for s in eligible])
+                if at is not None:
+                    eligible[at].data_candidate_id = str(data_candidates[0]["id"])
         if len(bp.sections) < 2:
             log.warning("themed report not possible, reading the posts instead: job=%s fewer than two sections left", job.id)
             return None
-        ctx = ThemedRun(db, workspace_id, job, docs, corpus, bp, themes, instructions, language, title)
+        ctx = ThemedRun(db, workspace_id, job, docs, corpus, bp, themes, instructions, language, title,
+                        data_candidates or [])
         themed = _themed_interactive(ctx, moved) if interactive else _themed_document(ctx)
         if themed:
             log.info("themed report done: job=%s posts_total=%d posts_used=%d blocks=%d suggestions=%d failed=%d seconds=%.1f",
@@ -490,8 +566,19 @@ def build_report(db: Session, job: Job, artifact: Artifact) -> dict:
     instructions = (params.get("instructions") or "").strip() or default_instructions(
         report_format, params.get("template_id"), about)
 
+    # Data discovery comes before planning: a verified dataset can shape a natural report section instead of being
+    # attached to whichever section happens to exist after writing.
+    visual_candidates: list[dict] = []
+    if report_format == "interactive":
+        try:
+            visual_material = material or visual_material_for_docs(artifact.workspace_id, docs, about)
+            visual_candidates = report_visuals.extract(
+                db, artifact.workspace_id, job, visual_material, focus=f"{about}. {instructions}"[:1200])
+        except Exception:
+            log.warning("report data-visual scan failed; continuing without plots", exc_info=True)
+
     themed = write_themed(db, artifact.workspace_id, job, docs, themed_title(db, artifact, params, docs), instructions, language,
-                          report_format == "interactive") if docs else None
+                          report_format == "interactive", visual_candidates) if docs else None
     log.info("report: job=%s artifact=%s format=%s way=%s", job.id, artifact.id, report_format,
              "themes" if themed else "legacy (posts read as text)")
     if themed:
@@ -501,7 +588,7 @@ def build_report(db: Session, job: Job, artifact: Artifact) -> dict:
     else:
         material = material or load_material(db, artifact.workspace_id, artifact.notebook_id, params, job=job, what="report")
         extra = {}
-        made = write_interactive(db, artifact.workspace_id, job, material, instructions, language) \
+        made = write_interactive(db, artifact.workspace_id, job, material, instructions, language, visual_candidates) \
             if report_format == "interactive" else None
         if made:
             title, blocks, suggestions = made
@@ -512,11 +599,13 @@ def build_report(db: Session, job: Job, artifact: Artifact) -> dict:
             title, markdown = write_document(db, artifact.workspace_id, job, material, instructions, language)
             blocks = number_blocks(split_prose(markdown))
             suggestions = []  # visuals are offered in interactive reports only, never in a document
+            visual_candidates = []
         source, sources = material.source, source_rows(material)
     artifact.content_json = {
         "title": title, "format": report_format, "template_id": params.get("template_id"),
         "instructions": instructions, "language": language, "topic": topic, "source": source,
-        "blocks": blocks, "suggestions": suggestions, "suggestions_offered": True, "citations": [], "sources": sources, **extra,
+        "blocks": blocks, "suggestions": suggestions, "visual_candidates": visual_candidates,
+        "suggestions_offered": True, "citations": [], "sources": sources, **extra,
     }
     artifact.status = "ready"
     db.commit()
@@ -546,8 +635,17 @@ def copy_block(kind: str, existing: Artifact) -> dict:
     raise NothingToDo("That one has nothing to add.")
 
 
-def make_block(db: Session, job: Job, report: Artifact, kind: str, brief: str, theme: str | None = None) -> dict:
+def make_block(db: Session, job: Job, report: Artifact, kind: str, brief: str, theme: str | None = None,
+               suggestion_id: str | None = None) -> dict:
     """A new visual about `brief`, built from the report's own sources."""
+    if kind in ("plot", "table", "timeline"):
+        block = report_visuals.candidate_block(report.content_json or {}, suggestion_id, kind)
+        if not block:
+            raise NothingToDo("That source-backed visual is no longer available.")
+        block["candidate_id"] = next((s.get("candidate_id") for s in (report.content_json or {}).get("suggestions") or []
+                                      if s.get("id") == suggestion_id), None)
+        block.pop("type", None)
+        return block
     source = (report.content_json or {})["source"]
     if kind == "infographic":
         # A picture is drawn by the renderer, so it is its own infographic (listed in the Library, counted in the
@@ -613,7 +711,8 @@ def handle_report_block(db: Session, job: Job) -> dict:
                 raise NothingToDo("That one is not available.")
             block = copy_block(kind, existing)
         else:
-            block = make_block(db, job, report, kind, (p.get("brief") or "").strip(), p.get("theme"))
+            block = make_block(db, job, report, kind, (p.get("brief") or "").strip(), p.get("theme"),
+                               p.get("suggestion_id"))
             saved = keep_visual(db, report, {"type": kind, **block})  # also lands in the notebook's Studio list
             if saved and not block.get("artifact_id"):
                 block["artifact_id"] = str(saved.id)
@@ -665,8 +764,16 @@ def remove_block(content: dict, block_id: str) -> dict | None:
         return None
     keep = [b for b in blocks if b["id"] != block_id]
     suggestions = list(content.get("suggestions") or [])
+    used_ids = {s.get("id") for s in suggestions}
+    next_id = next((f"s{n}" for n in range(1, 100) if f"s{n}" not in used_ids), "s99")
     kind = removed["type"]
-    if kind in FALLBACK_BRIEFS and not any(s["kind"] == kind for s in suggestions):
+    if kind in ("plot", "table", "timeline") and removed.get("candidate_id") \
+            and not any(s["kind"] == kind and s.get("candidate_id") == removed["candidate_id"] for s in suggestions):
+        suggestions.append({"id": next_id, "after_block_id": removed.get("after"), "kind": kind,
+                            "candidate_id": removed["candidate_id"], "brief": removed.get("title") or "Source data",
+                            "why": "The selected sources contain verified data for this view."})
+    elif kind in FALLBACK_BRIEFS and not any(s["kind"] == kind for s in suggestions):
         brief, why = FALLBACK_BRIEFS[kind]
-        suggestions.append({"id": "", "after_block_id": removed.get("after"), "kind": kind, "brief": brief, "why": why})
+        suggestions.append({"id": next_id, "after_block_id": removed.get("after"), "kind": kind,
+                            "brief": brief, "why": why})
     return {**content, "blocks": keep, "suggestions": suggestions}

@@ -6,7 +6,6 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.auth import Ctx, get_ctx
-from app.llm import run
 from app.models import Artifact
 from app.pipeline.report import EMBED_KINDS, keep_visual, remove_block
 from app.routers.artifacts import get_artifact_or_404
@@ -47,7 +46,7 @@ def suggest_templates(body: SuggestIn, ctx: Ctx = Depends(get_ctx)):
 
 
 class AddBlockIn(BaseModel):
-    kind: Literal["mind_map", "flashcards", "quiz", "infographic"]
+    kind: Literal["mind_map", "flashcards", "quiz", "infographic", "plot", "table", "timeline"]
     theme: str | None = Field(None, max_length=30)  # infographic: the premade theme
     after_block_id: str | None = Field(None, max_length=20)
     suggestion_id: str | None = Field(None, max_length=20)
@@ -70,6 +69,11 @@ def add_block(artifact_id: uuid.UUID, body: AddBlockIn, ctx: Ctx = Depends(get_c
     content = a.content_json or {}
     if body.kind not in EMBED_KINDS:
         raise HTTPException(400, "Unknown kind of visual")
+    if body.kind in ("plot", "table", "timeline") and not any(
+        s.get("id") == body.suggestion_id and s.get("kind") == body.kind and s.get("candidate_id")
+        for s in content.get("suggestions") or [] if isinstance(s, dict)
+    ):
+        raise HTTPException(400, "Choose a verified data suggestion from this report")
     if body.kind == "mind_map" and not content.get("source", {}).get("document_ids"):
         raise HTTPException(400, "A Mind Constellation is made from posts, not chats")
     if body.after_block_id and body.after_block_id not in {b["id"] for b in content.get("blocks") or []}:

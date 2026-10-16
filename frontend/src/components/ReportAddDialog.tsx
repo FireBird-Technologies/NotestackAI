@@ -5,12 +5,11 @@ import { ThemePicker } from "./Infographic";
 import { Modal } from "./ui";
 
 const LABEL = {
-  mind_map: "Mind Constellation", flashcards: "flashcards", quiz: "quiz", table: "comparison table", timeline: "timeline",
-  key_terms: "key terms", infographic: "infographic",
+  mind_map: "Mind Constellation", plot: "plot", table: "data table", timeline: "timeline", infographic: "infographic",
 } as const;
 
 /** The visuals that also exist as their own artifact, so one already made can be reused. */
-const HAS_STUDIO_ARTIFACT: string[] = ["mind_map", "flashcards", "quiz", "infographic"];
+const HAS_STUDIO_ARTIFACT: string[] = ["mind_map", "infographic"];
 
 /** Add a suggested visual: make a new one from the report's sources, or use one the user already made. */
 export function ReportAddDialog({ suggestion, existing, loading = false, busy, error, onClose, onAdd }: {
@@ -38,7 +37,9 @@ export function ReportAddDialog({ suggestion, existing, loading = false, busy, e
         <p className="muted">{suggestion.brief}</p>
         <label className="vw-option">
           <input type="radio" name="rp-add" checked={!useExisting} onChange={() => setUseExisting(false)} />
-          Make a new one from this report's sources
+          {["plot", "table", "timeline"].includes(suggestion.kind)
+            ? "Add this verified view of the report's source data"
+            : "Make a new one from this report's sources"}
         </label>
         {HAS_STUDIO_ARTIFACT.includes(suggestion.kind) && (
           <label className="vw-option">

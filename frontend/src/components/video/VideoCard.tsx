@@ -89,9 +89,8 @@ export function VideoCard({ artifact, onRemoved }: { artifact: Artifact; onRemov
         }}>
           <TrashIcon size={16} />
         </ConfirmButton>
+        <CardFeedback artifact={artifact} />
       </footer>
-      {/* A row of its own under the actions: a positive or negative review */}
-      <CardFeedback artifact={artifact} />
       {previewing && (
         <Modal title={artifact.title} onClose={() => setPreviewing(false)} wide>
           {preview

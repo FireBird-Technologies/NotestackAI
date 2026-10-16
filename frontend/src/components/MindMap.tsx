@@ -1067,9 +1067,8 @@ export function MindMapCard({
                        }}>
           <TrashIcon size={16} />
         </ConfirmButton>
+        <CardFeedback artifact={artifact} />
       </footer>
-      {/* A row of its own under the actions: a positive or negative review */}
-      <CardFeedback artifact={artifact} />
     </article>
   );
 }

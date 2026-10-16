@@ -245,17 +245,27 @@
                                       (preview ? " Preview: " + preview + "." : ""),
                                      privateContent: saved, imageIds: [] });
     }
-    if (data.state_url && data.state_token) {
-      fetch(data.state_url, { method: "POST", headers: { "Content-Type": "text/plain" },
-        body: data.state_token + "\n" + id, cache: "no-store" }).catch(function () {});
-    }
+    if (data.state_token) saveState(data.state_token + "\n" + id).catch(function () {});
+  }
+  /* Direct to the API first; if the host blocks that request, go through the app-only tool instead. */
+  function saveState(body) {
+    var viaTool = function () {
+      return call("widget_state", { state: body }).then(function (res) {
+        var v = parse(res) || {};
+        if (res.isError || v.error) throw new Error("state");
+        return v;
+      });
+    };
+    if (!data.state_url) return viaTool();
+    return fetch(data.state_url, { method: "POST", headers: { "Content-Type": "text/plain" }, body: body, cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error("status " + r.status); return r.json(); })
+      .catch(viaTool);
   }
   function restoreState() {
     var saved = localState();
     if (saved && saved.make === data.make && saved.artifact_id) return Promise.resolve(saved);
-    if (!data.state_url || !data.state_token) return Promise.resolve(null);
-    return fetch(data.state_url, { method: "POST", headers: { "Content-Type": "text/plain" },
-      body: data.state_token, cache: "no-store" }).then(function (r) { return r.ok ? r.json() : null; }, function () { return null; });
+    if (!data.state_token) return Promise.resolve(null);
+    return saveState(data.state_token).catch(function () { return null; });
   }
 
   /* ---- the finished quiz, cards or map plays inside this view: this page stands in for the host to the player page ---- */

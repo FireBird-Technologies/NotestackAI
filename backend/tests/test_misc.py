@@ -1,8 +1,9 @@
 import uuid
 
+from app.config import settings
 from app.llm.postprocess import clean_output, strip_em_dashes
 from app.pipeline.ingest import html_to_sections, normalize_feed_url
-from app.services.email import make_unsubscribe_token, verify_unsubscribe_token
+from app.services.email import ConsoleEmailProvider, email_service, make_unsubscribe_token, verify_unsubscribe_token
 from app.services.storage import keys, safe_filename, workspace_owns_key
 
 
@@ -39,6 +40,15 @@ def test_unsubscribe_token_roundtrip(client):
     uid = str(uuid.uuid4())
     assert verify_unsubscribe_token(make_unsubscribe_token(uid)) == uid
     assert verify_unsubscribe_token(uid + ".forged") is None
+
+
+def test_update_email_replies_go_to_team(client):
+    uid = str(uuid.uuid4())
+    assert email_service.send_blast_email(uid, "reader@example.com", "Ada", "News", "We shipped it.")
+    headers = ConsoleEmailProvider.sent[-1].headers
+    assert headers is not None
+    assert headers["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click"
+    assert ConsoleEmailProvider.sent[-1].reply_to == settings.alerts_email
 
 
 def test_plans_endpoint(client):

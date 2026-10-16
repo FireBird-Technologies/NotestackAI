@@ -24,7 +24,7 @@ from app.llm import run
 from app.llm.provider import fast_lm
 from app.llm.signatures import GroupThemes
 from app.models import Document, Job, Notebook, Workspace
-from app.pipeline.generate import extract_ideas, ideas_fresh
+from app.pipeline.generate import datasets_fresh, extract_ideas, ideas_fresh
 from app.pipeline.idea_pool import _tokens
 from app.pipeline.passages import _body_start, notebook_docs, workspace_docs
 from app.services.jobs import update_job
@@ -100,9 +100,8 @@ def select_docs(db: Session, workspace_id: uuid.UUID, notebook_id: uuid.UUID | N
 
 
 def ensure_ideas(db: Session, job: Job | None, workspace_id: uuid.UUID, docs: list[Document]) -> None:
-    """Extract the ideas of posts that have none yet, together, at most REPORT_INLINE_IDEAS of them. The rest are represented
-    by their opening; the background ideas job reaches them later."""
-    stale = [d for d in docs if not ideas_fresh(d)]
+    """Extract missing ideas and backfill missing dataset scans together, up to REPORT_INLINE_IDEAS posts."""
+    stale = [d for d in docs if not ideas_fresh(d) or not datasets_fresh(d)]
     if not stale or settings.report_inline_ideas <= 0:
         log.info("report ideas: workspace=%s posts=%d stale=%d inline_limit=%d, nothing extracted now", workspace_id, len(docs),
                  len(stale), settings.report_inline_ideas)
@@ -111,9 +110,9 @@ def ensure_ideas(db: Session, job: Job | None, workspace_id: uuid.UUID, docs: li
     result = extract_ideas(db, job, workspace_id, [str(d.id) for d in stale], parallel=True, limit=settings.report_inline_ideas)
     for d in stale:
         db.refresh(d)
-    log.info("report ideas: workspace=%s posts=%d stale=%d extracted=%s skipped=%s left_for_background=%d seconds=%.1f",
+    log.info("report ideas/data: workspace=%s posts=%d stale=%d extracted=%s skipped=%s left_for_background=%d seconds=%.1f",
              workspace_id, len(docs), len(stale), result.get("extracted"), result.get("skipped"),
-             sum(1 for d in stale if not ideas_fresh(d)), time.monotonic() - started)
+             sum(1 for d in stale if not ideas_fresh(d) or not datasets_fresh(d)), time.monotonic() - started)
 
 
 def fresh_share(docs: list[Document]) -> float:

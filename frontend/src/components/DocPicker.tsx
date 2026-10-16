@@ -28,15 +28,16 @@ export function DocPicker({
   const docs = given ?? fetched;
 
   useEffect(() => {
-    if (!given) docsApi.list({ limit: 5000 }).then((p) => setFetched(p.items));
+    if (!given) docsApi.list({ sort: "added", limit: 5000 }).then((p) => setFetched(p.items));
   }, [given]);
 
   const visible = useMemo(() => {
     const skip = new Set(exclude);
     const needle = q.trim().toLowerCase();
-    return (docs ?? []).filter(
-      (d) => !skip.has(d.id) && (!needle || d.title.toLowerCase().includes(needle) || (d.source_title ?? "").toLowerCase().includes(needle)),
-    );
+    return [...(docs ?? [])]
+      .sort((a, b) => (Date.parse(b.added_at ?? "") || 0) - (Date.parse(a.added_at ?? "") || 0))
+      .filter((d) => !skip.has(d.id)
+        && (!needle || d.title.toLowerCase().includes(needle) || (d.source_title ?? "").toLowerCase().includes(needle)));
   }, [docs, q, exclude]);
 
   // The tick-all box: ticked only while every pickable post in view is ticked, or with a `max`, exactly the first `max`
