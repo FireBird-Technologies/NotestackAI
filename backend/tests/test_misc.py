@@ -1,8 +1,8 @@
 import uuid
 
+from app.config import settings
 from app.llm.postprocess import clean_output, strip_em_dashes
 from app.pipeline.ingest import html_to_sections, normalize_feed_url
-from app.config import settings
 from app.services.email import ConsoleEmailProvider, email_service, make_unsubscribe_token, verify_unsubscribe_token
 from app.services.storage import keys, safe_filename, workspace_owns_key
 
@@ -47,8 +47,8 @@ def test_update_email_replies_go_to_team(client):
     assert email_service.send_blast_email(uid, "reader@example.com", "Ada", "News", "We shipped it.")
     headers = ConsoleEmailProvider.sent[-1].headers
     assert headers is not None
-    assert headers["Reply-To"] == settings.alerts_email
     assert headers["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click"
+    assert ConsoleEmailProvider.sent[-1].reply_to == settings.alerts_email
 
 
 def test_plans_endpoint(client):
