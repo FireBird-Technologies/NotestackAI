@@ -92,6 +92,16 @@ def report_section_lm(retry: bool = False) -> dspy.LM:
     return _build(_report_model(), effort="low", temperature=0.7 if retry else None, max_tokens=REPORT_SECTION_MAX_TOKENS)
 
 
+def writer_lm() -> dspy.LM:
+    """Writes the chat answer once research is done (streamed, outside dspy). LLM_WRITER_MODEL, else the main model."""
+    return writer_model_lm() if settings.llm_writer_model else main_lm()
+
+
+@lru_cache
+def writer_model_lm() -> dspy.LM:
+    return _build(settings.llm_writer_model, effort="low", temperature=None, max_tokens=None)
+
+
 @lru_cache
 def triage_lm() -> dspy.LM:
     """Cheap model that decides whether a chat message needs research at all."""

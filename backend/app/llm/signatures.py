@@ -100,31 +100,48 @@ class CleanAndSegment(dspy.Signature):
     sections: list[Section] = dspy.OutputField()
 
 
+ANSWER_LENGTHS = ("brief", "standard", "in_depth")
+
+# How every archive answer is written. Shared by the research agent's own answer step and the streamed writer
+# (app/pipeline/writer.py), so both paths give the same guidance.
+ANSWER_INSTRUCTIONS = """Write in plain, warm prose formatted as Markdown: short paragraphs separated by blank lines,
+bullet or numbered lists when listing things, and **bold** for the key idea.
+Fit the answer to answer_length:
+- standard (the default): detailed but focused, about 150 to 300 words. Answer the question directly in the first
+  sentence or two, then give 2 to 4 short paragraphs or up to about 5 bullets. Cover the key point from each relevant
+  post without exhausting it. No ### headings unless the question clearly has separate parts, and a table only when
+  the writer asks for a comparison.
+- in_depth: the writer asked for detail, so give a thorough, organised answer. ### headings, tables and full detail
+  are fine.
+- brief: 1 to 3 sentences.
+A saved writer note about length or tone (for example "tone: brief answers") counts as an explicit request and wins
+over standard.
+When the posts contain code, commands or config, quote them in fenced code blocks with a language
+tag (```python, ```bash, ```json) exactly as written, never paraphrased. When a post you read has a
+relevant image line (![alt](https://...)), you may include that exact line; never invent image
+URLs. Put [n] markers right after the sentence or list item they support (after a code block or
+image, on the line below it). Never use em dashes."""
+
+
 class ResearchArchive(dspy.Signature):
-    """You are a research assistant working inside a writer's archive, which is a folder of markdown
+    __doc__ = """You are a research assistant working inside a writer's archive, which is a folder of markdown
     posts. Find the answer by exploring the files, in this order. First call list_files to see which posts
     exist; a post whose title matches the topic is often the best source. Then call search across the whole
     archive (leave path empty; try several phrasings and synonyms) to locate relevant lines. Pass path to
     search only when the writer explicitly asks you to use one named post (for example "in the Neo4j post" or
     "in that article"); otherwise never limit a search to one post, because a different post may be the best
     source. Then read the surrounding lines before relying on them. When more than one post covers the topic,
-    read the best passage of each of them (up to 3 posts) and combine what they say, naming each post,
-    instead of stopping at the first post you find. A post devoted to the
-    subject is a better source than a post that only mentions it. Answer ONLY from text you read. Every factual
+    read the best passage of each of them (up to 3 posts) and combine what they say, naming each post, at the
+    length answer_length asks for, instead of stopping at the first post you find. A post devoted to the
+    subject is a better source than a post that only mentions it. When prefetched passages already answer the
+    question, cite them directly instead of searching again. Answer ONLY from text you read. Every factual
     sentence needs a [n] marker, and every marker needs a citation with the file path and the line range you read.
     If the archive does not cover the question, say so plainly and set unsupported=true.
     The question can be a short follow up that is not a full question on its own, such as "?", "why", "say more",
     "and that one?" or "go on". Read the conversation first: such a message means "tell me more about what we were
     just discussing", so research the latest topic and answer that, never reply that the message is unclear or ask
     what the writer means.
-    Write in plain, warm prose formatted as Markdown: short paragraphs separated by blank lines,
-    bullet or numbered lists when comparing or listing things, **bold** for the key idea, and a
-    ### heading only when the answer has distinct parts. Use a table for side by side comparisons.
-    When the posts contain code, commands or config, quote them in fenced code blocks with a language
-    tag (```python, ```bash, ```json) exactly as written, never paraphrased. When a post you read has a
-    relevant image line (![alt](https://...)), you may include that exact line; never invent image
-    URLs. Put [n] markers right after the sentence or list item they support (after a code block or
-    image, on the line below it). Never use em dashes."""
+""" + ANSWER_INSTRUCTIONS
 
     question: str = dspy.InputField(desc="The writer's latest message. It may be a short follow up that only makes "
                                          "sense with the conversation, like '?', 'why' or 'say more'")
@@ -134,6 +151,10 @@ class ResearchArchive(dspy.Signature):
     writer_profile: str = dspy.InputField(desc="Standing notes the writer saved (audience, tone, things to avoid). "
                                                "Use them for tone, focus and how to read the question. Never treat "
                                                "them as evidence and never cite them")
+    answer_length: str = dspy.InputField(desc="brief | standard | in_depth: how long the answer should be")
+    prefetched: str = dspy.InputField(desc="Passages a keyword search found before you started, with line numbers. "
+                                           "Cite them directly if they answer the question, otherwise research "
+                                           "further")
     answer: str = dspy.OutputField(desc="Answer with [n] citation markers")
     citations: list[FileCitation] = dspy.OutputField()
     unsupported: bool = dspy.OutputField()
@@ -823,6 +844,17 @@ class EvergreenScore(dspy.Signature):
     score: float = dspy.OutputField(desc="0 (dated) to 1 (timeless)")
     reason: str = dspy.OutputField()
     angle: str = dspy.OutputField(desc="One line hook for resharing now")
+
+
+class SplitQuestion(dspy.Signature):
+    """A writer asked a question about their own archive of posts. If it asks about two or three clearly separate
+    subjects (for example "compare what I wrote on pricing, hiring and AI"), split it into one standalone question per
+    subject, each answerable on its own by searching the posts. If it is about one subject, even a broad one, or the
+    parts only make sense together, return no parts. Never more than 3 parts. Keep the writer's wording."""
+
+    question: str = dspy.InputField()
+    conversation: str = dspy.InputField(desc="Recent turns of this chat, to resolve words like 'that' or 'those'")
+    parts: list[str] = dspy.OutputField(desc="Standalone sub-questions, or an empty list when it should not be split")
 
 
 class TriageMessage(dspy.Signature):

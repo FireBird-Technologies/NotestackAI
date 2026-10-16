@@ -17,6 +17,7 @@ import hashlib
 import json
 import re
 import threading
+import time
 import unicodedata
 import uuid
 from dataclasses import dataclass
@@ -33,6 +34,8 @@ MAX_SEARCH_HITS = 40
 MAX_LINE_CHARS = 240
 
 _locks: dict[tuple[uuid.UUID, str], threading.Lock] = {}
+# Posts only: when this process last brought a corpus in line with R2, and the manifest it saw (root -> (time, manifest)).
+_synced: dict[str, tuple[float, dict[str, str]]] = {}
 
 
 def slugify(text: str, max_len: int = 60) -> str:
@@ -150,11 +153,20 @@ class Corpus:
                 self.store.delete(self._key(rel))
                 self._local(rel).unlink(missing_ok=True)
             self._write_manifest(manifest)
+            if self.area == "corpus":
+                _synced[str(self.root)] = (time.monotonic(), dict(manifest))
 
     # Sync (API / any reader)
 
-    def sync(self) -> dict[str, str]:
-        """Bring the disk cache in line with R2. Downloads only files whose hash changed."""
+    def sync(self, need: tuple[str, ...] | list[str] = ()) -> dict[str, str]:
+        """Bring the disk cache in line with R2. Downloads only files whose hash changed.
+
+        Posts: a sync within CORPUS_SYNC_TTL_SECONDS of the last one in this process is skipped, unless a path in
+        `need` is missing from what that sync saw (a post added since). Chat memory always syncs."""
+        ttl = settings.corpus_sync_ttl_seconds if self.area == "corpus" else 0
+        seen = _synced.get(str(self.root))
+        if ttl > 0 and seen and time.monotonic() - seen[0] < ttl and all(p in seen[1] for p in need):
+            return seen[1]
         with self._lock:
             remote = self._read_manifest(remote=True)
             local = self._read_manifest(remote=False)
@@ -168,6 +180,8 @@ class Corpus:
                 self._local(rel).unlink(missing_ok=True)
             self.root.mkdir(parents=True, exist_ok=True)
             (self.root / MANIFEST).write_text(json.dumps(remote, sort_keys=True, indent=0), "utf-8")
+            if self.area == "corpus":
+                _synced[str(self.root)] = (time.monotonic(), remote)
             return remote
 
     # Reads

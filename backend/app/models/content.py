@@ -129,6 +129,9 @@ class Message(IdMixin, TimestampMixin, Base):
     # How an assistant answer was produced (triage route, which chat memory was loaded, the steps taken), so a
     # thumbs down can be traced back to what recall did. Null for user messages and older rows.
     recall_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Assistant answers to a chat's first question: notebook + question + post versions + writer notes, hashed. An exact
+    # repeat with the same key reuses this answer instead of researching again (CHAT_ANSWER_CACHE_DAYS).
+    cache_key: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
 
     citations: Mapped[list["Citation"]] = relationship(cascade="all, delete-orphan")
 

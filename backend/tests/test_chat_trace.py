@@ -42,7 +42,7 @@ def test_the_trace_shows_every_jev_answer_and_what_a_threshold_changed(monkeypat
     assert "engine   : jev" in text
     assert "memory   : replay" in text and "confidence 0.41" in text and "compose 0.39" in text
     assert "overrides: memory 'replay' confidence 0.41" in text
-    assert "FINAL    : kind=archive depth=deep memory=lookup topic=-" in text
+    assert "FINAL    : kind=archive depth=deep memory=lookup topic=- detail=standard reuse=new_research" in text
     assert "memory=lookup means:" in text
 
 
@@ -103,7 +103,7 @@ def test_the_archive_trace_lists_what_the_agent_was_given(monkeypatch, tmp_path)
     monkeypatch.setattr(r, "track_usage", no_usage)
     monkeypatch.setattr(r, "triage", lambda *a: r.Triage("archive", "q", "quick", "", engine="jev"))
     corpus = Corpus(uuid.uuid4(), cache_dir=str(tmp_path))
-    monkeypatch.setattr(corpus, "sync", lambda: {})
+    monkeypatch.setattr(corpus, "sync", lambda *a, **k: {})
     monkeypatch.setattr(settings, "chat_memory_read", False)
     t = ChatTrace()
     t.step("search", "pric(e|ing)")
@@ -265,7 +265,7 @@ def test_an_answer_step_that_stays_malformed_saves_a_plain_reply_and_is_not_file
     monkeypatch.setattr(r, "track_usage", no_usage)
     monkeypatch.setattr(r, "triage", lambda *a: r.Triage("archive", "q", "quick", "", engine="jev"))
     corpus = Corpus(uuid.uuid4(), cache_dir=str(tmp_path))
-    monkeypatch.setattr(corpus, "sync", lambda: {})
+    monkeypatch.setattr(corpus, "sync", lambda *a, **k: {})
     t = ChatTrace()
     out = r.research(corpus, {"a.md": "On Pricing"}, "What did I charge?", trace=t)
     assert out.text == r.FAILED_REPLY and out.kind == "error" and out.unsupported and out.citations == []

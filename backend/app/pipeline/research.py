@@ -7,14 +7,17 @@ conversation, answers off topic and app questions directly, and turns follow ups
 questions. Only real archive questions run the research agent, with a small step budget for simple
 lookups and the full budget for synthesis."""
 
+import contextvars
 import logging
 import random
 import re
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 import dspy
 from dspy.utils.exceptions import AdapterParseError
+from litellm import ContextWindowExceededError
 
 from app.chat_memory.context import (
     JEV_MEMORY,
@@ -33,8 +36,23 @@ from app.chat_memory.tools import ChatTools, is_chat_path
 from app.config import settings
 from app.corpus import Corpus, ScopedTools
 from app.llm.postprocess import strip_em_dashes
-from app.llm.provider import main_lm, track_usage, triage_lm
-from app.llm.signatures import ResearchArchive, ResearchArchiveWithMemory, TriageMessage, TriageWithMemory
+from app.llm.provider import fast_lm, main_lm, track_usage, triage_lm
+from app.llm.signatures import (
+    ResearchArchive,
+    ResearchArchiveWithMemory,
+    SplitQuestion,
+    TriageMessage,
+    TriageWithMemory,
+)
+from app.pipeline import writer
+from app.pipeline.prefetch import (
+    DEEP_PER_POST,
+    DEEP_TOP_K,
+    OVERVIEW_BUDGET_CHARS,
+    OVERVIEW_LIST_CHARS,
+    openings,
+    prefetch,
+)
 from app.pipeline.trace import MEMORY_GIVES, ChatTrace, current_trace, probs_text
 from app.services import jev
 
@@ -53,8 +71,8 @@ class VerifiedCitation:
 
 def _route_info(route: "Triage") -> dict:
     """What triage decided, in plain values: the first thing to look at when an answer forgot or mixed up a chat."""
-    return {"kind": route.kind, "depth": route.depth, "topic": route.topic, "memory": route.memory,
-            "standalone_question": route.question}
+    return {"kind": route.kind, "depth": route.depth, "detail": route.detail, "reuse": route.reuse,
+            "topic": route.topic, "memory": route.memory, "standalone_question": route.question}
 
 
 @dataclass
@@ -140,6 +158,8 @@ class Triage:
     completion_tokens: int = 0
     topic: str = ""  # the slug of the chat topic the message belongs to, "" when none
     memory: str = "none"  # none | lookup | replay | compose
+    detail: str = "standard"  # brief | standard | in_depth: how long the answer should be (depth sets research steps)
+    reuse: str = "new_research"  # new_research | rewrite_last: only reshape the previous answer, no new research
     # For the log and for recall_json: who decided, what Jev answered before our thresholds, and what they changed.
     engine: str = ""
     jev: dict = field(default_factory=dict)  # question id -> {"choice", "confidence", "probabilities"}
@@ -171,6 +191,73 @@ JEV_DEPTH = {
     "deep": "Synthesis, comparison or change over time across many posts",
 }
 JEV_MIN_CONFIDENCE = 0.55  # below this, research anyway: a wasted search beats a wrong brush off
+JEV_DETAIL = {
+    "standard": {
+        "what": "Asks about the posts without saying how long or detailed the answer should be",
+        "examples": ["What have I written about pricing?", "How did my view on remote work change?",
+                     "Which posts mention Stripe?"],
+    },
+    "in_depth": {
+        "what": "Explicitly asks for a detailed, thorough, comprehensive or step by step answer, a deep dive, or "
+                "everything about a subject",
+        "examples": ["Give me a detailed breakdown of my pricing posts", "Deep dive into everything I said about AI",
+                     "Explain step by step how I set up my newsletter"],
+    },
+    "brief": {
+        "what": "Explicitly asks for a short answer: one line, tl;dr, quickly, in brief",
+        "examples": ["tl;dr of my pricing posts", "In one line, what do I think about AI?",
+                     "Quickly, did I ever write about hiring?"],
+    },
+}
+JEV_REUSE = {
+    "new_research": {
+        "what": "Needs the posts looked at again: a new question, a new subject, or facts the last answer did not give",
+        "examples": ["What about hiring?", "Say more about the second point", "Why did I change my mind?"],
+    },
+    "rewrite_last": {
+        "what": "Only asks to reshape the assistant's previous answer (shorter, simpler, as bullets or a table, "
+                "rephrased or translated) with no new information needed",
+        "examples": ["make it shorter", "put that in bullets", "can you rephrase that more simply?"],
+    },
+}
+_BRIEF = re.compile(r"\btl;?dr\b|\bin (one|a|1) (line|sentence)\b|\bbriefly\b|\bin brief\b|\bshort answer\b|"
+                    r"\bquick(ly)? summar|\bone[- ]liner\b|\bkeep it short\b", re.IGNORECASE)
+_IN_DEPTH = re.compile(r"\bin (great |more |full )?detail\b|\bdetailed\b|\bdeep[- ]?dive\b|\bcomprehensive(ly)?\b|"
+                       r"\bthorough(ly)?\b|\belaborate\b|\bexpand on\b|\bstep[- ]by[- ]step\b|\bfull breakdown\b|"
+                       r"\beverything (about|on|i)\b|\blong answer\b|\bin[- ]depth\b", re.IGNORECASE)
+_REWRITE = re.compile(r"^\s*(can you |could you |please )?(make (it|that|this) (shorter|simpler|clearer|briefer)|"
+                      r"shorten (it|that|this)|(put|format|turn) (it|that|this) (in|into|as)\b|in bullets?\b|"
+                      r"as (a )?(list|table|bullets)\b|rephrase|reword|summari[sz]e (that|this|it)\b|"
+                      r"translate (it|that|this)\b)", re.IGNORECASE)
+
+
+def answer_length_from_text(message: str) -> str | None:
+    """An explicit ask for a short or a detailed answer, in so many words. None when the message does not say."""
+    if _BRIEF.search(message):
+        return "brief"
+    if _IN_DEPTH.search(message):
+        return "in_depth"
+    return None
+
+
+def asks_to_rewrite(message: str) -> bool:
+    return bool(_REWRITE.match(message))
+
+
+# Words that point back at the conversation. "these posts", "this notebook" and the like point at the notebook instead.
+_REFERS = re.compile(r"\b(it|its|that|this|these|those|him|his|her|hers|he|she|they|them|their|more|why|again|"
+                     r"above|previous|earlier|same)\b", re.IGNORECASE)
+_NOTEBOOK_WORDS = re.compile(r"\b(this|these|those|that|my|the|all|all of)\s+(posts?|notebooks?|archives?|blogs?|"
+                             r"articles?|essays?|newsletters?|writing)\b", re.IGNORECASE)
+
+
+def refers_back(message: str) -> bool:
+    """The message only makes sense with the conversation ("explain how to use it", "a brief intro of him")."""
+    return bool(_REFERS.search(_NOTEBOOK_WORDS.sub(" ", message)))
+
+
+def _has_answer(history: list[Turn]) -> bool:
+    return any(t.role == "assistant" for t in history)
 
 
 def canned_reply(kind: str, allowed: dict[str, str]) -> str:
@@ -197,6 +284,12 @@ def triage_with_jev(message: str, history: list[Turn], notebook: str, mem: ChatM
         "depth": {"instructions": "If it is about the posts, how much research does it need?",
                   "criteria": JEV_DEPTH},
     }
+    questions["detail"] = {"instructions": "How long and detailed an answer does the latest message ask for?",
+                           "criteria": JEV_DETAIL}
+    if _has_answer(history):
+        questions["reuse"] = {"instructions": "Does the latest message need new research in the posts, or only a "
+                                              "reshaped version of the assistant's previous answer?",
+                              "criteria": JEV_REUSE}
     if mem is not None:  # two more choices in the same request
         state["topics"] = topics_digest(mem.tf)
         questions["memory"] = {"instructions": JEV_MEMORY_QUESTION, "criteria": JEV_MEMORY}
@@ -234,9 +327,42 @@ def triage_with_jev(message: str, history: list[Turn], notebook: str, mem: ChatM
             notes.append(f"topic {picked.choice!r}: {why} -> no topic (the chat's latest topic is used instead)")
     elif mem is not None:
         notes.append(f"kind is {kind}, so the memory and topic answers are not used")
+    detail = "standard"
+    asked = answers.get("detail")  # .get: older fakes answer only intent and depth
+    if asked and asked.choice in JEV_DETAIL and asked.choice != "standard":
+        if asked.confidence >= JEV_MIN_CONFIDENCE:
+            detail = asked.choice
+        else:
+            notes.append(f"detail {asked.choice!r} confidence {asked.confidence:.2f} < {JEV_MIN_CONFIDENCE} -> standard "
+                         "(a longer or shorter answer only when the writer clearly asks)")
+    reuse = "new_research"
+    asked = answers.get("reuse")
+    if asked and asked.choice == "rewrite_last" and kind == "archive":
+        if asked.confidence >= JEV_MIN_CONFIDENCE:
+            reuse = "rewrite_last"
+        else:
+            notes.append(f"reuse 'rewrite_last' confidence {asked.confidence:.2f} < {JEV_MIN_CONFIDENCE} "
+                         "-> new_research")
     # Jev does not write text: the research agent resolves follow ups using the conversation it is given.
     return Triage(kind, message, depth.choice if depth.choice in JEV_DEPTH else "deep", "", topic=topic, memory=memory,
-                  engine="jev", jev=raw, notes=notes)
+                  detail=detail, reuse=reuse, engine="jev", jev=raw, notes=notes)
+
+
+def _phrase_rules(route: Triage, message: str, history: list[Turn]) -> Triage:
+    """What the message says in so many words wins: an explicit ask for a short or detailed answer, and a plain
+    "make it shorter" style request (when Jev is off, failed, or missed it)."""
+    if route.kind == "off_topic" and _has_answer(history) and refers_back(message):
+        route.notes.append("off_topic, but the message refers to the conversation (a follow up) -> archive")
+        route.kind, route.reply = "archive", ""
+    asked = answer_length_from_text(message)
+    if asked and asked != route.detail:
+        route.notes.append(f"the message asks for a {asked} answer in so many words -> detail={asked}")
+        route.detail = asked
+    if (route.kind == "archive" and route.reuse != "rewrite_last" and _has_answer(history)
+            and asks_to_rewrite(message)):
+        route.notes.append("the message only asks to reshape the previous answer -> reuse=rewrite_last")
+        route.reuse = "rewrite_last"
+    return route
 
 
 def triage(message: str, history: list[Turn], notebook: str, mem: ChatMemory | None = None) -> Triage:
@@ -245,13 +371,13 @@ def triage(message: str, history: list[Turn], notebook: str, mem: ChatMemory | N
     why = "Jev is not configured (no TYPESAFE_API_KEY)"
     if jev.configured():
         try:
-            return triage_with_jev(message, history, notebook, mem)
+            return _phrase_rules(triage_with_jev(message, history, notebook, mem), message, history)
         except jev.JevError as exc:
             log.warning("Jev triage failed, falling back to the LLM", exc_info=True)
             why = f"Jev failed: {exc}"
     route = triage_llm(message, history, notebook, mem)
     route.engine = f"llm triage ({why})"
-    return route
+    return _phrase_rules(route, message, history)
 
 
 def triage_llm(message: str, history: list[Turn], notebook: str, mem: ChatMemory | None = None) -> Triage:
@@ -425,13 +551,96 @@ def describe_context(question: str, route: Triage, inputs: dict, signature, tool
 
 RETRY_TEMPERATURE = 0.9  # a different request from the failed one, so the LM cache cannot return the same bad reply
 FAILED_REPLY = "I had trouble reading your posts just now. Please send that again."
+FAST_PATH_MIN_COVERAGE = 0.75  # share of the question's words the prefetched passages must hold to skip the agent
+MAX_PARTS = 3
 
 
-def _retry_malformed_steps(agent, trace: ChatTrace):
+@dataclass
+class LastAnswer:
+    """The previous assistant answer in this chat with its verified citations: enough to reshape it without research."""
+    text: str
+    citations: list[VerifiedCitation]
+
+
+class _Stream:
+    """The streamed answer writer for one message: sends text to on_delta as it arrives, takes a draft back (on_delta
+    None) when a write fails after text was shown, and adds up the writer's tokens (track_usage cannot see them)."""
+
+    def __init__(self, on_delta: Callable[[str | None], None] | None, trace: ChatTrace):
+        self.on_delta, self.trace = on_delta, trace
+        self.sent = False
+        self.prompt_tokens = self.completion_tokens = 0
+
+    def _emit(self, text: str) -> None:
+        self.sent = True
+        if self.on_delta:
+            self.on_delta(text)
+
+    def reset(self) -> None:
+        if self.sent and self.on_delta:
+            self.on_delta(None)
+        self.sent = False
+
+    def write(self, inputs: dict, evidence: str, length: str, label: str,
+              shrink: Callable[[], str] | None = None, stop_if_uncovered: bool = False) -> "writer.WriterResult | None":
+        """None when the write failed; the caller then takes another path. `shrink` returns smaller evidence when the
+        prompt is over the context window (it raises ValueError when there is nothing left to cut). stop_if_uncovered:
+        a one-call path stops at the model's first line when it says the material does not answer the question."""
+        why = "unknown"
+        for _ in range(3):
+            try:
+                res = writer.stream_answer(inputs, evidence, self._emit, length, stop_if_uncovered)
+            except writer.WriterUncovered:
+                why = "the model's first line said these passages do not answer it, so it stopped before any text"
+                break
+            except ContextWindowExceededError:
+                why = "over the context window"
+                if self.sent or shrink is None:
+                    break
+                try:
+                    evidence = shrink()
+                except ValueError:
+                    break
+                continue
+            except Exception as exc:  # a failed stream must never cost the writer their answer: another path runs
+                why = f"{type(exc).__name__}: {' '.join(str(exc).split())[:160]}"
+                log.warning("Streamed answer failed (%s): %s", label, why)
+                break
+            self.prompt_tokens += res.prompt_tokens
+            self.completion_tokens += res.completion_tokens
+            self.trace.add("writer", f"{label}: streamed {len(res.answer)} chars in {res.chunks} chunks, "
+                                     f"{len(res.citations)} citation(s), unsupported={res.unsupported}, "
+                                     f"tokens {res.prompt_tokens}/{res.completion_tokens}")
+            return res
+        self.reset()
+        self.trace.add("writer", f"{label}: failed ({why})")
+        return None
+
+    def extractor(self, length: str):
+        """Replaces ReAct's answer step with the streamed writer. None hands it back to dspy's own answer step."""
+        def extract(agent, trajectory, inputs):
+            state = {"t": dict(trajectory)}
+
+            def shrink() -> str:
+                state["t"] = agent.truncate_trajectory(state["t"])
+                return agent._format_trajectory(state["t"])
+
+            res = self.write(inputs, agent._format_trajectory(trajectory), length, "agent answer", shrink)
+            if res is None:
+                self.trace.add("writer", "agent answer: falling back to the agent's own answer step (not streamed)")
+                return None
+            return dspy.Prediction(answer=res.answer, citations=res.citations, unsupported=res.unsupported)
+        return extract
+
+
+def _retry_malformed_steps(agent, trace: ChatTrace, extract=None):
     """dspy's ReAct needs every model reply to be JSON with next_thought, next_tool_name and next_tool_args. The model
     sometimes sends only the tool's arguments, which raises AdapterParseError and used to fail the whole message.
     Here the failing step is asked once more (a new request, not the cached one). If it fails again, a ValueError
     tells ReAct to stop researching and write the answer from what it has found so far.
+
+    `extract(agent, trajectory, inputs)` takes over ReAct's answer step (the streamed writer, or capturing the
+    trajectory for a multi-part question). When it returns None the agent's own answer step runs as before.
 
     Hooks ReAct's `_call_with_potential_trajectory_truncation` (dspy 2.6.*, pinned in requirements.txt). Without it the
     agent is returned unchanged."""
@@ -440,6 +649,10 @@ def _retry_malformed_steps(agent, trace: ChatTrace):
         return agent
 
     def call(module, trajectory, **inputs):
+        if extract is not None and module is agent.extract:
+            pred = extract(agent, trajectory, inputs)
+            if pred is not None:
+                return pred
         try:
             return original(module, trajectory, **inputs)
         except AdapterParseError as first:
@@ -459,6 +672,30 @@ def _retry_malformed_steps(agent, trace: ChatTrace):
     return agent
 
 
+_MULTI = re.compile(r"\b(compare|comparison|versus|vs\.?|differences? between|as well as|and also)\b|;|"
+                    r"\n\s*(\d+[.)]|[-*])\s", re.IGNORECASE)
+
+
+def looks_multipart(question: str) -> bool:
+    """Cheap first check before asking the fast model to split: several subjects joined by and, commas or a list."""
+    return bool(_MULTI.search(question)) or question.count(",") + len(re.findall(r"\band\b", question, re.I)) >= 2
+
+
+def split_question(question: str, history: list[Turn], trace: ChatTrace) -> tuple[list[str], int, int]:
+    """The parts of a multi-part question (fast model, one call), or [] to research it whole."""
+    lm = fast_lm()
+    try:
+        with track_usage(lm) as usage, dspy.context(lm=lm):
+            pred = dspy.Predict(SplitQuestion)(question=question, conversation=conversation_text(history, limit=4))
+    except Exception as exc:
+        trace.add("writer", f"split: the fast model failed ({type(exc).__name__}), so the question is researched whole")
+        return [], 0, 0
+    parts = [p.strip() for p in (pred.parts or []) if p and p.strip()][:MAX_PARTS]
+    trace.add("writer", f"split: {len(parts)} part(s)" + (": " + " | ".join(parts) if parts and text_enabled() else "")
+              + ("" if len(parts) >= 2 else ", so the question is researched whole"))
+    return (parts if len(parts) >= 2 else []), usage.prompt_tokens, usage.completion_tokens
+
+
 def _triage_detail(route: Triage) -> dict:
     """Who triaged, what Jev answered before our thresholds, and what the thresholds changed. Saved with the message."""
     return {"engine": route.engine, "jev": route.jev, "notes": route.notes}
@@ -468,7 +705,7 @@ def _trace_triage(trace: ChatTrace, route: Triage) -> None:
     """The triage section of the log: every Jev answer with its confidence, then what our thresholds did to it."""
     trace.add("triage", f"engine   : {route.engine or 'unknown'}")
     if route.jev:
-        for qid in ("intent", "depth", "memory", "topic"):
+        for qid in ("intent", "depth", "detail", "reuse", "memory", "topic"):
             a = route.jev.get(qid)
             if a:
                 trace.add("triage", f"{qid:<9}: {a['choice']:<22} confidence {a['confidence']:.2f}   "
@@ -478,7 +715,7 @@ def _trace_triage(trace: ChatTrace, route: Triage) -> None:
     trace.add("triage", "overrides: " + ("; ".join(route.notes) if route.notes
                                          else "none, the answers were used as given"))
     trace.add("triage", f"FINAL    : kind={route.kind} depth={route.depth} memory={route.memory} "
-                        f"topic={route.topic or '-'}")
+                        f"topic={route.topic or '-'} detail={route.detail} reuse={route.reuse}")
     if route.kind == "archive":
         trace.add("triage", f"memory={route.memory} means: {MEMORY_GIVES.get(route.memory, '?')}")
 
@@ -503,7 +740,11 @@ def research(
     profile: str = "",
     chat_memory: ChatMemory | None = None,
     trace: ChatTrace | None = None,
+    on_delta: Callable[[str | None], None] | None = None,
+    last_answer: LastAnswer | None = None,
 ) -> ResearchResult:
+    """on_delta gets the answer text as it is written (None = take back what was sent, a different path writes it).
+    The returned text is the verified answer, which replaces whatever was streamed."""
     history = history or []
     trace = trace or current_trace() or ChatTrace()  # a throwaway one when research() is called on its own
     if not allowed:
@@ -520,6 +761,10 @@ def research(
 
     if on_step:
         on_step("think", "Reading the conversation")
+    # The posts sync (an R2 manifest check, usually skipped by the TTL) runs while triage decides what is needed.
+    pool = ThreadPoolExecutor(max_workers=1)
+    synced = pool.submit(contextvars.copy_context().run, corpus.sync, tuple(allowed))
+    pool.shutdown(wait=False)
     with trace.stage("triage"):
         route = triage(question, history, notebook_brief(notebook_title, allowed), chat_memory)
     _trace_triage(trace, route)
@@ -531,7 +776,7 @@ def research(
         reply = canned_reply(route.kind, allowed) if route.kind == "about_app" or not route.reply else route.reply
         source = "a fixed template" if route.kind == "about_app" or not route.reply else "the triage model's reply"
         trace.add("route", f"{route.kind.upper()}: triage decided this needs no research, so the reply is {source} "
-                           "(no research agent, no post reads, no R2 sync)")
+                           "(no research agent, no post reads; the posts sync started next to triage is not awaited)")
         trace.add("result", f"reply {len(reply)} chars | "
                             f"tokens (triage): {route.prompt_tokens}/{route.completion_tokens}")
         return ResearchResult(reply, False, [], route.prompt_tokens, route.completion_tokens,
@@ -540,8 +785,8 @@ def research(
                                       "memory_loaded": chat_memory is not None})
 
     trace.add("route", "ARCHIVE: the message needs the writer's posts, so the research agent runs")
-    with trace.stage("sync-posts"):
-        corpus.sync()
+    with trace.stage("sync-posts(wait)"):
+        manifest = synced.result() or {}
     steps: list[tuple[str, str]] = []
 
     def log(kind: str, detail: str) -> None:
@@ -551,6 +796,8 @@ def research(
             on_step(kind, detail)
 
     tools = ScopedTools(corpus, allowed, on_step=log)
+    stream = _Stream(on_delta, trace) if settings.chat_stream_answers else None
+    extra_prompt = extra_completion = 0  # model calls outside the agent: the question split
     trace.start_agent()  # step offsets in the log count from here
     notes, with_chat_tools = ("", False)
     if chat_memory is not None:
@@ -564,17 +811,112 @@ def research(
     if chat_tools:
         tool_list += [chat_tools.list_chat_topics, chat_tools.search_chats, chat_tools.read_chat]
     inputs = dict(question=route.question, conversation=conversation_text(history),
-                  archive_guide=archive_guide(tools), writer_profile=profile or "(none)")
+                  archive_guide=archive_guide(tools), writer_profile=profile or "(none)", answer_length=route.detail,
+                  prefetched="(none)")
     if notes or chat_tools:
         signature, inputs["chat_memory"] = ResearchArchiveWithMemory, notes or "(nothing filed yet)"
     else:
         signature = ResearchArchive
+    lm = main_lm()
+    recall = {
+        "route": _route_info(route),
+        "triage_detail": _triage_detail(route),
+        "memory_loaded": chat_memory is not None,
+        "memory_notes": notes[:4000],  # exactly what the agent was shown from earlier chats
+        "chat_tools": chat_tools is not None,
+        "chat_topics": [e.slug for e in chat_memory.tf.entries] if chat_memory is not None else [],
+    }
+
+    def finish(answer: str, proposed_cites, model_unsupported: bool, path: str, agent_prompt: int = 0,
+               agent_completion: int = 0) -> ResearchResult:
+        with trace.stage("verify"):
+            text, cites = verify_citations(tools, answer, proposed_cites or [], chat_tools)
+        unsupported = bool(model_unsupported) or not cites
+        refused = False
+        if not cites and not model_unsupported:
+            # The model answered without anything we could verify: do not pass it off as grounded.
+            text = "I could not find support for that in these posts, so I would rather not guess."
+            refused = True
+        proposed = proposed_cites or []
+        kept = {(c.path, c.line_start) for c in cites}
+        dropped = [c for c in proposed if (c.path, c.line_start) not in kept]
+        trace.add("citations",
+                  f"the model proposed {len(proposed)}, verified {len(cites)} "
+                  f"(posts {sum(1 for c in cites if not is_chat_path(c.path))}, "
+                  f"earlier chats {sum(1 for c in cites if is_chat_path(c.path))}), dropped {len(dropped)}",
+                  *[f"dropped: {c.path}:{c.line_start}-{c.line_end} (file not allowed here, or lines do not exist)"
+                    for c in dropped[:6]])
+        writer_prompt = stream.prompt_tokens if stream else 0
+        writer_completion = stream.completion_tokens if stream else 0
+        trace.add("result",
+                  f"answer {len(text)} chars via {path} | unsupported={unsupported} | "
+                  f"tokens prompt/completion: triage {route.prompt_tokens}/{route.completion_tokens}, "
+                  f"agent {agent_prompt}/{agent_completion}"
+                  + (f", writer {writer_prompt}/{writer_completion}" if stream else "")
+                  + (f", split {extra_prompt}/{extra_completion}" if extra_prompt or extra_completion else ""),
+                  *(["the model gave no verifiable citation, so the answer was replaced with the 'could not find "
+                     "support' message"] if refused else []))
+        return ResearchResult(
+            text=strip_em_dashes(text),
+            unsupported=unsupported,
+            citations=cites,
+            prompt_tokens=agent_prompt + route.prompt_tokens + writer_prompt + extra_prompt,
+            completion_tokens=agent_completion + route.completion_tokens + writer_completion + extra_completion,
+            steps=steps,
+            kind="archive",
+            question=route.question,
+            recall={**recall, "path": path},
+        )
+
+    # 1. Only reshape the previous answer ("make it shorter"): one streamed call over what it already cited.
+    if stream and route.reuse == "rewrite_last" and last_answer and last_answer.citations:
+        log("think", "Reworking the last answer")
+        evidence = ("The assistant's previous answer:\n" + last_answer.text + "\n\nThe passages it cited (cite these "
+                    "paths and line ranges again):\n\n" + "\n\n".join(
+                        f"{c.path} lines {c.line_start}-{c.line_end}\n{c.quote}" for c in last_answer.citations))
+        with trace.stage("rewrite"):
+            res = stream.write(inputs, evidence, route.detail, "rewrite of the last answer", stop_if_uncovered=True)
+        if res is not None:
+            result = finish(res.answer, res.citations, res.unsupported, "rewrite")
+            if result.citations:
+                trace.add("writer", "rewrite: the previous answer was reshaped with no new research")
+                return result
+            stream.reset()
+            trace.add("writer", "rewrite: no citation survived verification -> full research")
+            steps.clear()
+            trace.sections.pop("citations", None)
+            trace.sections.pop("result", None)
+
+    # 2. Keyword prefetch: the best passages go to the agent (and the writer) before any model call. A follow up
+    # ("explain how to use it") is searched together with the question before it, which names what "it" is.
+    query = route.question
+    earlier = next((t.text for t in reversed(history) if t.role == "user"), "")
+    if earlier and refers_back(route.question):
+        query = f"{route.question} {earlier}"
+    deep = route.depth == "deep"
+    with trace.stage("prefetch"):
+        try:
+            pre = prefetch(corpus, allowed, manifest, query, *((DEEP_TOP_K, DEEP_PER_POST) if deep else ()))
+        except Exception:  # a ranking problem only costs the head start
+            logging.getLogger(__name__).warning("Prefetch failed", exc_info=True)
+            pre = None
+    if pre is not None:
+        inputs["prefetched"] = pre.text
+        trace.add("context", f"prefetch: {len(pre.passages)} passage(s) from "
+                             f"{len({p.path for _, p in pre.passages})} post(s), the question's words covered "
+                             f"{pre.coverage:.0%} ({len(pre.terms)} of {len(pre.asked)} content word(s) occur in the "
+                             f"posts), top score {pre.top_score:.2f}"
+                             + (f", {pre.for_coverage} picked to cover a word the top passages lacked"
+                                if pre.for_coverage else "")
+                             + (f", +{len(pre.added)} passage(s) from the same sections so topics arrive whole"
+                                if pre.added else "")
+                             + (", searched with the previous question" if query != route.question else "")
+                             + "  [BM25 over the local disk cache]")
+
     if context_log_enabled():
         context_log.info(context_banner(chat_memory, route.topic, route.memory, inputs.get("chat_memory", "")))
         context_log.info(describe_context(question, route, inputs, signature, [t.__name__ for t in tool_list],
                                           chat_memory, chat_tools is not None))
-    agent = _retry_malformed_steps(dspy.ReAct(signature, tools=tool_list, max_iters=budget), trace)
-    lm = main_lm()
     if not settings.chat_memory_read:
         memory_line = "chat memory: OFF (CHAT_MEMORY_READ=false), so only the last messages of this chat are used"
     elif chat_memory is None:
@@ -588,7 +930,7 @@ def research(
     turns = min(len(history), HISTORY_TURNS)
     trace.add("context",
               f"signature: {signature.__name__} | model {getattr(lm, 'model', '?')} | "
-              f"up to {budget} reasoning steps ({route.depth})",
+              f"up to {budget} reasoning steps ({route.depth}) | answer length {route.detail}",
               f"tools    : {', '.join(t.__name__ for t in tool_list)}",
               f"question : {len(inputs['question'])} chars ("
               + ("the writer's raw message: Jev does not rewrite it" if route.engine == "jev"
@@ -598,6 +940,94 @@ def research(
               f"{len(profile)} chars  [Postgres WorkspaceMemory]",
               f"archive guide: {len(inputs['archive_guide'])} chars  [built in code]",
               memory_line)
+
+    # 3. Overview: a question about the notebook as a whole (no subject to search for) is answered in one call from
+    # the post list and the opening passage of the newest posts.
+    one_call = stream is not None and settings.chat_fast_path and route.detail != "in_depth" and chat_tools is None
+    if one_call and pre is not None and pre.overview:
+        listing = tools.list_files()  # shows as the one step: scanning the archive
+        listed = [(row.split("|")[1].strip(), row.split("|")[2].strip()) for row in listing.splitlines()
+                  if row.count("|") >= 2]
+        evidence = (f"The notebook's posts, newest first (date | path | title | headings):\n"
+                    f"{listing[:OVERVIEW_LIST_CHARS]}\n\nThe opening passage of the newest posts (citable, with line "
+                    f"numbers):\n\n{openings(corpus, listed, OVERVIEW_BUDGET_CHARS)}")
+        with trace.stage("overview"):
+            res = stream.write(inputs, evidence, route.detail, "overview", stop_if_uncovered=True)
+        if res is not None and not res.unsupported:
+            result = finish(res.answer, res.citations, res.unsupported, "overview")
+            if result.citations:
+                trace.add("writer", "overview path: hit, one model call over the post list and openings, no agent")
+                return result
+            trace.sections.pop("citations", None)
+            trace.sections.pop("result", None)
+        stream.reset()
+        trace.add("writer", "overview path: miss (the openings did not answer it) -> research agent")
+
+    # 4. Fast path: a question the prefetch clearly covers is answered in one call, no agent.
+    elif (one_call and pre is not None and pre.passages and pre.coverage >= FAST_PATH_MIN_COVERAGE):
+        log("think", "Found matching passages")
+        with trace.stage("fast-path"):
+            res = stream.write(inputs, "(no research steps: answer from the prefetched passages above)",
+                               route.detail, "fast path", stop_if_uncovered=True)
+        if res is not None and not res.unsupported:
+            result = finish(res.answer, res.citations, res.unsupported, "fast path")
+            if result.citations:
+                trace.add("writer", f"fast path: hit (coverage {pre.coverage:.0%}, {len(pre.passages)} passages), "
+                                "one model call and no agent")
+                return result
+            trace.sections.pop("citations", None)
+            trace.sections.pop("result", None)
+        stream.reset()
+        trace.add("writer", "fast path: miss (the passages did not answer it) -> research agent")
+    elif stream and settings.chat_fast_path and pre is not None:
+        trace.add("writer", f"fast path: not tried (detail={route.detail}, coverage {pre.coverage:.0%}, "
+                            f"chat tools {'given' if chat_tools else 'not given'})")
+
+    # 5. A question about several separate subjects: research the parts at once, then write one answer.
+    if (stream and settings.chat_parallel_parts and route.depth == "deep" and chat_tools is None
+            and looks_multipart(route.question)):
+        with trace.stage("split"):
+            parts, extra_prompt, extra_completion = split_question(route.question, history, trace)
+        if parts:
+            part_budget = max(2, budget // 2)
+
+            def research_part(n: int, part: str) -> str:
+                part_tools = ScopedTools(corpus, allowed, on_step=lambda k, d: log(k, f"[{n}] {d}"))
+                captured: dict[str, str] = {}
+
+                def capture(agent, trajectory, _inputs):
+                    captured["t"] = agent._format_trajectory(trajectory)
+                    return dspy.Prediction(answer="", citations=[], unsupported=False)
+
+                agent = _retry_malformed_steps(
+                    dspy.ReAct(signature, tools=[part_tools.list_files, part_tools.search, part_tools.read],
+                               max_iters=part_budget), trace, capture)
+                with dspy.context(lm=lm):
+                    agent(**{**inputs, "question": part})
+                return captured.get("t", "(nothing found)")
+
+            with trace.stage("agent(parts)"), track_usage(lm) as usage:
+                with ThreadPoolExecutor(max_workers=max(1, min(len(parts), settings.llm_max_concurrent))) as ex:
+                    futures = [ex.submit(contextvars.copy_context().run, research_part, n, part)
+                               for n, part in enumerate(parts, start=1)]
+                    found = []
+                    for n, (part, f) in enumerate(zip(parts, futures, strict=True), start=1):
+                        try:
+                            found.append(f"### Part {n}: {part}\n{f.result()}")
+                        except Exception as exc:
+                            trace.add("writer", f"part {n}: research failed ({type(exc).__name__})")
+                            found.append(f"### Part {n}: {part}\n(research failed, nothing found)")
+            trace.add("writer", f"parts: {len(parts)} researched in parallel, up to {part_budget} steps each")
+            with trace.stage("write(parts)"):
+                res = stream.write(inputs, "\n\n".join(found), route.detail, "answer over all parts")
+            if res is not None:
+                return finish(res.answer, res.citations, res.unsupported, "parallel parts",
+                              usage.prompt_tokens, usage.completion_tokens)
+            trace.add("writer", "parts: the combined answer failed -> one research agent over the whole question")
+
+    # 6. The research agent; its answer step is the streamed writer when streaming is on.
+    agent = _retry_malformed_steps(dspy.ReAct(signature, tools=tool_list, max_iters=budget), trace,
+                                   stream.extractor(route.detail) if stream else None)
     try:
         with trace.stage("agent"), track_usage(lm) as usage, dspy.context(lm=lm):
             pred = agent(**inputs)
@@ -612,45 +1042,5 @@ def research(
                               kind="error", question=route.question,
                               recall={"route": _route_info(route), "triage_detail": _triage_detail(route),
                                       "memory_loaded": chat_memory is not None, "failed": "malformed model reply"})
-
-    with trace.stage("verify"):
-        text, cites = verify_citations(tools, pred.answer, pred.citations or [], chat_tools)
-    unsupported = bool(pred.unsupported) or not cites
-    refused = False
-    if not cites and not pred.unsupported:
-        # The model answered without anything we could verify: do not pass it off as grounded.
-        text = "I could not find support for that in these posts, so I would rather not guess."
-        refused = True
-    proposed = pred.citations or []
-    kept = {(c.path, c.line_start) for c in cites}
-    dropped = [c for c in proposed if (c.path, c.line_start) not in kept]
-    trace.add("citations",
-              f"the model proposed {len(proposed)}, verified {len(cites)} "
-              f"(posts {sum(1 for c in cites if not is_chat_path(c.path))}, "
-              f"earlier chats {sum(1 for c in cites if is_chat_path(c.path))}), dropped {len(dropped)}",
-              *[f"dropped: {c.path}:{c.line_start}-{c.line_end} (file not allowed here, or lines do not exist)"
-                for c in dropped[:6]])
-    trace.add("result",
-              f"answer {len(text)} chars | unsupported={unsupported} | "
-              f"tokens prompt/completion: triage {route.prompt_tokens}/{route.completion_tokens}, "
-              f"agent {usage.prompt_tokens}/{usage.completion_tokens}",
-              *(["the model gave no verifiable citation, so the answer was replaced with the 'could not find "
-                 "support' message"] if refused else []))
-    return ResearchResult(
-        text=strip_em_dashes(text),
-        unsupported=unsupported,
-        citations=cites,
-        prompt_tokens=usage.prompt_tokens + route.prompt_tokens,
-        completion_tokens=usage.completion_tokens + route.completion_tokens,
-        steps=steps,
-        kind="archive",
-        question=route.question,
-        recall={
-            "route": _route_info(route),
-            "triage_detail": _triage_detail(route),
-            "memory_loaded": chat_memory is not None,
-            "memory_notes": notes[:4000],  # exactly what the agent was shown from earlier chats
-            "chat_tools": chat_tools is not None,
-            "chat_topics": [e.slug for e in chat_memory.tf.entries] if chat_memory is not None else [],
-        },
-    )
+    return finish(pred.answer, pred.citations, pred.unsupported, "research agent",
+                  usage.prompt_tokens, usage.completion_tokens)

@@ -1,9 +1,11 @@
 import asyncio
+import hashlib
 import json
 import logging
+import re
 import time
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -11,6 +13,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import load_only
 
 from app.auth import Ctx, get_ctx
 from app.chat_memory.context import load_chat_memory
@@ -33,7 +36,7 @@ from app.models import (
     Topic,
 )
 from app.pipeline.generate import ideas_fresh
-from app.pipeline.research import Turn, research
+from app.pipeline.research import LastAnswer, ResearchResult, Turn, VerifiedCitation, refers_back, research
 from app.pipeline.trace import ChatTrace, use_trace
 from app.routers.sources import serialize_document
 from app.services import report_suggestions
@@ -438,6 +441,41 @@ _STEP_LABEL = {"list": "Scanning the archive", "search": "Searching for", "read"
                "recall": "Remembering"}
 
 
+def answer_cache_key(notebook_id: uuid.UUID, question: str, docs: list[Document], profile: str) -> str:
+    """Same notebook, same question (case, spacing and end punctuation aside), same post versions, same writer notes."""
+    q = re.sub(r"\s+", " ", question.lower()).strip().rstrip("?!. ")
+    posts = "\n".join(sorted(f"{d.path}\t{d.content_hash or ''}\t{d.updated_at.isoformat() if d.updated_at else ''}"
+                             for d in docs))
+    return hashlib.sha256(f"{notebook_id}\n{q}\n{posts}\n{profile}".encode()).hexdigest()
+
+
+def _cached_answer(db, key: str) -> tuple[Message, ResearchResult] | None:
+    since = datetime.now(UTC) - timedelta(days=settings.chat_answer_cache_days)
+    hit = db.scalar(select(Message).where(Message.cache_key == key, Message.role == "assistant",
+                                          Message.created_at >= since)
+                    .order_by(Message.created_at.desc()).limit(1))
+    if hit is None or not hit.citations:
+        return None
+    cites = [VerifiedCitation(c.marker, c.path, c.line_start, c.line_end, c.span or "")
+             for c in sorted(hit.citations, key=lambda c: c.marker)]
+    recall = {k: v for k, v in (hit.recall_json or {}).items() if k not in {"steps", "timings_ms", "kind", "unsupported"}}
+    return hit, ResearchResult(hit.content, False, cites, kind="archive", recall={**recall, "cache_hit": str(hit.id)})
+
+
+def _last_answer(db, prior: list[Message]) -> LastAnswer | None:
+    """The chat's latest assistant answer with its verified citations, for "make it shorter" style follow ups."""
+    last = next((m for m in prior if m.role == "assistant"), None)  # prior is newest first
+    if last is None or not last.citations:
+        return None
+    return LastAnswer(last.content, [VerifiedCitation(c.marker, c.path, c.line_start, c.line_end, c.span or "")
+                                     for c in sorted(last.citations, key=lambda c: c.marker)])
+
+
+def _pieces(text: str, size: int = 400) -> list[str]:
+    """A cached answer is sent as a few deltas, so it arrives the way a streamed one does."""
+    return [text[i:i + size] for i in range(0, len(text), size)]
+
+
 async def _learn(db, workspace_id: uuid.UUID, message_id: uuid.UUID, kind: str,
                  trace: ChatTrace | None = None) -> list[dict]:
     """Queue the memory update for the writer's message, then wait briefly so the chat can say what was saved.
@@ -476,84 +514,124 @@ async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)
     nb = _get(ctx, notebook_id)
     db = ctx.db
     trace = ChatTrace(notebook=nb.title, message=body.question)
-    chat_row = db.get(Chat, body.chat_id) if body.chat_id else None
-    if body.chat_id and (not chat_row or chat_row.notebook_id != nb.id):
-        log.warning("Chat %s is not in notebook %s; starting a new chat", body.chat_id, nb.id)
-    if not chat_row or chat_row.notebook_id != nb.id:
-        label = (body.label or "").strip()
-        title = f"{label}: {body.question}" if label else body.question
-        chat_row = Chat(workspace_id=ctx.workspace.id, notebook_id=nb.id, title=title[:120])
-        db.add(chat_row)
-        db.flush()
-    chat_row.updated_at = datetime.now(UTC)  # keeps the history list newest first
-    trace.chat_id = str(chat_row.id)
-    # Memory: the chat so far (before this message), oldest first, capped to the last few turns.
-    with trace.stage("db-history+notes"):
-        prior = db.scalars(
-            select(Message).where(Message.chat_id == chat_row.id).order_by(Message.created_at.desc()).limit(8)
-        ).all()
-        history = [Turn(m.role, m.content) for m in reversed(prior)]
-        facts = list_facts(db, ctx.workspace.id)
-        profile = profile_text(facts)
-    # Chat memory (topic summaries and exact quotes from earlier in this notebook's chats), loaded here so the research
-    # thread needs no database session. None when the feature is off or nothing is remembered yet.
-    with trace.stage("chat-memory(R2)"):
-        chat_memory = load_chat_memory(db, ctx.workspace.id, nb.id, chat_row.id, {str(m.id) for m in prior})
-    with trace.stage("save-question"):
-        user_msg = Message(chat_id=chat_row.id, role="user", content=body.question)
-        db.add(user_msg)
-        db.commit()
-    trace.add("load",
-              f"history: {len(prior)} message(s) of this chat  [Postgres]",
-              f"workspace notes: {len(facts)} note(s)  [Postgres]",
-              ("chat memory: OFF (CHAT_MEMORY_READ=false), nothing read from R2" if not settings.chat_memory_read
-               else "chat memory: nothing remembered for this chat yet, or it failed to load" if chat_memory is None
-               else f"chat memory: {len(chat_memory.tf.entries)} topic(s) of this chat, "
-                    f"{len(chat_memory.topics)} topic file(s) read  "
-                    "[R2 manifest check, files from the local disk cache]"),
-              "your message saved to Postgres before any model runs")
-
-    with trace.stage("load-posts"):
-        docs = db.scalars(
-            select(Document)
-            .join(NotebookDocument, NotebookDocument.document_id == Document.id)
-            .where(NotebookDocument.notebook_id == nb.id, Document.path.is_not(None))
-        ).all()
-    allowed = {d.path: d.title for d in docs}
-    by_path = {d.path: d for d in docs}
-    corpus = Corpus(ctx.workspace.id)
+    workspace_id = ctx.workspace.id
 
     async def _run():
+        # Every database write of this message happens in here, in the stream. FastAPI closes the request's session
+        # when this endpoint returns, which is before the stream runs, and closing rolls back anything not yet
+        # committed: a chat row added out here would be gone by the time the question is saved.
+        chat_row = db.get(Chat, body.chat_id) if body.chat_id else None
+        if body.chat_id and (not chat_row or chat_row.notebook_id != nb.id):
+            log.warning("Chat %s is not in notebook %s; starting a new chat", body.chat_id, nb.id)
+        if not chat_row or chat_row.notebook_id != nb.id:
+            label = (body.label or "").strip()
+            title = f"{label}: {body.question}" if label else body.question
+            chat_row = Chat(workspace_id=workspace_id, notebook_id=nb.id, title=title[:120])
+            db.add(chat_row)
+            db.flush()
+        chat_row.updated_at = datetime.now(UTC)  # keeps the history list newest first
+        trace.chat_id = str(chat_row.id)
         yield _sse("status", {"chat_id": str(chat_row.id), "message": "Opening the archive"})
+        # Memory: the chat so far (before this message), oldest first, capped to the last few turns.
+        with trace.stage("db-history+notes"):
+            prior = db.scalars(
+                select(Message).where(Message.chat_id == chat_row.id).order_by(Message.created_at.desc()).limit(8)
+            ).all()
+            history = [Turn(m.role, m.content) for m in reversed(prior)]
+            facts = list_facts(db, ctx.workspace.id)
+            profile = profile_text(facts)
+        # Chat memory (topic summaries and exact quotes from earlier in this notebook's chats), loaded here so the
+        # research thread needs no database session. None when the feature is off or nothing is remembered yet.
+        with trace.stage("chat-memory(R2)"):
+            chat_memory = load_chat_memory(db, ctx.workspace.id, nb.id, chat_row.id, {str(m.id) for m in prior})
+        with trace.stage("load-posts"):
+            # Only the columns the chat uses: the full rows carry each post's text and metadata (about 1 MB for 130
+            # posts), which made this the slowest query of the message.
+            docs = db.scalars(
+                select(Document)
+                .join(NotebookDocument, NotebookDocument.document_id == Document.id)
+                .where(NotebookDocument.notebook_id == nb.id, Document.path.is_not(None))
+                .options(load_only(Document.id, Document.path, Document.title, Document.url, Document.content_hash,
+                                   Document.updated_at))
+            ).all()
+        allowed = {d.path: d.title for d in docs}
+        by_path = {d.path: d for d in docs}
+        corpus = Corpus(ctx.workspace.id)
+        last_answer = _last_answer(db, prior)
+        # A message that refers back to the conversation ("explain how to use it") is never a cached repeat.
+        cache_key = (answer_cache_key(nb.id, body.question, docs, profile)
+                     if settings.chat_answer_cache_days > 0 and docs and not refers_back(body.question) else None)
+        user_msg = Message(chat_id=chat_row.id, role="user", content=body.question)
+        db.add(user_msg)
+        trace.add("load",
+                  f"history: {len(prior)} message(s) of this chat  [Postgres]",
+                  f"workspace notes: {len(facts)} note(s)  [Postgres]",
+                  ("chat memory: OFF (CHAT_MEMORY_READ=false), nothing read from R2" if not settings.chat_memory_read
+                   else "chat memory: nothing remembered for this chat yet, or it failed to load" if chat_memory is None
+                   else f"chat memory: {len(chat_memory.tf.entries)} topic(s) of this chat, "
+                        f"{len(chat_memory.topics)} topic file(s) read  "
+                        "[R2 manifest check, files from the local disk cache]"),
+                  "your message is saved to Postgres while research starts")
+
         loop = asyncio.get_running_loop()
         steps: asyncio.Queue = asyncio.Queue()
 
         def on_step(kind: str, detail: str) -> None:
             loop.call_soon_threadsafe(steps.put_nowait, (kind, detail))
 
-        use_trace(trace)  # asyncio.to_thread copies this context, so research() finds the trace
-        task = asyncio.create_task(asyncio.to_thread(
-            research, corpus, allowed, body.question, on_step, history, nb.title, profile,
-            **({"chat_memory": chat_memory} if chat_memory is not None else {})))
-        while not task.done() or not steps.empty():
+        def on_delta(text: str | None) -> None:
+            loop.call_soon_threadsafe(steps.put_nowait, ("delta", text) if text is not None else ("reset", ""))
+
+        cached = _cached_answer(db, cache_key) if cache_key else None
+        if cached is not None:
+            hit, result = cached
+            with trace.stage("save-question"):
+                db.commit()
+            trace.add("route", f"CACHE: the same question was answered in this notebook on "
+                               f"{hit.created_at:%Y-%m-%d %H:%M} with the same posts and notes, so that answer "
+                               "(message " + str(hit.id)[:8] + ") is reused: no triage, no model call")
+            trace.mark("first-delta")
+            for piece in _pieces(result.text):
+                yield _sse("delta", {"text": piece})
+        else:
+            use_trace(trace)  # asyncio.to_thread copies this context, so research() finds the trace
+            task = asyncio.create_task(asyncio.to_thread(
+                research, corpus, allowed, body.question, on_step, history, nb.title, profile,
+                on_delta=on_delta, last_answer=last_answer,
+                **({"chat_memory": chat_memory} if chat_memory is not None else {})))
+            await asyncio.sleep(0)  # let the research thread start before the commit below holds this loop
+            with trace.stage("save-question(while research runs)"):
+                db.commit()
+            while not task.done() or not steps.empty():
+                try:
+                    kind, detail = await asyncio.wait_for(steps.get(), timeout=0.25)
+                except TimeoutError:
+                    continue
+                if kind == "delta":
+                    if "first-delta" not in trace.marks:
+                        trace.mark("first-delta")
+                    yield _sse("delta", {"text": detail})
+                elif kind == "reset":
+                    yield _sse("reset", {})
+                else:
+                    yield _sse("step", {"kind": kind, "message": f"{_STEP_LABEL.get(kind, kind)} {detail}".strip()})
             try:
-                kind, detail = await asyncio.wait_for(steps.get(), timeout=0.25)
-            except TimeoutError:
-                continue
-            yield _sse("step", {"kind": kind, "message": f"{_STEP_LABEL.get(kind, kind)} {detail}".strip()})
-        try:
-            result = task.result()
-        except Exception:
-            log.exception("Research failed for chat %s: %r", chat_row.id, body.question[:200])  # cause, not just "lost signal"
-            trace.error = "research raised (see the traceback above); no answer was saved"
-            yield _sse("error", {"message": "Lost signal while researching. Try again."})
-            return
+                result = task.result()
+            except Exception:
+                log.exception("Research failed for chat %s: %r", chat_row.id, body.question[:200])  # cause, not just "lost signal"
+                trace.error = "research raised (see the traceback above); no answer was saved"
+                yield _sse("error", {"message": "Lost signal while researching. Try again."})
+                return
 
         save_started = time.perf_counter()
+        cacheable = result.kind == "archive" and not result.unsupported and bool(result.citations)
         msg = Message(chat_id=chat_row.id, role="assistant", content=result.text,
+                      cache_key=cache_key if cacheable else None,
                       recall_json={**result.recall, "kind": result.kind, "unsupported": result.unsupported,
                                    "steps": [{"kind": k, "detail": d} for k, d in result.steps],
-                                   "timings_ms": {name: round(took) for name, took in trace.stages}})
+                                   "timings_ms": {name: round(took) for name, took in trace.stages},
+                                   **({"first_delta_ms": round(trace.marks["first-delta"])}
+                                      if "first-delta" in trace.marks else {})})
         db.add(msg)
         db.flush()
         citations = []
@@ -614,7 +692,14 @@ async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)
         try:
             async for chunk in _run():
                 yield chunk
+        except Exception:  # never leave the writer waiting on a stream that died without a word
+            log.exception("Chat failed for notebook %s: %r", nb.id, body.question[:200])
+            trace.error = trace.error or "the chat stream raised (see the traceback above)"
+            db.rollback()
+            yield _sse("error", {"message": "Lost signal while researching. Try again."})
         finally:
             trace.emit()  # one block per message, also when the client left or research failed
 
-    return StreamingResponse(stream(), media_type="text/event-stream")
+    # X-Accel-Buffering: nginx would otherwise hold the streamed answer back until the response ends.
+    return StreamingResponse(stream(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})

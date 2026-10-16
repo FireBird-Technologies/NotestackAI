@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { artifactsApi, notebooksApi } from "../api/endpoints";
 import { streamSSE } from "../api/stream";
+import { createTypewriter } from "../lib/typewriter";
 import type { AnswerFeedback as Feedback, Artifact, ChatSummary, Citation, Job, MemoryChange, Notebook } from "../api/types";
 import { AnswerFeedback } from "../components/AnswerFeedback";
 import { ArtifactCard, CitationList } from "../components/ArtifactCard";
@@ -58,6 +59,11 @@ function groupChats(chats: ChatSummary[]): { label: string; items: ChatSummary[]
     else groups.push({ label, items: [c] });
   });
   return groups;
+}
+
+/** A streaming draft as shown: [n] markers (and a half-written "[12" at the end) are hidden until they are verified. */
+function streamingText(draft: string): string {
+  return draft.replace(/ ?\[\d+\]/g, "").replace(/ ?\[\d*$/, "");
 }
 
 const STARTERS = ["What are the strongest ideas across these posts?", "Where do I contradict myself?", "Which post is most worth updating, and why?"];
@@ -506,6 +512,15 @@ export default function NotebookView() {
     const patchLast = (p: Partial<Turn>) => setTurns((t) => [...t.slice(0, -1), { ...t[t.length - 1], ...p }]);
     const answerAt = turns.length + 1; // where this answer sits, so a late "saved" note lands on the right message
     let answered = "";
+    let failed = false;
+    // The answer streams in as a draft, typed out smoothly a word at a time (lib/typewriter). Its [n] markers are only
+    // final once the server has verified them, so they are hidden until the typing ends and the verified text with its
+    // citations is swapped in. Everything goes to this answer's own row, so a question asked meanwhile is untouched.
+    const patchAnswer = (p: Partial<Turn>) => setTurns((t) => t.map((x, i) => (i === answerAt ? { ...x, ...p } : x)));
+    let draft = "";
+    let finalized = false;
+    let pendingSaved: MemoryChange[] | null = null;
+    const typer = createTypewriter((typed) => patchAnswer({ text: typed, status: undefined }));
     try {
       await streamSSE(
         `/api/notebooks/${id}/chat`,
@@ -522,21 +537,38 @@ export default function NotebookView() {
               const last = t[t.length - 1];
               return [...t.slice(0, -1), { ...last, status: d.message as string, steps: [...(last.steps ?? []), d.message as string] }];
             });
+          } else if (event === "delta") {
+            draft += d.text as string;
+            typer.setTarget(streamingText(draft));
+          } else if (event === "reset") {
+            draft = ""; // a different path writes the answer: drop what was shown
+            typer.reset();
           } else if (event === "error") {
-            patchLast({ text: d.message as string, status: undefined });
+            failed = true;
+            typer.stop();
+            patchAnswer({ text: d.message as string, status: undefined });
           } else if (event === "answer") {
             answered = d.text as string;
-            patchLast({ id: d.message_id as string, text: answered, citations: d.citations as Citation[], status: undefined });
+            const final = { id: d.message_id as string, text: answered, citations: d.citations as Citation[], status: undefined };
+            // Finish typing (the verified text, markers still hidden), then show it with its clickable citations.
+            void typer.finish(streamingText(answered)).then(() => {
+              finalized = true;
+              patchAnswer(pendingSaved ? { ...final, saved: pendingSaved } : final);
+            });
             setBusy(false); // the answer is here; the "saved to memory" note may follow a moment later
           } else if (event === "memory") {
             const saved = d.saved as MemoryChange[];
-            setTurns((t) => t.map((x, i) => (i === answerAt && x.role === "assistant" && x.text === answered ? { ...x, saved } : x)));
+            if (!finalized) pendingSaved = saved;
+            else setTurns((t) => t.map((x, i) => (i === answerAt && x.role === "assistant" && x.text === answered ? { ...x, saved } : x)));
           }
         },
         // Read at send time from the URL, the one place a stale closure or a state reset cannot change.
         { method: "POST", body: JSON.stringify({ question, chat_id: new URLSearchParams(window.location.search).get("chat") }) },
       );
+      // The stream closed without an answer or an error: say so instead of leaving the status spinning.
+      if (!answered && !failed) patchLast({ text: "Lost signal. Try again.", status: undefined });
     } catch {
+      typer.stop();
       patchLast({ text: "Lost signal. Try again.", status: undefined });
     } finally {
       setBusy(false);

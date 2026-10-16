@@ -1322,7 +1322,7 @@ def test_chat_passes_history_as_memory(client, auth, run_jobs, feed, monkeypatch
     nb = client.post("/api/notebooks", json={"title": "N", "document_ids": [doc["id"]]}, headers=auth).json()
     calls = []
 
-    def fake_research(corpus, allowed, question, on_step=None, history=None, notebook_title="", profile=""):
+    def fake_research(corpus, allowed, question, on_step=None, history=None, notebook_title="", profile="", **_):
         calls.append((question, [(t.role, t.text) for t in history or []], notebook_title))
         return ResearchResult(f"answer to {question}", False, [])
 
@@ -1355,7 +1355,7 @@ def _memory_chat(client, auth, run_jobs, monkeypatch, kind="archive", key="x"):
     monkeypatch.setattr(settings, "memory_notice_wait_seconds", 0)
     seen = []
 
-    def fake_research(corpus, allowed, question, on_step=None, history=None, notebook_title="", profile=""):
+    def fake_research(corpus, allowed, question, on_step=None, history=None, notebook_title="", profile="", **_):
         seen.append(profile)
         return ResearchResult("ok", False, [], kind=kind)
 

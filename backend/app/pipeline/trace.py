@@ -27,9 +27,10 @@ MEMORY_GIVES = {
 STEP_SOURCE = {"list": "posts, local disk cache", "search": "posts, local disk cache",
                "read": "post, local disk cache", "recall": "earlier chats, local disk cache", "think": ""}
 
-SECTIONS = ("load", "route", "triage", "context", "steps", "citations", "result", "save", "notes")
+SECTIONS = ("load", "route", "triage", "context", "steps", "writer", "citations", "result", "save", "notes")
 TITLES = {"load": "1 LOAD (Postgres, R2)", "route": "2 PATH", "triage": "3 TRIAGE",
-          "context": "4 WHAT THE AGENT WAS GIVEN", "steps": "5 AGENT STEPS", "citations": "6 CITATIONS",
+          "context": "4 WHAT THE AGENT WAS GIVEN", "steps": "5 AGENT STEPS",
+          "writer": "5b ANSWER WRITER (streaming, fast path, rewrite, parts)", "citations": "6 CITATIONS",
           "result": "7 RESULT", "save": "8 SAVED", "notes": "9 AFTER THE ANSWER"}
 
 
@@ -80,8 +81,10 @@ class ChatTrace:
         head = f"CHAT TRACE  chat={self.chat_id[:8] or '-'}  notebook={self.notebook!r}"
         shown = f"  {self.message[:140]!r}" if text_enabled() else ""
         lines = [head, f"  message : {len(self.message)} chars{shown}"]
+        first = self.marks.get("first-delta")
         if answered is not None:
-            lines.append(f"  clock   : answer sent after {ms(answered)}, stream closed after {ms(total)}")
+            lines.append("  clock   : " + (f"first answer text after {ms(first)}, " if first is not None else "")
+                         + f"answer sent after {ms(answered)}, stream closed after {ms(total)}")
         else:
             lines.append(f"  clock   : stopped after {ms(total)}" + (f"  ERROR: {self.error}" if self.error else ""))
         for key in SECTIONS:

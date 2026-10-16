@@ -11,6 +11,12 @@ os.environ["ELEVENLABS_API_KEY"] = ""
 os.environ["FIRECRAWL_API_KEY"] = ""
 os.environ["R2_PREFIX"] = ""
 os.environ["TYPESAFE_API_KEY"] = ""
+# The chat speed features make direct model calls the dspy fakes cannot see; tests turn them on one at a time.
+os.environ["CHAT_STREAM_ANSWERS"] = "false"
+os.environ["CHAT_FAST_PATH"] = "false"
+os.environ["CHAT_PARALLEL_PARTS"] = "false"
+os.environ["CHAT_ANSWER_CACHE_DAYS"] = "0"
+os.environ["CORPUS_SYNC_TTL_SECONDS"] = "0"
 # Every name the settings accept for these, so a key exported in the shell under another name cannot get through.
 for _name in ("STRIPE_SECRET_KEY", "STRIPE_API_KEY", "STRIPE_SECRET", "STRIPE_WEBHOOK_SECRET",
               "STRIPE_WEBHOOK_SIGNING_SECRET", "STRIPE_SIGNING_SECRET"):
