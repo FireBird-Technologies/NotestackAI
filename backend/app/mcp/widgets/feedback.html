@@ -1,0 +1,75 @@
+<style>
+  #nsfb { display: none; align-items: center; width: max-content; max-width: 100%; margin: 12px 0 0 auto; padding: 4px; border: 1px solid rgba(255,255,255,.14); border-radius: 12px; background: rgba(255,255,255,.025); color: rgba(255,255,255,.56); font: 12.5px "Inter", system-ui, sans-serif; }
+  #nsfb.on { display: flex; }
+  #nsfb .q { padding: 0 9px 0 7px; white-space: nowrap; }
+  #nsfb .acts { display: inline-flex; align-items: center; gap: 3px; padding-left: 4px; border-left: 1px solid rgba(255,255,255,.14); }
+  #nsfb button { display: grid; place-items: center; width: 34px; height: 32px; padding: 0; border: 1px solid transparent; border-radius: 8px; background: transparent; color: rgba(255,255,255,.56); cursor: pointer; transition: color .16s, border-color .16s, background .16s; }
+  #nsfb button svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  #nsfb button:hover { border-color: rgba(255,255,255,.28); background: rgba(255,255,255,.055); color: #fff; box-shadow: none; }
+  #nsfb button:focus-visible { outline: 2px solid #217cff; outline-offset: 2px; }
+  #nsfb #nsfb-up.on { border-color: rgba(33,124,255,.6); background: rgba(33,124,255,.2); color: #9fc5ff; }
+  #nsfb #nsfb-down.on { border-color: rgba(255,125,125,.55); background: rgba(255,90,90,.12); color: #ffaaaa; }
+  #nsfb button:disabled { cursor: wait; opacity: .55; }
+  #nsfb .st { padding: 0 7px; color: rgba(255,255,255,.72); white-space: nowrap; }
+  #nsfb .st:empty { display: none; }
+</style>
+<div id="nsfb">
+  <span class="q">Was this useful?</span>
+  <span class="acts">
+    <button id="nsfb-up" type="button" aria-label="Helpful" title="Helpful"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10v11H3V10h4Zm0 9h10.2a2 2 0 0 0 1.9-1.4l1.7-5.5A2 2 0 0 0 18.9 9H14l.7-3.2A2.3 2.3 0 0 0 12.4 3L7 10v9Z"/></svg></button>
+    <button id="nsfb-down" type="button" aria-label="Not helpful" title="Not helpful"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 14V3H3v11h4Zm0-9h10.2a2 2 0 0 1 1.9 1.4l1.7 5.5a2 2 0 0 1-1.9 3.1H14l.7 3.2a2.3 2.3 0 0 1-2.3 2.8L7 14V5Z"/></svg></button>
+  </span>
+  <span class="st" id="nsfb-st" aria-live="polite"></span>
+</div>
+<script>
+/* Thumbs up / down for a finished artifact. Watches for the result the host hands the page, then saves the rating through
+   the app-only rate_artifact tool. Uses its own message ids so it never collides with the page's own requests. */
+(function () {
+  "use strict";
+  var KINDS = { flashcards: 1, quiz: 1, mind_map: 1, infographic: 1 }, n = 1, waiting = {}, current = null;
+  var box = document.getElementById("nsfb"), up = document.getElementById("nsfb-up"), down = document.getElementById("nsfb-down"), st = document.getElementById("nsfb-st");
+  function size() { window.parent.postMessage({ jsonrpc: "2.0", method: "ui/notifications/size-changed", params: { width: Math.ceil(document.documentElement.scrollWidth), height: Math.ceil(document.documentElement.scrollHeight) } }, "*"); }
+  function find(o, d) {
+    if (!o || d > 6) return null;
+    if (typeof o === "string") { try { return find(JSON.parse(o), d + 1); } catch (e) { return null; } }
+    if (typeof o !== "object") return null;
+    if (KINDS[o.kind] && o.artifact_id && o.status === "ready") return o;
+    for (var k in o) { var f = find(o[k], d + 1); if (f) return f; }
+    return null;
+  }
+  function mark(v) { up.classList.toggle("on", v === "up"); down.classList.toggle("on", v === "down"); }
+  function call(args) {
+    return new Promise(function (resolve, reject) {
+      var id = "nsfb-" + n++; waiting[id] = { resolve: resolve, reject: reject };
+      window.parent.postMessage({ jsonrpc: "2.0", id: id, method: "tools/call", params: { name: "rate_artifact", arguments: args } }, "*");
+    });
+  }
+  function rate(value) {
+    if (!current) return;
+    up.disabled = down.disabled = true; st.textContent = "Saving...";
+    call({ artifact_id: current, rating: value }).then(function (res) {
+      var bad = !res || res.isError; try { bad = bad || !!JSON.parse(res.content[0].text).error; } catch (e) { /* not JSON */ }
+      if (bad) throw new Error("rate");
+      mark(value); st.textContent = "Thanks";
+      setTimeout(function () { if (st.textContent === "Thanks") { st.textContent = ""; size(); } }, 1800);
+    }).catch(function () { st.textContent = "Could not save"; }).then(function () { up.disabled = down.disabled = false; size(); });
+  }
+  up.addEventListener("click", function () { rate("up"); });
+  down.addEventListener("click", function () { rate("down"); });
+  window.addEventListener("message", function (e) {
+    if (e.source !== window.parent) return;
+    var m = e.data;
+    if (!m || m.jsonrpc !== "2.0") return;
+    if (m.method === undefined && waiting[m.id]) {
+      var w = waiting[m.id]; delete waiting[m.id];
+      if (m.error) w.reject(m.error); else w.resolve(m.result);
+      return;
+    }
+    if (m.method && m.method.indexOf("tool-result") >= 0) {
+      var p = find(m.params, 0);
+      if (!p) return;
+      current = p.artifact_id; mark(p.feedback && p.feedback.rating); box.classList.add("on"); size();
+    }
+  });
+})();
+</script>

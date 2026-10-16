@@ -12,7 +12,7 @@ from app.mcp import loopback, options, scope, views, widgets
 from app.mcp.common import DATA, SCOPE_HELP, VISUAL, ToolError, guarded, shown, token, uid
 from app.mcp.loopback import ApiError
 
-READ_ONLY = {"readOnlyHint": True, "openWorldHint": False}
+READ_ONLY = {"readOnlyHint": True, "destructiveHint": False, "openWorldHint": False}
 MAX_SUGGEST_POSTS = 200
 
 
@@ -23,11 +23,11 @@ def _desc(text: str) -> dict:
 def register(mcp: FastMCP) -> None:
     @mcp.tool(**_desc(
         "List the writer's notebooks with how many posts, chats and generated items each holds. The notebook called "
-        "\"All posts\" (is_archive) holds everything. Use it to get a notebook_id."))
+        "\"All posts\" (is_archive) holds everything. Pass its visible title as notebook_title to another tool."))
     @guarded("list_notebooks")
     async def list_notebooks() -> dict:
         rows = await loopback.data("GET", "/api/notebooks", token())
-        return {"notebooks": [{k: n.get(k) for k in ("id", "title", "description", "document_count", "chat_count",
+        return {"notebooks": [{k: n.get(k) for k in ("title", "description", "document_count", "chat_count",
                                                       "artifact_count", "is_archive", "updated_at")} | {"title": shown(n.get("title"))}
                               for n in rows]}
 

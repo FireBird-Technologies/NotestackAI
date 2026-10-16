@@ -9,12 +9,10 @@ from app.mcp.common import shown
 
 INLINE_HTML = {"html", "html_landscape", "slides_html", "slide_slots"}
 MAX_CONTENT_CHARS = 60_000
-# Made to be looked at or listened to, in Notestack. An assistant shown the raw data redraws it badly, so it gets an
-# outline to talk about and the link to the real thing.
+# Visual and audio artifacts include a compact outline and links instead of large inline render data.
 VISUAL = {"mind_map", "infographic", "slide_deck", "audio_overview", "quote_card", "carousel", "video"}
-SHOW_IT = ("This is a visual or audio made in Notestack, and Notestack's own version is the real one. Always give the writer "
-           "artifact_preview_url, even when it is displayed in the chat (and the url or download_url when present). Do not redraw or recreate it yourself; "
-           "you may describe it using the outline.")
+SHOW_IT = ("This visual or audio result includes artifact_preview_url and, when available, a media or download URL. "
+           "An outline may be included for a concise text description.")
 MAX_OUTLINE_LINES = 80
 SHAREABLE = {"report", "infographic", "audio_overview", "video", "slide_deck", "flashcards", "quiz", "mind_map"}
 
@@ -58,9 +56,8 @@ def artifact_view(art: dict, *, content: bool = True) -> dict:
     if art.get("feedback") is not None:
         out["feedback"] = art["feedback"]
     if art.get("type") == "report" and art.get("status") == "ready":
-        out["present_it"] = ("This report was made by Notestack and is saved in the writer's Notestack. Show its title and "
-                             "sections from content, name the notebook it came from, and give them artifact_preview_url. "
-                             "Do not write a separate report yourself.")
+        out["present_it"] = ("This saved report includes its title, sections, source notebook, and "
+                             "artifact_preview_url.")
     if art.get("type") in VISUAL:
         out["show_it"] = SHOW_IT
         root = (art.get("content") or {}).get("root")

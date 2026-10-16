@@ -13,15 +13,15 @@ from app.mcp.common import shown, template_preview
 
 MIME = "text/html;profile=mcp-app"
 # A new address whenever the page changes: hosts keep their copy of a page by address.
-MIND_MAP_URI = "ui://notestack/mind-constellation-v10"
+MIND_MAP_URI = "ui://notestack/mind-constellation-v11"
 MIND_MAP_UI = {"ui": {"resourceUri": MIND_MAP_URI}}
-FLASHCARDS_URI = "ui://notestack/flashcards-v9"
+FLASHCARDS_URI = "ui://notestack/flashcards-v10"
 FLASHCARDS_UI = {"ui": {"resourceUri": FLASHCARDS_URI}}
 MAX_CARDS = 60
-QUIZ_URI = "ui://notestack/quiz-v9"
+QUIZ_URI = "ui://notestack/quiz-v10"
 QUIZ_UI = {"ui": {"resourceUri": QUIZ_URI}}
 MAX_QUESTIONS = 40
-INFOGRAPHIC_URI = "ui://notestack/infographic-v3"
+INFOGRAPHIC_URI = "ui://notestack/infographic-v4"
 INFOGRAPHIC_UI = {"ui": {"resourceUri": INFOGRAPHIC_URI}}
 PICKER_URI = "ui://notestack/notebook-picker-v8"
 PICKER_UI = {"ui": {"resourceUri": PICKER_URI}}
@@ -34,8 +34,17 @@ VIDEO_UI = {"ui": {"resourceUri": VIDEO_URI}}
 VIDEO_OPTIONS_URI = "ui://notestack/video-options-v8"
 VIDEO_OPTIONS_UI = {"ui": {"resourceUri": VIDEO_OPTIONS_URI}}
 
-OPTIONS_URI = "ui://notestack/generation-options-v56"
+OPTIONS_URI = "ui://notestack/generation-options-v59"
 OPTIONS_UI = {"ui": {"resourceUri": OPTIONS_URI}}
+# Chats remember the page address a result was made with. When a page changes its address, the old one keeps serving
+# the current page, so a chat reopened later still shows its result instead of "unable to reach".
+LEGACY_URIS = {
+    MIND_MAP_URI: ["ui://notestack/mind-constellation-v10"],
+    FLASHCARDS_URI: ["ui://notestack/flashcards-v9"],
+    QUIZ_URI: ["ui://notestack/quiz-v9"],
+    INFOGRAPHIC_URI: ["ui://notestack/infographic-v3"],
+    OPTIONS_URI: ["ui://notestack/generation-options-v58"],
+}
 _OPTIONS_HTML = Path(__file__).with_name("widgets") / "generation_options.html"
 
 
@@ -89,7 +98,7 @@ def mind_map_payload(art: dict, open_url: str) -> dict:
     """What the widget draws: the map's labels, notes and a few quoted sources, never ids or file paths."""
     root = (art.get("content") or {}).get("root")
     ready = art.get("status") == "ready" and isinstance(root, dict)
-    payload = {"kind": "mind_map", "status": art.get("status"), "title": shown(art.get("title")), "open_url": open_url,
+    payload = {"kind": "mind_map", "artifact_id": art.get("id"), "feedback": art.get("feedback"), "status": art.get("status"), "title": shown(art.get("title")), "open_url": open_url,
                "root": _trim(root, [MAX_NODES]) if ready else None}
     if not ready:
         payload["message"] = ("Notestack could not make this one." if art.get("status") == "failed"
@@ -101,7 +110,7 @@ def flashcards_payload(art: dict, open_url: str) -> dict:
     """What the widget flips through: each card's front and back, never ids or source paths."""
     cards = (art.get("content") or {}).get("cards")
     ready = art.get("status") == "ready" and isinstance(cards, list) and cards
-    payload = {"kind": "flashcards", "status": art.get("status"), "title": shown(art.get("title")), "open_url": open_url,
+    payload = {"kind": "flashcards", "artifact_id": art.get("id"), "feedback": art.get("feedback"), "status": art.get("status"), "title": shown(art.get("title")), "open_url": open_url,
                "cards": [{"front": str(c.get("front") or "")[:300], "back": str(c.get("back") or "")[:800]}
                          for c in cards[:MAX_CARDS] if isinstance(c, dict)] if ready else []}
     if not ready:
@@ -126,7 +135,7 @@ def quiz_payload(art: dict, open_url: str) -> dict:
     """What the widget plays: Notestack's own questions, options, answers and explanations, never ids or source paths."""
     qs = (art.get("content") or {}).get("questions")
     ready = art.get("status") == "ready" and isinstance(qs, list) and qs
-    payload = {"kind": "quiz", "status": art.get("status"), "title": shown(art.get("title")), "open_url": open_url,
+    payload = {"kind": "quiz", "artifact_id": art.get("id"), "feedback": art.get("feedback"), "status": art.get("status"), "title": shown(art.get("title")), "open_url": open_url,
                "questions": [_question(q) for q in qs[:MAX_QUESTIONS] if isinstance(q, dict)] if ready else []}
     if not ready:
         payload["message"] = ("Notestack could not make this quiz." if art.get("status") == "failed"
@@ -138,7 +147,7 @@ def infographic_payload(art: dict, open_url: str) -> dict:
     """The two exact pages Notestack rendered, sent only to the sandboxed view (never to the model)."""
     content = art.get("content") or {}
     ready = art.get("status") == "ready" and bool(content.get("html_landscape") or content.get("html"))
-    payload = {"kind": "infographic", "artifact_id": art.get("id"), "status": art.get("status"),
+    payload = {"kind": "infographic", "artifact_id": art.get("id"), "feedback": art.get("feedback"), "status": art.get("status"),
                "title": shown(art.get("title")), "open_url": open_url,
                "html": content.get("html") if ready else None,
                "html_landscape": content.get("html_landscape") if ready else None}
@@ -177,6 +186,14 @@ def report_payload(art: dict, open_url: str) -> dict:
         elif t == "timeline":
             out = {"type": t, "title": title, "events": [{"when": str(e.get("when") or "")[:60], "title": str(e.get("title") or "")[:200],
                                                           "detail": str(e.get("detail") or "")[:500]} for e in (b.get("events") or [])[:40] if isinstance(e, dict)]}
+        elif t == "plot":
+            out = {"type": t, "title": title, "plot_kind": str(b.get("plot_kind") or "bar")[:12],
+                   "x_label": str(b.get("x_label") or "")[:80], "y_label": str(b.get("y_label") or "")[:80],
+                   "unit": str(b.get("unit") or "")[:40],
+                   "points": [{"label": str(p.get("label") or "")[:160], "value": p.get("value"),
+                               "display_value": str(p.get("display_value") or "")[:80]}
+                              for p in (b.get("points") or [])[:40]
+                              if isinstance(p, dict) and isinstance(p.get("value"), int | float)]}
         elif t == "flashcards":
             cards = [c for c in (b.get("cards") or []) if isinstance(c, dict)]
             out = {"type": t, "title": title, "count": len(cards),
@@ -241,6 +258,14 @@ _FONTS = ('<link rel="preconnect" href="https://fonts.googleapis.com"><link rel=
           '&family=Space+Grotesk:wght@500;600;700&display=swap">')
 
 
+_FEEDBACK = Path(__file__).with_name("widgets") / "feedback.html"
+
+
+def _with_feedback(html: str) -> str:
+    """A standalone result page with the thumbs up / down bar added after its content."""
+    return html.replace("</body>", _FEEDBACK.read_text(encoding="utf-8") + "</body>", 1)
+
+
 def _themed(html: str) -> str:
     """A page as served: the app's fonts and design tokens added last, so they win over the page's own defaults."""
     css = _THEME.read_text(encoding="utf-8")
@@ -264,12 +289,10 @@ def _api_domains() -> list[str]:
 
 
 def _csp(*, display_modes: list[str] | None = None, description: str | None = None,
-         frame_domains: list[str] | None = None, connect_domains: list[str] | None = None) -> dict:
+         resource_domains: list[str] | None = None, connect_domains: list[str] | None = None) -> dict:
     """What a page may load, plus presentation hints a host needs before it loads the page."""
-    csp = {"resourceDomains": _media_domains() + _preview_domains() +
-           ["https://fonts.googleapis.com", "https://fonts.gstatic.com"]}
-    if frame_domains:
-        csp["frameDomains"] = frame_domains
+    csp = {"resourceDomains": ["https://fonts.googleapis.com", "https://fonts.gstatic.com"] +
+           (resource_domains or [])}
     if connect_domains:
         csp["connectDomains"] = connect_domains
     meta = {"ui": {"csp": csp}}
@@ -282,8 +305,9 @@ def _csp(*, display_modes: list[str] | None = None, description: str | None = No
 
 def _media_domains() -> list[str]:
     """Where a rendered video may be played from inside the chat view (the host only allows what the page declares)."""
-    hosts = ["https://*.r2.dev", "https://*.r2.cloudflarestorage.com", "https://*.cloudflarestorage.com",
-             settings.b2v_app_url.rstrip("/")]
+    # Keep this allowlist exact. Production adds its specific public media origin
+    # through MCP_MEDIA_DOMAINS; broad storage-provider wildcards fail App review.
+    hosts = [settings.b2v_app_url.rstrip("/")]
     return hosts + [d.strip() for d in settings.mcp_media_domains.split(",") if d.strip()]
 
 
@@ -306,6 +330,14 @@ def _report_block(b: dict) -> dict | None:
         return {"id": block_id, "type": t, "title": title,
                 "events": [{"when": str(x.get("when") or "")[:60], "title": str(x.get("title") or "")[:160],
                             "detail": str(x.get("detail") or "")[:400]} for x in (b.get("events") or [])[:40] if isinstance(x, dict)]}
+    if t == "plot":
+        return {"id": block_id, "type": t, "title": title, "plot_kind": str(b.get("plot_kind") or "bar")[:12],
+                "x_label": str(b.get("x_label") or "")[:80], "y_label": str(b.get("y_label") or "")[:80],
+                "unit": str(b.get("unit") or "")[:40],
+                "points": [{"label": str(p.get("label") or "")[:160], "value": p.get("value"),
+                            "display_value": str(p.get("display_value") or "")[:80]}
+                           for p in (b.get("points") or [])[:40]
+                           if isinstance(p, dict) and isinstance(p.get("value"), int | float)]}
     if t == "mind_map" and isinstance(b.get("root"), dict):
         return {"id": block_id, "type": t, "title": title, "artifact_id": artifact_id, "root": _trim(b["root"], [60])}
     if t == "flashcards":
@@ -323,7 +355,7 @@ def _report_block(b: dict) -> dict | None:
 
 def _report_suggestion(s: dict) -> dict | None:
     """One safe, actionable suggestion for an interactive report widget."""
-    if s.get("kind") not in ("mind_map", "flashcards", "quiz", "infographic"):
+    if s.get("kind") not in ("mind_map", "infographic", "plot", "table", "timeline"):
         return None
     return {"id": str(s.get("id") or "")[:20], "after_block_id": str(s.get("after_block_id") or "")[:40],
             "kind": s["kind"], "brief": str(s.get("brief") or "")[:500], "why": str(s.get("why") or "")[:500]}
@@ -356,24 +388,24 @@ def register(mcp: FastMCP) -> None:
     @mcp.resource(MIND_MAP_URI, name="mind-constellation", title="Mind Constellation", mime_type=MIME,
                   description="Draws a finished Mind Constellation as an interactive picture.", meta=_csp())
     def mind_constellation() -> str:
-        return _themed(_HTML.read_text(encoding="utf-8"))
+        return _themed(_with_feedback(_HTML.read_text(encoding="utf-8")))
 
     @mcp.resource(FLASHCARDS_URI, name="flashcards", title="Flashcards", mime_type=MIME,
                   description="Shows a set of flashcards you can flip through.", meta=_csp())
     def flashcards() -> str:
-        return _themed(_FLASHCARDS_HTML.read_text(encoding="utf-8"))
+        return _themed(_with_feedback(_FLASHCARDS_HTML.read_text(encoding="utf-8")))
 
     @mcp.resource(QUIZ_URI, name="quiz", title="Quiz", mime_type=MIME,
                   description="Plays a quiz one question at a time, with answers and explanations.", meta=_csp())
     def quiz() -> str:
-        return _themed(_QUIZ_HTML.read_text(encoding="utf-8"))
+        return _themed(_with_feedback(_QUIZ_HTML.read_text(encoding="utf-8")))
 
     @mcp.resource(INFOGRAPHIC_URI, name="infographic", title="Infographic", mime_type=MIME,
                   description="Shows a finished Notestack infographic directly in the conversation.",
                   meta=_csp(display_modes=["inline", "fullscreen"],
                             description="A finished infographic that can be viewed inline or expanded."))
     def infographic() -> str:
-        return _themed(_INFOGRAPHIC_HTML.read_text(encoding="utf-8"))
+        return _themed(_with_feedback(_INFOGRAPHIC_HTML.read_text(encoding="utf-8")))
 
     @mcp.resource(PICKER_URI, name="notebook-picker", title="Choose a notebook", mime_type=MIME,
                   description="Lets the writer pick a notebook, or make a new one and tick its posts.", meta=_csp())
@@ -382,20 +414,20 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.resource(VIDEO_URI, name="video", title="Video", mime_type=MIME,
                   description="Plays a finished video in the chat, or shows that it is still being made.",
-                  meta=_csp(frame_domains=[settings.b2v_app_url.rstrip("/")], connect_domains=_api_domains()))
+                  meta=_csp(resource_domains=_media_domains() + _preview_domains(), connect_domains=_api_domains()))
     def video() -> str:
         return _themed(_VIDEO_HTML.read_text(encoding="utf-8"))
 
     @mcp.resource(VIDEO_OPTIONS_URI, name="video-options", title="Video options", mime_type=MIME,
                   description="Lets the writer choose the template, shape, length and voice of a video.",
-                  meta=_csp())
+                  meta=_csp(resource_domains=_preview_domains() + [settings.b2v_app_url.rstrip("/")]))
     def video_options() -> str:
         return _themed(_VIDEO_OPTIONS_HTML.read_text(encoding="utf-8"))
 
 
     @mcp.resource(OPTIONS_URI, name="generation-options", title="Choose settings", mime_type=MIME,
                   description="Lets the writer choose the settings (difficulty, template, look, length...) for what is made.",
-                  meta=_csp(frame_domains=[settings.b2v_app_url.rstrip("/")], connect_domains=_api_domains()))
+                  meta=_csp(resource_domains=_media_domains() + _preview_domains(), connect_domains=_api_domains()))
     def generation_options() -> str:
         """The form page, with the quiz, flashcards and mind map pages inside it so a finished one plays right there."""
         players = {k: _themed((Path(__file__).with_name("widgets") / f).read_text(encoding="utf-8"))
@@ -413,3 +445,8 @@ def register(mcp: FastMCP) -> None:
                                 ("quiz", "quiz.html"), ("infographic", "infographic.html"))}
         blob = json.dumps(players).replace("</", "<\\/")
         return _themed(_REPORT_HTML.read_text(encoding="utf-8")).replace("/*__PLAYERS__*/{}", blob)
+
+    for current, olds in LEGACY_URIS.items():
+        res = mcp._resource_manager._resources[current]
+        for old in olds:
+            mcp._resource_manager.add_resource(res.model_copy(update={"uri": old}))

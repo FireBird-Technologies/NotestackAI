@@ -22,6 +22,40 @@ class SourceRef(BaseModel):
     line_end: int
 
 
+class ReportVisualPoint(BaseModel):
+    """One exact label/value pair copied from a report source."""
+
+    label: str = Field(description="Category, date or event label exactly as written in the cited source")
+    value: str = Field(description="Number or date exactly as written in the cited source")
+    detail: str = Field("", description="Optional short detail copied exactly from the cited source")
+    sources: list[SourceRef] = Field(description="Lines that contain the label, value and detail")
+
+
+class ReportVisualRow(BaseModel):
+    """One table row whose cells all occur in the cited source lines."""
+
+    cells: list[str]
+    sources: list[SourceRef] = Field(description="Lines that contain every cell in this row")
+
+
+class ReportVisualCandidate(BaseModel):
+    kind: Literal["bar", "line", "scatter", "pie", "timeline", "table"]
+    title: str = Field(description="A factual short title supported by the cited material")
+    description: str = Field("", description="A short source phrase or sentence explaining what the dataset measures")
+    metric: str = Field("", description="The measured quantity exactly as named in the source, or empty")
+    dimension: str = Field("", description="What distinguishes the points, such as year or plan, exactly as sourced")
+    population: str = Field("", description="The population or scope measured, exactly as sourced, or empty")
+    qualifiers: list[str] = Field(default_factory=list, description="Exact source phrases that qualify the values, such as "
+                                  "approximately, year-end, excluding free users, or sample size")
+    x_label: str = Field("", description="Axis label, or empty")
+    y_label: str = Field("", description="Axis label, or empty")
+    unit: str = Field("", description="Unit exactly as written in the source, or empty")
+    points: list[ReportVisualPoint] = Field(default_factory=list)
+    headers: list[str] = Field(default_factory=list)
+    rows: list[ReportVisualRow] = Field(default_factory=list)
+    sources: list[SourceRef] = Field(default_factory=list, description="Lines containing the title, headers, units or axis labels")
+
+
 class FileCitation(SourceRef):
     marker: int = Field(description="The n in the [n] marker used in the answer")
 
@@ -357,11 +391,17 @@ class ExtractIdeas(dspy.Signature):
     """Read one post and list the ideas it makes, so a mind map can be drawn later without re-reading it.
     Each idea is a short label, one plain sentence on what the writer says, and 2 to 4 specific points or
     examples. Attach the numbered lines each idea and point came from. Cover the whole post, not only the
-    opening. Only use what the post says. Never use em dashes."""
+    opening. Also preserve up to three coherent datasets that could later support a chart, table or timeline.
+    The numeric material contains number-bearing regions from across the complete post, including parts beyond
+    the main passage. Copy every dataset label, number, date, unit, qualifier and cell exactly and cite the smallest
+    lines containing it. Never calculate, combine, estimate or fill values. A dataset requires at least two comparable
+    points, two explicitly dated events, or two rows. Only use what the post says. Never use em dashes."""
 
     title: str = dspy.InputField()
     passage: str = dspy.InputField(desc="The post with path and numbered lines")
+    numeric_material: str = dspy.InputField(desc="Number-bearing regions from the full post, with the same path and line numbers")
     ideas: list[MindTopic] = dspy.OutputField(desc="3 to 6 ideas that together cover the post")
+    datasets: list[ReportVisualCandidate] = dspy.OutputField(desc="0 to 3 source-grounded datasets worth preserving")
 
 
 class MindArrangedBranch(BaseModel):
@@ -551,7 +591,7 @@ class WriteReport(dspy.Signature):
 
 
 class PlannedEmbed(BaseModel):
-    kind: Literal["mind_map", "flashcards", "quiz", "infographic"]
+    kind: Literal["mind_map", "infographic"]
     title: str = Field(description="A short heading for the visual, 2 to 6 words")
     brief: str = Field(description="What the visual covers, one sentence, drawn from this section")
     why: str = Field(description="Why it helps the reader at this point, one short sentence")
@@ -562,25 +602,30 @@ class PlannedSection(BaseModel):
     brief: str = Field(description="What this section says and which part of the material it draws on, 1 to 2 sentences")
     embed: PlannedEmbed | None = Field(None, description="A visual to suggest right after this section, only where it "
                                                          "really helps")
+    data_candidate_id: str | None = Field(None, description="Exact id of a verified dataset this prose section naturally "
+                                                         "explains, or null")
 
 
 class PlanInteractiveReport(dspy.Signature):
     """Plan an interactive report the reader describes, from the material given. Every section is written text: never plan a
-    section that is itself a quiz, flashcards, practice questions or a mind map, because those are visuals, and are
-    suggested through a section's visual instead. Choose 4 to 8 sections in a sensible
+    section that is itself a quiz, flashcards, practice questions or a mind map. Choose 4 to 8 sections in a sensible
     order, starting with an Introduction and ending with a Summary unless the reader asks for something else. Each
     heading is specific and descriptive of what the section covers, never generic like "Details" or "Section 2".
     Then decide, section by section, where a visual would help the reader and which one. These are only
     suggestions: nothing is built until the reader clicks Add, so suggest the spots where each really fits: a mind_map to show how
-    many linked ideas fit together (at most one, usually near the start or the end), flashcards to learn a set of
-    terms or facts, a quiz to check understanding after a dense section, an infographic for a one page picture of the
-    main ideas. Use at most four visuals in all, each kind
+    many linked ideas fit together (at most one, usually near the start or the end), or an infographic for a one page
+    picture of the main ideas. Data plots, tables and timelines are detected and verified separately, so never suggest
+    them here. Never suggest a quiz or flashcards. Verified data opportunities have already been checked against the source.
+    When at least one directly strengthens the requested report, make a natural prose section explain the strongest one and
+    put its exact id in data_candidate_id. Do not create a mechanical chart section and do not use an id more than once.
+    Use at most two other visuals in all, each kind
     at most once, and none where plain prose reads better. Only the kinds allowed may be used. Use only what the
     material covers. Never use em dashes."""
 
     title: str = dspy.InputField()
     material: list[str] = dspy.InputField(desc="Posts with path and numbered lines, or chat transcripts")
     request: str = dspy.InputField(desc="What the reader wants the report to be")
+    data_opportunities: list[str] = dspy.InputField(desc="Verified source datasets that may deserve a matching section")
     allowed_kinds: list[str] = dspy.InputField(desc="The visuals that may be used")
     language: str = dspy.InputField()
     report_title: str = dspy.OutputField(desc="A specific title, 3 to 10 words")
@@ -595,7 +640,8 @@ class WriteReportSection(dspy.Signature):
     the heading, and do not use "#" or "##" headings; "###" subheadings are fine. Do not cite: no [n] markers, footnotes,
     references or lists of sources in the text; the app shows the reader the sources separately. Never write about visuals, mind maps, flashcards,
     quizzes, tables or timelines in the text, and never suggest or describe one, even if the reader's instructions
-    mention them: the app offers those to the reader separately, so write only the report itself. Write in the
+    mention them: the app offers those to the reader separately, so write only the report itself. When verified_data is
+    present, integrate those facts naturally without mentioning a chart or performing new calculations. Write in the
     language requested. Never use em dashes."""
 
     # The parts every section shares come first, so a provider can reuse them across the section calls.
@@ -606,6 +652,7 @@ class WriteReportSection(dspy.Signature):
     language: str = dspy.InputField()
     heading: str = dspy.InputField()
     brief: str = dspy.InputField(desc="What this section should say")
+    verified_data: list[str] = dspy.InputField(desc="Source-verified data assigned to this section, or empty")
     markdown: str = dspy.OutputField(desc="The section body in Markdown, without its heading")
 
 
@@ -655,6 +702,7 @@ class BlueprintSection(BaseModel):
     must_cover: list[str] = Field(description="2 to 4 specific points this section has to make")
     embed: PlannedEmbed | None = Field(None, description="A visual to suggest right after this section, only where it "
                                                          "really helps")
+    data_candidate_id: str | None = Field(None, description="Exact id of a verified dataset this section naturally explains")
 
 
 class ThemeConnection(BaseModel):
@@ -673,11 +721,14 @@ class PlanReportBlueprint(dspy.Signature):
     restate the major themes. Where themes connect, say which section bridges them (connections), and add a synthesis section
     only if the connection deserves its own. Each section's must_cover is specific to it and shares no point with another.
     Choose at most max_sections sections. Never plan a section that is itself a quiz, flashcards, practice questions or a
-    mind map: when allowed_kinds is not empty those are visuals, suggested through a section's embed (at most four in all, each
-    kind once, only the kinds allowed): a mind_map to show how many linked themes fit together (at most one, near the start or
-    the end), flashcards to learn a set of terms or facts, a quiz to check understanding after a dense section, and an
-    infographic, a one page picture of the main ideas, which every report with that kind allowed should suggest once, on the
-    last section before the summary. Suggest the others only where they really help; none where plain prose reads better. When
+    mind map. When allowed_kinds is not empty, suggest through a section's embed at most two visuals in all, each kind once
+    and only the kinds allowed: a mind_map to show how many linked themes fit together (at most one, near the start or
+    the end), and an infographic, a one page picture of the main ideas, which every report with that kind allowed should
+    suggest once, on the
+    last section before the summary. Suggest the others only where they really help; none where plain prose reads better.
+    Verified data opportunities have already been checked against the posts. When one strengthens the requested report,
+    assign its exact id to the body or synthesis section that naturally explains it; never create a mechanical chart section.
+    When
     allowed_kinds is empty, plan no embeds, and a quiz or practice section is allowed only if the reader's request asks for
     one. Use only what the themes cover. Never use em dashes."""
 
@@ -685,6 +736,7 @@ class PlanReportBlueprint(dspy.Signature):
     request: str = dspy.InputField(desc="What the reader wants the report to be")
     themes: list[str] = dspy.InputField(desc="One per line: id | name | tier | weight | posts | asked for: summary")
     relations: list[str] = dspy.InputField(desc="One per line: id <-> id: how they connect, or empty")
+    data_opportunities: list[str] = dspy.InputField(desc="Verified datasets that may deserve a matching report section")
     allowed_kinds: list[str] = dspy.InputField(desc="The visuals that may be suggested, or empty")
     language: str = dspy.InputField()
     max_sections: int = dspy.InputField(desc="The most sections to plan")
@@ -707,7 +759,8 @@ class WriteThemedSection(dspy.Signature):
     heading, and do not use "#" or "##" headings; "###" subheadings are fine. Do not cite: no [n] markers, footnotes,
     references or lists of sources in the text, and do not name the posts or their paths; the app shows the reader the
     sources separately. Do not write quiz questions, flashcards or review questions, and never write about visuals, mind maps,
-    flashcards, quizzes, tables or timelines in the text: the app offers those separately. Write in the language requested.
+    flashcards, quizzes, tables or timelines in the text: the app offers those separately. When verified_data is present,
+    integrate those facts naturally without mentioning a chart or performing new calculations. Write in the language requested.
     Never use em dashes."""
 
     # What every section shares comes first, so a provider can reuse it across the section calls.
@@ -725,6 +778,7 @@ class WriteThemedSection(dspy.Signature):
     bridges: list[str] = dspy.InputField(desc="Connections this section should bridge, or empty")
     evidence: list[str] = dspy.InputField(desc="Posts as written, short summaries of other posts, or digests of the written "
                                                "sections")
+    verified_data: list[str] = dspy.InputField(desc="Source-verified data assigned to this section, or empty")
     markdown: str = dspy.OutputField(desc="The section body in Markdown, without its heading")
 
 
@@ -774,20 +828,35 @@ class SuggestReportTemplates(dspy.Signature):
 
 class EmbedIdea(BaseModel):
     after_block_id: str = Field(description="Id of the section the visual goes right after, exactly as listed")
-    kind: Literal["mind_map", "flashcards", "quiz", "infographic"]
+    kind: Literal["mind_map", "infographic"]
     brief: str = Field(description="What the visual should cover, one sentence, about that section")
     why: str = Field(description="Why it helps the reader at that point, one short sentence")
 
 
 class SuggestEmbeds(dspy.Signature):
     """Look at a finished report's sections and suggest up to four places where a visual would help the reader:
-    a mind_map to show how many linked ideas fit together, flashcards to learn a set of terms or facts, a quiz to
-    check understanding after a dense section. Pick the sections where each really fits, use only the kinds allowed,
+    a mind_map to show how many linked ideas fit together or an infographic to summarise the main ideas. Never suggest
+    quizzes or flashcards. Pick the sections where each really fits, use only the kinds allowed,
     and do not suggest the same kind twice in a row. Never use em dashes."""
 
     sections: list[str] = dspy.InputField(desc="One per line: id | heading: the start of the section")
     allowed_kinds: list[str] = dspy.InputField()
     suggestions: list[EmbedIdea] = dspy.OutputField(desc="0 to 4")
+
+
+class ExtractReportVisuals(dspy.Signature):
+    """Find data in source material that can be shown faithfully as a chart, table or timeline. Copy every label, number,
+    date, unit and table cell exactly from the source lines and cite the smallest line range containing it. Use the
+    candidate-level sources for its title, headers, units and axis labels. Never calculate,
+    estimate, combine, extrapolate, normalise or fill missing values. A chart needs at least two comparable points with the
+    same unit. A timeline needs at least two explicitly dated events. A table needs at least two rows with the same columns.
+    Every candidate must directly support the report focus; ignore numeric data from selected sources that is unrelated to
+    that focus. Return nothing when the relevant material is prose without suitable explicit data. Prefer at most three
+    strong candidates and do not return two candidates showing the same facts. Never use em dashes."""
+
+    material: list[str] = dspy.InputField(desc="Posts with paths and numbered lines")
+    focus: str = dspy.InputField(desc="The requested report focus; every candidate must directly help explain it")
+    candidates: list[ReportVisualCandidate] = dspy.OutputField(desc="0 to 3 source-grounded visual candidates")
 
 
 class ExtractTopics(dspy.Signature):

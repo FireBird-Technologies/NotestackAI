@@ -94,12 +94,19 @@
   .result-link span { color: var(--text-3); font-size: .72rem; text-transform: uppercase; letter-spacing: .07em; }
   .result-link a { color: #8fbbff; font-size: .84rem; line-height: 1.4; overflow-wrap: anywhere; text-decoration: none; }
   .result-link a:hover { text-decoration: underline; }
-  #feedback { display: none; align-items: center; justify-content: flex-end; gap: 8px; padding-top: 14px; color: var(--text-3); font-size: .8rem; }
+  #feedback { display: none; align-items: center; width: max-content; max-width: 100%; margin: 14px 0 0 auto; padding: 4px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.025); color: var(--text-3); font-size: .78rem; }
   #feedback.on { display: flex; }
-  #feedback button { width: 36px; height: 36px; padding: 0; border-radius: 50%; border: 1px solid var(--line-strong); background: var(--surface); color: var(--text-2); cursor: pointer; font-size: 1rem; }
-  #feedback button:hover { border-color: var(--blue-60); color: #fff; } #feedback button.on { border-color: var(--blue); background: var(--blue-20); color: #fff; box-shadow: var(--glow-sm); }
-  #feedback button:disabled { cursor: wait; opacity: .6; }
-  #feedback-status { min-width: 48px; }
+  .feedback-question { padding: 0 9px 0 7px; white-space: nowrap; }
+  .feedback-actions { display: inline-flex; align-items: center; gap: 3px; padding-left: 4px; border-left: 1px solid var(--line); }
+  #feedback button { display: grid; place-items: center; width: 34px; height: 32px; padding: 0; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--text-3); cursor: pointer; transition: color .16s, border-color .16s, background .16s, transform .16s; }
+  #feedback button svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  #feedback button:hover { border-color: var(--line-strong); background: rgba(255,255,255,.055); color: #fff; transform: translateY(-1px); }
+  #feedback button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  #feedback #thumb-up.on { border-color: var(--blue-60); background: var(--blue-20); color: #9fc5ff; }
+  #feedback #thumb-down.on { border-color: rgba(255,125,125,.55); background: rgba(255,90,90,.12); color: #ffaaaa; }
+  #feedback button:disabled { cursor: wait; opacity: .55; transform: none; }
+  #feedback-status { padding: 0 7px; color: var(--text-2); white-space: nowrap; }
+  #feedback-status:empty { display: none; }
   #media .preview-card { padding: 22px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); text-align: left; }
   #media .preview-card b { display: block; margin-bottom: 7px; }
   #media .preview-url { display: block; width: 100%; padding: 11px 14px; border: 1px solid var(--blue-35); border-radius: 10px; background: rgba(33,124,255,.08); color: #8fbbff; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
@@ -170,7 +177,14 @@
 <div id="out">
   <div id="pending"></div><div id="cards"></div><div id="quizv"></div><div id="player"></div><div id="media"></div>
   <div id="artifact-link"></div>
-  <div id="feedback"><span>Was this useful?</span><button id="thumb-up" type="button" aria-label="Thumbs up" title="Thumbs up">&#128077;</button><button id="thumb-down" type="button" aria-label="Thumbs down" title="Thumbs down">&#128078;</button><span id="feedback-status" aria-live="polite"></span></div>
+  <div id="feedback">
+    <span class="feedback-question">Was this useful?</span>
+    <span class="feedback-actions">
+      <button id="thumb-up" type="button" aria-label="Helpful" title="Helpful"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10v11H3V10h4Zm0 9h10.2a2 2 0 0 0 1.9-1.4l1.7-5.5A2 2 0 0 0 18.9 9H14l.7-3.2A2.3 2.3 0 0 0 12.4 3L7 10v9Z"/></svg></button>
+      <button id="thumb-down" type="button" aria-label="Not helpful" title="Not helpful"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 14V3H3v11h4Zm0-9h10.2a2 2 0 0 1 1.9 1.4l1.7 5.5a2 2 0 0 1-1.9 3.1H14l.7 3.2a2.3 2.3 0 0 1-2.3 2.8L7 14V5Z"/></svg></button>
+    </span>
+    <span id="feedback-status" aria-live="polite"></span>
+  </div>
   <div id="doc"><div id="dochead"><b id="doctitle"></b></div><div id="docbody" class="doc"></div></div>
 </div>
 <script>
@@ -231,17 +245,27 @@
                                       (preview ? " Preview: " + preview + "." : ""),
                                      privateContent: saved, imageIds: [] });
     }
-    if (data.state_url && data.state_token) {
-      fetch(data.state_url, { method: "POST", headers: { "Content-Type": "text/plain" },
-        body: data.state_token + "\n" + id, cache: "no-store" }).catch(function () {});
-    }
+    if (data.state_token) saveState(data.state_token + "\n" + id).catch(function () {});
+  }
+  /* Direct to the API first; if the host blocks that request, go through the app-only tool instead. */
+  function saveState(body) {
+    var viaTool = function () {
+      return call("widget_state", { state: body }).then(function (res) {
+        var v = parse(res) || {};
+        if (res.isError || v.error) throw new Error("state");
+        return v;
+      });
+    };
+    if (!data.state_url) return viaTool();
+    return fetch(data.state_url, { method: "POST", headers: { "Content-Type": "text/plain" }, body: body, cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error("status " + r.status); return r.json(); })
+      .catch(viaTool);
   }
   function restoreState() {
     var saved = localState();
     if (saved && saved.make === data.make && saved.artifact_id) return Promise.resolve(saved);
-    if (!data.state_url || !data.state_token) return Promise.resolve(null);
-    return fetch(data.state_url, { method: "POST", headers: { "Content-Type": "text/plain" },
-      body: data.state_token, cache: "no-store" }).then(function (r) { return r.ok ? r.json() : null; }, function () { return null; });
+    if (!data.state_token) return Promise.resolve(null);
+    return saveState(data.state_token).catch(function () { return null; });
   }
 
   /* ---- the finished quiz, cards or map plays inside this view: this page stands in for the host to the player page ---- */
@@ -603,7 +627,8 @@
     function rate(value) {
       up.disabled = down.disabled = true; status.textContent = "Saving...";
       call("rate_artifact", { artifact_id: id, rating: value }).then(function () {
-        picked = value; up.classList.toggle("on", value === "up"); down.classList.toggle("on", value === "down"); status.textContent = "Saved";
+        picked = value; up.classList.toggle("on", value === "up"); down.classList.toggle("on", value === "down"); status.textContent = "Thanks";
+        window.setTimeout(function () { if (status.textContent === "Thanks") { status.textContent = ""; reportSize(); } }, 1800);
       }, function () { status.textContent = "Could not save"; }).then(function () { up.disabled = down.disabled = false; reportSize(); });
     }
     up.onclick = function () { rate("up"); }; down.onclick = function () { rate("down"); };
@@ -798,7 +823,10 @@
       args.notebook_id = nb; if (docs) args.document_ids = docs;
     }
     if (data.make !== "video") args.wait_seconds = 0;
-    $("go").disabled = true; clearResult(); enterOutput("Making " + nice()); status("Starting your " + nice(), null, "busy");
+    /* Keep the current artifact visible while a replacement starts. It is cleared
+       only after the new artifact is ready, inside watch(). A rejected tool call
+       must never erase the result the writer already has. */
+    $("go").disabled = true; enterOutput("Making " + nice()); status("Starting your " + nice(), null, "busy");
     function start() { call(data.tool, args).then(function (res) {
       var v = parse(res) || {};
       if (res.isError || v.error) {

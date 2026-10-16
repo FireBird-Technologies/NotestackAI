@@ -1495,7 +1495,7 @@ def test_mind_map_reuses_stored_ideas_instead_of_rereading_posts(client, auth, r
 
 def test_extract_ideas_job_stores_ideas_on_the_post(client, auth, run_jobs, feed, llm, db_session):
     from app.models import Document
-    from app.pipeline.generate import extract_ideas, ideas_fresh
+    from app.pipeline.generate import datasets_fresh, extract_ideas, ideas_fresh
 
     connect(client, auth, run_jobs)
     doc = db_session.get(Document, uuid.UUID(docs(client, auth)[0]["id"]))
@@ -1505,8 +1505,23 @@ def test_extract_ideas_job_stores_ideas_on_the_post(client, auth, run_jobs, feed
     assert extract_ideas(db_session, None, doc.workspace_id, [str(doc.id)])["extracted"] == 1
     db_session.refresh(doc)
     assert ideas_fresh(doc) and doc.metadata_json["ideas"][0]["sources"] == [ref]
+    assert datasets_fresh(doc) and doc.metadata_json["datasets"] == []  # no numeric data is a valid, cached result
     extract_ideas(db_session, None, doc.workspace_id, [str(doc.id)])
     assert llm["_calls"].count("ExtractIdeas") == 1  # current ideas are not re-extracted
+
+
+def test_idea_extraction_numeric_material_reads_numbered_regions_across_the_post():
+    from types import SimpleNamespace
+
+    from app.pipeline.generate import _numeric_material
+
+    lines = ["# Metrics", "Opening without data", *["ordinary line" for _ in range(30)],
+             "Subscribers reached 4,100 in 2024.", "That was measured at year end."]
+    corpus = SimpleNamespace(read_lines=lambda _path: lines)
+    document = SimpleNamespace(path="posts/metrics.md", title="Metrics")
+    material = _numeric_material(corpus, document)
+    assert "33| Subscribers reached 4,100 in 2024." in material
+    assert "34| That was measured at year end." in material
 
 
 def _two_post_notebook(client, auth, run_jobs):
@@ -1794,15 +1809,15 @@ def test_interactive_report_only_suggests_visuals_until_the_reader_adds_them(cli
     c = client.get(f"/api/artifacts/{art['id']}", headers=auth).json()["content"]
     assert c["format"] == "interactive"
     assert [b["type"] for b in c["blocks"]] == ["prose", "prose", "prose"]  # nothing is built until the reader asks
-    # a table is not a visual we offer; the plan suggested no infographic, so one is offered before the last section
+    # quizzes and flashcards are never offered; the unverified table is ignored and an infographic remains available
     assert [(s["after_block_id"], s["kind"]) for s in c["suggestions"]] == [
-        ("b1", "flashcards"), ("b2", "infographic"), ("b2", "quiz")]  # filled up to three
+        ("b2", "infographic")]
     assert "GenerateFlashcards" not in llm["_calls"]
     assert c["citations"] == [] and not any("[" in b["text"] for b in c["blocks"])  # nothing is cited
 
     r = client.post(f"/api/reports/{art['id']}/blocks", json={
         "kind": "table", "after_block_id": "b3", "brief": "options"}, headers=auth)
-    assert r.status_code == 422  # only a mind map, flashcards, a quiz or an infographic can be added
+    assert r.status_code == 400  # data visuals can only be added from a verified suggestion
 
     llm["PlanInteractiveReport"] = {"report_title": "x", "sections": []}  # an unusable plan
     llm["WriteReport"] = {"report_title": "Plain", "markdown": "## A\nText.\n\n## B\nMore.", "citations": []}

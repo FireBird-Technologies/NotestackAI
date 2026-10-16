@@ -762,9 +762,10 @@ select.input option {
 }
 
 .doc-row {
+  position: relative;
   display: grid;
   gap: 2px;
-  padding: 10px 0;
+  padding: 10px 44px 10px 0;
   border-bottom: 1px solid var(--line);
 }
 
@@ -775,6 +776,44 @@ select.input option {
 .doc-title {
   text-align: left;
   font-size: 0.95rem;
+}
+
+/* Individual posts are removed here, not from a healthy source card. Keep the control quiet until the row is in use. */
+.doc-delete {
+  position: absolute;
+  top: 8px;
+  right: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  border-radius: 999px;
+  color: var(--text-2);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease, color 140ms ease, background 140ms ease;
+}
+
+.doc-row:hover .doc-delete,
+.doc-row:focus-within .doc-delete,
+.doc-delete.armed {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.doc-delete:hover,
+.doc-delete.armed {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+}
+
+@media (hover: none) {
+  .doc-delete {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 .posts-table {
@@ -977,7 +1016,7 @@ select.input option {
 
 .artifact-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 6px;
 }
@@ -3035,8 +3074,7 @@ select.input,
 }
 
 .metrics,
-.picker-actions,
-.artifact-actions {
+.picker-actions {
   flex-wrap: wrap;
 }
 
@@ -5988,22 +6026,200 @@ details.map-legend[open] summary {
 }
 
 .rp-timeline {
+  position: relative;
   display: grid;
-  gap: 14px;
+  gap: 12px;
   margin: 0;
-  padding: 0 0 0 18px;
-  border-left: 1px solid var(--blue-60);
+  padding: 4px 0 2px;
   list-style: none;
+}
+
+.rp-timeline::before {
+  position: absolute;
+  top: 22px;
+  bottom: 22px;
+  left: 109px;
+  width: 1px;
+  background: linear-gradient(180deg, transparent, var(--blue-60) 7%, var(--blue-60) 93%, transparent);
+  content: "";
 }
 
 .rp-timeline li {
   display: grid;
-  gap: 2px;
+  grid-template-columns: 94px 32px minmax(0, 1fr);
+  align-items: start;
 }
 
-.rp-timeline p {
+.rp-timeline-block {
+  overflow: hidden;
+  width: min(100%, 960px);
+  gap: 0;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(75% 100% at 0% 0%, var(--blue-10), transparent 58%),
+    rgba(255, 255, 255, 0.025);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 16px 50px rgba(0, 0, 0, 0.22);
+}
+
+.rp-timeline-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 2px 4px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.rp-timeline-head > div {
+  display: grid;
+  gap: 5px;
+}
+
+.rp-timeline-head .rp-h {
+  font-size: 1.18rem;
+  font-weight: 600;
+}
+
+.rp-timeline-head p {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 0.76rem;
+}
+
+.rp-timeline-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--blue);
+  font-size: 0.66rem;
+  font-weight: 650;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.rp-timeline-eyebrow > span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--blue);
+  box-shadow: 0 0 10px var(--blue);
+}
+
+.rp-timeline-kind {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border: 1px solid var(--blue-20);
+  border-radius: 999px;
+  background: var(--blue-05);
+  color: var(--text-2);
+  font-size: 0.68rem;
+}
+
+.rp-timeline-when {
+  justify-self: end;
+  margin-top: 11px;
+  padding: 4px 9px;
+  border: 1px solid var(--blue-20);
+  border-radius: 999px;
+  background: var(--blue-05);
+  color: #9fc5ff;
+  font-size: 0.72rem;
+  line-height: 1.2;
+}
+
+.rp-timeline-node {
+  z-index: 1;
+  justify-self: center;
+  width: 11px;
+  height: 11px;
+  margin-top: 18px;
+  border: 2px solid #8bb8ff;
+  border-radius: 50%;
+  background: #07101f;
+  box-shadow: 0 0 0 4px rgba(33, 124, 255, 0.1), 0 0 14px rgba(33, 124, 255, 0.4);
+}
+
+.rp-timeline-card {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 13px 15px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.025);
+  transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+}
+
+.rp-timeline li:hover .rp-timeline-card {
+  border-color: rgba(33, 124, 255, 0.4);
+  background: rgba(33, 124, 255, 0.065);
+  transform: translateX(2px);
+}
+
+.rp-timeline-card strong {
+  color: var(--white);
+  font-size: 0.94rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.rp-timeline-card p {
   margin: 0;
   color: var(--text-2);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.rp-timeline-card p.standalone {
+  color: var(--text);
+  font-weight: 450;
+}
+
+@media (max-width: 640px) {
+  .rp-timeline-block {
+    padding: 15px 12px 12px;
+    border-radius: var(--radius);
+  }
+
+  .rp-timeline-kind {
+    display: none;
+  }
+
+  .rp-timeline {
+    gap: 14px;
+    padding-top: 14px;
+  }
+
+  .rp-timeline::before {
+    top: 26px;
+    bottom: 20px;
+    left: 7px;
+  }
+
+  .rp-timeline li {
+    grid-template-columns: 16px minmax(0, 1fr);
+    row-gap: 6px;
+  }
+
+  .rp-timeline-when {
+    grid-column: 2;
+    justify-self: start;
+    margin: 0;
+  }
+
+  .rp-timeline-node {
+    grid-row: 1 / span 2;
+    grid-column: 1;
+    width: 9px;
+    height: 9px;
+    margin-top: 7px;
+  }
+
+  .rp-timeline-card {
+    grid-column: 2;
+  }
 }
 
 .rp-visual {
@@ -7256,8 +7472,13 @@ a.rp-src-main:hover .rp-src-out {
 }
 
 .artifact-inline .artifact-body,
-.artifact-inline .artifact-body .row,
-.artifact-inline .artifact-actions {
+.artifact-inline .artifact-body .row {
+  display: contents;
+}
+
+/* The footer's buttons join the body's in one row, so the `order` rules below can put view, download, share, launch and
+   delete on the left and the thumbs last, at the right end. */
+.artifact-inline > .artifact-actions {
   display: contents;
 }
 
@@ -7584,6 +7805,143 @@ a.rp-src-main:hover .rp-src-out {
   gap: 10px;
   justify-items: start;
   margin: 0;
+}
+
+.rp-plot-block {
+  overflow: hidden;
+  gap: 0;
+  padding: 18px 18px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(80% 90% at 0% 0%, var(--blue-10), transparent 55%),
+    rgba(255, 255, 255, 0.025);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 16px 50px rgba(0, 0, 0, 0.22);
+}
+
+.rp-plot-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 2px 4px 12px;
+}
+
+.rp-plot-head > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.rp-plot-head .rp-h {
+  font-size: 1.18rem;
+  font-weight: 600;
+}
+
+.rp-plot-head p {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 0.76rem;
+}
+
+.rp-plot-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--blue);
+  font-size: 0.66rem;
+  font-weight: 650;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.rp-plot-eyebrow > span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--blue);
+  box-shadow: 0 0 10px var(--blue);
+}
+
+.rp-plot-kind {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border: 1px solid var(--blue-20);
+  border-radius: 999px;
+  background: var(--blue-05);
+  color: var(--text-2);
+  font-size: 0.68rem;
+}
+
+.rp-plot {
+  width: 100%;
+  min-height: 290px;
+  border-top: 1px solid var(--line);
+}
+
+.rp-plot-data {
+  border-top: 1px solid var(--line);
+}
+
+.rp-plot-data summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 5px 2px;
+  color: var(--text-3);
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 550;
+  list-style: none;
+  transition: color 0.18s ease;
+}
+
+.rp-plot-data summary::-webkit-details-marker {
+  display: none;
+}
+
+.rp-plot-data summary:hover {
+  color: var(--text);
+}
+
+.rp-plot-data-chevron {
+  font-size: 1rem;
+  transition: transform 0.2s ease;
+}
+
+.rp-plot-data[open] .rp-plot-data-chevron {
+  transform: rotate(180deg);
+}
+
+.rp-plot-data .rp-table-wrap {
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.rp-plot-data .rp-table th,
+.rp-plot-data .rp-table td {
+  border-width: 0 0 1px;
+  font-size: 0.78rem;
+}
+
+.rp-plot-data .rp-table tr:last-child td {
+  border-bottom: 0;
+}
+
+@media (max-width: 640px) {
+  .rp-plot-block {
+    padding: 15px 12px 11px;
+    border-radius: var(--radius);
+  }
+
+  .rp-plot-head {
+    padding-inline: 3px;
+  }
+
+  .rp-plot-kind {
+    display: none;
+  }
 }
 
 .rp-infographic .ig-frame {
@@ -10736,15 +11094,10 @@ body.nbv-resizing iframe {
   transform: none;
 }
 
-/* The thumbs are the same on every card, on a row of their own under the actions, at the right. The inline cards'
+/* Keep the thumbs at the right end of the same action row. The inline cards'
    "every button 40px" rules must not reach them. */
-.artifact .card-fb {
-  justify-self: end;
-}
-
-.artifact-inline > .card-fb {
-  flex: 0 0 100%;
-  justify-content: flex-end;
+.artifact .artifact-actions .card-fb {
+  margin-left: auto;
 }
 
 .artifact .card-fb .card-fb-btn {
@@ -10822,7 +11175,7 @@ body.nbv-resizing iframe {
 }
 
 /* A card's icons in one order on every card, wherever each is rendered (an inline card's body buttons and footer share
-   one row): view, download, present, share, launch, then retry and delete last; the thumbs on their row below. */
+   one row): view, download, present, share, launch, then retry, delete, and the thumbs last. */
 .artifact .card-act-view { order: 1; }
 .artifact .card-act-download { order: 2; }
 .artifact .card-act-present { order: 3; }

@@ -80,7 +80,7 @@ export const sourcesApi = {
 };
 
 export const docsApi = {
-  list: (p: { q?: string; source_id?: string; indexed_only?: boolean; limit?: number; offset?: number } = {}) =>
+  list: (p: { q?: string; source_id?: string; indexed_only?: boolean; sort?: "published" | "added"; limit?: number; offset?: number } = {}) =>
     api<Page<Doc>>(`/api/documents${qs(p)}`),
   get: (id: string) => api<DocDetail>(`/api/documents/${id}`),
   remove: (id: string) => del(`/api/documents/${id}`),

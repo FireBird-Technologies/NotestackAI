@@ -243,7 +243,9 @@ def get_notebook(notebook_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
         select(Document)
         .join(NotebookDocument, NotebookDocument.document_id == Document.id)
         .where(NotebookDocument.notebook_id == nb.id)
-        .order_by(Document.published_at.desc())
+        # The notebook rail is an inbox: posts uploaded/imported most recently come first, regardless of the date
+        # originally printed on the article.
+        .order_by(Document.created_at.desc(), Document.published_at.desc().nulls_last())
     ).all()
     return {
         "id": str(nb.id),

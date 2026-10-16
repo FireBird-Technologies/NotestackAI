@@ -41,6 +41,9 @@ def report_text(a: Artifact) -> str:
         elif kind == "table":
             out += [*([title] if title else []), " | ".join(_clean(h) for h in b.get("headers") or []),
                     *[" | ".join(_clean(x) for x in r) for r in b.get("rows") or []], ""]
+        elif kind == "plot":
+            out += [title or "Plot", *[f"- {_clean(p.get('label'))}: {_clean(p.get('display_value')) or p.get('value')}"
+                                        for p in b.get("points") or []], ""]
         elif kind == "flashcards":
             out += [title or "Flashcards", *[f"- {_clean(x.get('front'))}: {_clean(x.get('back'))}"
                                              for x in b.get("cards") or []], ""]
@@ -115,6 +118,14 @@ def _block_html(b: dict) -> str:
         cells = "".join(f"<th>{_inline(h)}</th>" for h in b.get("headers") or [])
         rows = "".join("<tr>" + "".join(f"<td>{_inline(x)}</td>" for x in r) + "</tr>" for r in b.get("rows") or [])
         return f"{head}<table><thead><tr>{cells}</tr></thead><tbody>{rows}</tbody></table>"
+    if kind == "plot":
+        x = _inline(b.get("x_label")) or "Label"
+        y = _inline(b.get("y_label")) or "Value"
+        if b.get("unit"):
+            y += f" ({_inline(b.get('unit'))})"
+        rows = "".join(f"<tr><td>{_inline(p.get('label'))}</td><td>{_inline(p.get('display_value')) or p.get('value')}</td></tr>"
+                       for p in b.get("points") or [])
+        return f"{head}<table><thead><tr><th>{x}</th><th>{y}</th></tr></thead><tbody>{rows}</tbody></table>"
     return ""
 
 

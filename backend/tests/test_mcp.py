@@ -657,12 +657,12 @@ async def test_connect_then_use_the_tools_over_http(http, client, auth, run_jobs
 
     init = await rpc("initialize", {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "t", "version": "1"}})
     assert init["serverInfo"]["name"] == "Notestack" and "find_content" in init["instructions"]
-    assert "NEVER print" in init["instructions"] and "human-readable title" in init["instructions"]
+    assert "omit internal identifiers" in init["instructions"] and "refer to items by title" in init["instructions"]
     # Claude cannot read posts itself, so questions about the writer's words go through ask_notebook
-    assert "ask_notebook" in init["instructions"] and "cannot read the text of their posts" in init["instructions"]
-    assert "add_source" in init["instructions"]
-    assert "show Notestack's own preview" in init["instructions"]
-    assert "shareable preview URL" in init["instructions"] and "artifact_preview_url" in init["instructions"]
+    assert "ask_notebook" in init["instructions"] and "returns citations" in init["instructions"]
+    assert "choose_options" in init["instructions"]
+    assert "in-chat view" in init["instructions"]
+    assert "artifact_preview_url" in init["instructions"]
     listed = {x["name"] for x in (await rpc("tools/list", id_=2))["tools"]}
     assert {"find_content", "ask_notebook", "generate_report", "share_artifact"} <= listed
     assert "get_document" not in listed
@@ -687,3 +687,13 @@ async def test_connect_then_use_the_tools_over_http(http, client, auth, run_jobs
     # a page on another host pointing its name at us cannot reach /mcp
     evil = await http.post("/mcp", headers={**h, "Host": "evil.example"}, json={"jsonrpc": "2.0", "id": 6, "method": "tools/list"})
     assert evil.status_code in (400, 421)
+
+
+def test_openai_apps_challenge_is_served_as_plain_text(client, monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "openai_apps_challenge", "")
+    assert client.get("/.well-known/openai-apps-challenge").status_code == 404
+    monkeypatch.setattr(settings, "openai_apps_challenge", "tok-123\n")
+    r = client.get("/.well-known/openai-apps-challenge")
+    assert r.status_code == 200 and r.text == "tok-123" and r.headers["content-type"].startswith("text/plain")

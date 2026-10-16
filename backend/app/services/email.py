@@ -22,6 +22,7 @@ class OutgoingEmail:
     html: str
     text: str
     headers: dict[str, str] | None = None
+    reply_to: str | None = None
 
 
 class BaseEmailProvider(ABC):
@@ -46,6 +47,8 @@ class ResendEmailProvider(BaseEmailProvider):
         }
         if email.headers:
             params["headers"] = email.headers
+        if email.reply_to:
+            params["reply_to"] = email.reply_to
         result = self._resend.Emails.send(params)
         return result.get("id") if isinstance(result, dict) else None
 
@@ -246,6 +249,7 @@ class EmailService:
                 html=_layout(subject, body_html, self._unsubscribe_footer(user_id)),
                 text=f"Hi {first},\n\n{body}\n\nUnsubscribe: {self._unsubscribe_url(user_id)}",
                 headers=self._list_unsubscribe(user_id),
+                reply_to=settings.alerts_email,
             )
         )
 
