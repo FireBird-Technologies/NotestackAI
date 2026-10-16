@@ -1,6 +1,7 @@
 """Text generation jobs over the corpus: notebook summaries, topic map, voice profile, evergreen scores."""
 
 import logging
+import re
 import time
 import uuid
 from collections import Counter, defaultdict
@@ -22,7 +23,7 @@ from app.llm.signatures import (
     SummarizeNotebook,
 )
 from app.models import Artifact, Document, DocumentTopic, Job, Notebook, Topic, VoiceProfile
-from app.pipeline.passages import as_citations, notebook_docs, passages_for, tools_for, verify_refs, workspace_docs
+from app.pipeline.passages import _body_start, as_citations, notebook_docs, passages_for, tools_for, verify_refs, workspace_docs
 from app.pipeline.research import verify_citations
 from app.services.jobs import update_job
 
@@ -72,6 +73,7 @@ def summarize_notebook(db: Session, job: Job, artifact: Artifact) -> dict:
 
 MAX_BRANCHES, MAX_DETAILS = 10, 4
 IDEAS_BUDGET = 30_000  # characters of one post read for its ideas
+NUMERIC_BUDGET = 20_000  # number-bearing windows from the full post, including beyond IDEAS_BUDGET
 BRIEF_ABOVE = 600  # ideas listed to the model by label only beyond this many
 CATCH_ALL = "More from your posts"
 
@@ -112,25 +114,74 @@ def ideas_fresh(d) -> bool:
     return bool(md.get("ideas")) and md.get("ideas_hash") == (d.content_hash or "")
 
 
+def datasets_fresh(d) -> bool:
+    """True when this post has been checked for datasets at its current content version, including a valid empty result."""
+    from app.pipeline.report_visuals import DATASET_SCHEMA
+
+    md = d.metadata_json or {}
+    return md.get("datasets_hash") == (d.content_hash or "") and md.get("datasets_schema") == DATASET_SCHEMA \
+        and isinstance(md.get("datasets"), list)
+
+
+def _numeric_material(corpus: Corpus, d: Document) -> str:
+    """Number-bearing source windows from the complete post, with enough surrounding text to retain their meaning."""
+    try:
+        lines = corpus.read_lines(d.path)
+    except Exception:
+        return f"FILE {d.path} ({d.title})\n(no numeric regions found)"
+    first = _body_start(lines)
+    numeric = re.compile(r"(?:[$£€₹]\s*\d|\d[\d,.]*\s*(?:%|[a-zA-Z]{1,12})?|•\s*\d)")
+    selected: set[int] = set()
+    for index in range(first, len(lines)):
+        if numeric.search(lines[index]):
+            selected.update(range(max(first, index - 2), min(len(lines), index + 3)))
+    entries = [f"{index + 1}| {lines[index]}" for index in sorted(selected) if lines[index].strip()]
+    if sum(len(x) + 1 for x in entries) > NUMERIC_BUDGET:
+        # Retain regions from across the post instead of silently favoring its beginning.
+        step = max(len(entries) / max(NUMERIC_BUDGET // 120, 1), 1)
+        entries = [entries[min(int(n * step), len(entries) - 1)] for n in range(max(NUMERIC_BUDGET // 120, 1))]
+    return f"FILE {d.path} ({d.title})\n" + ("\n".join(entries) or "(no numeric regions found)")
+
+
+def _idea_input(corpus: Corpus, d: Document) -> dict:
+    return {"title": d.title, "passage": "\n\n".join(passages_for(corpus, [d], budget_chars=IDEAS_BUDGET)),
+            "numeric_material": _numeric_material(corpus, d)}
+
+
+def _dataset_material(corpus: Corpus, d: Document, supplied: dict):
+    """A one-post material object whose refs always resolve back to that post."""
+    from types import SimpleNamespace
+
+    tools = tools_for(corpus, [d])
+
+    def refs(items) -> list[dict]:
+        return [{"document_id": str(d.id), "path": r["path"], "title": r["title"],
+                 "line_start": r["line_start"], "line_end": r["line_end"], "quote": r["quote"]}
+                for r in verify_refs(tools, items or []) if r["path"] == d.path]
+
+    return SimpleNamespace(title=d.title, docs=[d], text=[supplied["passage"], supplied["numeric_material"]],
+                           mode="passages", refs=refs, tools=tools)
+
+
 def extract_ideas(db: Session, job: Job | None, workspace_id: uuid.UUID, doc_ids: list[str] | None = None, *,
                   parallel: bool = False, limit: int | None = None) -> dict:
-    """Read each post that has no current ideas once and keep what it says on the post (label, note, points and
-    the lines they came from). Maps are arranged from these, so they never re-read the posts. `parallel` reads the
-    posts together instead of one after the other (a report that needs many at once); `limit` reads at most that many."""
+    """Read posts that lack current ideas or dataset caches and store both with their verified source lines."""
     docs = workspace_docs(db, workspace_id, [uuid.UUID(str(i)) for i in doc_ids] if doc_ids is not None else None)
-    todo = [d for d in docs if not ideas_fresh(d)]
+    todo = [d for d in docs if not ideas_fresh(d) or not datasets_fresh(d)]
     if limit is not None:
         todo = todo[:limit]
     corpus = Corpus(workspace_id)
+    corpus.sync()
     lm = fast_lm()
     done = 0
     answers: list[dict | None] | None = None
+    supplied = [_idea_input(corpus, d) for d in todo]
     if parallel and todo:
         if job:
             update_job(db, job, progress=0.05, message=f"Reading {len(todo)} posts for their key ideas")
         answers = run.predict_many(
             ExtractIdeas,
-            [dict(title=d.title, passage="\n\n".join(passages_for(corpus, [d], budget_chars=IDEAS_BUDGET))) for d in todo],
+            supplied,
             db=db, workspace_id=workspace_id, lm=lm)
     for i, d in enumerate(todo):
         if answers is not None:
@@ -141,8 +192,7 @@ def extract_ideas(db: Session, job: Job | None, workspace_id: uuid.UUID, doc_ids
             if job:
                 update_job(db, job, progress=0.05 + 0.85 * i / max(len(todo), 1), message=f"Reading {d.title[:70]}")
             try:
-                out = run.predict(ExtractIdeas, db=db, workspace_id=workspace_id, job=job, lm=lm, title=d.title,
-                                  passage="\n\n".join(passages_for(corpus, [d], budget_chars=IDEAS_BUDGET)))
+                out = run.predict(ExtractIdeas, db=db, workspace_id=workspace_id, job=job, lm=lm, **supplied[i])
             except Exception:
                 continue
         tools = tools_for(corpus, [d])
@@ -160,9 +210,15 @@ def extract_ideas(db: Session, job: Job | None, workspace_id: uuid.UUID, doc_ids
                        for x in t.get("details") or [] if (x.get("label") or "").strip()]
             ideas.append({"label": t["label"].strip()[:80], "note": (t.get("note") or "").strip()[:400],
                           "sources": keep(t.get("sources")), "details": details[:MAX_DETAILS]})
-        if not ideas:
-            continue
-        d.metadata_json = {**(d.metadata_json or {}), "ideas": ideas[:8], "ideas_hash": d.content_hash or ""}
+        from app.pipeline import report_visuals
+
+        datasets = report_visuals.cache_post_datasets(
+            d, _dataset_material(corpus, d, supplied[i]), out.get("datasets") or [])
+        metadata = {**(d.metadata_json or {}), "datasets": datasets,
+                    "datasets_hash": d.content_hash or "", "datasets_schema": report_visuals.DATASET_SCHEMA}
+        if ideas:
+            metadata.update({"ideas": ideas[:8], "ideas_hash": d.content_hash or ""})
+        d.metadata_json = metadata
         db.commit()
         done += 1
     return {"extracted": done, "skipped": len(todo) - done}

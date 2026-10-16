@@ -122,15 +122,19 @@ export type ReportBlock =
   | { id: string; type: "key_terms"; title?: string; terms: { term: string; definition: string }[] }
   | { id: string; type: "table"; title?: string; headers: string[]; rows: string[][] }
   | { id: string; type: "timeline"; title?: string; events: { when: string; title: string; detail: string }[] }
+  | { id: string; type: "plot"; title?: string; plot_kind: "bar" | "line" | "scatter" | "pie";
+      x_label?: string; y_label?: string; unit?: string;
+      points: { label: string; value: number; display_value?: string; detail?: string }[] }
   | { id: string; type: "mind_map"; title?: string; root: MindNode; node_count?: number; post_count?: number }
   | { id: string; type: "flashcards"; title?: string; cards: FlashcardData[] }
   | { id: string; type: "quiz"; title?: string; questions: QuizQuestion[] }
   /** An infographic (its own artifact, also in the Library): its page, once written (filled in when the report is read). */
   | { id: string; type: "infographic"; title?: string; artifact_id?: string; theme?: string; status?: string; html?: string | null; html_landscape?: string | null };
 
-export type ReportSuggestionKind = "mind_map" | "flashcards" | "quiz" | "table" | "timeline" | "key_terms" | "infographic";
+export type ReportSuggestionKind = "mind_map" | "plot" | "table" | "timeline" | "infographic";
 /** A spot where the AI thinks a visual would help: shown in the app with an Add button, never on a shared page. */
-export type ReportSuggestion = { id: string; after_block_id: string; kind: ReportSuggestionKind; brief: string; why: string };
+export type ReportSuggestion = { id: string; after_block_id: string; kind: ReportSuggestionKind; brief: string; why: string;
+                                 candidate_id?: string };
 
 /** The link state of a report. */
 export type ShareInfo = { shared: boolean; url: string | null; show_sources: boolean };

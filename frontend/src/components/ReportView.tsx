@@ -5,6 +5,7 @@ import { InfographicFrame } from "./Infographic";
 import { Markdown } from "./Markdown";
 import { MindMapExplorer } from "./MindMap";
 import { QuizRunner } from "./Quiz";
+import { ReportPlot } from "./ReportPlot";
 
 /** What the owner can do to a report: add a suggested visual, or remove one. Never given on a shared page. */
 export type ReportEditor = {
@@ -18,7 +19,7 @@ export type ReportEditor = {
 };
 
 const KIND_LABEL = {
-  mind_map: "Mind Constellation", flashcards: "Flashcards", quiz: "Quiz", table: "Comparison table", timeline: "Timeline",
+  mind_map: "Mind Constellation", flashcards: "Flashcards", quiz: "Quiz", plot: "Plot", table: "Data table", timeline: "Timeline",
   key_terms: "Key terms", infographic: "Infographic",
 } as const;
 
@@ -100,6 +101,8 @@ function Block({ block, content, artifactId, onCite }: { block: ReportBlock } & 
           </ol>
         </section>
       );
+    case "plot":
+      return <ReportPlot block={block} />;
     case "mind_map":
       return (
         <section className="rp-block">
@@ -382,6 +385,10 @@ export function reportMarkdown(content: Record<string, any>): string {
       lines.push(...(b.title ? [`## ${b.title}`, ""] : []), `| ${b.headers.join(" | ")} |`, `| ${b.headers.map(() => "---").join(" | ")} |`,
         ...b.rows.map((r) => `| ${r.join(" | ")} |`), "");
     } else if (b.type === "timeline") lines.push(`## ${b.title || "Timeline"}`, ...b.events.map((e) => `- **${e.when}** ${e.title}${e.detail ? `: ${e.detail}` : ""}`), "");
+    else if (b.type === "plot") {
+      lines.push(`## ${b.title || "Plot"}`, `| ${b.x_label || "Label"} | ${b.y_label || "Value"}${b.unit ? ` (${b.unit})` : ""} |`, "| --- | --- |",
+        ...b.points.map((p) => `| ${p.label} | ${p.display_value || p.value} |`), "");
+    }
     else if (b.type === "flashcards") lines.push(`## ${b.title || "Flashcards"}`, ...b.cards.map((c) => `- **${c.front}**: ${c.back}`), "");
     else if (b.type === "infographic") lines.push(`## ${b.title || "Infographic"}`, "");
     else if (b.type === "quiz") lines.push(`## ${b.title || "Quiz"}`, ...b.questions.map((q, i) => `${i + 1}. ${q.question}`), "");

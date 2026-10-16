@@ -3,6 +3,7 @@ import { NavLink } from "react-router-dom";
 import { docsApi, jobsApi, sourcesApi } from "../api/endpoints";
 import type { Doc, Job, Source } from "../api/types";
 import { Reader } from "../components/Reader";
+import { TrashIcon } from "../components/icons/Icons";
 import { SourceUrlHint, useSourceUrlCheck } from "../components/SourceUrlCheck";
 import { ConfirmButton, EmptyState, errorMessage, formatDate, JobProgress, Loading, PageHeader, StatusPill } from "../components/ui";
 import { useJobMap } from "../hooks/useJob";
@@ -204,7 +205,6 @@ export default function Sources() {
   const [docs, setDocs] = useState<Doc[]>([]);
   const [total, setTotal] = useState(0);
   const [q, setQ] = useState("");
-  const [filter, setFilter] = useState<string>("");
   const [removing, setRemoving] = useState<Set<string>>(new Set()); // sources being deleted: dimmed at once, gone when done
   const [offset, setOffset] = useState(0);
   const [reading, setReading] = useState<string | null>(null);
@@ -227,13 +227,13 @@ export default function Sources() {
   const loadDocs = useCallback(
     (reset = true) => {
       const start = reset ? 0 : offset + PAGE;
-      return docsApi.list({ q, source_id: filter || undefined, indexed_only: true, limit: PAGE, offset: start }).then((p) => {
+      return docsApi.list({ q, indexed_only: true, sort: "added", limit: PAGE, offset: start }).then((p) => {
         setTotal(p.total);
         setOffset(start);
         setDocs((d) => (reset ? p.items : [...d, ...p.items]));
       });
     },
-    [q, filter, offset],
+    [q, offset],
   );
 
   const { jobs, watch } = useJobMap((_key, finished) => {
@@ -266,7 +266,7 @@ export default function Sources() {
     const t = setTimeout(() => loadDocs(true), 200);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, filter]);
+  }, [q]);
 
   // Pick up syncs and imports that were already running when the page opened.
   useEffect(() => {
@@ -342,6 +342,7 @@ export default function Sources() {
         {sources?.map((s) => {
           const job = jobs[s.id];
           const active = job && (job.status === "queued" || job.status === "running");
+          const failed = !active && (s.sync_status === "error" || job?.status === "failed");
           return (
             <article key={s.id} className={`card source-card${removing.has(s.id) ? " removing" : ""}`}>
               <header className="row between">
@@ -389,16 +390,7 @@ export default function Sources() {
                     Sync now
                   </button>
                 )}
-                {sources.length > 1 && (
-                  <button className="btn btn-small" aria-pressed={filter === s.id} onClick={() => setFilter(filter === s.id ? "" : s.id)}>
-                    {filter === s.id ? "Show all posts" : "Only these posts"}
-                  </button>
-                )}
-                {s.id === PENDING_IMPORTS_ID ? (
-                  <button type="button" className="btn btn-small" disabled title="Available as soon as the upload begins">
-                    Delete
-                  </button>
-                ) : <ConfirmButton
+                {failed && !s.is_imports && s.id !== PENDING_IMPORTS_ID && <ConfirmButton
                   confirmLabel="Click again to delete"
                   busyLabel="Deleting..."
                   onConfirm={async () => {
@@ -416,7 +408,6 @@ export default function Sources() {
                     // Gone from the page now; the lists refresh behind it.
                     setSources((list) => (list ?? []).filter((x) => x.id !== s.id));
                     setDocs((list) => list.filter((d) => d.source_id !== s.id));
-                    if (filter === s.id) setFilter("");
                     loadSources();
                     loadDocs();
                   }}
@@ -432,8 +423,8 @@ export default function Sources() {
         <EmptyState title="No sources yet" body="A lone satellite, waiting for signal. Connect a blog or site above, or upload your markdown files." />
       )}
 
-      {/* The posts are here as soon as there are any: every source's posts together, or one source's when its button is on */}
-      {sources && sources.length > 0 && (filter || total > 0) && (
+      {/* One automatic feed across every source, with the most recently added posts first. */}
+      {sources && sources.length > 0 && (
         <section className="card posts-table">
           <div className="row between">
             <h2>
@@ -455,6 +446,27 @@ export default function Sources() {
                 <span className="mono muted">
                   {d.source_title ?? ""} · {formatDate(d.published_at)} · {d.words} words
                 </span>
+                <ConfirmButton
+                  className="icon-btn doc-delete"
+                  label={`Delete ${d.title}`}
+                  confirmLabel="Delete?"
+                  busyLabel=""
+                  onConfirm={async () => {
+                    try {
+                      await docsApi.remove(d.id);
+                      if (reading === d.id) setReading(null);
+                      setDocs((list) => list.filter((post) => post.id !== d.id));
+                      setTotal((n) => Math.max(0, n - 1));
+                      setSources((list) => list?.map((source) => source.id === d.source_id
+                        ? { ...source, document_count: Math.max(0, source.document_count - 1) }
+                        : source) ?? null);
+                    } catch (e) {
+                      setError(errorMessage(e, "Could not delete that post."));
+                    }
+                  }}
+                >
+                  <TrashIcon size={18} />
+                </ConfirmButton>
               </li>
             ))}
             {docs.length === 0 && <li className="muted">No posts match.</li>}

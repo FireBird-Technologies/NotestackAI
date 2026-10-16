@@ -135,6 +135,7 @@ def serialize_artifact(a: Artifact, job: Job | None = None) -> dict:
     if a.type == "slide_deck" and a.status == "ready":
         content = {**content, "slides_html": slide_pages(content), "slide_slots": slide_slots(content)}
     if a.type == "report":
+        content = {k: v for k, v in content.items() if k != "visual_candidates"}
         content = {**content, "blocks": report_blocks(a)}
     slides = content.get("slide_keys") or []
     return {

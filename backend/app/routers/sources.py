@@ -1,4 +1,5 @@
 import uuid
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
@@ -218,6 +219,7 @@ def list_documents(
     q: str = "",
     source_id: uuid.UUID | None = None,
     indexed_only: bool = False,
+    sort: Literal["published", "added"] = "published",
     limit: int = 500,
     offset: int = 0,
 ):
@@ -234,8 +236,10 @@ def list_documents(
     if indexed_only:
         query = query.where(Document.path.is_not(None))
     total = ctx.db.scalar(select(func.count()).select_from(query.subquery()))
+    order = ((Document.created_at.desc(), Document.published_at.desc().nulls_last()) if sort == "added" else
+             (Document.published_at.desc().nulls_last(), Document.created_at.desc()))
     rows = ctx.db.execute(
-        query.order_by(Document.published_at.desc().nulls_last(), Document.created_at.desc())
+        query.order_by(*order)
         .offset(max(offset, 0)).limit(min(limit, 5000))
     ).all()
     return {"total": total, "items": [serialize_document(d, s) for d, s in rows]}

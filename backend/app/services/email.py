@@ -245,7 +245,7 @@ class EmailService:
                 subject=subject,
                 html=_layout(subject, body_html, self._unsubscribe_footer(user_id)),
                 text=f"Hi {first},\n\n{body}\n\nUnsubscribe: {self._unsubscribe_url(user_id)}",
-                headers=self._list_unsubscribe(user_id),
+                headers={**self._list_unsubscribe(user_id), "Reply-To": settings.alerts_email},
             )
         )
 

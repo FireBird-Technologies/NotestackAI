@@ -17,6 +17,7 @@ from app.llm import run
 from app.llm.provider import report_plan_lm
 from app.llm.signatures import PlanReportBlueprint
 from app.models import Job
+from app.pipeline import report_visuals
 from app.pipeline.report_themes import Theme
 
 log = logging.getLogger(__name__)
@@ -40,6 +41,7 @@ class Section:
     depth: str = "standard"
     must_cover: list[str] = field(default_factory=list)
     embed: dict | None = None
+    data_candidate_id: str | None = None
     covered_elsewhere: list[str] = field(default_factory=list)
 
 
@@ -85,7 +87,7 @@ def _in_reading_order(sections: list[Section]) -> list[Section]:
     return intro + [s for s in sections if s.role in ("body", "synthesis")] + summary
 
 
-def repair(bp: Blueprint, themes: list[Theme]) -> Blueprint:
+def repair(bp: Blueprint, themes: list[Theme], data_candidates: list[dict] | None = None) -> Blueprint:
     """Make the plan agree with the weights. Raises BlueprintUnavailable when fewer than two sections remain."""
     by_id = {t.id: t for t in themes}
     sections = [s for s in bp.sections if s.heading.strip()]
@@ -155,6 +157,24 @@ def repair(bp: Blueprint, themes: list[Theme]) -> Blueprint:
         s.theme_ids = [t.id for t in themes if t.tier == "major" or t.pinned] or s.theme_ids
     for s in sections:
         s.depth = derived_depth(s, by_id)
+
+    # Keep only real, unique candidate assignments on narrative sections. Extraction already established report-level
+    # relevance; if the planner omitted every id, repair that omission by choosing the best-fitting body section.
+    data_candidates = data_candidates or []
+    valid_ids = {str(c.get("id")) for c in data_candidates}
+    used_data: set[str] = set()
+    for s in sections:
+        cid = str(s.data_candidate_id or "")
+        if s.role not in ("body", "synthesis") or cid not in valid_ids or cid in used_data:
+            s.data_candidate_id = None
+        else:
+            s.data_candidate_id = cid
+            used_data.add(cid)
+    if data_candidates and not used_data:
+        eligible = [s for s in sections if s.role in ("body", "synthesis")]
+        at = report_visuals.best_section(data_candidates[0], [vars(s) for s in eligible])
+        if at is not None:
+            eligible[at].data_candidate_id = str(data_candidates[0]["id"])
     if len(sections) < 2:
         log.warning("report blueprint unusable: sections=%d planned=%d", len(sections), planned)
         raise BlueprintUnavailable("the plan has fewer than two sections")
@@ -185,14 +205,16 @@ def repair(bp: Blueprint, themes: list[Theme]) -> Blueprint:
 
 
 def plan_blueprint(db: Session, job: Job | None, workspace_id: uuid.UUID, title: str, request: str,
-                   themes: list[Theme], relations: list[dict], kinds: list[str], language: str) -> Blueprint:
+                   themes: list[Theme], relations: list[dict], kinds: list[str], language: str,
+                   data_candidates: list[dict] | None = None) -> Blueprint:
     """The checked plan for these themes. Raises BlueprintUnavailable (or whatever the model call raised) when there is none."""
     log.info("report blueprint: asking the model workspace=%s themes=%d relations=%d allowed_visuals=%s", workspace_id, len(themes),
              len(relations), kinds)
     started = time.monotonic()
     out = run.predict(PlanReportBlueprint, db=db, workspace_id=workspace_id, job=job, lm=report_plan_lm(), title=title,
                       request=request, themes=theme_lines(themes), relations=relation_lines(relations), allowed_kinds=kinds,
-                      language=language, max_sections=MAX_SECTIONS)
+                      data_opportunities=report_visuals.opportunity_lines(data_candidates or []), language=language,
+                      max_sections=MAX_SECTIONS)
     sections = []
     for s in out.get("sections") or []:
         heading = (s.get("heading") or "").strip()
@@ -200,12 +222,13 @@ def plan_blueprint(db: Session, job: Job | None, workspace_id: uuid.UUID, title:
             sections.append(Section(
                 heading=heading, role=s.get("role") if s.get("role") in ROLES else "body", brief=(s.get("brief") or "").strip(),
                 theme_ids=[str(i) for i in s.get("theme_ids") or []], depth=s.get("depth") or "standard",
-                must_cover=[str(p).strip() for p in s.get("must_cover") or [] if str(p).strip()][:4], embed=s.get("embed")))
+                must_cover=[str(p).strip() for p in s.get("must_cover") or [] if str(p).strip()][:4], embed=s.get("embed"),
+                data_candidate_id=s.get("data_candidate_id")))
     log.info("report blueprint: model answered sections=%d connections=%d seconds=%.1f", len(sections),
              len(out.get("connections") or []), time.monotonic() - started)
     bp = Blueprint(title=(out.get("report_title") or title).strip(), storyline=(out.get("storyline") or "").strip(),
                    sections=sections, connections=out.get("connections") or [])
-    return repair(bp, themes)
+    return repair(bp, themes, data_candidates)
 
 
 def outline(bp: Blueprint) -> list[str]:

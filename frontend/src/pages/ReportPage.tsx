@@ -92,6 +92,10 @@ export default function ReportPage() {
   };
   const startAdd = async (s: ReportSuggestion) => {
     setAddFailed(null);
+    if (!["mind_map", "infographic"].includes(s.kind)) {
+      setAdding({ suggestion: s, existing: [], loading: false });
+      return;
+    }
     setAdding({ suggestion: s, existing: [], loading: true });
     // The ones already made from this notebook (or, for a report with no notebook, anywhere), to offer as an alternative
     // to making a new one.

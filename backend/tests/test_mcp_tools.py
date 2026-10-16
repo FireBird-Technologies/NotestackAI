@@ -729,14 +729,15 @@ async def test_the_map_tools_link_to_the_widget_and_it_is_served(mcp):  # noqa: 
     viewers = {"generate_mind_map", "show_mind_map", "generate_flashcards", "show_flashcards", "generate_quiz", "show_quiz",
                "generate_infographic", "show_infographic", "choose_notebook", "choose_options", "choose_video_options",
                "generate_slide_deck", "generate_audio_overview", "generate_video", "get_video", "view_report", "generate_report",
-               "rate_artifact"}
-    assert listed["rate_artifact"].meta == widgets.app_only()
+               "rate_artifact", "widget_state"}
+    assert listed["rate_artifact"].meta == widgets.app_only() and listed["widget_state"].meta == widgets.app_only()
     assert all(t.meta is None for n, t in listed.items() if n not in viewers)
     assert all("visibility" not in (listed[name].meta or {}).get("ui", {}) for name in listed if name.startswith("generate_"))
     resources = await mcp.list_resources()
     served = {widgets.MIND_MAP_URI, widgets.FLASHCARDS_URI, widgets.QUIZ_URI, widgets.INFOGRAPHIC_URI, widgets.PICKER_URI, widgets.REPORT_URI,
               widgets.VIDEO_URI, widgets.VIDEO_OPTIONS_URI, widgets.OPTIONS_URI}
-    assert {str(r.uri) for r in resources} == served and all(r.mimeType == "text/html;profile=mcp-app" for r in resources)
+    legacy = {u for olds in widgets.LEGACY_URIS.values() for u in olds}
+    assert {str(r.uri) for r in resources} == served | legacy and all(r.mimeType == "text/html;profile=mcp-app" for r in resources)
     page = list(await mcp.read_resource(WIDGET))[0].content
     for needed in ("ui/initialize", "ui/notifications/initialized", "ui/notifications/tool-result", "ui/notifications/size-changed",
                    "ui/open-link", "ui/resource-teardown", "window.parent"):
@@ -1241,3 +1242,32 @@ def test_the_video_form_offers_the_writers_saved_voices_with_previews_instead_of
     assert v["options"][0]["gender"] == "male" and v["options"][0]["accent"] == "british" and v["options"][1]["gender"] is None
     plain = {f["key"]: f for f in options.form("video", {}, None)["fields"]}  # no voice list: the male or female choice stays
     assert "voice" not in plain and plain["voice_gender"]["type"] == "chips"
+
+
+@pytest.mark.anyio
+async def test_widget_state_tool_saves_and_restores_without_direct_fetch(auth, as_writer, mcp, db_session):  # noqa: F811
+    form = await call_raw(mcp, "choose_options", make="mind_map")
+    token = form.structuredContent["state_token"]
+    artifact = make_artifact(db_session, "mind_map", content={"title": "Map", "root": {"label": "Root"}})
+    saved = await call(mcp, "widget_state", state=token + "\n" + str(artifact.id))
+    assert saved["artifact_id"] == str(artifact.id)
+    restored = await call(mcp, "widget_state", state=token)
+    assert restored["artifact_id"] == str(artifact.id)
+
+
+@pytest.mark.anyio
+async def test_standalone_result_pages_have_thumbs_and_payloads_carry_the_artifact(mcp):  # noqa: F811
+    for uri in (widgets.FLASHCARDS_URI, widgets.QUIZ_URI, widgets.MIND_MAP_URI, widgets.INFOGRAPHIC_URI):
+        page = list(await mcp.read_resource(uri))[0].content
+        assert 'id="nsfb"' in page and "rate_artifact" in page, uri
+    art = {"id": "a1", "status": "ready", "feedback": {"rating": "up"}, "content": {"cards": [{"front": "q", "back": "a"}]}}
+    payload = widgets.flashcards_payload(art, "https://x")
+    assert payload["artifact_id"] == "a1" and payload["feedback"] == {"rating": "up"}
+
+
+@pytest.mark.anyio
+async def test_old_page_addresses_still_serve_the_current_page(mcp):  # noqa: F811
+    for current, olds in widgets.LEGACY_URIS.items():
+        new_page = list(await mcp.read_resource(current))[0].content
+        for old in olds:
+            assert list(await mcp.read_resource(old))[0].content == new_page, old

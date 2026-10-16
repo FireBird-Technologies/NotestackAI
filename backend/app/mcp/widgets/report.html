@@ -162,7 +162,7 @@
     var t = b.type;
     if (t === "prose") return markdown(b.text, into);
     var card = el("div", "card" + (t === "callout" ? " callout" : ""), null, into);
-    if (b.title || t !== "callout") el("h4", "", b.title || ({ key_terms: "Key terms", table: "Table", timeline: "Timeline", mind_map: "Mind map", flashcards: "Flashcards", quiz: "Quiz", infographic: "Infographic" }[t] || ""), card);
+    if (b.title || t !== "callout") el("h4", "", b.title || ({ key_terms: "Key terms", plot: "Plot", table: "Table", timeline: "Timeline", mind_map: "Mind map", flashcards: "Flashcards", quiz: "Quiz", infographic: "Infographic" }[t] || ""), card);
     if (t === "callout") { markdown(b.text, card); return; }
     if ((t === "mind_map" || t === "flashcards" || t === "quiz" || t === "infographic") && mountPlayer(b, card)) return;
     if (t === "key_terms") { var dl = el("dl", "", null, card); (b.terms || []).forEach(function (x) { el("dt", "", x.term, dl); el("dd", "", x.definition, dl); }); return; }
@@ -173,6 +173,11 @@
       return;
     }
     if (t === "timeline") { var tl = el("ul", "tl", null, card); (b.events || []).forEach(function (x) { var li = el("li", "", null, tl); el("span", "", x.when, li); el("b", "", x.title, li); if (x.detail) li.appendChild(document.createTextNode(" " + x.detail)); }); return; }
+    if (t === "plot") {
+      var pt = el("table", "", null, card), ph = el("tr", "", null, el("thead", "", null, pt));
+      el("th", "", b.x_label || "Label", ph); el("th", "", (b.y_label || "Value") + (b.unit ? " (" + b.unit + ")" : ""), ph);
+      var pb = el("tbody", "", null, pt); (b.points || []).forEach(function (p) { var pr = el("tr", "", null, pb); el("td", "", p.label, pr); el("td", "", p.display_value || String(p.value), pr); }); return;
+    }
     if (t === "mind_map") { var mm = el("div", "map", null, card); if (b.root) outline(b.root, mm); return; }
     if (t === "flashcards") {
       (b.cards || []).forEach(function (c) { var f = el("button", "fc", c.front, card); f.type = "button"; el("em", "", c.back, f); f.addEventListener("click", function () { f.classList.toggle("open"); reportSize(); }); });
@@ -195,7 +200,7 @@
     }
     if (t === "infographic") { el("div", "note", "This infographic is a picture. Open the report in Notestack to see it.", card); return; }
   }
-  var LABEL = { mind_map: "Mind Constellation", flashcards: "Flashcards", quiz: "Quiz", infographic: "Infographic" };
+  var LABEL = { mind_map: "Mind Constellation", plot: "Plot", table: "Data table", timeline: "Timeline", infographic: "Infographic" };
   function addingFor(id) { return (data.adding || []).filter(function (a) { return a.suggestion_id === id; })[0]; }
   function suggestion(s, into) {
     var state = addingFor(s.id), busy = state && (state.status === "queued" || state.status === "running");
