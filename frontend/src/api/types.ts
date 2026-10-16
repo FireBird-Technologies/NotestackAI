@@ -37,6 +37,8 @@ export type Doc = {
   path: string | null;
   source_id: string | null;
   source_title: string | null;
+  /** When this post was uploaded or imported into Notestack. */
+  added_at: string | null;
   published_at: string | null;
   words: number;
   evergreen_score: number | null;

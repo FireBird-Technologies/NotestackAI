@@ -45,6 +45,42 @@ function MindMapBlock({ block, artifactId }: { block: Extract<ReportBlock, { typ
   );
 }
 
+const timelineKey = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+
+function TimelineBlock({ block }: { block: Extract<ReportBlock, { type: "timeline" }> }) {
+  const suppliedTitle = block.title?.trim();
+  const title = !suppliedTitle || /^(source\s+)?timeline$/i.test(suppliedTitle) ? "Timeline" : suppliedTitle;
+  return (
+    <section className="rp-block rp-timeline-block">
+      <header className="rp-timeline-head">
+        <div>
+          <span className="rp-timeline-eyebrow"><span aria-hidden="true" />Verified source chronology</span>
+          <h3 className="rp-h">{title}</h3>
+          <p>{block.events.length} verified milestone{block.events.length === 1 ? "" : "s"}</p>
+        </div>
+        <span className="rp-timeline-kind">Timeline</span>
+      </header>
+      <ol className="rp-timeline">
+        {block.events.map((event, index) => {
+          // Some sources use the year as both the event label and its date. Showing it twice makes the timeline noisy.
+          const repeatedTitle = timelineKey(event.title) === timelineKey(event.when);
+          const showTitle = !repeatedTitle || !event.detail;
+          return (
+            <li key={`${event.when}-${event.title}-${index}`}>
+              <span className="mono rp-timeline-when">{event.when}</span>
+              <span className="rp-timeline-node" aria-hidden="true" />
+              <div className="rp-timeline-card">
+                {showTitle && <strong>{event.title}</strong>}
+                {event.detail && <p className={showTitle ? "" : "standalone"}>{event.detail}</p>}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+  );
+}
+
 function Block({ block, content, artifactId, onCite }: { block: ReportBlock } & Props) {
   switch (block.type) {
     case "prose":
@@ -87,20 +123,7 @@ function Block({ block, content, artifactId, onCite }: { block: ReportBlock } & 
         </section>
       );
     case "timeline":
-      return (
-        <section className="rp-block">
-          {block.title && <h3 className="rp-h">{block.title}</h3>}
-          <ol className="rp-timeline">
-            {block.events.map((e, i) => (
-              <li key={i}>
-                <span className="mono muted">{e.when}</span>
-                <strong>{e.title}</strong>
-                {e.detail && <p>{e.detail}</p>}
-              </li>
-            ))}
-          </ol>
-        </section>
-      );
+      return <TimelineBlock block={block} />;
     case "plot":
       return <ReportPlot block={block} />;
     case "mind_map":

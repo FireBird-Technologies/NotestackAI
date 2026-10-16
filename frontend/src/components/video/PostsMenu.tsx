@@ -78,8 +78,10 @@ export function SourcesMenu({ docs, loading = false, postIds, onPostIds, maxPost
   const [q, setQ] = useState("");
   const needle = q.trim().toLowerCase();
   const chatTitle = (c: ChatSummary) => c.title?.trim() || "Untitled chat";
-  const posts = useMemo(() => (docs ?? []).filter((d) => !needle || d.title.toLowerCase().includes(needle)
-    || (d.source_title ?? "").toLowerCase().includes(needle)), [docs, needle]);
+  const posts = useMemo(() => [...(docs ?? [])]
+    .sort((a, b) => (Date.parse(b.added_at ?? "") || 0) - (Date.parse(a.added_at ?? "") || 0))
+    .filter((d) => !needle || d.title.toLowerCase().includes(needle)
+      || (d.source_title ?? "").toLowerCase().includes(needle)), [docs, needle]);
   const chatRows = useMemo(() => chats.filter((c) => !needle || chatTitle(c).toLowerCase().includes(needle)), [chats, needle]);
 
   // Select All ticks as many of the posts and chats in view as can be ticked; it reads as ticked once those are all in.

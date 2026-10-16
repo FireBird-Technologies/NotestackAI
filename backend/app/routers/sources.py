@@ -206,6 +206,7 @@ def serialize_document(d: Document, source: Source | None = None) -> dict:
         "path": d.path,
         "source_id": str(d.source_id) if d.source_id else None,
         "source_title": source.title if source else None,
+        "added_at": d.created_at.isoformat() if d.created_at else None,
         "published_at": d.published_at.isoformat() if d.published_at else None,
         "words": meta.get("words") or len((d.clean_text or "").split()),
         "evergreen_score": d.evergreen_score,
