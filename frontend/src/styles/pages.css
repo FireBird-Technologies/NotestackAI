@@ -5681,6 +5681,8 @@ details.map-legend[open] summary {
 /* Thumbs up / down under an answer */
 .fb {
   display: grid;
+  /* minmax(0, ...): a long next-step label shrinks to an ellipsis instead of widening the column past the panel */
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
 }
 
@@ -5696,22 +5698,23 @@ details.map-legend[open] summary {
   display: inline-flex;
   margin-left: 6px;
   min-width: 0;
-  max-width: 100%;
+  max-width: calc(100% - 6px);
 }
 
 .nbv-next {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 28px;
-  padding: 0 11px;
+  min-height: 28px;
+  padding: 4px 11px;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: 16px;
   background: transparent;
   color: var(--text-2);
   font: inherit;
   font-size: 0.8125rem;
-  white-space: nowrap;
+  line-height: 1.35;
+  text-align: left;
   max-width: 100%;
   min-width: 0;
   cursor: pointer;
@@ -5726,11 +5729,20 @@ details.map-legend[open] summary {
   color: var(--white);
 }
 
-/* A step named after the answer's topic can be long: on a narrow screen it ends in an ellipsis (the full text is the title). */
+/* A step named after the answer's topic can be long: it wraps to a second line, and only past that ends in an ellipsis
+   (the full text is the title). */
 .nbv-next-label {
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.nbv-next > svg,
+.nbv-next-arrow {
+  flex-shrink: 0;
 }
 
 .nbv-next-arrow {
