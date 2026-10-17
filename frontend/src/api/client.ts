@@ -1,5 +1,5 @@
 export const BASE = import.meta.env.VITE_API_URL ?? "";
-const ACCESS = "ns_access";
+export const ACCESS_KEY = "ns_access";
 const REFRESH = "ns_refresh";
 
 export class ApiError extends Error {
@@ -41,14 +41,14 @@ function read(key: string): string | null {
 
 export const tokens = {
   get access() {
-    return read(ACCESS);
+    return read(ACCESS_KEY);
   },
   get refresh() {
     return read(REFRESH);
   },
   set(access: string, refresh?: string) {
     try {
-      localStorage.setItem(ACCESS, access);
+      localStorage.setItem(ACCESS_KEY, access);
       if (refresh) localStorage.setItem(REFRESH, refresh);
     } catch {
       /* private mode: session only */
@@ -56,7 +56,7 @@ export const tokens = {
   },
   clear() {
     try {
-      localStorage.removeItem(ACCESS);
+      localStorage.removeItem(ACCESS_KEY);
       localStorage.removeItem(REFRESH);
     } catch {
       /* ignore */
