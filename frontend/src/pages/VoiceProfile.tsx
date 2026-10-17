@@ -103,7 +103,7 @@ function GenerateVoicePanel({
 
   return (
     <>
-      <div className="stack">
+      <div className="stack voice-modes">
         <Tabs<GenMode>
           tabs={[
             { id: "prompt", label: "Describe it" },

@@ -1,17 +1,21 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { UpgradeProvider } from "../hooks/useUpgrade";
+import type { User } from "../api/auth";
 import Logo from "./Logo";
+import { Modal } from "./ui";
 import { FuelGauge, NudgeDock } from "./Nudges";
 import SkyCanvas from "./SkyCanvas";
 import UpgradeModal from "./UpgradeModal";
 import {
   ConnectorIcon,
   LaunchpadIcon,
+  ChevronIcon,
   LibraryIcon,
+  MenuIcon,
   MicIcon,
-  OrbitIcon,
+  GearIcon,
   PlanetIcon,
   SatelliteDishIcon,
 } from "./icons/Icons";
@@ -24,6 +28,34 @@ const NAV: { to: string; label: string; icon: typeof PlanetIcon; end?: boolean; 
   { to: "/app/launchpad", label: "Launchpad", icon: LaunchpadIcon, also: ["/app/resurface", "/app/launch-kit"] },
   { to: "/app/voices", label: "Manage voices", icon: MicIcon },
 ];
+
+/** Phones: the account, behind the hamburger. Who is signed in, the plan and what is left on it, and Sign out. */
+function AccountModal({ user, signingOut, logout, onClose }: {
+  user: User; signingOut: boolean; logout: () => void; onClose: () => void;
+}) {
+  const name = user.name?.trim() || user.email;
+  return (
+    <Modal title="Account" onClose={onClose}>
+      <div className="stack account-modal">
+        <div className="app-menu-profile">
+          {user.avatar_url ? (
+            <img className="app-menu-avatar" src={user.avatar_url} alt="" referrerPolicy="no-referrer" />
+          ) : (
+            <span className="app-menu-avatar" aria-hidden="true">{name.charAt(0).toUpperCase()}</span>
+          )}
+          <span className="app-menu-who">
+            <strong>{name}</strong>
+            {user.name?.trim() && <span className="muted small">{user.email}</span>}
+          </span>
+        </div>
+        <FuelGauge collapsed={false} />
+        <button type="button" className="btn app-menu-signout" onClick={logout} disabled={signingOut}>
+          {signingOut ? "Signing out..." : "Sign out"}
+        </button>
+      </div>
+    </Modal>
+  );
+}
 
 const COLLAPSED_KEY = "ns_sidebar_collapsed";
 
@@ -40,6 +72,10 @@ export default function AppShell() {
   const location = useLocation();
   const notebookFocus = /^\/app\/notebooks\/[^/]+$/.test(location.pathname);
   const [collapsed, setCollapsed] = useState(readCollapsed);
+  const [menuOpen, setMenuOpen] = useState(false); // small screens: the other tabs fold away under the current one
+  const [accountOpen, setAccountOpen] = useState(false); // small screens: profile, plan and Sign out, behind the hamburger
+  // Navigating anywhere (including the browser back button) closes the menu.
+  useEffect(() => setMenuOpen(false), [location.pathname]);
   const toggle = () =>
     setCollapsed((c) => {
       try {
@@ -51,6 +87,13 @@ export default function AppShell() {
     });
   if (loading) return <div className="boot"><div className="orbit-loader"><span /></div></div>;
   if (!user) return <Navigate to="/" replace />;
+
+  const isActive = (to: string, also?: string[]) =>
+    location.pathname === to || location.pathname.startsWith(`${to}/`) || !!also?.some((p) => location.pathname.startsWith(p));
+  // Small screens show only the tab you are on; its chevron unfolds the rest.
+  const current = [...NAV, { to: "/app/connector", label: "Connector", icon: ConnectorIcon }, { to: "/app/settings", label: "Settings", icon: GearIcon }]
+    .find((n) => isActive(n.to, "also" in n ? n.also : undefined));
+  const CurrentIcon = current?.icon;
 
   return (
     <UpgradeProvider>
@@ -81,8 +124,18 @@ export default function AppShell() {
                 <path d={collapsed ? "M13 10l2 2-2 2" : "M15 10l-2 2 2 2"} />
               </svg>
             </button>
+            <button type="button" className="nav-toggle app-account-btn" onClick={() => setAccountOpen(true)}
+                    aria-label="Account" aria-haspopup="dialog">
+              <MenuIcon size={22} />
+            </button>
           </div>
-          <nav aria-label="App">
+          <button type="button" className="side-link active app-current" onClick={() => setMenuOpen((o) => !o)}
+                  aria-expanded={menuOpen} aria-controls="app-nav">
+            {CurrentIcon && <CurrentIcon />}
+            <span className="side-label">{current?.label ?? "Menu"}</span>
+            <ChevronIcon size={18} className={`icon app-current-chev${menuOpen ? " open" : ""}`} />
+          </button>
+          <nav id="app-nav" className={menuOpen ? "open" : undefined} aria-label="App">
             {NAV.map(({ to, label, icon: Icon, end, also }) => (
               <NavLink
                 key={to}
@@ -110,10 +163,15 @@ export default function AppShell() {
                 </span>
               </span>
             </NavLink>
+            {/* Phones: Settings is one of the tabs (wide screens pin it to the sidebar's foot) */}
+            <NavLink to="/app/settings" className={({ isActive }) => `side-link app-nav-settings${isActive ? " active" : ""}`}>
+              <GearIcon />
+              <span className="side-label">Settings</span>
+            </NavLink>
           </nav>
           <FuelGauge collapsed={collapsed} />
           <NavLink to="/app/settings" title={collapsed ? "Settings" : undefined} className={({ isActive }) => `side-link side-settings${isActive ? " active" : ""}`}>
-            <OrbitIcon />
+            <GearIcon />
             <span className="side-label">Settings</span>
           </NavLink>
           <div className="sidebar-user">
@@ -127,6 +185,7 @@ export default function AppShell() {
           <Outlet />
         </main>
       </div>
+      {accountOpen && <AccountModal user={user} signingOut={signingOut} logout={logout} onClose={() => setAccountOpen(false)} />}
       {/* Outside .shell: its children get position: relative, and these are fixed overlays. */}
       <NudgeDock />
       <UpgradeModal />

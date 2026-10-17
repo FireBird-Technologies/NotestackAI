@@ -123,7 +123,11 @@ export default function Notebooks() {
   const [renaming, setRenaming] = useState<string | null>(null);
   const [name, setName] = useState("");
 
-  const load = useCallback(() => notebooksApi.list().then(setNotebooks), []);
+  // The archive ("All posts") always comes first; the rest keep the order the API gives them.
+  const load = useCallback(
+    () => notebooksApi.list().then((list) => setNotebooks([...list].sort((a, b) => Number(b.is_archive) - Number(a.is_archive)))),
+    [],
+  );
   useEffect(() => {
     // "All posts" always exists, so asking the whole archive never needs setup.
     notebooksApi.archive().finally(load);
