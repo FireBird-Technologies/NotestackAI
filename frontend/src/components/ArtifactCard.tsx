@@ -10,7 +10,7 @@ import { InfographicBody } from "./Infographic";
 import { QuizBody } from "./Quiz";
 import { StudyOverlay } from "./StudyOverlay";
 import { ReportBody } from "./ReportBody";
-import { ConfirmButton, errorMessage, formatDate, formatDuration, JobProgress, StatusPill } from "./ui";
+import { DeleteButton, errorMessage, formatDate, formatDuration, JobProgress, StatusPill } from "./ui";
 import { ShareButton } from "./ShareDialog";
 import { ChevronIcon, DownloadIcon, RetryIcon } from "./icons/Icons";
 import { CardFeedback } from "./CardFeedback";
@@ -288,8 +288,8 @@ export function ArtifactCard({
           </button>
         )}
         {onRemoved && (
-          <ConfirmButton
-            className="btn btn-small btn-icon-only card-delete" label="Delete" confirmLabel="Delete?" busyLabel="" nativeTitle={false}
+          <DeleteButton
+            heading={`Delete ${artifact.type_label.toLowerCase()}?`} name={artifact.title}
             onConfirm={async () => {
               // A blog2video video is also removed from blog2video.
               await (artifact.provider === "blog2video" ? videosApi.remove(artifact.id) : artifactsApi.remove(artifact.id));
@@ -297,7 +297,7 @@ export function ArtifactCard({
             }}
           >
             <TrashIcon size={16} />
-          </ConfirmButton>
+          </DeleteButton>
         )}
         <CardFeedback artifact={artifact} />
       </footer>

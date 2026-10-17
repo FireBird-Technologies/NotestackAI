@@ -68,6 +68,10 @@
 
 /* Under the page title, step 1 only: plain text */
 .vw-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
   justify-self: start;
   margin-top: -12px;
   padding: 0;
@@ -740,7 +744,7 @@
 
 @media (max-width: 1000px) {
   .vw-editor {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr); /* plain 1fr grows to fit its widest content and overflows a phone */
   }
 }
 
@@ -1362,6 +1366,30 @@ a.mc-action {
   opacity: 0.6;
 }
 
+/* Phones: a row's title, status and date fill the first line; its buttons (Launch, Share, delete) wrap to a second,
+   with delete at the far end. Covers the Library rows (.artifact-row-head) and the Videos rows (.vw-list-row). */
+@media (max-width: 699px) {
+  .artifact-row-head,
+  .vw-list-row:not(.artifact-row) {
+    flex-wrap: wrap;
+    row-gap: 12px;
+  }
+
+  .artifact-row-head > .vw-list-main,
+  .vw-list-row:not(.artifact-row) > .vw-list-main {
+    flex: 1 0 100%;
+  }
+
+  .artifact-row-head > .vw-list-delete,
+  .vw-list-row:not(.artifact-row) > .vw-list-delete {
+    margin-left: auto;
+  }
+
+  .vw-list-row {
+    padding: 16px;
+  }
+}
+
 /* Confirm button in every delete / remove / stop warning: a solid red pill, darker red on hover. While it works
    (disabled, "Deleting..."), it stays red and dimmed instead of picking up the shared .btn-danger hover. */
 .btn.vw-delete-confirm {
@@ -1435,6 +1463,24 @@ a.mc-action {
   gap: 12px;
 }
 
+/* Share (icon only) beside the thumbs, all the same small round size */
+.vw-preview-acts {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.vw-preview-acts .card-fb {
+  margin-left: 0;
+}
+
+.vw-preview-acts .btn.btn-small.btn-icon-only {
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+}
+
 .vw-tabbar {
   display: flex;
   flex-wrap: wrap;
@@ -1446,6 +1492,25 @@ a.mc-action {
 /* The editor's tabs: more room between them than the default tab pill */
 .vw-tabbar .tabs {
   gap: 12px;
+}
+
+/* Phones: the four tabs on one row across the full width, each taking an equal share with its label centred */
+@media (max-width: 699px) {
+  .vw-tabbar .tabs {
+    flex: 1 1 100%;
+    flex-wrap: nowrap;
+    gap: 2px;
+    width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .vw-tabbar .tab {
+    flex: 1 0 auto;
+    justify-content: center;
+    padding: 6px 10px;
+    white-space: nowrap;
+  }
 }
 
 .vw-scenes-head {
@@ -1466,7 +1531,9 @@ a.mc-action {
 
 .vw-group {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
+  min-width: 0; /* a long scene title shortens with an ellipsis instead of widening the card */
 }
 
 .vw-group-head {
@@ -2078,6 +2145,7 @@ a.mc-action {
   display: flex;
   align-items: center;
   gap: 16px;
+  min-width: 0;
   margin: 10px 0 0 18px;
   padding: 14px 18px;
   border: 1px solid var(--line);
@@ -2121,6 +2189,7 @@ a.mc-action {
 
 .vw-vo-main {
   display: grid;
+  grid-template-columns: minmax(0, 1fr); /* the column follows the row's width, not the title's length */
   flex: 1;
   gap: 8px;
   min-width: 0;
@@ -2134,6 +2203,7 @@ a.mc-action {
 }
 
 .vw-vo-line strong {
+  min-width: 0; /* lets the title shrink to an ellipsis beside the timer */
   overflow: hidden;
   font-weight: 500;
   text-overflow: ellipsis;
@@ -2160,8 +2230,14 @@ a.mc-action {
 
 @media (max-width: 640px) {
   .vw-vo-row {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    gap: 12px;
     margin-left: 0;
+    padding: 12px 14px;
+  }
+
+  .vw-group-head {
+    padding: 14px 16px;
   }
 }
 
@@ -3237,4 +3313,33 @@ a.mc-action {
 
 .vw-modal-quota {
   justify-self: end;
+}
+
+/* The Audio tab's card never grows wider than the editor column */
+.vw-vo-card {
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+
+/* Phones: the render controls take their own full row under the preview line. Format on the left, Download on the
+   right; while rendering, the progress on the left and Cancel on the right. */
+@media (max-width: 699px) {
+  .vw-preview-foot > .vw-render-panel {
+    flex: 1 1 100%;
+  }
+
+  .vw-render-panel > .row {
+    flex-wrap: nowrap;
+    justify-content: space-between;
+  }
+
+  .vw-render-panel .vw-render-row {
+    min-width: 0;
+    gap: 12px;
+  }
+
+  .vw-render-panel .vw-render-row > .vw-render-status {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
 }

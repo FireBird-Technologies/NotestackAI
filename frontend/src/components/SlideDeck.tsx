@@ -8,7 +8,7 @@ import { useJob } from "../hooks/useJob";
 import { CheckIcon, CollapseIcon, DownloadIcon, ExpandIcon, MoreIcon, PdfIcon, PlayIcon, PptxIcon, DesktopIcon, RetryIcon, ShareIcon, TrashIcon } from "./icons/Icons";
 import { cardClick, ViewButton } from "./cardActions";
 import { LANGUAGES, Pills, SourceFocusFields, sourceSummary, type SourceSelection } from "./SourceFocusFields";
-import { ConfirmButton, ConfirmDeleteModal, errorMessage, formatDate, JobProgress, Modal, StatusPill } from "./ui";
+import { DeleteButton, ConfirmDeleteModal, errorMessage, formatDate, JobProgress, Modal, StatusPill } from "./ui";
 import { canShare, ShareButton, ShareDialog } from "./ShareDialog";
 import { PostButton } from "./launchpad/PostButton";
 import { CardFeedback } from "./CardFeedback";
@@ -846,7 +846,7 @@ export function SlideDeckViewer({ artifact, onClose, onDelete, onSaved }: {
       {pages.length > 0 && <DownloadMenu artifact={artifact} prepare={save} />}
       <CardFeedback artifact={artifact} />
       <DeckMenu artifact={artifact} onPresent={() => void present(inView)} onDelete={onDelete} prepare={save} />
-      <button type="button" className="sd-icon-btn" onClick={requestClose} title="Close" aria-label="Close">
+      <button type="button" className="sd-icon-btn sd-close" onClick={requestClose} title="Close" aria-label="Close">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
           <path d="M6 6l12 12M18 6L6 18" />
         </svg>
@@ -999,7 +999,7 @@ export function SlideDeckRow({ artifact: initial, onRemoved }: { artifact: Artif
             }
           }}><RetryIcon size={16} /></button>
         )}
-        <ConfirmButton onConfirm={remove} className="btn btn-small btn-icon-only card-delete" label="Delete" confirmLabel="Delete?" busyLabel="" nativeTitle={false}><TrashIcon size={16} /></ConfirmButton>
+        <DeleteButton heading="Delete slide deck?" name={deckTitle(artifact)} onConfirm={remove}><TrashIcon size={16} /></DeleteButton>
         <CardFeedback artifact={artifact} />
       </footer>
       {open && <SlideDeckViewer artifact={artifact} onClose={() => setOpen(false)} onDelete={remove} onSaved={setArtifact} />}

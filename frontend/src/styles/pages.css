@@ -1570,12 +1570,34 @@ select.input option {
   margin: 0;
   padding: 0;
   display: grid;
+  /* One set of columns for every row (each row is a subgrid of it): date, platform and type are only as wide as
+     their longest entry, the status fits its pill, and the post text gets the rest */
+  grid-template-columns: auto auto auto minmax(0, 1fr) auto;
+  column-gap: 20px;
+}
+
+.agenda-row > .mono,
+.agenda-platform {
+  white-space: nowrap;
+}
+
+.agenda > li {
+  display: contents;
+}
+
+.agenda > li > .agenda-row {
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+
+.agenda > li.muted {
+  display: block;
+  grid-column: 1 / -1;
 }
 
 .agenda-row {
   display: grid;
-  grid-template-columns: 150px 120px minmax(0, 1fr) auto auto;
-  gap: 12px;
+  column-gap: 20px;
   align-items: center;
   width: 100%;
   padding: 10px 4px;
@@ -1598,9 +1620,38 @@ select.input option {
   white-space: nowrap;
 }
 
+.agenda-platform {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.agenda-kind {
+  justify-self: start;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agenda-end {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 @media (max-width: 720px) {
+  .agenda {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .agenda > li > .agenda-row,
   .agenda-row {
     grid-template-columns: 1fr auto;
+    gap: 8px 12px;
   }
 
   .agenda-text {
@@ -2940,6 +2991,24 @@ select.input option {
   }
 }
 
+/* Phones: a tall map instead of a thin strip. The view crops the sides to fit (fitView in TopicMap.tsx). */
+@media (max-width: 699px) {
+  .map-canvas .map-svg {
+    width: 100%;
+    height: min(72vh, 620px);
+    max-height: none;
+    aspect-ratio: auto;
+  }
+
+  .map-hud {
+    left: 10px;
+    top: 10px;
+    max-width: calc(100% - 76px);
+    padding: 8px 10px;
+    font-size: 0.66rem;
+  }
+}
+
 /* Launchpad: a month fits on one screen. */
 .cal-day {
   min-height: 72px;
@@ -3833,10 +3902,11 @@ select.input,
   min-width: 0;
 }
 
-.lk-title strong {
+.lk-title strong,
+.lk-title > .small {
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: nowrap; /* the row has a fixed height: a long source line shortens instead of spilling into the next row */
 }
 
 @media (max-width: 640px) {
@@ -4118,6 +4188,23 @@ select.input,
   border-color: #f2786b;
   background: rgba(242, 120, 107, 0.12);
   color: #f2786b;
+}
+
+/* Phones: the thumbnail and details on one row, the buttons on their own row under them (remove at the far end) */
+@media (max-width: 699px) {
+  .lp-attach {
+    flex-wrap: wrap;
+    row-gap: 10px;
+  }
+
+  .lp-attach-actions {
+    flex: 1 0 100%;
+    gap: 8px;
+  }
+
+  .lp-attach-actions .lp-attach-remove {
+    margin-left: auto;
+  }
 }
 
 /* The attachment's preview */
@@ -4548,6 +4635,28 @@ select.input,
   .lp-pick-go {
     display: none;
   }
+
+  /* Phones: smaller gaps, thumbnail and tag, so the title and its source line get the room */
+  .lp-pick-row {
+    gap: 10px;
+    padding-left: 8px;
+    padding-right: 6px;
+  }
+
+  .lp-pick-row .lp-thumb {
+    width: 38px;
+    height: 38px;
+  }
+
+  .lp-pick-row .lp-tag {
+    min-width: 0;
+    padding: 3px 8px;
+    font-size: 0.7rem;
+  }
+
+  .lp-pick-item {
+    padding-right: 4px;
+  }
 }
 
 /* A calendar item that carries a video or images */
@@ -4610,6 +4719,7 @@ details.map-legend[open] summary {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: center; /* when the buttons wrap under the link box, they sit centred */
   gap: 10px;
 }
 
@@ -7250,6 +7360,68 @@ details.map-legend[open] summary {
   height: min(680px, calc(100vh - 100px));
 }
 
+/* Narrow screens: the dialog takes its content's height and the modal scrolls, so the templates never run under the
+   Generate button (the fixed height above is for wide screens, where everything fits on one screen). */
+@media (max-width: 1000px) {
+  .rp-dialog {
+    height: auto;
+  }
+
+  .rp-split {
+    grid-template-rows: none;
+  }
+
+  /* With no fixed height to fill, the instructions box keeps a usable size of its own */
+  .rp-edit-main .rp-instructions.input {
+    min-height: 280px;
+  }
+}
+
+/* Phones: two template cards a row, with less padding and a smaller pencil, so the names and descriptions get the
+   room; the "Writing templates..." note drops below its label instead of squeezing it onto two lines. */
+@media (max-width: 640px) {
+  .rp-split .rp-templates {
+    gap: 8px;
+  }
+
+  .rp-template-main {
+    padding: 12px 38px 12px 12px;
+  }
+
+  .rp-template-main strong {
+    font-size: 0.95rem;
+  }
+
+  .rp-template-main .muted {
+    font-size: 0.8rem;
+  }
+
+  .rp-pencil {
+    top: 8px;
+    right: 8px;
+    width: 28px;
+    height: 28px;
+  }
+
+  .rp-template.wait {
+    min-height: 88px;
+    padding: 12px;
+  }
+
+  .rp-suggest-label {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  .rp-suggest-label > * {
+    flex: 0 0 auto;
+  }
+
+  .rp-loading-text {
+    white-space: normal;
+  }
+}
+
 /* The sources at the end of a report */
 .rp-sources-section {
   margin-top: 12px;
@@ -9706,6 +9878,28 @@ a.rp-src-main:hover .rp-src-out {
     width: 34px;
     height: 34px;
   }
+
+  /* The close button pins to the top right beside the title; the other tools centre on the row below */
+  .modal:has(.sd-view) .modal-head {
+    position: relative;
+  }
+
+  .modal:has(.sd-view) .modal-head h2 {
+    flex: 1 1 100%;
+    padding-right: 44px;
+  }
+
+  .sd-head-actions {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .sd-head-actions .sd-close {
+    position: absolute;
+    top: 0;
+    right: 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -10464,6 +10658,56 @@ body.nbv-resizing iframe {
   margin-left: auto;
   color: var(--text-3);
   letter-spacing: 0;
+}
+
+.nbv-rail-chev {
+  transition: transform 0.15s;
+}
+
+.nbv-rail-chev.folded {
+  transform: rotate(-90deg);
+}
+
+/* Phones: the rail sits above the chat at its natural height. It folds to its top bar, and Chats and Posts open one
+   at a time, each showing about three rows and scrolling the rest. */
+@media (max-width: 899px) {
+  .nbv-history {
+    max-height: none;
+  }
+
+  .nbv-history-folded {
+    gap: 0;
+  }
+
+  .nbv-history .nbv-history-head {
+    min-height: 0;
+    padding: 6px 4px 6px 8px;
+    border-bottom: 0;
+  }
+
+  .nbv-history .nbv-chat-list {
+    flex: none;
+    max-height: 8.25rem;
+    padding: 0;
+  }
+
+  .nbv-history .nbv-chat-list:empty {
+    display: none;
+  }
+
+  .nbv-history .nbv-posts {
+    flex: none;
+    min-height: 0;
+    padding: 8px 0 0 8px;
+    overflow: visible;
+  }
+
+  .nbv-history .nbv-posts .nbv-docs {
+    max-height: 10.5rem;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
 }
 
 /* The quiz result as a small galaxy: a nebula behind a medal-planet, its ring and moon, and a star per question on an orbit */
@@ -11340,4 +11584,171 @@ body.nbv-resizing iframe {
 
 .artifact .ig-dl .ig-dl-menu button:hover {
   background: var(--surface-2);
+}
+
+/* Topic map: Briefing is an on/off switch with its label, a smaller copy of the scene editor's switch */
+.map-brief-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-2);
+  font: 500 0.9rem var(--font-body);
+  cursor: pointer;
+}
+
+.map-brief-switch:hover,
+.map-brief-switch[aria-checked="true"] {
+  color: var(--white);
+}
+
+.map-brief-switch .vw-switch {
+  display: block;
+  width: 40px;
+  height: 24px;
+}
+
+.map-brief-switch .vw-switch span {
+  width: 18px;
+  height: 18px;
+}
+
+.map-brief-switch .vw-switch.on span {
+  left: 19px;
+}
+
+/* A job's progress bar right under a page's header gets room from the header's buttons */
+.page-head + .ascent {
+  margin-top: 12px;
+}
+
+/* Library: tabs on wide screens, a dropdown pill on phones */
+.lib-filter-phone {
+  display: none;
+}
+
+@media (max-width: 699px) {
+  .lib-tabs-wide {
+    display: none;
+  }
+
+  .lib-filter-phone {
+    display: block;
+    justify-self: start;
+    min-width: 200px;
+  }
+
+  .lib-filter-phone .dropdown-btn {
+    height: 42px;
+    border-color: var(--blue);
+    color: var(--white);
+    font-weight: 600;
+  }
+}
+
+/* Launchpad calendar: the Prev/Next arrows show on phones only (wide screens keep the words) */
+.cal-nav-arrow {
+  display: none;
+}
+
+/* Phones: a compact month. Arrows either side of a centred month name with Month/Agenda under it, square day
+   cells, and each post as a small coloured bar (still tappable; its words don't fit a seventh of a phone). */
+@media (max-width: 599px) {
+  .cal-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .cal-nav {
+    justify-content: space-between;
+    flex-wrap: nowrap;
+  }
+
+  .cal-nav h2 {
+    font-size: 1.1rem;
+    text-align: center;
+  }
+
+  .cal-nav .btn {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    flex: none;
+  }
+
+  .cal-nav-arrow {
+    display: block;
+  }
+
+  .cal-nav-label {
+    display: none;
+  }
+
+  .cal-head .tabs {
+    align-self: center;
+  }
+
+  .cal-grid {
+    gap: 3px;
+  }
+
+  .cal-weekday {
+    padding: 4px 0;
+    font-size: 0.62rem;
+    text-align: center;
+  }
+
+  .cal-day {
+    min-height: 0;
+    aspect-ratio: 1 / 1.15;
+    padding: 3px;
+    gap: 2px;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .cal-date {
+    font-size: 0.66rem;
+  }
+
+  .cal-day.schedulable::after {
+    display: none;
+  }
+
+  .cal-item {
+    flex: none;
+    height: 7px;
+    padding: 0;
+    border-radius: 999px;
+    font-size: 0;
+    line-height: 0;
+  }
+
+  .cal-item > * {
+    display: none;
+  }
+
+  .lp-cal-foot {
+    margin-top: 10px;
+  }
+}
+
+/* Add voices: each way to make a voice is its own pill (no shared track, so wrapping on a phone stays tidy) */
+.voice-modes > .tabs {
+  gap: 8px;
+  padding: 0;
+  border: 0;
+}
+
+.voice-modes > .tabs .tab {
+  border: 1px solid var(--line-strong);
+}
+
+.voice-modes > .tabs .tab.active {
+  border-color: var(--blue);
 }

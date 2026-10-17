@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from "r
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { launchpadApi } from "../api/endpoints";
 import type { CalendarItem, PostableArtifact, SocialAccounts } from "../api/types";
-import { FilmIcon } from "../components/icons/Icons";
+import { ArrowLeftIcon, ArrowRightIcon, FilmIcon } from "../components/icons/Icons";
 import { AttachmentChip, AttachPicker, LibraryPicker } from "../components/launchpad/Attachment";
 import { PLATFORMS, ScheduleModal } from "../components/ScheduleModal";
 import { dayKey, monthGrid, nextSlot, SlotPicker, toWall, userTimeZone, wallToDate } from "../components/launchpad/SlotPicker";
@@ -11,6 +11,16 @@ import { BackArrow, ConfirmButton, CopyButton, errorMessage, formatDate, Loading
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 /** A small mark on a calendar item that carries a video or images. */
+/** What a post carries, for the agenda's pill: the same names the attachment picker uses (just text when nothing). */
+function kindLabel(item: CalendarItem): string {
+  const a = item.artifact;
+  if (!a) return item.kit_id ? "Launch Kit" : "Text";
+  if (a.type === "upload") return "Upload";
+  if (a.media === "video") return "Video";
+  if (a.media === "audio") return "Audio";
+  return a.type_label;
+}
+
 function MediaMark({ item }: { item: CalendarItem }) {
   if (!item.artifact || item.artifact.media === "text") return null;
   return (
@@ -427,13 +437,13 @@ export default function Launchpad() {
       <div className="lp-layout">
       <section className="card">
         <div className="row between cal-head">
-          <div className="row">
+          <div className="row cal-nav">
             <button className="btn btn-small" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))} aria-label="Previous month">
-              Prev
+              <ArrowLeftIcon size={16} className="icon cal-nav-arrow" /><span className="cal-nav-label">Prev</span>
             </button>
             <h2>{month.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</h2>
             <button className="btn btn-small" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))} aria-label="Next month">
-              Next
+              <span className="cal-nav-label">Next</span><ArrowRightIcon size={16} className="icon cal-nav-arrow" />
             </button>
           </div>
           <Tabs tabs={[{ id: "month", label: "Month" }, { id: "agenda", label: "Agenda" }]} value={view} onChange={setView} />
@@ -472,6 +482,7 @@ export default function Launchpad() {
                   <span className="cal-date mono">{d.getDate()}</span>
                   {dayItems.map((i) => (
                     <button key={i.id} className={`cal-item cal-${i.status}`} title={i.content}
+                            aria-label={`${i.platform_label} post at ${new Date(i.scheduled_at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`}
                             onClick={(e) => {
                               e.stopPropagation(); // the post's editor, not a new post on its day
                               setOpen(i);
@@ -496,12 +507,17 @@ export default function Launchpad() {
             {items.map((i) => (
               <li key={i.id}>
                 <button className="agenda-row" onClick={() => setOpen(i)}>
+                  {/* Always the same five cells, so every row's columns line up */}
                   <span className="mono muted">{formatDate(i.scheduled_at, true)}</span>
-                  <strong>{i.platform_label}</strong>
-                  <MediaMark item={i} />
+                  <strong className="agenda-platform">{i.platform_label}</strong>
+                  <span className={`lp-tag agenda-kind${i.artifact?.media === "video" ? " video" : i.artifact?.type === "slide_deck" ? " deck" : !i.artifact && i.kit_id ? " kit" : ""}`}>
+                    {kindLabel(i)}
+                  </span>
                   <span className="agenda-text">{i.content}</span>
-                  <StatusPill status={i.status} />
-                  {i.clicks > 0 && <span className="mono muted">{i.clicks} clicks</span>}
+                  <span className="agenda-end">
+                    {i.clicks > 0 && <span className="mono muted">{i.clicks} clicks</span>}
+                    <StatusPill status={i.status} />
+                  </span>
                 </button>
               </li>
             ))}

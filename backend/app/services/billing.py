@@ -25,6 +25,12 @@ METERS = {
 }
 
 
+def _capped(used: float, limit: float) -> float:
+    """What a meter shows as used: never more than its limit (a Free workspace past its 10 chat messages shows 10/10,
+    however many it sent on a paid plan). Unlimited (-1) shows the real count."""
+    return used if limit < 0 else min(used, limit)
+
+
 def _meters(plan: Plan, used: dict, sources: int) -> list[dict]:
     rows = []
     meters = dict(METERS)
@@ -33,9 +39,9 @@ def _meters(plan: Plan, used: dict, sources: int) -> list[dict]:
                   for k, v in METERS.items()}
     for key, (label, unit) in meters.items():
         limit = getattr(plan, key)
-        rows.append({"key": key, "label": label, "unit": unit, "used": used[key], "limit": limit,
+        rows.append({"key": key, "label": label, "unit": unit, "used": _capped(used[key], limit), "limit": limit,
                      "pct": 0 if limit < 0 else round(min(1.0, used[key] / max(limit, 1)), 3)})
-    rows.append({"key": "sources", "label": "Sources", "unit": "", "used": sources, "limit": plan.sources,
+    rows.append({"key": "sources", "label": "Sources", "unit": "", "used": _capped(sources, plan.sources), "limit": plan.sources,
                  "pct": 0 if plan.sources < 0 else round(min(1.0, sources / max(plan.sources, 1)), 3)})
     return rows
 
@@ -49,7 +55,7 @@ def _more_meters(db: Session, workspace: Workspace, plan: Plan, used: dict) -> l
             ("reports", "Reports", used["reports"], plan.reports),
             ("infographics", "Infographics", used["infographics"], plan.infographics),
             ("chat_messages", "Chat messages", used["chat_messages"], plan.chat_messages)]
-    return [{"key": k, "label": label, "unit": "", "used": u, "limit": limit,
+    return [{"key": k, "label": label, "unit": "", "used": _capped(u, limit), "limit": limit,
              "pct": 0 if limit < 0 else round(min(1.0, u / max(limit, 1)), 3)} for k, label, u, limit in rows]
 
 

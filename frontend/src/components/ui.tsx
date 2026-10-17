@@ -204,12 +204,32 @@ export function ConfirmDeleteModal({ heading, name, onCancel, onConfirm }: {
         {error && <p className="error-text" role="alert">{error}</p>}
         <div className="row sd-confirm-actions">
           <button type="button" className="btn" onClick={onCancel} disabled={busy}>Cancel</button>
-          <button type="button" className="btn btn-danger" onClick={confirm} disabled={busy} autoFocus>
+          <button type="button" className="btn btn-danger vw-delete-confirm" onClick={confirm} disabled={busy} autoFocus>
             {busy ? (<><span className="nbv-send-spinner" aria-hidden="true" /> Deleting...</>) : "Delete"}
           </button>
         </div>
       </div>
     </Modal>
+  );
+}
+
+/** An icon button that asks before deleting: a warning modal naming the thing, then onConfirm. */
+export function DeleteButton({ heading, name, onConfirm, className = "btn btn-small btn-icon-only card-delete", label = "Delete", children }: {
+  heading: string;
+  name: string;
+  onConfirm: () => Promise<void>;
+  className?: string;
+  label?: string;
+  children: ReactNode;
+}) {
+  const [asking, setAsking] = useState(false);
+  return (
+    <>
+      <button type="button" className={className} aria-label={label} onClick={() => setAsking(true)}>
+        {children}
+      </button>
+      {asking && <ConfirmDeleteModal heading={heading} name={name} onCancel={() => setAsking(false)} onConfirm={onConfirm} />}
+    </>
   );
 }
 

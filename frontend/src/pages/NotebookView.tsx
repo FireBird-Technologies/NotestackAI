@@ -24,10 +24,10 @@ import { prefetchSuggestions } from "../hooks/reportSuggestions";
 import { useArtifactLimits } from "../hooks/useArtifactLimits";
 import { useUpgrade } from "../hooks/useUpgrade";
 import { ReportDialog, type ReportRequest } from "../components/ReportDialog";
-import { PaneResizer, usePaneWidths } from "../components/PaneResizer";
+import { PaneResizer, useMedia, usePaneWidths } from "../components/PaneResizer";
 import { Reader } from "../components/Reader";
 import { seedDocs } from "../components/video/sourceCache";
-import { ConfirmButton, errorMessage, formatDate, JobProgress, Loading, Modal } from "../components/ui";
+import { errorMessage, formatDate, JobProgress, Loading, Modal } from "../components/ui";
 import { useJob } from "../hooks/useJob";
 import { AddSource } from "./Sources";
 import { VideoCreateForm } from "./VideoCreate";
@@ -353,9 +353,24 @@ export default function NotebookView() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [q, setQ] = useState("");
   const [postFilter, setPostFilter] = useState("");
+  const [removing, setRemoving] = useState<{ id: string; title: string } | null>(null); // the post awaiting confirmation
+  const [removeBusy, setRemoveBusy] = useState(false);
+  const [removeError, setRemoveError] = useState<string | null>(null);
+  const [deletingChat, setDeletingChat] = useState<{ id: string; title: string } | null>(null); // the chat awaiting confirmation
+  const [deleteChatBusy, setDeleteChatBusy] = useState(false);
+  const [deleteChatError, setDeleteChatError] = useState<string | null>(null);
   const [postsOpen, setPostsOpen] = useState(true);
   const [chatsOpen, setChatsOpen] = useState(true);
   const [closedGroups, setClosedGroups] = useState<string[]>([]); // date headings folded shut
+  // Phones stack the rail above the chat: it folds to its top bar, and Chats and Posts open one at a time.
+  const phone = useMedia("(max-width: 899px)");
+  const [railFolded, setRailFolded] = useState(false);
+  const [phoneSection, setPhoneSection] = useState<"chats" | "posts" | null>(null);
+  const flipSection = (s: "chats" | "posts") => {
+    // Opening Chats starts with every date heading folded, so the section shows the dates first.
+    if (s === "chats" && phoneSection !== "chats") setClosedGroups(groupChats(chats).map((g) => g.label));
+    setPhoneSection((cur) => (cur === s ? null : s));
+  };
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [busy, setBusy] = useState(false);
   const upgrade = useUpgrade();
@@ -401,6 +416,9 @@ export default function NotebookView() {
   const bottom = useRef<HTMLDivElement>(null);
   const layout = useRef<HTMLDivElement>(null);
   const panes = usePaneWidths(layout, { leftOpen: historyOpen, rightOpen: toolsOpen }); // the side panels' dragged widths
+  const railShown = phone || historyOpen; // on a phone the rail never hides, it folds
+  const chatsShown = phone ? phoneSection === "chats" : chatsOpen;
+  const postsShown = phone ? phoneSection === "posts" : postsOpen;
 
   // Auto-save the title shortly after the user stops typing.
   useEffect(() => {
@@ -539,7 +557,7 @@ export default function NotebookView() {
     const sentIn = chatLoad.current; // the chat on screen when it was sent: opening or starting another one changes it
     setTurns((t) => [...t, { role: "user", text: question }, { role: "assistant", text: "", status: "Scanning", askKey }]);
     // Count the question as soon as it is sent (the server counts it then too); the answer brings the exact number.
-    if (quota) setChatQuota({ used: quota.used + 1, limit: quota.limit, left: Math.max(quota.left - 1, 0) });
+    if (quota) setChatQuota({ used: Math.min(quota.used + 1, quota.limit), limit: quota.limit, left: Math.max(quota.left - 1, 0) });
     const patchAnswer = (p: Partial<Turn> | ((x: Turn) => Partial<Turn>)) =>
       setTurns((t) => t.map((x) => (x.askKey === askKey ? { ...x, ...(typeof p === "function" ? p(x) : p) } : x)));
     let answered = "";
@@ -736,7 +754,7 @@ export default function NotebookView() {
     <div ref={layout} className={`nbv${historyOpen ? "" : " nbv-history-closed"}${toolsOpen ? "" : " nbv-tools-closed"}`} style={panes.style}>
       <PaneResizer side="left" panes={panes} container={layout} label="Resize the chats panel" />
       <PaneResizer side="right" panes={panes} container={layout} label="Resize the create panel" />
-      {historyOpen && <aside className="nbv-pane nbv-history" aria-label="Notebook chats">
+      {railShown && <aside className={`nbv-pane nbv-history${phone && railFolded ? " nbv-history-folded" : ""}`} aria-label="Notebook chats">
         {/* The top line: back to all notebooks, and the button that closes this column */}
         <div className="nbv-history-top">
           <Link to="/app/notebooks" className="nbv-history-back">
@@ -745,18 +763,35 @@ export default function NotebookView() {
             </svg>
             All notebooks
           </Link>
-          <button type="button" className="nbv-close-history" onClick={() => setChatRail(false)} aria-label="Close chat sidebar" title="Close chat sidebar">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
-              <path d="M9 4.5v15M15 10l-2 2 2 2" />
-            </svg>
-          </button>
+          {phone ? (
+            <button type="button" className="nbv-close-history" onClick={() => setRailFolded(!railFolded)} aria-expanded={!railFolded}
+                    aria-label={railFolded ? "Show chats and posts" : "Hide chats and posts"} title={railFolded ? "Show chats and posts" : "Hide chats and posts"}>
+              <svg className={`nbv-rail-chev${railFolded ? " folded" : ""}`} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </button>
+          ) : (
+            <button type="button" className="nbv-close-history" onClick={() => setChatRail(false)} aria-label="Close chat sidebar" title="Close chat sidebar">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
+                <path d="M9 4.5v15M15 10l-2 2 2 2" />
+              </svg>
+            </button>
+          )}
         </div>
+        {!(phone && railFolded) && <>
         <div className="nbv-history-head">
-          <div>
-            <h2>Chats</h2>
-            <span className="muted">In this notebook</span>
-          </div>
+          {phone ? (
+            <button type="button" className="nbv-posts-toggle" aria-expanded={chatsShown} onClick={() => flipSection("chats")}>
+              <svg className={`nbv-posts-chev${chatsShown ? " open" : ""}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
+              Chats <span className="nbv-posts-count">{chats.length}</span>
+            </button>
+          ) : (
+            <div>
+              <h2>Chats</h2>
+              <span className="muted">In this notebook</span>
+            </div>
+          )}
           <div className="nbv-history-actions">
             <button type="button" className="nbv-new-chat" onClick={newChat} disabled={busy} aria-label="New chat" title="New chat">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true">
@@ -766,15 +801,15 @@ export default function NotebookView() {
           </div>
         </div>
         <nav className="nbv-chat-list" aria-label="Chat history">
-          {chats.length > 0 && (
+          {chats.length > 0 && !phone && (
             <button type="button" className="nbv-posts-toggle nbv-chats-toggle" aria-expanded={chatsOpen} onClick={() => setChatsOpen(!chatsOpen)}>
               <svg className={`nbv-posts-chev${chatsOpen ? " open" : ""}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
               Recent <span className="nbv-posts-count">{chats.length}</span>
             </button>
           )}
-          {chats.length === 0 ? (
+          {!chatsShown ? null : chats.length === 0 ? (
             <p className="nbv-history-empty muted small">Your conversations in this notebook will appear here.</p>
-          ) : chatsOpen && (
+          ) : (
             groupChats(chats).map((g) => (
               <div key={g.label} className="nbv-chat-group">
                 <button type="button" className="nbv-chat-list-label nbv-group-toggle" aria-expanded={!closedGroups.includes(g.label)}
@@ -796,16 +831,20 @@ export default function NotebookView() {
                       >
                         <span>{chatTitle}</span>
                       </button>
-                      <ConfirmButton
+                      <button
+                        type="button"
                         className="nbv-chat-delete"
-                        confirmLabel="✓"
-                        onConfirm={() => removeChat(c.id)}
+                        title="Delete chat"
+                        onClick={() => {
+                          setDeleteChatError(null);
+                          setDeletingChat({ id: c.id, title: chatTitle });
+                        }}
                       >
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                           <path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5" />
                         </svg>
                         <span className="sr-only">Delete {chatTitle}</span>
-                      </ConfirmButton>
+                      </button>
                     </div>
                   );
                 })}
@@ -817,8 +856,8 @@ export default function NotebookView() {
         {/* Posts: below the chat history */}
         <section className="nbv-section nbv-posts">
           <div className="nbv-section-head">
-            <button type="button" className="nbv-posts-toggle" aria-expanded={postsOpen} onClick={() => setPostsOpen(!postsOpen)}>
-              <svg className={`nbv-posts-chev${postsOpen ? " open" : ""}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
+            <button type="button" className="nbv-posts-toggle" aria-expanded={postsShown} onClick={() => (phone ? flipSection("posts") : setPostsOpen(!postsOpen))}>
+              <svg className={`nbv-posts-chev${postsShown ? " open" : ""}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
               Posts <span className="nbv-posts-count">{nb.documents.length}</span>
             </button>
             <button className="btn btn-small" onClick={() => setAdding(true)}
@@ -832,7 +871,7 @@ export default function NotebookView() {
               load();
             }} />
           ))}
-          {postsOpen && (
+          {postsShown && (
             <>
               {nb.is_archive && <p className="muted small">Every indexed post. New posts join automatically.</p>}
               {!nb.is_archive && nb.documents.length === 0 && <p className="muted small">No posts yet. Add some to start asking and creating.</p>}
@@ -851,9 +890,9 @@ export default function NotebookView() {
                         className="icon-btn nbv-remove"
                         aria-label={`Remove ${d.title} from this notebook`}
                         title="Remove from this notebook (the post itself is kept)"
-                        onClick={async () => {
-                          await notebooksApi.removeDoc(nb.id, d.id);
-                          load();
+                        onClick={() => {
+                          setRemoveError(null);
+                          setRemoving({ id: d.id, title: d.title });
                         }}
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
@@ -867,11 +906,12 @@ export default function NotebookView() {
             </>
           )}
         </section>
+        </>}
       </aside>}
 
       <section className="card nbv-pane nbv-chat">
         <div className="chat-bar">
-          {!historyOpen && (
+          {!railShown && (
             <button type="button" className="nbv-show-history" onClick={() => setChatRail(true)} aria-label="Show chat sidebar" title="Show chat sidebar">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
@@ -880,7 +920,7 @@ export default function NotebookView() {
             </button>
           )}
           <div className="nbv-titlebar">
-            {!historyOpen && (
+            {!railShown && (
               <Link to="/app/notebooks" className="mono muted small-link">
                 Notebooks /
               </Link>
@@ -1119,6 +1159,68 @@ export default function NotebookView() {
         </Modal>
       )}
       {reading && <Reader documentId={reading.id} highlight={reading.start ? { start: reading.start, end: reading.end ?? reading.start } : undefined} onClose={() => setReading(null)} />}
+      {deletingChat && (
+        // While the delete runs, Escape, the backdrop and the close button do nothing.
+        <Modal title="Delete this chat?" onClose={deleteChatBusy ? () => undefined : () => setDeletingChat(null)}>
+          <div className="stack">
+            <p>"<strong>{deletingChat.title}</strong>" and all its messages will be deleted permanently. This can't be undone.</p>
+            {deleteChatError && <p className="error-text">{deleteChatError}</p>}
+            <div className="vw-nav">
+              <button className="btn" onClick={() => setDeletingChat(null)} disabled={deleteChatBusy}>Cancel</button>
+              <button
+                className="btn btn-danger vw-delete-confirm"
+                disabled={deleteChatBusy}
+                onClick={async () => {
+                  setDeleteChatBusy(true);
+                  try {
+                    await removeChat(deletingChat.id);
+                    setDeletingChat(null);
+                  } catch (e) {
+                    setDeleteChatError(errorMessage(e));
+                  } finally {
+                    setDeleteChatBusy(false);
+                  }
+                }}
+              >
+                {deleteChatBusy ? "Deleting..." : "Delete chat"}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+      {removing && (
+        // While the removal runs, Escape, the backdrop and the close button do nothing.
+        <Modal title="Remove this post?" onClose={removeBusy ? () => undefined : () => setRemoving(null)}>
+          <div className="stack">
+            <p>
+              "<strong>{removing.title}</strong>" will be removed from this notebook. The post itself is kept in your
+              library, and you can add it back later.
+            </p>
+            {removeError && <p className="error-text">{removeError}</p>}
+            <div className="vw-nav">
+              <button className="btn" onClick={() => setRemoving(null)} disabled={removeBusy}>Cancel</button>
+              <button
+                className="btn btn-danger vw-delete-confirm"
+                disabled={removeBusy}
+                onClick={async () => {
+                  setRemoveBusy(true);
+                  try {
+                    await notebooksApi.removeDoc(nb.id, removing.id);
+                    setRemoving(null);
+                    load();
+                  } catch (e) {
+                    setRemoveError(errorMessage(e));
+                  } finally {
+                    setRemoveBusy(false);
+                  }
+                }}
+              >
+                {removeBusy ? "Removing..." : "Remove post"}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
       {quoted && (
         <Modal title={quoted.title} onClose={() => setQuoted(null)}>
           <p className="mono muted small">
