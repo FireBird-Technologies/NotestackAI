@@ -2938,6 +2938,11 @@ select.input option {
   padding: 8px 0;
 }
 
+/* Room on the right for the delete button (absolutely placed), so a long title never runs under it */
+.doc-list > .doc-row {
+  padding-right: 44px;
+}
+
 .source-row {
   padding: 10px 12px;
 }
