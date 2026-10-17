@@ -45,6 +45,7 @@ from app.services.jobs import create_job, record_usage
 from app.services.memory import list_facts, profile_text
 from app.services.notebook_titles import visible_notebook_title
 from app.services.storage import storage
+from app.services.usage import chat_quota, check_limit, record_chat_message
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/notebooks", tags=["notebooks"])
@@ -349,7 +350,7 @@ def chat_messages(chat_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
         cites = [_cite(c.marker, c.path, c.line_start, c.line_end, c.span or "", docs.get(c.document_id))
                  for c in sorted(m.citations, key=lambda c: c.marker)]
         out.append({"id": str(m.id), "role": m.role, "text": m.content, "citations": cites,
-                    "feedback": _feedback_out(fb.get(m.id))})
+                    "feedback": _feedback_out(fb.get(m.id)), "topic": (m.recall_json or {}).get("topic") or ""})
     return out
 
 
@@ -458,10 +459,13 @@ def _cached_answer(db, key: str) -> tuple[Message, ResearchResult] | None:
                     .order_by(Message.created_at.desc()).limit(1))
     if hit is None or not hit.citations:
         return None
+    if "topic" not in (hit.recall_json or {}):
+        return None  # saved before answers carried a topic: answer afresh, so the next steps name what it is about
     cites = [VerifiedCitation(c.marker, c.path, c.line_start, c.line_end, c.span or "")
              for c in sorted(hit.citations, key=lambda c: c.marker)]
     recall = {k: v for k, v in (hit.recall_json or {}).items() if k not in {"steps", "timings_ms", "kind", "unsupported"}}
-    return hit, ResearchResult(hit.content, False, cites, kind="archive", recall={**recall, "cache_hit": str(hit.id)})
+    return hit, ResearchResult(hit.content, False, cites, kind="archive", recall={**recall, "cache_hit": str(hit.id)},
+                               topic=(hit.recall_json or {}).get("topic") or "")
 
 
 def _last_answer(db, prior: list[Message]) -> LastAnswer | None:
@@ -515,6 +519,8 @@ async def _learn(db, workspace_id: uuid.UUID, message_id: uuid.UUID, kind: str,
 async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)):
     nb = _get(ctx, notebook_id)
     db = ctx.db
+    # Free has a fixed number of chat questions: refuse with a real 402 here, before the stream starts.
+    plan = check_limit(db, ctx.workspace, "chat_messages")
     trace = ChatTrace(notebook=nb.title, message=body.question)
     workspace_id = ctx.workspace.id
 
@@ -565,6 +571,7 @@ async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)
                      if settings.chat_answer_cache_days > 0 and docs and not refers_back(body.question) else None)
         user_msg = Message(chat_id=chat_row.id, role="user", content=body.question)
         db.add(user_msg)
+        record_chat_message(db, workspace_id)  # saved with the question by the commit below
         trace.add("load",
                   f"history: {len(prior)} message(s) of this chat  [Postgres]",
                   f"workspace notes: {len(facts)} note(s)  [Postgres]",
@@ -630,6 +637,7 @@ async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)
         msg = Message(chat_id=chat_row.id, role="assistant", content=result.text,
                       cache_key=cache_key if cacheable else None,
                       recall_json={**result.recall, "kind": result.kind, "unsupported": result.unsupported,
+                                   "topic": result.topic,
                                    "steps": [{"kind": k, "detail": d} for k, d in result.steps],
                                    "timings_ms": {name: round(took) for name, took in trace.stages},
                                    **({"first_delta_ms": round(trace.marks["first-delta"])}
@@ -682,6 +690,9 @@ async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)
             "text": result.text,
             "unsupported": result.unsupported,
             "citations": citations,
+            "topic": result.topic,  # what the answer is about, for the next-step suggestions
+            # How many questions the plan has left ({used, limit, left}), or None when chat is unlimited.
+            "quota": chat_quota(db, ctx.workspace) if plan.chat_messages >= 0 else None,
         })
         wait_started = time.perf_counter()
         saved = await _learn(db, ctx.workspace.id, user_msg.id, result.kind, trace)

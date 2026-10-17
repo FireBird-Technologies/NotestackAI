@@ -48,7 +48,11 @@ Output format, exactly:
 3. A line containing only {SENTINEL}
 4. One JSON object, nothing after it:
 {{"citations": [{{"marker": 1, "path": "sources/site/2024-01-01-slug.md", "line_start": 12, "line_end": 18}}],
- "unsupported": false}}"""
+ "unsupported": false, "topic": "BlogHub's featured listings"}}
+"topic" names the subject of the answer in 2 to 6 words, to fill "Study ... with flashcards", "Quiz yourself on ..."
+and "Turn ... into a slide deck". It is a noun phrase, never a question or a clause: "BlogHub", not "what BlogHub is";
+"links on Substack Notes", not "why links underperform on Notes"; "the Hook & Eye method", "your pricing posts".
+Lowercase except names. Use "" when the archive does not cover the question."""
 
 _INPUT_TITLES = (("question", "Question"), ("answer_length", "Answer length"), ("conversation", "Conversation"),
                  ("writer_profile", "Writer notes"), ("chat_memory", "Notes from earlier in this chat"),
@@ -75,6 +79,7 @@ class WriterResult:
     prompt_tokens: int = 0
     completion_tokens: int = 0
     chunks: int = 0
+    topic: str = ""  # what the answer is about, in a few words: the app names its next-step suggestions after it
     extra: dict = field(default_factory=dict)
 
 
@@ -144,7 +149,7 @@ class SentinelFilter:
             raise WriterError("the answer ended without the citations line")
 
 
-def parse_tail(tail: str) -> tuple[list[FileCitation], bool]:
+def parse_tail(tail: str) -> tuple[list[FileCitation], bool, str]:
     """The JSON after the sentinel. Code fences and stray text around the object are tolerated."""
     start, end = tail.find("{"), tail.rfind("}")
     if start < 0 or end < start:
@@ -154,7 +159,19 @@ def parse_tail(tail: str) -> tuple[list[FileCitation], bool]:
         cites = [FileCitation.model_validate(c) for c in data.get("citations") or []]
     except (ValueError, TypeError) as exc:
         raise WriterError(f"unreadable citations: {exc}") from exc
-    return cites, bool(data.get("unsupported", False))
+    topic = data.get("topic") if isinstance(data.get("topic"), str) else ""
+    return cites, bool(data.get("unsupported", False)), clean_topic(topic)
+
+
+TOPIC_MAX_CHARS = 48
+
+
+def clean_topic(topic: str) -> str:
+    """A short phrase that fits inside a button label: one line, no end punctuation, cut at a word when too long."""
+    topic = strip_em_dashes(" ".join(topic.split())).strip(" .,:;!?\"'")
+    if len(topic) > TOPIC_MAX_CHARS:
+        topic = topic[:TOPIC_MAX_CHARS].rsplit(" ", 1)[0]
+    return topic
 
 
 def user_prompt(inputs: dict, evidence: str) -> str:
@@ -199,6 +216,6 @@ def stream_answer(inputs: dict, evidence: str, on_delta: Callable[[str], None],
     if not out.done and finish == "length":
         raise WriterError(f"the answer hit the {kwargs.get('max_tokens')} token cap before its citations")
     out.close()
-    cites, unsupported = parse_tail(out.tail)
+    cites, unsupported, topic = parse_tail(out.tail)
     answer = re.sub(r"\s+$", "", out.body)
-    return WriterResult(answer, cites, unsupported, prompt_tokens, completion_tokens, out.emitted)
+    return WriterResult(answer, cites, unsupported, prompt_tokens, completion_tokens, out.emitted, topic=topic)

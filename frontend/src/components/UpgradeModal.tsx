@@ -18,6 +18,7 @@ const LIMIT_TITLES: Record<string, string> = {
   infographics: "Infographics used up",
   sources: "Your station is full",
   voice_cloning: "Voice cloning is locked",
+  chat_messages: "Free chat messages used up",
 };
 
 /** What the plan adds over the current one, as short boost chips ("20x audio minutes"). */
@@ -38,6 +39,7 @@ function boosts(plan: PlanInfo, current: PlanInfo): string[] {
   times(plan.launch_kits, current.launch_kits, "Launch Kits");
   times(plan.reports, current.reports, "reports");
   times(plan.infographics, current.infographics, "infographics");
+  if (plan.chat_messages < 0 && current.chat_messages >= 0) out.push("Unlimited chat");
   if (plan.voice_cloning && !current.voice_cloning) out.push("Voice cloning");
   return out;
 }
@@ -122,13 +124,25 @@ export default function UpgradeModal() {
   const limit = modal.mode === "limit" ? modal.limit : null;
   const recommended =
     (modal.mode === "explore" && modal.highlight) || limit?.upgrade_to || status?.next_plan || offers[0]?.id;
-  const meter = limit?.kind ? status?.meters.find((m) => m.key === limit.kind) : undefined;
+  // The popup's own counts when it carries them (a chat warning opens before the billing status refreshes).
+  const counted = limit?.kind && limit.used !== undefined && limit.limit !== undefined && limit.limit > 0
+    ? { used: limit.used, limit: limit.limit, pct: Math.min(1, limit.used / limit.limit) }
+    : null;
+  const listed = limit?.kind
+    ? [...(status?.meters ?? []), ...(status?.more_meters ?? [])].find((m) => m.key === limit.kind)
+    : undefined;
+  const meter = listed && counted ? { ...listed, ...counted } : listed;
+  // Free's chat messages are a total that never refills, and the popup also warns while some are still left.
+  const chatLimit = limit?.kind === "chat_messages";
+  const warning = !!limit?.left && limit.left > 0;
   const canBuy = modal.mode !== "welcome" && offers.length > 0 && (status?.can_upgrade || !status?.billing_enabled);
   const title =
     modal.mode === "welcome"
       ? `Welcome to ${current?.name ?? "your new plan"}`
       : limit
-        ? LIMIT_TITLES[limit.kind ?? ""] ?? "You are out of fuel"
+        ? chatLimit && warning
+          ? `Only ${limit.left} free message${limit.left === 1 ? "" : "s"} left`
+          : LIMIT_TITLES[limit.kind ?? ""] ?? "You are out of fuel"
         : "Explore more with an upgrade";
 
   return (
@@ -149,7 +163,9 @@ export default function UpgradeModal() {
           <p className="muted">
             {modal.mode === "welcome"
               ? "Your new limits are live. Every source, minute and Launch Kit below is ready to use."
-              : limit
+              : chatLimit
+                ? `${limit?.message} ${canBuy ? "Upgrade for unlimited research chat." : ""}`.trim()
+                : limit
                 ? `${limit.message} ${canBuy ? "Upgrade and keep flying, or wait" : "Your allowance refills"} on ${resetDate(status?.since, limit?.kind === "videos" ? status?.videos_resets_at : null)}.`
                 : "Your archive has more orbits in it. More sources, more minutes and more Launch Kits, so every post gets a second life."}
           </p>

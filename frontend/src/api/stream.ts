@@ -1,4 +1,4 @@
-import { tokens } from "./client";
+import { parseError, tokens } from "./client";
 
 const BASE = import.meta.env.VITE_API_URL ?? "";
 
@@ -13,7 +13,9 @@ export async function streamSSE(
   if (tokens.access) headers.set("Authorization", `Bearer ${tokens.access}`);
   if (init.body) headers.set("Content-Type", "application/json");
   const res = await fetch(`${BASE}${path}`, { ...init, headers, signal });
-  if (!res.ok || !res.body) throw new Error(`Stream failed (${res.status})`);
+  // A refused request (a 402 plan_limit opens the upgrade popup) throws the same ApiError as any other call.
+  if (!res.ok) throw await parseError(res);
+  if (!res.body) throw new Error(`Stream failed (${res.status})`);
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { notebooksApi } from "../api/endpoints";
 import type { AnswerFeedback as Feedback } from "../api/types";
 
@@ -32,7 +32,13 @@ const CopyGlyph = ({ done }: { done?: boolean }) => (
 const forCopy = (text: string) => text.replace(/\s*\[\d+\](?:\[\d+\])*/g, "").trim();
 
 /** Copy, thumbs up and thumbs down under an answer. A thumbs down opens a few reasons and an optional note. Saved as soon as it is chosen. */
-export function AnswerFeedback({ messageId, initial, text }: { messageId: string; initial?: Feedback | null; text?: string }) {
+export function AnswerFeedback({ messageId, initial, text, extra }: {
+  messageId: string;
+  initial?: Feedback | null;
+  text?: string;
+  /** Shown at the end of the row, after the thumbs (the last answer's next step suggestion). */
+  extra?: ReactNode;
+}) {
   const [fb, setFb] = useState<Feedback | null>(initial ?? null);
   const [open, setOpen] = useState(false);
   const [reasons, setReasons] = useState<string[]>(initial?.reasons ?? []);
@@ -93,6 +99,7 @@ export function AnswerFeedback({ messageId, initial, text }: { messageId: string
         <button type="button" className={`fb-btn${fb?.rating === "down" ? " is-on" : ""}`} aria-pressed={fb?.rating === "down"} aria-label="Bad answer" title="Bad answer" onClick={() => choose("down")}>
           <Thumb down />
         </button>
+        {extra}
         {thanks && <span className="mono muted small">Thanks, saved.</span>}
         {error && <span className="error-text small">Could not save that. Try again.</span>}
       </div>

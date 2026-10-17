@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { artifactsApi, notebooksApi } from "../api/endpoints";
+import { ApiError } from "../api/client";
 import { streamSSE } from "../api/stream";
 import { createTypewriter } from "../lib/typewriter";
 import type { AnswerFeedback as Feedback, Artifact, ChatSummary, Citation, Job, MemoryChange, Notebook } from "../api/types";
@@ -12,6 +13,7 @@ import { DocPicker } from "../components/DocPicker";
 import { ConnectorIcon, FlashcardsIcon, HeadphonesIcon, InfographicIcon, QuizIcon, ReportIcon, RocketIcon, SlidesIcon, TelescopeIcon, VideoIcon } from "../components/icons/Icons";
 import { ScheduleModal } from "../components/ScheduleModal";
 import { MindMapDialog, MindMapExplorer, MindMapCard } from "../components/MindMap";
+import { NextStepHint, type NextStep } from "../components/NextStepHint";
 import { FlashcardsDialog, type FlashcardsRequest } from "../components/Flashcards";
 import { InfographicDialog, type InfographicRequest } from "../components/Infographic";
 import { SlideDeckDialog, SlideDeckRow, type SlideDeckRequest } from "../components/SlideDeck";
@@ -20,6 +22,7 @@ import { QuizDialog, type QuizRequest } from "../components/Quiz";
 import { prefetchFocus } from "../components/SourceFocusFields";
 import { prefetchSuggestions } from "../hooks/reportSuggestions";
 import { useArtifactLimits } from "../hooks/useArtifactLimits";
+import { useUpgrade } from "../hooks/useUpgrade";
 import { ReportDialog, type ReportRequest } from "../components/ReportDialog";
 import { PaneResizer, usePaneWidths } from "../components/PaneResizer";
 import { Reader } from "../components/Reader";
@@ -40,6 +43,8 @@ type Turn = {
   status?: string;
   steps?: string[];
   saved?: MemoryChange[];
+  topic?: string; // what the answer is about, named in the next-step suggestions under it
+  askKey?: string; // the question this answer belongs to, while it is on screen: what the stream's updates look for
 };
 
 
@@ -89,7 +94,7 @@ function readToolsRailOpen(): boolean {
 }
 
 /** Create: one click per format with sensible defaults, options folded away; then what was made from this notebook. */
-function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, quizOpen, onQuizClose, onCreateQuiz, cardsOpen, onCardsClose, onCreateCards, infographicOpen, onInfographicClose, onCreateInfographic, audioOpen, onAudioClose, onCreateAudio, slidesOpen, onSlidesClose, onCreateSlides, reportOpen, onReportClose, onCreateReport, onCreateVideo, onClose }: {
+function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, quizOpen, onQuizClose, onCreateQuiz, cardsOpen, onCardsClose, onCreateCards, infographicOpen, onInfographicClose, onCreateInfographic, audioOpen, onAudioClose, onCreateAudio, slidesOpen, onSlidesClose, onCreateSlides, reportOpen, onReportClose, onCreateReport, mapOpen, onMapClose, onCreateMap, onCreateVideo, onClose }: {
   notebookId: string;
   docs: { id: string; title: string; locked?: boolean }[];
   chats: ChatSummary[];
@@ -113,6 +118,9 @@ function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, quizOpe
   reportOpen: boolean;
   onReportClose: () => void;
   onCreateReport: () => void;
+  mapOpen: boolean; // the Mind Constellation settings (from here, or from the chat's next step suggestion)
+  onMapClose: () => void;
+  onCreateMap: () => void;
   onCreateVideo: () => void;
   /** Closes the right column (the chat takes its room). */
   onClose: () => void;
@@ -121,7 +129,6 @@ function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, quizOpe
   const [error, setError] = useState<string | null>(null);
   const [reading, setReading] = useState<{ id: string; start: number; end: number } | null>(null);
   const [connectorOpen, setConnectorOpen] = useState(false);
-  const [mapDialog, setMapDialog] = useState(false);
   const [waitingMap, setWaitingMap] = useState<string | null>(null); // a map the user just asked for: open it when ready
   const [exploring, setExploring] = useState<Artifact | null>(null);
 
@@ -168,7 +175,7 @@ function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, quizOpe
     }
   };
   const makeMap = (documentIds: string[], focus: string) =>
-    launch("Mind Constellation", () => setMapDialog(false), () => artifactsApi.generate({
+    launch("Mind Constellation", onMapClose, () => artifactsApi.generate({
       type: "mind_map",
       notebook_id: notebookId,
       document_ids: documentIds.length === docs.length ? undefined : documentIds,
@@ -206,7 +213,7 @@ function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, quizOpe
         </button>
       </div>
       <div className="nbv-make">
-        <button className="nbv-make-stars" disabled={off} onClick={() => setMapDialog(true)}>
+        <button className="nbv-make-stars" disabled={off} onClick={onCreateMap}>
           <span className="nbv-stars-text">
             <strong>Mind Constellation</strong>
             <small>Explore your posts as stars</small>
@@ -331,11 +338,13 @@ function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, quizOpe
       {cardsOpen && <FlashcardsDialog notebookId={notebookId} chats={chats} currentChatId={currentChatId} busy={false}
                                       error={null} onClose={onCardsClose} onCreate={makeCards} />}
       {connectorOpen && <ConnectorModal onClose={() => setConnectorOpen(false)} />}
-      {mapDialog && <MindMapDialog docs={docs} busy={false} error={null} onClose={() => setMapDialog(false)} onCreate={makeMap} />}
+      {mapOpen && <MindMapDialog docs={docs} busy={false} error={null} onClose={onMapClose} onCreate={makeMap} />}
       {exploring && <MindMapExplorer artifact={exploring} onClose={() => setExploring(null)} />}
     </div>
   );
 }
+
+type ChatQuota = { used: number; limit: number; left: number };
 
 export default function NotebookView() {
   const { id = "" } = useParams();
@@ -349,12 +358,24 @@ export default function NotebookView() {
   const [closedGroups, setClosedGroups] = useState<string[]>([]); // date headings folded shut
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [busy, setBusy] = useState(false);
+  const upgrade = useUpgrade();
+  // Free's chat questions ({used, limit, left}): the latest answer's count, else the billing meter. null = unlimited.
+  const [chatQuota, setChatQuota] = useState<ChatQuota | null | undefined>(undefined);
+  const chatMeter = upgrade.status?.more_meters.find((m) => m.key === "chat_messages");
+  const quota =
+    chatQuota !== undefined
+      ? chatQuota
+      : chatMeter && chatMeter.limit >= 0
+        ? { used: chatMeter.used, limit: chatMeter.limit, left: Math.max(chatMeter.limit - chatMeter.used, 0) }
+        : null;
+  const outOfChat = quota !== null && quota.left <= 0;
   const [loadingChatId, setLoadingChatId] = useState<string | null>(null);
   // The Add dialog: connect a source (all its posts join this notebook) and pick posts already indexed. The imports
   // under way are listed under Posts (All posts gathers every post anyway).
   const [adding, setAdding] = useState(false);
   const [imports, setImports] = useState<Job[]>([]);
   const [makingVideo, setMakingVideo] = useState(false); // the video wizard is open in a modal
+  const [makingMap, setMakingMap] = useState(false); // the Mind Constellation settings are open
   const [makingQuiz, setMakingQuiz] = useState(false); // the quiz settings are open in a modal
   const [makingInfographic, setMakingInfographic] = useState(false); // the infographic settings are open in a modal
   const [makingCards, setMakingCards] = useState(false); // the flashcard settings are open in a modal
@@ -375,6 +396,7 @@ export default function NotebookView() {
   const chatId = params.get("chat");
   const shown = useRef<string | null>(null);
   const chatLoad = useRef(0);
+  const askSeq = useRef(0); // counts questions asked on this page: the newest one owns the input's busy state
   const asked = useRef(false);
   const bottom = useRef<HTMLDivElement>(null);
   const layout = useRef<HTMLDivElement>(null);
@@ -454,7 +476,7 @@ export default function NotebookView() {
     }
     // If the user selected another conversation while this request was running, ignore this older response.
     if (request !== chatLoad.current) return;
-    const history: Turn[] = msgs.map((m) => ({ id: m.id, feedback: m.feedback, role: m.role, text: m.text, citations: m.citations }));
+    const history: Turn[] = msgs.map((m) => ({ id: m.id, feedback: m.feedback, role: m.role, text: m.text, citations: m.citations, topic: m.topic }));
     // Early chats saved the answer but not the opening user message. Their title is the original question,
     // so restore it in the transcript instead of showing an assistant answer with no visible prompt.
     if (history[0]?.role === "assistant") {
@@ -505,18 +527,26 @@ export default function NotebookView() {
 
   const ask = async (text: string) => {
     const question = text.trim();
-    if (!question || busy || loadingChatId) return;
+    if (!question || busy || loadingChatId || outOfChat) return;
     setQ("");
     setBusy(true);
-    setTurns((t) => [...t, { role: "user", text: question }, { role: "assistant", text: "", status: "Scanning" }]);
-    const patchLast = (p: Partial<Turn>) => setTurns((t) => [...t.slice(0, -1), { ...t[t.length - 1], ...p }]);
-    const answerAt = turns.length + 1; // where this answer sits, so a late "saved" note lands on the right message
+    // Every update from this question's stream finds its own answer by this key, never by position. When the chat on
+    // screen changes (New chat, another chat) while an earlier answer is still streaming or typing, its updates find
+    // nothing and change nothing, instead of writing into whatever now sits at that position.
+    const seq = ++askSeq.current;
+    const askKey = `ask-${seq}`;
+    const latest = () => askSeq.current === seq;
+    const sentIn = chatLoad.current; // the chat on screen when it was sent: opening or starting another one changes it
+    setTurns((t) => [...t, { role: "user", text: question }, { role: "assistant", text: "", status: "Scanning", askKey }]);
+    // Count the question as soon as it is sent (the server counts it then too); the answer brings the exact number.
+    if (quota) setChatQuota({ used: quota.used + 1, limit: quota.limit, left: Math.max(quota.left - 1, 0) });
+    const patchAnswer = (p: Partial<Turn> | ((x: Turn) => Partial<Turn>)) =>
+      setTurns((t) => t.map((x) => (x.askKey === askKey ? { ...x, ...(typeof p === "function" ? p(x) : p) } : x)));
     let answered = "";
     let failed = false;
     // The answer streams in as a draft, typed out smoothly a word at a time (lib/typewriter). Its [n] markers are only
     // final once the server has verified them, so they are hidden until the typing ends and the verified text with its
-    // citations is swapped in. Everything goes to this answer's own row, so a question asked meanwhile is untouched.
-    const patchAnswer = (p: Partial<Turn>) => setTurns((t) => t.map((x, i) => (i === answerAt ? { ...x, ...p } : x)));
+    // citations is swapped in.
     let draft = "";
     let finalized = false;
     let pendingSaved: MemoryChange[] | null = null;
@@ -527,16 +557,14 @@ export default function NotebookView() {
         (event, data) => {
           const d = data as Record<string, unknown>;
           if (event === "status") {
-            if (d.chat_id) {
+            // Select the chat only while this question is still the one being asked on screen.
+            if (d.chat_id && latest() && chatLoad.current === sentIn) {
               shown.current = d.chat_id as string; // its messages are already on screen: do not reload them
               selectChat(d.chat_id as string);
             }
-            patchLast({ status: d.message as string });
+            patchAnswer({ status: d.message as string });
           } else if (event === "step") {
-            setTurns((t) => {
-              const last = t[t.length - 1];
-              return [...t.slice(0, -1), { ...last, status: d.message as string, steps: [...(last.steps ?? []), d.message as string] }];
-            });
+            patchAnswer((x) => ({ status: d.message as string, steps: [...(x.steps ?? []), d.message as string] }));
           } else if (event === "delta") {
             draft += d.text as string;
             typer.setTarget(streamingText(draft));
@@ -549,30 +577,74 @@ export default function NotebookView() {
             patchAnswer({ text: d.message as string, status: undefined });
           } else if (event === "answer") {
             answered = d.text as string;
-            const final = { id: d.message_id as string, text: answered, citations: d.citations as Citation[], status: undefined };
+            const final = { id: d.message_id as string, text: answered, citations: d.citations as Citation[], status: undefined, topic: (d.topic as string | undefined) || "" };
             // Finish typing (the verified text, markers still hidden), then show it with its clickable citations.
             void typer.finish(streamingText(answered)).then(() => {
               finalized = true;
               patchAnswer(pendingSaved ? { ...final, saved: pendingSaved } : final);
             });
-            setBusy(false); // the answer is here; the "saved to memory" note may follow a moment later
+            if (latest()) setBusy(false); // the answer is here; the "saved to memory" note may follow a moment later
+            const left = d.quota as ChatQuota | null | undefined;
+            if (left !== undefined) {
+              setChatQuota(left);
+              remindChatQuota(left);
+            }
+            void upgrade.refresh();
           } else if (event === "memory") {
             const saved = d.saved as MemoryChange[];
             if (!finalized) pendingSaved = saved;
-            else setTurns((t) => t.map((x, i) => (i === answerAt && x.role === "assistant" && x.text === answered ? { ...x, saved } : x)));
+            else patchAnswer({ saved });
           }
         },
         // Read at send time from the URL, the one place a stale closure or a state reset cannot change.
         { method: "POST", body: JSON.stringify({ question, chat_id: new URLSearchParams(window.location.search).get("chat") }) },
       );
       // The stream closed without an answer or an error: say so instead of leaving the status spinning.
-      if (!answered && !failed) patchLast({ text: "Lost signal. Try again.", status: undefined });
-    } catch {
+      if (!answered && !failed) patchAnswer({ text: "Lost signal. Try again.", status: undefined });
+    } catch (e) {
       typer.stop();
-      patchLast({ text: "Lost signal. Try again.", status: undefined });
+      if (e instanceof ApiError && e.status === 402) {
+        // Out of chat messages: the upgrade popup is already open. Take the question back off the screen.
+        setTurns((t) => {
+          const at = t.findIndex((x) => x.askKey === askKey);
+          return at < 0 ? t : [...t.slice(0, Math.max(at - 1, 0)), ...t.slice(at + 1)];
+        });
+        if (latest()) setQ(question);
+        if (e.code === "plan_limit" && e.detail?.kind === "chat_messages") {
+          const limit = Number(e.detail.limit ?? quota?.limit ?? 0);
+          setChatQuota({ used: limit, limit, left: 0 });
+        }
+      } else {
+        patchAnswer({ text: "Lost signal. Try again.", status: undefined });
+        // Unknown whether the server counted it: go back to the billing meter, freshly loaded.
+        setChatQuota(undefined);
+        void upgrade.refresh();
+      }
     } finally {
-      setBusy(false);
+      // An earlier question's stream can end (after waiting for its memory note) while a newer one is running: only
+      // the newest question frees the input.
+      if (latest()) setBusy(false);
       loadChats();
+    }
+  };
+
+  // The popup for a Free workspace that has used all its chat questions: from the input, the send button or Enter.
+  const openChatLimit = () => {
+    if (!quota) return;
+    const n = quota.limit;
+    upgrade.openLimit({ ...quota, kind: "chat_messages", message: `You have used all ${n} free chat message${n === 1 ? "" : "s"}.` });
+  };
+
+  // Free has a few chat questions: the upgrade popup shows after the 3rd and the 6th, and after the last one (the 10th
+  // on Free), when they have run out.
+  const CHAT_REMINDERS_AT = [3, 6];
+  const remindChatQuota = (left: ChatQuota | null) => {
+    if (!left || left.limit <= 0) return;
+    const plural = (n: number) => `${n} free chat message${n === 1 ? "" : "s"}`;
+    if (left.left <= 0) {
+      upgrade.openLimit({ ...left, kind: "chat_messages", message: `You have used all ${plural(left.limit)}.` });
+    } else if (CHAT_REMINDERS_AT.includes(left.used)) {
+      upgrade.openLimit({ ...left, kind: "chat_messages", message: `You have only ${plural(left.left)} left.` });
     }
   };
 
@@ -625,6 +697,34 @@ export default function NotebookView() {
     seedDocs(nb.id, nb.documents); // the posts this page already has: the dialog shows them at once
     setMakingQuiz(true);
   };
+
+  const openVideo = () => {
+    seedDocs(nb.id, nb.documents); // the posts this page already has: the wizard shows them at once
+    setMakingVideo(true);
+  };
+
+  // The next step suggested beside the last answer. The dialogs live in the Create panel, so it opens too.
+  const inPanel = (open: () => void) => () => {
+    setToolsRail(true);
+    open();
+  };
+  // The steps suggested under the last answer. With the answer's topic each one names it ("Quiz yourself on your
+  // pricing posts"); without one (small talk, an answer from before topics were saved) the plain label shows.
+  const nextSteps = (topic?: string): NextStep[] => {
+    const t = topic?.trim();
+    const say = (plain: string, named: (t: string) => string) => (t ? named(t) : plain);
+    return [
+      { id: "audio", label: say("Make an audio overview", (x) => `Hear an audio overview of ${x}`), icon: <HeadphonesIcon size={14} />, run: inPanel(openAudio) },
+      { id: "slides", label: say("Create a slide deck", (x) => `Turn ${x} into a slide deck`), icon: <SlidesIcon size={14} />, run: inPanel(openSlides) },
+      { id: "video", label: say("Make a video", (x) => `Make a video about ${x}`), icon: <VideoIcon size={14} />, run: openVideo },
+      { id: "report", label: say("Generate a report", (x) => `Write a report on ${x}`), icon: <ReportIcon size={14} />, run: inPanel(openReport) },
+      { id: "quiz", label: say("Take a quiz", (x) => `Quiz yourself on ${x}`), icon: <QuizIcon size={14} />, run: inPanel(openQuiz) },
+      { id: "infographic", label: say("Generate an infographic", (x) => `Make an infographic on ${x}`), icon: <InfographicIcon size={14} />, run: inPanel(openInfographic) },
+      { id: "mindmap", label: say("Explore a Mind Constellation", (x) => `Map ${x} in a Mind Constellation`), icon: <TelescopeIcon size={14} />, run: inPanel(() => setMakingMap(true)) },
+      { id: "cards", label: say("Study with flashcards", (x) => `Study ${x} with flashcards`), icon: <FlashcardsIcon size={14} />, run: inPanel(openCards) },
+    ];
+  };
+  const lastAnswerAt = turns.map((t) => t.role).lastIndexOf("assistant");
 
   const cite = (c: Citation) => {
     if (c.kind === "chat") setQuoted(c);
@@ -868,7 +968,15 @@ export default function NotebookView() {
                   <p className="turn-text">{t.text}</p>
                 ))}
               {t.citations && <CitationList citations={t.citations} onCite={cite} collapsible />}
-              {t.role === "assistant" && t.id && t.text && !t.status && <AnswerFeedback key={t.id} messageId={t.id} initial={t.feedback} text={t.text} />}
+              {t.role === "assistant" && t.id && t.text && !t.status && (
+                <AnswerFeedback
+                  key={t.id}
+                  messageId={t.id}
+                  initial={t.feedback}
+                  text={t.text}
+                  extra={i === lastAnswerAt && !busy && nb.documents.length > 0 ? <NextStepHint actions={nextSteps(t.topic)} /> : undefined}
+                />
+              )}
               {t.saved && t.saved.length > 0 && (
                 <p className="mono muted small">
                   {t.saved
@@ -881,10 +989,36 @@ export default function NotebookView() {
           ))}
           <div ref={bottom} />
         </div>
+        {/* Free only: how many chat messages are left, as a bar that fills with each one sent. */}
+        {quota && quota.limit > 0 && (
+          <div className={`nbv-chat-limit${outOfChat ? " is-empty" : quota.left <= 3 ? " is-low" : ""}`}>
+            <div
+              className="nbv-chat-limit-track"
+              role="progressbar"
+              aria-label="Free chat messages used"
+              aria-valuemin={0}
+              aria-valuemax={quota.limit}
+              aria-valuenow={Math.min(quota.used, quota.limit)}
+            >
+              <div className="nbv-chat-limit-fill" style={{ width: `${Math.min(100, (quota.used / quota.limit) * 100)}%` }} />
+            </div>
+            <p className="muted small">
+              Free plan chat limit{" "}
+              <span className="nbv-chat-limit-count">
+                {Math.min(quota.used, quota.limit)}/{quota.limit}
+              </span>{" "}
+              ·{" "}
+              <button type="button" className="link-btn" onClick={() => upgrade.openUpgrade()}>
+                Upgrade
+              </button>
+            </p>
+          </div>
+        )}
         <form
           onSubmit={(e: FormEvent) => {
             e.preventDefault();
-            void ask(q);
+            if (outOfChat) openChatLimit(); // Enter or the send button once the free questions are used
+            else void ask(q);
           }}
           className="inline-form nbv-ask"
         >
@@ -892,7 +1026,17 @@ export default function NotebookView() {
             className="input"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder={nb.documents.length ? "What have I written about pricing?" : "Add posts to start asking"}
+            // Out of free questions the field stays clickable (read only, not disabled, which would swallow the click)
+            // and opens the upgrade popup instead of taking text.
+            readOnly={outOfChat}
+            onClick={outOfChat ? openChatLimit : undefined}
+            placeholder={
+              outOfChat
+                ? "You have used all your free chat messages"
+                : nb.documents.length
+                  ? "What have I written about pricing?"
+                  : "Add posts to start asking"
+            }
             aria-label="Ask your notebook"
             disabled={!nb.documents.length || Boolean(loadingChatId)}
           />
@@ -922,11 +1066,9 @@ export default function NotebookView() {
                      audioOpen={makingAudio} onAudioClose={() => setMakingAudio(false)} onCreateAudio={openAudio}
                      slidesOpen={makingSlides} onSlidesClose={() => setMakingSlides(false)} onCreateSlides={openSlides}
                      cardsOpen={makingCards} onCardsClose={() => setMakingCards(false)} onCreateCards={openCards}
+                     mapOpen={makingMap} onMapClose={() => setMakingMap(false)} onCreateMap={() => setMakingMap(true)}
                      disabled={nb.documents.length === 0}
-                     onCreateVideo={() => {
-                       seedDocs(nb.id, nb.documents); // the posts this page already has: the wizard shows them at once
-                       setMakingVideo(true);
-                     }}
+                     onCreateVideo={openVideo}
                      onClose={() => setToolsRail(false)} />
       </aside>}
 

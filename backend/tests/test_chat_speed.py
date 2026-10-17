@@ -69,7 +69,7 @@ def test_the_sentinel_never_leaks_even_when_split_across_chunks():
 
 
 def test_the_citations_tail_is_parsed_or_rejected():
-    cites, unsupported = w.parse_tail('\n```json\n{"citations": [{"marker": 1, "path": "a.md", "line_start": 3, '
+    cites, unsupported, _ = w.parse_tail('\n```json\n{"citations": [{"marker": 1, "path": "a.md", "line_start": 3, '
                                       '"line_end": 4}], "unsupported": false}\n```')
     assert cites == [FileCitation(marker=1, path="a.md", line_start=3, line_end=4)] and unsupported is False
     for garbage in ["", "not json", '{"citations": [{"marker": "x"}]}']:
@@ -799,3 +799,59 @@ def test_a_fast_path_the_passages_do_not_cover_hands_over_without_a_reset(monkey
     res = r.research(c, allowed, "How often do I raise prices?", on_delta=deltas.append, trace=t)
     assert deltas == [] and res.recall["path"] == "research agent"  # nothing shown, nothing taken back
     assert "stopped before any text" in t.render()
+
+
+# The answer's topic, for the next-step suggestions under it
+
+
+def test_the_writer_returns_a_short_clean_topic():
+    _, _, topic = w.parse_tail('{"citations": [], "unsupported": false, "topic": "  BlogHub\'s featured listings. "}')
+    assert topic == "BlogHub's featured listings"
+    assert w.parse_tail('{"citations": [], "unsupported": false}')[2] == ""  # older replies without one
+    assert w.parse_tail('{"citations": [], "topic": 42}')[2] == ""
+    long = w.clean_topic("the many different ways I described growing a newsletter through directories and notes")
+    assert len(long) <= w.TOPIC_MAX_CHARS and not long.endswith(" ")
+
+
+def test_the_topic_is_sent_with_the_answer_saved_and_returned_with_the_chat(client, db_session, monkeypatch):
+    from app.routers import notebooks as nbr
+
+    auth, nb, _ = _notebook_with_post(client, db_session, "topic@example.com")
+
+    def fake_research(corpus, allowed, question, on_step=None, history=None, notebook_title="", profile="", **kw):
+        cite = r.VerifiedCitation(1, "sources/x/pricing.md", 7, 7, "Raise prices once a year")
+        return r.ResearchResult("Yearly [1].", False, [cite], kind="archive", question=question,
+                                topic="your pricing posts")
+
+    monkeypatch.setattr(nbr, "research", fake_research)
+    body = client.post(f"/api/notebooks/{nb['id']}/chat", json={"question": "pricing?"}, headers=auth).text
+    assert json.loads(re.search(r"event: answer\ndata: (.*)", body).group(1))["topic"] == "your pricing posts"
+    chat_id = json.loads(re.search(r"event: status\ndata: (.*)", body).group(1))["chat_id"]
+    msgs = client.get(f"/api/notebooks/chats/{chat_id}/messages", headers=auth).json()
+    assert [m["topic"] for m in msgs] == ["", "your pricing posts"]
+
+
+def test_a_cached_answer_saved_before_topics_is_answered_afresh(client, db_session, monkeypatch):
+    from app.models import Message
+    from app.routers import notebooks as nbr
+
+    monkeypatch.setattr(settings, "chat_answer_cache_days", 7)
+    auth, nb, _ = _notebook_with_post(client, db_session, "oldcache@example.com")
+    runs = []
+
+    def fake_research(corpus, allowed, question, on_step=None, history=None, notebook_title="", profile="", **kw):
+        runs.append(question)
+        cite = r.VerifiedCitation(1, "sources/x/pricing.md", 7, 7, "Raise prices once a year")
+        return r.ResearchResult("Yearly [1].", False, [cite], kind="archive", question=question, topic="your pricing")
+
+    monkeypatch.setattr(nbr, "research", fake_research)
+    ask = lambda: client.post(f"/api/notebooks/{nb['id']}/chat", json={"question": "pricing?"},  # noqa: E731
+                              headers=auth).text
+    ask()
+    old = db_session.scalars(select(Message).where(Message.cache_key.is_not(None))).one()
+    old.recall_json = {k: v for k, v in old.recall_json.items() if k != "topic"}  # as saved before topics
+    db_session.commit()
+    body = ask()
+    assert len(runs) == 2 and json.loads(re.search(r"event: answer\ndata: (.*)", body).group(1))["topic"] == "your pricing"
+    ask()  # the fresh answer, with its topic, is now the one reused
+    assert len(runs) == 2

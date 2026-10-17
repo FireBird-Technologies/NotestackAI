@@ -40,10 +40,11 @@ class Plan:
     reports: int = 0  # reports a month; -1 = unlimited
     infographics: int = 0  # infographics a month (in total on a lifetime plan); -1 = unlimited
     audio_overviews: int = -1  # audio overviews allowed (in total on a lifetime plan), whatever their length; -1 = no cap
+    chat_messages: int = -1  # notebook chat questions (in total on a lifetime plan); -1 = unlimited
 
     @property
     def lifetime(self) -> bool:
-        """The allowances for videos, audio overviews, Launch Kits and infographics are totals that never reset (Free)."""
+        """The allowances for videos, audio overviews, Launch Kits, infographics and chat messages are totals that never reset (Free)."""
         return not self.videos_monthly
 
 
@@ -73,10 +74,11 @@ DEFAULT_PLANS: dict[str, Plan] = {
         launch_kits=2,
         reports=2,
         infographics=2,
+        chat_messages=10,
         voice_cloning=False,
         features=(
             "Up to 5 posts indexed, from any source",
-            "Grounded research chat with citations",
+            "10 research chat messages with citations",
             "1 audio overview, any length",
             "1 video",
             "2 Launch Kits",
@@ -101,6 +103,7 @@ DEFAULT_PLANS: dict[str, Plan] = {
         voice_cloning=True,
         features=(
             "Up to 100 posts indexed, from any source",
+            "Unlimited research chat",
             "10x more audio overviews than Free",
             "10 videos a month",
             "20 Launch Kits a month",
@@ -125,6 +128,7 @@ DEFAULT_PLANS: dict[str, Plan] = {
         voice_cloning=True,
         features=(
             "Up to 250 posts indexed, from any source",
+            "Unlimited research chat",
             "40x more audio overviews than Free",
             "20 videos a month",
             "50 Launch Kits a month",
@@ -146,6 +150,7 @@ def _plan_from_row(row: PlanRecord) -> Plan:
                 price_monthly_usd=float(row.price_monthly_usd or 0), sources=row.sources,
                 indexed_posts=row.indexed_posts, audio_minutes=row.audio_minutes,
                 videos=row.videos, launch_kits=row.launch_kits, reports=row.reports, infographics=row.infographics, audio_overviews=row.audio_overviews,
+                chat_messages=row.chat_messages,
                 voice_cloning=bool(row.voice_cloning),
                 features=tuple(row.features or ()),
                 videos_monthly=bool(row.videos_monthly),

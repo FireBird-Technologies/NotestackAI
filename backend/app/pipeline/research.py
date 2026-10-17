@@ -86,6 +86,7 @@ class ResearchResult:
     kind: str = "archive"  # archive | chitchat | about_app | off_topic
     question: str = ""  # the standalone question that was researched
     recall: dict = field(default_factory=dict)  # how recall behaved for this answer (saved with the message)
+    topic: str = ""  # what the answer is about in a few words (from the writer), for the next-step suggestions
 
 
 @dataclass
@@ -570,6 +571,7 @@ class _Stream:
         self.on_delta, self.trace = on_delta, trace
         self.sent = False
         self.prompt_tokens = self.completion_tokens = 0
+        self.topic = ""  # from the last write that succeeded
 
     def _emit(self, text: str) -> None:
         self.sent = True
@@ -608,6 +610,7 @@ class _Stream:
                 break
             self.prompt_tokens += res.prompt_tokens
             self.completion_tokens += res.completion_tokens
+            self.topic = res.topic
             self.trace.add("writer", f"{label}: streamed {len(res.answer)} chars in {res.chunks} chunks, "
                                      f"{len(res.citations)} citation(s), unsupported={res.unsupported}, "
                                      f"tokens {res.prompt_tokens}/{res.completion_tokens}")
@@ -866,6 +869,7 @@ def research(
             kind="archive",
             question=route.question,
             recall={**recall, "path": path},
+            topic=(stream.topic if stream and not refused else ""),
         )
 
     # 1. Only reshape the previous answer ("make it shorter"): one streamed call over what it already cited.

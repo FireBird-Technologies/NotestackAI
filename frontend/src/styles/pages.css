@@ -2179,9 +2179,9 @@ select.input option {
 
 .md-code-copy,
 .md-code-more {
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: 999px;
-  background: transparent;
+  background: rgba(255, 255, 255, 0.03);
   color: var(--text-2);
   font-size: 0.7rem;
   letter-spacing: 0.06em;
@@ -3582,6 +3582,11 @@ select.input,
   font-size: 1rem;
 }
 
+/* Out of free chat questions: the field is read only and opens the upgrade popup when clicked. */
+.nbv-ask .input[readonly] {
+  cursor: pointer;
+}
+
 .nbv-ask {
   position: relative;
   display: block;
@@ -3598,6 +3603,46 @@ select.input,
   padding: 0;
   border-radius: 50%;
   transform: translateY(-50%);
+}
+
+.nbv-chat-limit {
+  display: grid;
+  gap: 6px;
+  width: min(100%, 64rem);
+  margin: 16px auto 10px;
+  padding-inline: 4px;
+}
+
+.nbv-chat-limit p {
+  margin: 0;
+  justify-self: end;
+}
+
+.nbv-chat-limit-count {
+  font-variant-numeric: tabular-nums;
+  color: var(--white);
+}
+
+.nbv-chat-limit-track {
+  justify-self: end;
+  width: min(240px, 100%);
+  height: 4px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.nbv-chat-limit-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--blue-60), var(--blue));
+  transition: width 0.4s ease;
+}
+
+.nbv-chat-limit.is-low .nbv-chat-limit-fill,
+.nbv-chat-limit.is-empty .nbv-chat-limit-fill {
+  background: var(--blue);
+  box-shadow: var(--glow-sm);
 }
 
 .nbv-send-spinner {
@@ -5535,8 +5580,77 @@ details.map-legend[open] summary {
 
 .fb-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+}
+
+/* The last answer's next step suggestion: a faint pill that fades to another tool every few seconds. */
+.nbv-next-wrap {
+  display: inline-flex;
+  margin-left: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.nbv-next {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+  max-width: 100%;
+  min-width: 0;
+  cursor: pointer;
+  animation: nbv-next-in 0.35s ease both;
+  transition: border-color 0.2s, color 0.2s, background 0.2s;
+}
+
+.nbv-next:hover,
+.nbv-next:focus-visible {
+  border-color: var(--blue-60);
+  background: var(--blue-05);
+  color: var(--white);
+}
+
+/* A step named after the answer's topic can be long: on a narrow screen it ends in an ellipsis (the full text is the title). */
+.nbv-next-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nbv-next-arrow {
+  opacity: 0.6;
+  transition: transform 0.2s;
+}
+
+.nbv-next:hover .nbv-next-arrow {
+  transform: translateX(2px);
+}
+
+@keyframes nbv-next-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nbv-next {
+    animation: none;
+  }
 }
 
 .fb-btn {
