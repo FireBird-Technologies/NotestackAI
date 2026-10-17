@@ -13,6 +13,7 @@ from mcp.server.auth.provider import AccessToken
 
 from app.mcp import common, loopback, policy, provider, tokens, widgets
 from app.models import McpAuthRequest, McpGrant, User
+from tests.conftest import last_code
 from tests.test_buildout import auth, connect, docs, feed  # noqa: F401  (fixtures and helpers)
 
 BASE = "http://localhost:8000"
@@ -328,6 +329,20 @@ async def test_refreshing_rotates_and_reusing_an_old_token_ends_the_connection(h
     assert stolen.status_code == 400 and stolen.json()["error"] == "invalid_grant"
     # the connection is over, including the newest tokens the real app holds
     assert (await refresh(second.json()["refresh_token"])).status_code == 400
+
+
+@pytest.mark.anyio
+async def test_a_password_reset_disconnects_every_app(http, auth, live):  # noqa: F811
+    t = await sign_in(http, auth)
+    await http.post("/api/auth/password/forgot/start", json={"email": "ada@example.com"})
+    r = await http.post("/api/auth/password/forgot/complete",
+                        json={"email": "ada@example.com", "code": last_code(), "password": "new-orbit-99"})
+    assert r.status_code == 200, r.text
+    refreshed = await http.post("/token", data={"grant_type": "refresh_token", "client_id": t["client_id"],
+                                                "refresh_token": t["refresh_token"]})
+    assert refreshed.status_code == 400 and refreshed.json()["error"] == "invalid_grant"
+    assert (await http.post("/mcp", json={}, headers=bearer(t["access_token"]))).status_code == 401
+    assert (await http.get("/api/mcp/grants", headers=bearer(r.json()["access_token"]))).json() == []
 
 
 @pytest.mark.anyio

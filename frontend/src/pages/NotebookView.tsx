@@ -10,7 +10,7 @@ import { ArtifactCard, CitationList } from "../components/ArtifactCard";
 import ConnectorModal from "../components/ConnectorModal";
 import { Markdown } from "../components/Markdown";
 import { DocPicker } from "../components/DocPicker";
-import { ConnectorIcon, FlashcardsIcon, HeadphonesIcon, InfographicIcon, QuizIcon, ReportIcon, RocketIcon, SlidesIcon, TelescopeIcon, VideoIcon } from "../components/icons/Icons";
+import { ConnectorIcon, FlashcardsIcon, HeadphonesIcon, InfographicIcon, PanelMenuIcon, QuizIcon, ReportIcon, RocketIcon, SlidesIcon, TelescopeIcon, VideoIcon } from "../components/icons/Icons";
 import { ScheduleModal } from "../components/ScheduleModal";
 import { MindMapDialog, MindMapExplorer, MindMapCard } from "../components/MindMap";
 import { NextStepHint, type NextStep } from "../components/NextStepHint";
@@ -24,10 +24,10 @@ import { prefetchSuggestions } from "../hooks/reportSuggestions";
 import { useArtifactLimits } from "../hooks/useArtifactLimits";
 import { useUpgrade } from "../hooks/useUpgrade";
 import { ReportDialog, type ReportRequest } from "../components/ReportDialog";
-import { PaneResizer, usePaneWidths } from "../components/PaneResizer";
+import { PaneResizer, useMedia, usePaneWidths } from "../components/PaneResizer";
 import { Reader } from "../components/Reader";
 import { seedDocs } from "../components/video/sourceCache";
-import { ConfirmButton, errorMessage, formatDate, JobProgress, Loading, Modal } from "../components/ui";
+import { errorMessage, formatDate, JobProgress, Loading, Modal } from "../components/ui";
 import { useJob } from "../hooks/useJob";
 import { AddSource } from "./Sources";
 import { VideoCreateForm } from "./VideoCreate";
@@ -105,7 +105,9 @@ function readToolsRailOpen(): boolean {
 }
 
 /** Create: one click per format with sensible defaults, options folded away; then what was made from this notebook. */
-function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, presets, presetKey, quizOpen, onQuizClose, onCreateQuiz, cardsOpen, onCardsClose, onCreateCards, infographicOpen, onInfographicClose, onCreateInfographic, audioOpen, onAudioClose, onCreateAudio, slidesOpen, onSlidesClose, onCreateSlides, reportOpen, onReportClose, onCreateReport, mapOpen, onMapClose, onCreateMap, onCreateVideo, onClose }: {
+function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, presets, presetKey, quizOpen, onQuizClose, onCreateQuiz, cardsOpen, onCardsClose, onCreateCards, infographicOpen, onInfographicClose, onCreateInfographic, audioOpen, onAudioClose, onCreateAudio, slidesOpen, onSlidesClose, onCreateSlides, reportOpen, onReportClose, onCreateReport, mapOpen, onMapClose, onCreateMap, onCreateVideo, onClose, closeAsX = false }: {
+  /** Phones: the panel is a drawer, closed with a plain X */
+  closeAsX?: boolean;
   notebookId: string;
   docs: { id: string; title: string; locked?: boolean }[];
   chats: ChatSummary[];
@@ -221,10 +223,16 @@ function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, presets
       <div className="nbv-tools-head">
         <span className="vw-label">Create</span>
         <button type="button" className="nbv-close-tools" onClick={onClose} aria-label="Close tools panel" title="Close tools panel">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
-            <path d="M15 4.5v15M9 10l2 2-2 2" />
-          </svg>
+          {closeAsX ? (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          ) : (
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
+              <path d="M15 4.5v15M9 10l2 2-2 2" />
+            </svg>
+          )}
         </button>
       </div>
       <div className="nbv-make">
@@ -370,9 +378,18 @@ export default function NotebookView() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [q, setQ] = useState("");
   const [postFilter, setPostFilter] = useState("");
+  const [removing, setRemoving] = useState<{ id: string; title: string } | null>(null); // the post awaiting confirmation
+  const [removeBusy, setRemoveBusy] = useState(false);
+  const [removeError, setRemoveError] = useState<string | null>(null);
+  const [deletingChat, setDeletingChat] = useState<{ id: string; title: string } | null>(null); // the chat awaiting confirmation
+  const [deleteChatBusy, setDeleteChatBusy] = useState(false);
+  const [deleteChatError, setDeleteChatError] = useState<string | null>(null);
   const [postsOpen, setPostsOpen] = useState(true);
   const [chatsOpen, setChatsOpen] = useState(true);
-  const [closedGroups, setClosedGroups] = useState<string[]>([]); // date headings folded shut
+  const [openGroups, setOpenGroups] = useState<string[]>(["Today"]); // date headings unfolded: only Today to start
+  // Phones: the chat fills the screen; the chats rail and the Create panel slide in over it, one at a time.
+  const phone = useMedia("(max-width: 899px)");
+  const [drawer, setDrawer] = useState<"history" | "tools" | null>(null);
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [busy, setBusy] = useState(false);
   const upgrade = useUpgrade();
@@ -422,6 +439,27 @@ export default function NotebookView() {
   const bottom = useRef<HTMLDivElement>(null);
   const layout = useRef<HTMLDivElement>(null);
   const panes = usePaneWidths(layout, { leftOpen: historyOpen, rightOpen: toolsOpen }); // the side panels' dragged widths
+  const railShown = phone || historyOpen; // on a phone both panels stay mounted (their dialogs live there) as drawers
+  const toolsShown = phone || toolsOpen;
+  const chatsShown = chatsOpen;
+  const postsShown = postsOpen;
+  const closeDrawer = () => setDrawer(null);
+
+  // An open drawer: Escape shuts it and the page behind does not scroll. Growing past phone size drops it.
+  useEffect(() => {
+    if (!phone || !drawer) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setDrawer(null);
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = overflow;
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [phone, drawer]);
+  useEffect(() => {
+    if (!phone) setDrawer(null);
+  }, [phone]);
 
   // Auto-save the title shortly after the user stops typing.
   useEffect(() => {
@@ -560,7 +598,7 @@ export default function NotebookView() {
     const sentIn = chatLoad.current; // the chat on screen when it was sent: opening or starting another one changes it
     setTurns((t) => [...t, { role: "user", text: question }, { role: "assistant", text: "", status: "Scanning", askKey }]);
     // Count the question as soon as it is sent (the server counts it then too); the answer brings the exact number.
-    if (quota) setChatQuota({ used: quota.used + 1, limit: quota.limit, left: Math.max(quota.left - 1, 0) });
+    if (quota) setChatQuota({ used: Math.min(quota.used + 1, quota.limit), limit: quota.limit, left: Math.max(quota.left - 1, 0) });
     const patchAnswer = (p: Partial<Turn> | ((x: Turn) => Partial<Turn>)) =>
       setTurns((t) => t.map((x) => (x.askKey === askKey ? { ...x, ...(typeof p === "function" ? p(x) : p) } : x)));
     let answered = "";
@@ -785,7 +823,9 @@ export default function NotebookView() {
     <div ref={layout} className={`nbv${historyOpen ? "" : " nbv-history-closed"}${toolsOpen ? "" : " nbv-tools-closed"}`} style={panes.style}>
       <PaneResizer side="left" panes={panes} container={layout} label="Resize the chats panel" />
       <PaneResizer side="right" panes={panes} container={layout} label="Resize the create panel" />
-      {historyOpen && <aside className="nbv-pane nbv-history" aria-label="Notebook chats">
+      {phone && drawer && <div className="nbv-drawer-backdrop" onClick={closeDrawer} aria-hidden="true" />}
+      {railShown && <aside className={`nbv-pane nbv-history${phone ? ` nbv-drawer nbv-drawer-left${drawer === "history" ? " open" : ""}` : ""}`}
+                           aria-label="Notebook chats">
         {/* The top line: back to all notebooks, and the button that closes this column */}
         <div className="nbv-history-top">
           <Link to="/app/notebooks" className="nbv-history-back">
@@ -794,12 +834,20 @@ export default function NotebookView() {
             </svg>
             All notebooks
           </Link>
-          <button type="button" className="nbv-close-history" onClick={() => setChatRail(false)} aria-label="Close chat sidebar" title="Close chat sidebar">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
-              <path d="M9 4.5v15M15 10l-2 2 2 2" />
-            </svg>
-          </button>
+          {phone ? (
+            <button type="button" className="nbv-close-history" onClick={closeDrawer} aria-label="Close chats" title="Close">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true">
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+          ) : (
+            <button type="button" className="nbv-close-history" onClick={() => setChatRail(false)} aria-label="Close chat sidebar" title="Close chat sidebar">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
+                <path d="M9 4.5v15M15 10l-2 2 2 2" />
+              </svg>
+            </button>
+          )}
         </div>
         <div className="nbv-history-head">
           <div>
@@ -807,7 +855,7 @@ export default function NotebookView() {
             <span className="muted">In this notebook</span>
           </div>
           <div className="nbv-history-actions">
-            <button type="button" className="nbv-new-chat" onClick={newChat} disabled={busy} aria-label="New chat" title="New chat">
+            <button type="button" className="nbv-new-chat" onClick={() => { newChat(); closeDrawer(); }} disabled={busy} aria-label="New chat" title="New chat">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true">
                 <path d="M12 5v14M5 12h14" />
               </svg>
@@ -821,40 +869,47 @@ export default function NotebookView() {
               Recent <span className="nbv-posts-count">{chats.length}</span>
             </button>
           )}
-          {chats.length === 0 ? (
+          {!chatsShown ? null : chats.length === 0 ? (
             <p className="nbv-history-empty muted small">Your conversations in this notebook will appear here.</p>
-          ) : chatsOpen && (
+          ) : (
             groupChats(chats).map((g) => (
               <div key={g.label} className="nbv-chat-group">
-                <button type="button" className="nbv-chat-list-label nbv-group-toggle" aria-expanded={!closedGroups.includes(g.label)}
-                        onClick={() => setClosedGroups((o) => (o.includes(g.label) ? o.filter((x) => x !== g.label) : [...o, g.label]))}>
-                  <svg className={`nbv-posts-chev${!closedGroups.includes(g.label) ? " open" : ""}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
+                <button type="button" className="nbv-chat-list-label nbv-group-toggle" aria-expanded={openGroups.includes(g.label)}
+                        onClick={() => setOpenGroups((o) => (o.includes(g.label) ? o.filter((x) => x !== g.label) : [...o, g.label]))}>
+                  <svg className={`nbv-posts-chev${openGroups.includes(g.label) ? " open" : ""}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
                   {g.label} <span className="nbv-group-count">{g.items.length}</span>
                 </button>
-                {!closedGroups.includes(g.label) && g.items.map((c) => {
+                {openGroups.includes(g.label) && g.items.map((c) => {
                   const chatTitle = c.title?.trim() || "Untitled chat";
                   return (
                     <div key={c.id} className={`nbv-chat-item${chatId === c.id ? " active" : ""}`}>
                       <button
                         type="button"
                         className="nbv-chat-link"
-                        onClick={() => void openChat(c.id)}
+                        onClick={() => {
+                          void openChat(c.id);
+                          closeDrawer();
+                        }}
                         disabled={busy}
                         aria-current={chatId === c.id ? "page" : undefined}
                         aria-label={`${chatTitle}, updated ${formatDate(c.updated_at)}`}
                       >
                         <span>{chatTitle}</span>
                       </button>
-                      <ConfirmButton
+                      <button
+                        type="button"
                         className="nbv-chat-delete"
-                        confirmLabel="✓"
-                        onConfirm={() => removeChat(c.id)}
+                        title="Delete chat"
+                        onClick={() => {
+                          setDeleteChatError(null);
+                          setDeletingChat({ id: c.id, title: chatTitle });
+                        }}
                       >
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                           <path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5" />
                         </svg>
                         <span className="sr-only">Delete {chatTitle}</span>
-                      </ConfirmButton>
+                      </button>
                     </div>
                   );
                 })}
@@ -866,8 +921,8 @@ export default function NotebookView() {
         {/* Posts: below the chat history */}
         <section className="nbv-section nbv-posts">
           <div className="nbv-section-head">
-            <button type="button" className="nbv-posts-toggle" aria-expanded={postsOpen} onClick={() => setPostsOpen(!postsOpen)}>
-              <svg className={`nbv-posts-chev${postsOpen ? " open" : ""}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
+            <button type="button" className="nbv-posts-toggle" aria-expanded={postsShown} onClick={() => setPostsOpen(!postsOpen)}>
+              <svg className={`nbv-posts-chev${postsShown ? " open" : ""}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
               Posts <span className="nbv-posts-count">{nb.documents.length}</span>
             </button>
             <button className="btn btn-small" onClick={() => setAdding(true)}
@@ -881,7 +936,7 @@ export default function NotebookView() {
               load();
             }} />
           ))}
-          {postsOpen && (
+          {postsShown && (
             <>
               {nb.is_archive && <p className="muted small">Every indexed post. New posts join automatically.</p>}
               {!nb.is_archive && nb.documents.length === 0 && <p className="muted small">No posts yet. Add some to start asking and creating.</p>}
@@ -900,9 +955,9 @@ export default function NotebookView() {
                         className="icon-btn nbv-remove"
                         aria-label={`Remove ${d.title} from this notebook`}
                         title="Remove from this notebook (the post itself is kept)"
-                        onClick={async () => {
-                          await notebooksApi.removeDoc(nb.id, d.id);
-                          load();
+                        onClick={() => {
+                          setRemoveError(null);
+                          setRemoving({ id: d.id, title: d.title });
                         }}
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
@@ -920,7 +975,12 @@ export default function NotebookView() {
 
       <section className="card nbv-pane nbv-chat">
         <div className="chat-bar">
-          {!historyOpen && (
+          {phone ? (
+            <button type="button" className="nbv-show-history" onClick={() => setDrawer("history")} aria-label="Open chats and posts"
+                    title="Chats and posts" aria-expanded={drawer === "history"}>
+              <PanelMenuIcon size={22} strokeWidth={1.8} />
+            </button>
+          ) : !railShown && (
             <button type="button" className="nbv-show-history" onClick={() => setChatRail(true)} aria-label="Show chat sidebar" title="Show chat sidebar">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
@@ -929,7 +989,7 @@ export default function NotebookView() {
             </button>
           )}
           <div className="nbv-titlebar">
-            {!historyOpen && (
+            {!railShown && (
               <Link to="/app/notebooks" className="mono muted small-link">
                 Notebooks /
               </Link>
@@ -968,8 +1028,10 @@ export default function NotebookView() {
               </h2>
             )}
           </div>
-          {!toolsOpen && (
-            <button type="button" className="nbv-show-tools" onClick={() => setToolsRail(true)} aria-label="Show tools panel" title="Show tools panel">
+          {(phone || !toolsOpen) && (
+            <button type="button" className="nbv-show-tools" onClick={() => (phone ? setDrawer("tools") : setToolsRail(true))}
+                    aria-label={phone ? "Open the Create panel" : "Show tools panel"} title={phone ? "Create" : "Show tools panel"}
+                    aria-expanded={phone ? drawer === "tools" : undefined}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
                 <path d="M15 4.5v15M11 10l-2 2 2 2" />
@@ -1116,7 +1178,8 @@ export default function NotebookView() {
         </form>
       </section>
 
-      {toolsOpen && <aside className="card nbv-pane nbv-side" aria-label="Notebook tools">
+      {toolsShown && <aside className={`card nbv-pane nbv-side${phone ? ` nbv-drawer nbv-drawer-right${drawer === "tools" ? " open" : ""}` : ""}`}
+                            aria-label="Notebook tools">
         <StudioPanel notebookId={nb.id} docs={nb.documents.map((d) => ({ id: d.id, title: d.title, locked: d.locked }))}
                      chats={chats} currentChatId={chatId} presets={presets} presetKey={presetKey} quizOpen={makingQuiz}
                      onQuizClose={() => setMakingQuiz(false)} onCreateQuiz={() => openQuiz()}
@@ -1128,7 +1191,7 @@ export default function NotebookView() {
                      mapOpen={makingMap} onMapClose={() => setMakingMap(false)} onCreateMap={() => openMap()}
                      disabled={nb.documents.length === 0}
                      onCreateVideo={() => openVideo()}
-                     onClose={() => setToolsRail(false)} />
+                     closeAsX={phone} onClose={() => (phone ? closeDrawer() : setToolsRail(false))} />
       </aside>}
 
       {makingVideo && (
@@ -1178,6 +1241,68 @@ export default function NotebookView() {
         </Modal>
       )}
       {reading && <Reader documentId={reading.id} highlight={reading.start ? { start: reading.start, end: reading.end ?? reading.start } : undefined} onClose={() => setReading(null)} />}
+      {deletingChat && (
+        // While the delete runs, Escape, the backdrop and the close button do nothing.
+        <Modal title="Delete this chat?" onClose={deleteChatBusy ? () => undefined : () => setDeletingChat(null)}>
+          <div className="stack">
+            <p>"<strong>{deletingChat.title}</strong>" and all its messages will be deleted permanently. This can't be undone.</p>
+            {deleteChatError && <p className="error-text">{deleteChatError}</p>}
+            <div className="vw-nav">
+              <button className="btn" onClick={() => setDeletingChat(null)} disabled={deleteChatBusy}>Cancel</button>
+              <button
+                className="btn btn-danger vw-delete-confirm"
+                disabled={deleteChatBusy}
+                onClick={async () => {
+                  setDeleteChatBusy(true);
+                  try {
+                    await removeChat(deletingChat.id);
+                    setDeletingChat(null);
+                  } catch (e) {
+                    setDeleteChatError(errorMessage(e));
+                  } finally {
+                    setDeleteChatBusy(false);
+                  }
+                }}
+              >
+                {deleteChatBusy ? "Deleting..." : "Delete chat"}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+      {removing && (
+        // While the removal runs, Escape, the backdrop and the close button do nothing.
+        <Modal title="Remove this post?" onClose={removeBusy ? () => undefined : () => setRemoving(null)}>
+          <div className="stack">
+            <p>
+              "<strong>{removing.title}</strong>" will be removed from this notebook. The post itself is kept in your
+              library, and you can add it back later.
+            </p>
+            {removeError && <p className="error-text">{removeError}</p>}
+            <div className="vw-nav">
+              <button className="btn" onClick={() => setRemoving(null)} disabled={removeBusy}>Cancel</button>
+              <button
+                className="btn btn-danger vw-delete-confirm"
+                disabled={removeBusy}
+                onClick={async () => {
+                  setRemoveBusy(true);
+                  try {
+                    await notebooksApi.removeDoc(nb.id, removing.id);
+                    setRemoving(null);
+                    load();
+                  } catch (e) {
+                    setRemoveError(errorMessage(e));
+                  } finally {
+                    setRemoveBusy(false);
+                  }
+                }}
+              >
+                {removeBusy ? "Removing..." : "Remove post"}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
       {quoted && (
         <Modal title={quoted.title} onClose={() => setQuoted(null)}>
           <p className="mono muted small">

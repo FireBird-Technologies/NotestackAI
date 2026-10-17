@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { artifactsApi } from "../api/endpoints";
 import type { Artifact, MindNode } from "../api/types";
 import { useJob } from "../hooks/useJob";
-import { ConfirmButton, errorMessage, formatDate, JobProgress, Modal, StatusPill } from "./ui";
+import { DeleteButton, errorMessage, formatDate, JobProgress, Modal, StatusPill } from "./ui";
 import { Reader } from "./Reader";
 import { ShareButton } from "./ShareDialog";
 import { CardFeedback } from "./CardFeedback";
@@ -1060,13 +1060,13 @@ export function MindMapCard({
             }
           }}><RetryIcon size={16} /></button>
         )}
-        <ConfirmButton className="btn btn-small btn-icon-only card-delete" label="Delete" confirmLabel="Delete?" busyLabel="" nativeTitle={false}
+        <DeleteButton heading="Delete Mind Constellation?" name={artifact.title}
                        onConfirm={async () => {
                          await artifactsApi.remove(artifact.id);
                          onRemoved(artifact.id);
                        }}>
           <TrashIcon size={16} />
-        </ConfirmButton>
+        </DeleteButton>
         <CardFeedback artifact={artifact} />
       </footer>
     </article>

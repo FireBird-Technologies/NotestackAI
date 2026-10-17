@@ -1570,12 +1570,34 @@ select.input option {
   margin: 0;
   padding: 0;
   display: grid;
+  /* One set of columns for every row (each row is a subgrid of it): date, platform and type are only as wide as
+     their longest entry, the status fits its pill, and the post text gets the rest */
+  grid-template-columns: auto auto auto minmax(0, 1fr) auto;
+  column-gap: 20px;
+}
+
+.agenda-row > .mono,
+.agenda-platform {
+  white-space: nowrap;
+}
+
+.agenda > li {
+  display: contents;
+}
+
+.agenda > li > .agenda-row {
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+
+.agenda > li.muted {
+  display: block;
+  grid-column: 1 / -1;
 }
 
 .agenda-row {
   display: grid;
-  grid-template-columns: 150px 120px minmax(0, 1fr) auto auto;
-  gap: 12px;
+  column-gap: 20px;
   align-items: center;
   width: 100%;
   padding: 10px 4px;
@@ -1598,9 +1620,38 @@ select.input option {
   white-space: nowrap;
 }
 
+.agenda-platform {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.agenda-kind {
+  justify-self: start;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agenda-end {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 @media (max-width: 720px) {
+  .agenda {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .agenda > li > .agenda-row,
   .agenda-row {
     grid-template-columns: 1fr auto;
+    gap: 8px 12px;
   }
 
   .agenda-text {
@@ -2929,6 +2980,11 @@ select.input option {
   padding: 8px 0;
 }
 
+/* Room on the right for the delete button (absolutely placed), so a long title never runs under it */
+.doc-list > .doc-row {
+  padding-right: 44px;
+}
+
 .source-row {
   padding: 10px 12px;
 }
@@ -2979,6 +3035,24 @@ select.input option {
 @media (max-width: 1099px) {
   .map-svg {
     max-height: 62vh;
+  }
+}
+
+/* Phones: a tall map instead of a thin strip. The view crops the sides to fit (fitView in TopicMap.tsx). */
+@media (max-width: 699px) {
+  .map-canvas .map-svg {
+    width: 100%;
+    height: min(72vh, 620px);
+    max-height: none;
+    aspect-ratio: auto;
+  }
+
+  .map-hud {
+    left: 10px;
+    top: 10px;
+    max-width: calc(100% - 76px);
+    padding: 8px 10px;
+    font-size: 0.66rem;
   }
 }
 
@@ -3589,6 +3663,12 @@ select.input,
   place-items: center;
 }
 
+/* While a conversation loads, its row fills the whole message area, so the loader sits in the middle of it */
+.nbv-turns:has(> .nbv-chat-loading) {
+  grid-template-rows: minmax(0, 1fr);
+  align-content: stretch;
+}
+
 .nbv-chat-loading .loading {
   flex-direction: column;
   padding: 32px;
@@ -3875,10 +3955,11 @@ select.input,
   min-width: 0;
 }
 
-.lk-title strong {
+.lk-title strong,
+.lk-title > .small {
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: nowrap; /* the row has a fixed height: a long source line shortens instead of spilling into the next row */
 }
 
 @media (max-width: 640px) {
@@ -4160,6 +4241,23 @@ select.input,
   border-color: #f2786b;
   background: rgba(242, 120, 107, 0.12);
   color: #f2786b;
+}
+
+/* Phones: the thumbnail and details on one row, the buttons on their own row under them (remove at the far end) */
+@media (max-width: 699px) {
+  .lp-attach {
+    flex-wrap: wrap;
+    row-gap: 10px;
+  }
+
+  .lp-attach-actions {
+    flex: 1 0 100%;
+    gap: 8px;
+  }
+
+  .lp-attach-actions .lp-attach-remove {
+    margin-left: auto;
+  }
 }
 
 /* The attachment's preview */
@@ -4590,6 +4688,28 @@ select.input,
   .lp-pick-go {
     display: none;
   }
+
+  /* Phones: smaller gaps, thumbnail and tag, so the title and its source line get the room */
+  .lp-pick-row {
+    gap: 10px;
+    padding-left: 8px;
+    padding-right: 6px;
+  }
+
+  .lp-pick-row .lp-thumb {
+    width: 38px;
+    height: 38px;
+  }
+
+  .lp-pick-row .lp-tag {
+    min-width: 0;
+    padding: 3px 8px;
+    font-size: 0.7rem;
+  }
+
+  .lp-pick-item {
+    padding-right: 4px;
+  }
 }
 
 /* A calendar item that carries a video or images */
@@ -4652,6 +4772,7 @@ details.map-legend[open] summary {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: center; /* when the buttons wrap under the link box, they sit centred */
   gap: 10px;
 }
 
@@ -4683,22 +4804,7 @@ details.map-legend[open] summary {
   }
 }
 
-@media (max-width: 899px) {
-  .sidebar {
-    position: relative;
-  }
 
-  .sidebar .side-settings {
-    position: absolute;
-    top: 14px;
-    right: 16px;
-    padding: 8px;
-  }
-
-  .sidebar .side-settings .side-label {
-    display: none;
-  }
-}
 
 @media (min-width: 900px) {
   .shell.collapsed .side-settings {
@@ -5617,6 +5723,8 @@ details.map-legend[open] summary {
 /* Thumbs up / down under an answer */
 .fb {
   display: grid;
+  /* minmax(0, ...): a long next-step label shrinks to an ellipsis instead of widening the column past the panel */
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
 }
 
@@ -5632,22 +5740,23 @@ details.map-legend[open] summary {
   display: inline-flex;
   margin-left: 6px;
   min-width: 0;
-  max-width: 100%;
+  max-width: calc(100% - 6px);
 }
 
 .nbv-next {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 28px;
-  padding: 0 11px;
+  min-height: 28px;
+  padding: 4px 11px;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: 16px;
   background: transparent;
   color: var(--text-2);
   font: inherit;
   font-size: 0.8125rem;
-  white-space: nowrap;
+  line-height: 1.35;
+  text-align: left;
   max-width: 100%;
   min-width: 0;
   cursor: pointer;
@@ -5662,11 +5771,20 @@ details.map-legend[open] summary {
   color: var(--white);
 }
 
-/* A step named after the answer's topic can be long: on a narrow screen it ends in an ellipsis (the full text is the title). */
+/* A step named after the answer's topic can be long: it wraps to a second line, and only past that ends in an ellipsis
+   (the full text is the title). */
 .nbv-next-label {
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.nbv-next > svg,
+.nbv-next-arrow {
+  flex-shrink: 0;
 }
 
 .nbv-next-arrow {
@@ -7290,6 +7408,68 @@ details.map-legend[open] summary {
 
 .rp-dialog {
   height: min(680px, calc(100vh - 100px));
+}
+
+/* Narrow screens: the dialog takes its content's height and the modal scrolls, so the templates never run under the
+   Generate button (the fixed height above is for wide screens, where everything fits on one screen). */
+@media (max-width: 1000px) {
+  .rp-dialog {
+    height: auto;
+  }
+
+  .rp-split {
+    grid-template-rows: none;
+  }
+
+  /* With no fixed height to fill, the instructions box keeps a usable size of its own */
+  .rp-edit-main .rp-instructions.input {
+    min-height: 280px;
+  }
+}
+
+/* Phones: two template cards a row, with less padding and a smaller pencil, so the names and descriptions get the
+   room; the "Writing templates..." note drops below its label instead of squeezing it onto two lines. */
+@media (max-width: 640px) {
+  .rp-split .rp-templates {
+    gap: 8px;
+  }
+
+  .rp-template-main {
+    padding: 12px 38px 12px 12px;
+  }
+
+  .rp-template-main strong {
+    font-size: 0.95rem;
+  }
+
+  .rp-template-main .muted {
+    font-size: 0.8rem;
+  }
+
+  .rp-pencil {
+    top: 8px;
+    right: 8px;
+    width: 28px;
+    height: 28px;
+  }
+
+  .rp-template.wait {
+    min-height: 88px;
+    padding: 12px;
+  }
+
+  .rp-suggest-label {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  .rp-suggest-label > * {
+    flex: 0 0 auto;
+  }
+
+  .rp-loading-text {
+    white-space: normal;
+  }
 }
 
 /* The sources at the end of a report */
@@ -9748,6 +9928,28 @@ a.rp-src-main:hover .rp-src-out {
     width: 34px;
     height: 34px;
   }
+
+  /* The close button pins to the top right beside the title; the other tools centre on the row below */
+  .modal:has(.sd-view) .modal-head {
+    position: relative;
+  }
+
+  .modal:has(.sd-view) .modal-head h2 {
+    flex: 1 1 100%;
+    padding-right: 44px;
+  }
+
+  .sd-head-actions {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .sd-head-actions .sd-close {
+    position: absolute;
+    top: 0;
+    right: 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -10486,6 +10688,16 @@ body.nbv-resizing iframe {
   margin: 4px 0 2px 9px;
 }
 
+/* The date groups (Today, Yesterday...) sit one step in from RECENT, as its children; their chats come with them */
+.nbv-history .nbv-chat-group {
+  padding-left: 14px;
+}
+
+/* POSTS starts at the same indent as RECENT above it, so the two headings line up */
+.nbv-history .nbv-posts > .nbv-section-head {
+  padding-left: 9px;
+}
+
 .nbv-history .nbv-group-toggle {
   display: flex;
   align-items: center;
@@ -10506,6 +10718,145 @@ body.nbv-resizing iframe {
   margin-left: auto;
   color: var(--text-3);
   letter-spacing: 0;
+}
+
+/* Phones, like a chat app: the chat fills the screen. The chats rail (hamburger, left) and the Create panel (right)
+   slide in over it as drawers, one at a time, and close with their X, the backdrop or Escape. */
+@media (max-width: 899px) {
+  .nbv,
+  .nbv.nbv-tools-closed,
+  .nbv.nbv-history-closed {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "chat";
+    height: calc(100dvh - var(--main-pad-top) - var(--main-pad-bottom));
+    min-height: 420px;
+  }
+
+  .nbv-chat {
+    min-width: 0;
+    min-height: 0;
+  }
+
+  /* The conversation never pushes the page sideways: long words and links wrap, wide code and tables scroll inside */
+  .nbv-turns {
+    grid-template-columns: minmax(0, 1fr);
+    overflow-x: hidden;
+  }
+
+  .nbv-turns > *,
+  .nbv-turns .turn,
+  .nbv-turns .turn > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .nbv-turns p,
+  .nbv-turns li,
+  .nbv-turns a,
+  .nbv-turns blockquote {
+    overflow-wrap: anywhere;
+  }
+
+  .nbv-turns pre,
+  .nbv-turns table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .nbv-turns img {
+    max-width: 100%;
+    height: auto;
+  }
+
+  .nbv-drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(2px);
+    animation: nbv-fade 0.18s ease-out;
+  }
+
+  .nbv-drawer {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    z-index: 61;
+    width: min(88vw, 380px);
+    height: 100dvh;
+    max-height: none;
+    margin: 0;
+    padding: 14px;
+    border-radius: 0;
+    background: var(--black);
+    visibility: hidden;
+    transition: transform 0.22s ease, visibility 0s linear 0.22s;
+  }
+
+  .nbv-drawer-left {
+    left: 0;
+    border-width: 0 1px 0 0;
+    transform: translateX(-100%);
+  }
+
+  .nbv-drawer-right {
+    right: 0;
+    border-width: 0 0 0 1px;
+    transform: translateX(100%);
+    overflow-y: auto;
+  }
+
+  .nbv-drawer.open {
+    visibility: visible;
+    transform: none;
+    transition: transform 0.22s ease, visibility 0s;
+  }
+}
+
+/* Phones: the app's top bar (logo, the tab menu, the account button) stays above a notebook too, and the chat takes
+   exactly the rest of the screen under it */
+@media (max-width: 899px) {
+  .shell.notebook-focus {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    min-height: 0;
+  }
+
+  .shell.notebook-focus > .sidebar {
+    display: flex; /* the drawer, still there to open (wide screens hide it on a notebook) */
+  }
+
+  .shell.notebook-focus > .app-topbar {
+    flex: none;
+  }
+
+  .shell.notebook-focus > .shell-main {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .shell.notebook-focus .nbv {
+    flex: 1;
+    height: auto;
+    min-height: 0;
+  }
+}
+
+@keyframes nbv-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nbv-drawer,
+  .nbv-drawer.open {
+    transition: none;
+  }
 }
 
 /* The quiz result as a small galaxy: a nebula behind a medal-planet, its ring and moon, and a star per question on an orbit */
@@ -11382,4 +11733,171 @@ body.nbv-resizing iframe {
 
 .artifact .ig-dl .ig-dl-menu button:hover {
   background: var(--surface-2);
+}
+
+/* Topic map: Briefing is an on/off switch with its label, a smaller copy of the scene editor's switch */
+.map-brief-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-2);
+  font: 500 0.9rem var(--font-body);
+  cursor: pointer;
+}
+
+.map-brief-switch:hover,
+.map-brief-switch[aria-checked="true"] {
+  color: var(--white);
+}
+
+.map-brief-switch .vw-switch {
+  display: block;
+  width: 40px;
+  height: 24px;
+}
+
+.map-brief-switch .vw-switch span {
+  width: 18px;
+  height: 18px;
+}
+
+.map-brief-switch .vw-switch.on span {
+  left: 19px;
+}
+
+/* A job's progress bar right under a page's header gets room from the header's buttons */
+.page-head + .ascent {
+  margin-top: 12px;
+}
+
+/* Library: tabs on wide screens, a dropdown pill on phones */
+.lib-filter-phone {
+  display: none;
+}
+
+@media (max-width: 699px) {
+  .lib-tabs-wide {
+    display: none;
+  }
+
+  .lib-filter-phone {
+    display: block;
+    justify-self: start;
+    min-width: 200px;
+  }
+
+  .lib-filter-phone .dropdown-btn {
+    height: 42px;
+    border-color: var(--blue);
+    color: var(--white);
+    font-weight: 600;
+  }
+}
+
+/* Launchpad calendar: the Prev/Next arrows show on phones only (wide screens keep the words) */
+.cal-nav-arrow {
+  display: none;
+}
+
+/* Phones: a compact month. Arrows either side of a centred month name with Month/Agenda under it, square day
+   cells, and each post as a small coloured bar (still tappable; its words don't fit a seventh of a phone). */
+@media (max-width: 599px) {
+  .cal-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .cal-nav {
+    justify-content: space-between;
+    flex-wrap: nowrap;
+  }
+
+  .cal-nav h2 {
+    font-size: 1.1rem;
+    text-align: center;
+  }
+
+  .cal-nav .btn {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    flex: none;
+  }
+
+  .cal-nav-arrow {
+    display: block;
+  }
+
+  .cal-nav-label {
+    display: none;
+  }
+
+  .cal-head .tabs {
+    align-self: center;
+  }
+
+  .cal-grid {
+    gap: 3px;
+  }
+
+  .cal-weekday {
+    padding: 4px 0;
+    font-size: 0.62rem;
+    text-align: center;
+  }
+
+  .cal-day {
+    min-height: 0;
+    aspect-ratio: 1 / 1.15;
+    padding: 3px;
+    gap: 2px;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .cal-date {
+    font-size: 0.66rem;
+  }
+
+  .cal-day.schedulable::after {
+    display: none;
+  }
+
+  .cal-item {
+    flex: none;
+    height: 7px;
+    padding: 0;
+    border-radius: 999px;
+    font-size: 0;
+    line-height: 0;
+  }
+
+  .cal-item > * {
+    display: none;
+  }
+
+  .lp-cal-foot {
+    margin-top: 10px;
+  }
+}
+
+/* Add voices: each way to make a voice is its own pill (no shared track, so wrapping on a phone stays tidy) */
+.voice-modes > .tabs {
+  gap: 8px;
+  padding: 0;
+  border: 0;
+}
+
+.voice-modes > .tabs .tab {
+  border: 1px solid var(--line-strong);
+}
+
+.voice-modes > .tabs .tab.active {
+  border-color: var(--blue);
 }

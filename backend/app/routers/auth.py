@@ -388,7 +388,7 @@ def forgot_complete(body: ResetIn, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(400, {"code": "not_found", "message": "Account not found."})
     user.password_hash = ident.hash_password(body.password)
-    user.token_version += 1  # sign out everywhere
+    ident.sign_out_everywhere(db, user)  # a leaked password must not keep any device or app signed in
     ev.clear_codes(db, email, VerificationPurpose.PASSWORD_RESET)
     return _finalize_login(db, user, False)
 

@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { UpgradeProvider } from "../hooks/useUpgrade";
 import Logo from "./Logo";
+import { useMedia } from "./PaneResizer";
 import { FuelGauge, NudgeDock } from "./Nudges";
 import SkyCanvas from "./SkyCanvas";
 import UpgradeModal from "./UpgradeModal";
@@ -11,7 +12,8 @@ import {
   LaunchpadIcon,
   LibraryIcon,
   MicIcon,
-  OrbitIcon,
+  PanelMenuIcon,
+  GearIcon,
   PlanetIcon,
   SatelliteDishIcon,
 } from "./icons/Icons";
@@ -39,7 +41,24 @@ export default function AppShell() {
   const { user, loading, signingOut, logout } = useAuth();
   const location = useLocation();
   const notebookFocus = /^\/app\/notebooks\/[^/]+$/.test(location.pathname);
-  const [collapsed, setCollapsed] = useState(readCollapsed);
+  const [collapsedPref, setCollapsed] = useState(readCollapsed);
+  // Phones: the whole sidebar is a drawer from the left, opened from the top bar's menu button
+  const phone = useMedia("(max-width: 899px)");
+  const collapsed = collapsedPref && !phone; // the drawer always shows everything
+  const [menuOpen, setMenuOpen] = useState(false);
+  // Navigating anywhere (including the browser back button) closes the drawer; so does growing past phone size.
+  useEffect(() => setMenuOpen(false), [location.pathname, phone]);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMenuOpen(false);
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = overflow;
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpen]);
   const toggle = () =>
     setCollapsed((c) => {
       try {
@@ -52,11 +71,26 @@ export default function AppShell() {
   if (loading) return <div className="boot"><div className="orbit-loader"><span /></div></div>;
   if (!user) return <Navigate to="/" replace />;
 
+  const isActive = (to: string, also?: string[]) =>
+    location.pathname === to || location.pathname.startsWith(`${to}/`) || !!also?.some((p) => location.pathname.startsWith(p));
+  // The phone top bar names the tab you are on
+  const current = [...NAV, { to: "/app/connector", label: "Connector" }, { to: "/app/settings", label: "Settings" }]
+    .find((n) => isActive(n.to, "also" in n ? n.also : undefined));
+
   return (
     <UpgradeProvider>
       <div className={`shell${collapsed ? " collapsed" : ""}${notebookFocus ? " notebook-focus" : ""}`}>
         <SkyCanvas intensity={0.35} />
-        <aside className="sidebar">
+        {/* Phones: the menu button and the tab you are on */}
+        <header className="app-topbar">
+          <button type="button" className="app-topbar-menu" onClick={() => setMenuOpen(true)} aria-label="Open menu"
+                  aria-expanded={menuOpen} aria-controls="app-sidebar">
+            <PanelMenuIcon size={22} strokeWidth={1.8} />
+          </button>
+          <span className="app-topbar-title">{current?.label ?? "Notestack"}</span>
+        </header>
+        {menuOpen && <div className="app-drawer-backdrop" onClick={() => setMenuOpen(false)} aria-hidden="true" />}
+        <aside id="app-sidebar" className={`sidebar${menuOpen ? " open" : ""}`}>
           <div className="sidebar-top">
             {collapsed ? (
               <button type="button" className="sidebar-brand sidebar-brand-btn" onClick={toggle} aria-label="Expand sidebar" title="Expand sidebar">
@@ -79,6 +113,11 @@ export default function AppShell() {
                 <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
                 <path d="M9 4.5v15" />
                 <path d={collapsed ? "M13 10l2 2-2 2" : "M15 10l-2 2 2 2"} />
+              </svg>
+            </button>
+            <button type="button" className="app-drawer-close" onClick={() => setMenuOpen(false)} aria-label="Close menu" title="Close">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true">
+                <path d="M6 6l12 12M18 6L6 18" />
               </svg>
             </button>
           </div>
@@ -113,7 +152,7 @@ export default function AppShell() {
           </nav>
           <FuelGauge collapsed={collapsed} />
           <NavLink to="/app/settings" title={collapsed ? "Settings" : undefined} className={({ isActive }) => `side-link side-settings${isActive ? " active" : ""}`}>
-            <OrbitIcon />
+            <GearIcon />
             <span className="side-label">Settings</span>
           </NavLink>
           <div className="sidebar-user">

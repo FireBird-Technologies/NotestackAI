@@ -461,8 +461,12 @@ export default function VideoEditor() {
                 Preview · {summary?.scenes ?? project.project.scenes.length} scenes
                 {summary ? ` · ${summary.duration_seconds}s` : ""}
               </span>
-              {storedMp4 && project && <ShareButton artifact={{ ...project.artifact, url: storedMp4 }} />}
-              {project && <CardFeedback artifact={project.artifact} />}
+              {project && (
+                <span className="vw-preview-acts">
+                  {storedMp4 && <ShareButton artifact={{ ...project.artifact, url: storedMp4 }} iconOnly />}
+                  <CardFeedback artifact={project.artifact} />
+                </span>
+              )}
               <RenderPanel disabled={locked}
                            format={portrait ? "portrait" : "landscape"}
                            onFormat={setFormatTo}
@@ -502,7 +506,7 @@ export default function VideoEditor() {
             <Tabs<Panel>
               tabs={[
                 { id: "scenes", label: "Edit Scenes" },
-                { id: "images", label: "Images/footage" },
+                { id: "images", label: "Images" },
                 { id: "audio", label: "Audio" },
                 { id: "settings", label: "Settings" },
               ]}
@@ -725,7 +729,7 @@ function RenderPanel({ disabled, format, rendering, progress, onFormat, onDownlo
   progress?: number; onFormat: (f: Format) => void; onDownload: () => void; onCancel: () => void;
 }) {
   return (
-    <div className="stack">
+    <div className="stack vw-render-panel">
       <div className="row wrap">
         {rendering ? (
           <div className="vw-render-row">

@@ -16,7 +16,7 @@ import type {
   VideoVoicesResponse,
 } from "../api/types";
 import { Dropdown } from "../components/Dropdown";
-import { CheckIcon, SparkleIcon } from "../components/icons/Icons";
+import { CheckIcon, SparkleIcon, ArrowLeftIcon } from "../components/icons/Icons";
 import { ErrorText, errorMessage, Loading, PageHeader } from "../components/ui";
 import { SourcePicker, type VideoSource } from "../components/video/SourcePicker";
 import { loadArchiveId, sourceCache } from "../components/video/sourceCache";
@@ -286,7 +286,7 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
         // Leaves the wizard for wherever it was opened from. Steps 2 and 3 have their own Back at the bottom.
         <button type="button" className="vw-back"
                 onClick={() => (window.history.length > 1 ? navigate(-1) : navigate("/app/archive?tab=videos"))}>
-          Back
+          <ArrowLeftIcon size={16} /> Back
         </button>
       )}
       <Steps step={step} />

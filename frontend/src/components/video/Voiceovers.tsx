@@ -40,7 +40,7 @@ export function Voiceovers(p: PanelProps & { scenes: VideoScene[] }) {
   for (let i = 0; i < scenes.length; i += GROUP) groups.push(scenes.slice(i, i + GROUP));
 
   return (
-    <section className="card stack">
+    <section className="card stack vw-vo-card">
       <div className="vw-vo-head">
         <h3>Voiceovers</h3>
         <span className="muted small">{ready} / {scenes.length} scenes · {total}s total</span>

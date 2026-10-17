@@ -107,4 +107,5 @@ def chat_quota(db: Session, workspace: Workspace) -> dict | None:
     if plan.chat_messages < 0:
         return None
     used = month_usage(db, workspace.id, plan.lifetime)["chat_messages"]
-    return {"used": used, "limit": plan.chat_messages, "left": max(plan.chat_messages - used, 0)}
+    # Shown as at most the limit: thousands of messages still read "10 of 10 used", never "1,240 of 10"
+    return {"used": min(used, plan.chat_messages), "limit": plan.chat_messages, "left": max(plan.chat_messages - used, 0)}

@@ -140,6 +140,12 @@ export const ConnectorIcon = (p: P) => (
   </Icon>
 );
 
+export const ArrowLeftIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M19 12H5M11 6l-6 6 6 6" />
+  </Icon>
+);
+
 export const ArrowRightIcon = (p: P) => (
   <Icon {...p}>
     <path d="M5 12h14M13 6l6 6-6 6" />
@@ -309,6 +315,35 @@ export const ExpandIcon = (p: P) => (
 export const CollapseIcon = (p: P) => (
   <Icon {...p}>
     <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />
+  </Icon>
+);
+
+/** A cog: settings. */
+export const GearIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M10.33 4.32c.43-1.76 2.92-1.76 3.35 0a1.72 1.72 0 0 0 2.57 1.07c1.54-.94 3.31.82 2.37 2.37a1.72 1.72 0 0 0 1.06 2.57c1.76.43 1.76 2.92 0 3.35a1.72 1.72 0 0 0-1.07 2.57c.94 1.54-.82 3.31-2.37 2.37a1.72 1.72 0 0 0-2.57 1.06c-.43 1.76-2.92 1.76-3.35 0a1.72 1.72 0 0 0-2.57-1.07c-1.54.94-3.31-.82-2.37-2.37a1.72 1.72 0 0 0-1.06-2.57c-1.76-.43-1.76-2.92 0-3.35a1.72 1.72 0 0 0 1.07-2.57c-.94-1.54.82-3.31 2.37-2.37 1 .61 2.3.07 2.57-1.06z" />
+    <circle cx="12" cy="12" r="3" />
+  </Icon>
+);
+
+/** Three lines: open the menu. */
+export const MenuIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M4 7h16M4 12h16M4 17h16" />
+  </Icon>
+);
+
+/** Two lines, the lower one shorter: open a side panel (like a chat app's sidebar button). */
+export const PanelMenuIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M4 8.5h16M4 15.5h9" />
+  </Icon>
+);
+
+/** An X: close. */
+export const CloseIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M6 6l12 12M18 6L6 18" />
   </Icon>
 );
 

@@ -5,10 +5,10 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 import bcrypt
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from app.models import AuthProvider, Subscription, User, Workspace, WorkspaceMember
+from app.models import AuthProvider, McpGrant, Subscription, User, Workspace, WorkspaceMember
 from app.services.plans import PLANS
 
 
@@ -119,7 +119,17 @@ def resolve_password_user(db: Session, *, email: str, password: str) -> User:
     return user
 
 
+def sign_out_everywhere(db: Session, user: User) -> None:
+    """End every web session (stale token_version) and every connected MCP app, which refreshes on its own grant."""
+    user.token_version += 1
+    db.execute(
+        update(McpGrant)
+        .where(McpGrant.user_id == user.id, McpGrant.revoked_at.is_(None))
+        .values(revoked_at=datetime.now(UTC))
+    )
+
+
 def soft_delete(db: Session, user: User) -> None:
     user.deleted_at = datetime.now(UTC)
     user.is_active = False
-    user.token_version += 1
+    sign_out_everywhere(db, user)

@@ -4,6 +4,7 @@ import { artifactsApi } from "../api/endpoints";
 import type { Artifact } from "../api/types";
 import { ArtifactRow } from "../components/ArtifactRow";
 import { Reader } from "../components/Reader";
+import { Dropdown } from "../components/Dropdown";
 import { EmptyState, Loading, PageHeader, Tabs } from "../components/ui";
 import Videos from "./Videos";
 import { canPost, PostButton } from "../components/launchpad/PostButton";
@@ -36,7 +37,13 @@ export default function Archive() {
   return (
     <div className="page-wrap">
       <PageHeader eyebrow="Library" title="Everything you have made" />
-      <Tabs<Tab> tabs={TABS} value={tab} onChange={pickTab} />
+      {/* Wide screens: every kind as a tab. Phones: the chosen kind in a pill, its chevron opens the rest. */}
+      <div className="lib-tabs-wide">
+        <Tabs<Tab> tabs={TABS} value={tab} onChange={pickTab} />
+      </div>
+      <div className="lib-filter-phone">
+        <Dropdown<Tab> label="Show" value={tab} options={TABS.map((t) => ({ value: t.id, label: t.label }))} onChange={pickTab} />
+      </div>
       {tab === "videos" ? <Videos /> : <MadeList filter={tab} />}
     </div>
   );

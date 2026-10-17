@@ -1,11 +1,77 @@
-import { Link, NavLink } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { blogPosts } from "../content/blogPosts";
 import { tools } from "../content/tools";
+import { MenuIcon } from "./icons/Icons";
 import Logo from "./Logo";
+import MenuSheet from "./MenuSheet";
+
+const NAV_LINKS = [
+  { to: "/#features", label: "Features" },
+  { to: "/pricing", label: "Pricing" },
+  { to: "/tools", label: "Free tools" },
+  { to: "/blogs", label: "Blog" },
+];
+
+/** Features is a hash on the home page, so it only counts as active when that hash is in the URL. */
+function isLinkActive(to: string, pathname: string, hash: string) {
+  const [path, anchor] = to.split("#");
+  if (anchor) return pathname === path && hash === `#${anchor}`;
+  return pathname === path || pathname.startsWith(`${path}/`);
+}
+
+function MobileMenu({ signedIn, onClose }: { signedIn: boolean; onClose: () => void }) {
+  const { pathname, hash } = useLocation();
+  return (
+    <MenuSheet id="nav-menu" className="nav-menu-backdrop" onClose={onClose}>
+      <nav className="nav-menu-links" aria-label="Main">
+        {NAV_LINKS.map((l) => {
+          const active = isLinkActive(l.to, pathname, hash);
+          return (
+            <Link
+              key={l.to}
+              to={l.to}
+              className={active ? "active" : undefined}
+              aria-current={active ? "page" : undefined}
+              onClick={onClose}
+            >
+              {l.label}
+            </Link>
+          );
+        })}
+      </nav>
+      {!signedIn && (
+        <Link to="/auth" className="btn nav-menu-signin" onClick={onClose}>
+          Sign in
+        </Link>
+      )}
+    </MenuSheet>
+  );
+}
 
 export function PublicNav() {
   const { user } = useAuth();
+  const { pathname, hash } = useLocation();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const closeMenu = () => setMenuOpen(false);
+
+  // Navigating anywhere (including the browser back button) closes the menu.
+  useEffect(() => setMenuOpen(false), [pathname, hash]);
+
+  const toggle = (
+    <button
+      type="button"
+      className="nav-toggle"
+      onClick={() => setMenuOpen(true)}
+      aria-label="Open menu"
+      aria-expanded={menuOpen}
+      aria-controls="nav-menu"
+    >
+      <MenuIcon size={22} />
+    </button>
+  );
+
   return (
     <header className="nav">
       <div className="container nav-inner">
@@ -13,17 +79,22 @@ export function PublicNav() {
           <Logo />
         </Link>
         <nav className="nav-links" aria-label="Main">
-          <NavLink to="/#features">Features</NavLink>
-          <NavLink to="/pricing">Pricing</NavLink>
-          <NavLink to="/tools">Free tools</NavLink>
-          <NavLink to="/blogs">Blog</NavLink>
+          {NAV_LINKS.map((l) => (
+            <NavLink key={l.to} to={l.to}>
+              {l.label}
+            </NavLink>
+          ))}
         </nav>
         {user ? (
-          <Link to="/app/notebooks" className="btn btn-primary nav-cta">
-            Your notebooks
-          </Link>
+          <div className="nav-auth">
+            {toggle}
+            <Link to="/app/notebooks" className="btn btn-primary nav-cta">
+              Your notebooks
+            </Link>
+          </div>
         ) : (
           <div className="nav-auth">
+            {toggle}
             <Link to="/auth" className="nav-signin">
               Sign in
             </Link>
@@ -33,6 +104,7 @@ export function PublicNav() {
           </div>
         )}
       </div>
+      {menuOpen && <MobileMenu signedIn={!!user} onClose={closeMenu} />}
     </header>
   );
 }
