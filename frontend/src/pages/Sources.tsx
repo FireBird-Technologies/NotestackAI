@@ -5,7 +5,7 @@ import type { Doc, Job, Source } from "../api/types";
 import { Reader } from "../components/Reader";
 import { TrashIcon } from "../components/icons/Icons";
 import { SourceUrlHint, useSourceUrlCheck } from "../components/SourceUrlCheck";
-import { ConfirmButton, EmptyState, errorMessage, formatDate, JobProgress, Loading, PageHeader, StatusPill } from "../components/ui";
+import { DeleteButton, EmptyState, errorMessage, formatDate, JobProgress, Loading, PageHeader, StatusPill } from "../components/ui";
 import { useJobMap } from "../hooks/useJob";
 import { useUpgrade } from "../hooks/useUpgrade";
 
@@ -390,9 +390,11 @@ export default function Sources() {
                     Sync now
                   </button>
                 )}
-                {failed && !s.is_imports && s.id !== PENDING_IMPORTS_ID && <ConfirmButton
-                  confirmLabel="Click again to delete"
-                  busyLabel="Deleting..."
+                {failed && !s.is_imports && s.id !== PENDING_IMPORTS_ID && <DeleteButton
+                  className="btn btn-small btn-danger"
+                  label={`Delete ${s.title ?? s.feed_url}`}
+                  heading="Delete this source?"
+                  name={s.title ?? s.feed_url}
                   onConfirm={async () => {
                     setRemoving((r) => new Set(r).add(s.id));
                     try {
@@ -413,7 +415,7 @@ export default function Sources() {
                   }}
                 >
                   Delete
-                </ConfirmButton>}
+                </DeleteButton>}
               </footer>
             </article>
           );
@@ -446,27 +448,24 @@ export default function Sources() {
                 <span className="mono muted">
                   {d.source_title ?? ""} · {formatDate(d.published_at)} · {d.words} words
                 </span>
-                <ConfirmButton
+                <DeleteButton
                   className="icon-btn doc-delete"
                   label={`Delete ${d.title}`}
-                  confirmLabel="Delete?"
-                  busyLabel=""
+                  heading="Delete this post?"
+                  name={d.title}
                   onConfirm={async () => {
-                    try {
-                      await docsApi.remove(d.id);
-                      if (reading === d.id) setReading(null);
-                      setDocs((list) => list.filter((post) => post.id !== d.id));
-                      setTotal((n) => Math.max(0, n - 1));
-                      setSources((list) => list?.map((source) => source.id === d.source_id
-                        ? { ...source, document_count: Math.max(0, source.document_count - 1) }
-                        : source) ?? null);
-                    } catch (e) {
-                      setError(errorMessage(e, "Could not delete that post."));
-                    }
+                    // A failure shows in the warning, which stays open to try again
+                    await docsApi.remove(d.id);
+                    if (reading === d.id) setReading(null);
+                    setDocs((list) => list.filter((post) => post.id !== d.id));
+                    setTotal((n) => Math.max(0, n - 1));
+                    setSources((list) => list?.map((source) => source.id === d.source_id
+                      ? { ...source, document_count: Math.max(0, source.document_count - 1) }
+                      : source) ?? null);
                   }}
                 >
                   <TrashIcon size={18} />
-                </ConfirmButton>
+                </DeleteButton>
               </li>
             ))}
             {docs.length === 0 && <li className="muted">No posts match.</li>}
