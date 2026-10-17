@@ -39,7 +39,7 @@ def test_free_plan_nudges_and_out_of_fuel_402(client, auth, billing_on, db_sessi
     kits = next(m for m in body["meters"] if m["key"] == "launch_kits")
     assert kits["used"] == 2 and kits["pct"] == 1
     more = {m["key"]: m for m in body["more_meters"]}  # the rest of the plan, behind the sidebar card's chevron
-    assert set(more) == {"indexed_posts", "reports", "infographics"} and more["indexed_posts"]["limit"] == 5
+    assert set(more) == {"indexed_posts", "reports", "infographics", "chat_messages"} and more["indexed_posts"]["limit"] == 5
     ids = [n["id"] for n in body["nudges"]]
     assert ids[0].startswith("empty-launch_kits") and "perk-voice" in ids
     assert "—" not in str(body)

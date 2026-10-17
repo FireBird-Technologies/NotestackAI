@@ -268,7 +268,8 @@ def test_jev_picks_the_topic_and_the_memory_level(monkeypatch):
 def test_without_chat_memory_triage_asks_exactly_what_it_always_did(monkeypatch):
     seen = _jev(monkeypatch)
     t = r.triage("hello?", [], "nb")
-    assert set(seen["questions"]) == {"intent", "depth"} and (t.topic, t.memory) == ("", "none")
+    # no memory and topic questions; detail always, reuse only once the chat has an answer to reshape
+    assert set(seen["questions"]) == {"intent", "depth", "detail"} and (t.topic, t.memory) == ("", "none")
 
 
 def test_an_unsure_memory_decision_looks_up_the_latest_topic(monkeypatch):
@@ -411,7 +412,7 @@ def test_the_chat_endpoint_loads_memory_only_when_the_flag_is_on(client, db_sess
 
     monkeypatch.setattr(nbr, "research", fake_research)
     client.post(f"/api/notebooks/{nb['id']}/chat", json={"question": "hello there friend"}, headers=auth)
-    assert seen["kwargs"] == {}  # the flag is off: research is called exactly as before
+    assert "chat_memory" not in seen["kwargs"]  # the flag is off: no chat memory is passed
 
 
 def test_a_chat_citation_is_saved_streamed_and_reloaded(client, db_session, monkeypatch):

@@ -115,6 +115,18 @@ class Settings(BaseSettings):
     # Corpus: posts as markdown files. R2 is the source of truth; each process keeps a disk cache.
     corpus_cache_dir: str = ".corpus-cache"
     research_max_steps: int = 10
+    # Chat speed. CHAT_STREAM_ANSWERS streams the answer token by token from our own writer call (app/pipeline/writer.py)
+    # instead of dspy's one-shot answer step. CHAT_FAST_PATH answers quick questions from a keyword prefetch in one
+    # call when the prefetch is strong. CHAT_PARALLEL_PARTS researches the parts of a multi-part question at once.
+    chat_stream_answers: bool = True
+    chat_fast_path: bool = True
+    chat_parallel_parts: bool = True
+    # Exact repeats of a first question in a notebook reuse the saved answer while the posts are unchanged. 0 = off.
+    chat_answer_cache_days: int = 7
+    # Empty = LLM_MODEL. The model that writes (and streams) chat answers once research is done.
+    llm_writer_model: str = ""
+    # Skip the R2 manifest check when this process synced the same corpus this recently. Writes reset it.
+    corpus_sync_ttl_seconds: float = 30.0
     # After an answer, how long the chat stream waits for the memory update so it can say what was saved.
     memory_notice_wait_seconds: float = 25.0
 

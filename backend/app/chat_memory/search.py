@@ -78,7 +78,10 @@ class Bm25:
         self.idf = {t: math.log(1 + (n - d + 0.5) / (d + 0.5)) for t, d in df.items()}
 
     def search(self, query: str, since: str = "") -> list[tuple[float, Unit]]:
-        terms = list(dict.fromkeys(tokenize(query)))
+        return self.search_terms(list(dict.fromkeys(tokenize(query))), since)
+
+    def search_terms(self, terms: list[str], since: str = "") -> list[tuple[float, Unit]]:
+        """Score units for terms already tokenized the way the units were (post prefetch also stems them)."""
         scored = []
         for unit, tf in zip(self.units, self.tf, strict=True):
             if since and unit.last < since:

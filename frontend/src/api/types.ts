@@ -93,7 +93,15 @@ export type AnswerFeedback = {
 };
 /** A chat listed across the whole workspace, with the notebook it belongs to. */
 export type WorkspaceChat = ChatSummary & { notebook_id: string; notebook_title: string };
-export type ChatMessage = { id: string; role: "user" | "assistant"; text: string; citations: Citation[]; feedback?: AnswerFeedback | null };
+export type ChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  text: string;
+  citations: Citation[];
+  feedback?: AnswerFeedback | null;
+  /** What an answer is about in a few words ("BlogHub's featured listings"); "" when there is none. */
+  topic?: string;
+};
 
 export type ArtifactType = "summary" | "audio_overview" | "video" | "quote_card" | "carousel" | "launch_kit" | "mind_map" | "quiz" | "flashcards" | "report" | "infographic" | "slide_deck" | "upload";
 
@@ -457,12 +465,14 @@ export type Plan = {
   voice_cloning: boolean;
   /** Audio overviews allowed (in total on Free), whatever their length; -1 = no cap. */
   audio_overviews: number;
+  /** Notebook chat questions (in total on Free); -1 = unlimited. */
+  chat_messages: number;
 };
 
 export type Usage = {
   plan: string;
-  used: { audio_minutes: number; audio_overviews: number; videos: number; launch_kits: number; reports: number; infographics: number; indexed_posts: number; llm_tokens: number; since: string };
-  limits: { audio_minutes: number; audio_overviews: number; videos: number; launch_kits: number; reports: number; infographics: number; sources: number; indexed_posts: number };
+  used: { audio_minutes: number; audio_overviews: number; videos: number; launch_kits: number; reports: number; infographics: number; chat_messages: number; indexed_posts: number; llm_tokens: number; since: string };
+  limits: { audio_minutes: number; audio_overviews: number; videos: number; launch_kits: number; reports: number; infographics: number; chat_messages: number; sources: number; indexed_posts: number };
   videos_resets_at: string | null;
 };
 
@@ -511,7 +521,7 @@ export type BillingStatus = {
   has_billing_account: boolean;
   period_end: string | null;
   meters: Meter[];
-  /** Posts indexed, reports and infographics: shown when the sidebar plan card is opened. */
+  /** Posts indexed, reports, infographics and chat messages: shown when the sidebar plan card is opened. */
   more_meters: Meter[];
   since: string;
   /** Videos reset on renewal (or monthly without one), not on the 1st like the other meters. */

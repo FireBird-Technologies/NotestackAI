@@ -41,12 +41,14 @@ def _meters(plan: Plan, used: dict, sources: int) -> list[dict]:
 
 
 def _more_meters(db: Session, workspace: Workspace, plan: Plan, used: dict) -> list[dict]:
-    """The rest of the plan's limits, shown when the sidebar card is opened: indexed posts, reports and infographics."""
+    """The rest of the plan's limits, shown when the sidebar card is opened: indexed posts, reports, infographics and
+    chat messages."""
     posts = db.scalar(select(func.count()).select_from(Document)
                       .where(Document.workspace_id == workspace.id, Document.path.is_not(None))) or 0
     rows = [("indexed_posts", "Posts indexed", posts, plan.indexed_posts),
             ("reports", "Reports", used["reports"], plan.reports),
-            ("infographics", "Infographics", used["infographics"], plan.infographics)]
+            ("infographics", "Infographics", used["infographics"], plan.infographics),
+            ("chat_messages", "Chat messages", used["chat_messages"], plan.chat_messages)]
     return [{"key": k, "label": label, "unit": "", "used": u, "limit": limit,
              "pct": 0 if limit < 0 else round(min(1.0, u / max(limit, 1)), 3)} for k, label, u, limit in rows]
 
