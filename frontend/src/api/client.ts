@@ -20,7 +20,16 @@ export const PLAN_LIMIT_EVENT = "ns:plan-limit";
 /** Fired when a signed in request gets a 401 that a refresh cannot fix, so the app signs the user out. */
 export const SESSION_EXPIRED_EVENT = "ns:session-expired";
 
-export type PlanLimitDetail = { message: string; kind?: string; plan?: string; upgrade_to?: string | null };
+export type PlanLimitDetail = {
+  message: string;
+  kind?: string;
+  plan?: string;
+  upgrade_to?: string | null;
+  /** How many are still left: set for an early warning (chat messages running low) rather than a refusal. */
+  left?: number;
+  used?: number;
+  limit?: number;
+};
 
 function read(key: string): string | null {
   try {
@@ -55,7 +64,7 @@ export const tokens = {
   },
 };
 
-async function parseError(res: Response): Promise<ApiError> {
+export async function parseError(res: Response): Promise<ApiError> {
   let message = res.statusText || "Something went wrong";
   let code: string | undefined;
   let extra: Record<string, unknown> | undefined;

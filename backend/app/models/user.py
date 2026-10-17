@@ -111,6 +111,7 @@ class PlanRecord(TimestampMixin, Base):
     reports: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # per month, -1 = unlimited
     infographics: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # per month, -1 = unlimited
     audio_overviews: Mapped[int] = mapped_column(Integer, default=-1, server_default="-1")  # allowed (in total on Free); -1 = no cap
+    chat_messages: Mapped[int] = mapped_column(Integer, default=-1, server_default="-1")  # questions (in total on Free); -1 = unlimited
     voice_cloning: Mapped[bool] = mapped_column(Boolean, default=False)
     features: Mapped[list] = mapped_column(JSON, default=list)  # bullet points on the pricing page
     # Server defaults: 0006 seeds this table without these columns on a database 0001 built from the models.

@@ -21,6 +21,8 @@ type UpgradeState = {
   modal: UpgradeModal | null;
   nudge: Nudge | null;
   openUpgrade: (highlight?: string | null) => void;
+  /** The out of fuel popup without a refused request: an early warning, such as chat messages running low. */
+  openLimit: (limit: PlanLimitDetail) => void;
   close: () => void;
   refresh: () => Promise<void>;
   dismissNudge: (id: string) => void;
@@ -174,6 +176,10 @@ export function UpgradeProvider({ children }: { children: ReactNode }) {
       openUpgrade: (highlight) => {
         setError(null);
         setModal({ mode: "explore", highlight });
+      },
+      openLimit: (limit) => {
+        setError(null);
+        setModal({ mode: "limit", limit });
       },
       close: () => {
         setModal(null);

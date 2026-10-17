@@ -136,7 +136,7 @@ def test_research_gives_the_profile_to_the_agent(monkeypatch, tmp_path):
     monkeypatch.setattr(r, "track_usage", no_usage)
     monkeypatch.setattr(r, "triage", lambda *a: r.Triage("archive", "q", "quick", ""))
     corpus = Corpus(uuid.uuid4(), cache_dir=str(tmp_path))
-    monkeypatch.setattr(corpus, "sync", lambda: {})
+    monkeypatch.setattr(corpus, "sync", lambda *a, **k: {})
     r.research(corpus, {"a.md": "On Pricing"}, "What did I charge?", profile="- audience: founders")
     assert seen["writer_profile"] == "- audience: founders"
     r.research(corpus, {"a.md": "On Pricing"}, "What did I charge?")
