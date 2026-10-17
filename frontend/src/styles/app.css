@@ -1006,113 +1006,118 @@ button.side-link {
   display: none;
 }
 
-/* Small screens: only the tab you are on shows, and its chevron unfolds the others below it */
-.app-current {
-  width: 100%;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.app-current .side-label {
-  flex: 1;
-}
-
-.side-link.app-current .app-current-chev {
-  color: var(--text-2);
-  filter: none;
-  transition: transform 0.15s;
-}
-
-.side-link.app-current .app-current-chev.open {
-  transform: rotate(180deg);
-}
-
-@media (max-width: 899px) {
-  /* The bar takes its own height; the page starts right under it */
-  .shell {
-    align-content: start;
-  }
-
-  .sidebar {
-    gap: 12px;
-  }
-
-  .sidebar nav {
-    display: none;
-    flex-direction: column;
-    overflow: visible;
-  }
-
-  .sidebar nav.open {
-    display: flex;
-  }
-
-  .sidebar nav .side-link.active {
-    display: none;
-  }
-}
-
-/* Phones: the hamburger (top right) opens the Account modal; Settings is one of the tabs */
-.nav-toggle.app-account-btn {
-  display: grid;
-}
-
-@media (max-width: 899px) {
-  .sidebar .side-settings {
-    display: none;
-  }
-}
-
-.app-menu-profile {
+/* Phones: a slim top bar (menu button and the tab you are on); the whole sidebar slides in from the left as a drawer,
+   with every tab (the current one highlighted), the plan, Settings, and the account with Sign out */
+.app-topbar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-width: 0;
+  gap: 10px;
+  min-height: 56px;
+  padding: 8px var(--gutter);
+  border-bottom: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(10px);
 }
 
-.app-menu-avatar {
+.app-topbar-menu,
+.app-drawer-close {
   display: grid;
   flex: none;
   place-items: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  object-fit: cover;
-  background: var(--blue-20);
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
   color: var(--white);
-  font-weight: 600;
+  cursor: pointer;
 }
 
-.app-menu-who {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
+.app-topbar-menu:hover,
+.app-drawer-close:hover {
+  background: var(--surface-2);
 }
 
-.app-menu-who > * {
+.app-topbar-title {
   overflow: hidden;
+  color: var(--white);
+  font: 600 1.15rem var(--font-display);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.app-menu-signout {
-  width: 100%;
-  height: 42px;
+@media (max-width: 899px) {
+  .shell {
+    align-content: start;
+  }
+
+  /* .shell > :not(.sky) makes its children position: relative; these two must stay fixed overlays */
+  .shell > .app-drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(2px);
+  }
+
+  .shell > .sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 71;
+    width: min(86vw, 320px);
+    height: 100dvh;
+    overflow-y: auto;
+    gap: 16px;
+    padding: 16px 14px;
+    border-bottom: 0;
+    border-right: 1px solid var(--line);
+    background: var(--black);
+    visibility: hidden;
+    transform: translateX(-100%);
+    transition: transform 0.22s ease, visibility 0s linear 0.22s;
+  }
+
+  .shell > .sidebar.open {
+    visibility: visible;
+    transform: none;
+    transition: transform 0.22s ease, visibility 0s;
+  }
+
+  .sidebar nav {
+    flex-direction: column;
+    overflow: visible;
+  }
+
+  .sidebar .fuel {
+    margin-top: auto;
+  }
+
+  .sidebar-user {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .sidebar-user > .mono {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 
-.account-modal .fuel {
-  gap: 10px;
-}
-
-.account-modal .fuel-row {
-  font-size: 0.78rem;
+@media (prefers-reduced-motion: reduce) {
+  .shell > .sidebar {
+    transition: none;
+  }
 }
 
 @media (min-width: 900px) {
-  .app-current,
-  .app-nav-settings,
-  .nav-toggle.app-account-btn {
+  .app-topbar,
+  .app-drawer-close,
+  .app-drawer-backdrop {
     display: none;
   }
   .shell {

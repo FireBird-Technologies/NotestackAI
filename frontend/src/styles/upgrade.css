@@ -453,15 +453,9 @@
 }
 
 /* ---------- Sidebar fuel gauge ---------- */
-/* The plan card: in the desktop sidebar, and in the phone Account modal (the sidebar copy hides on phones) */
+/* The plan card, at the foot of the sidebar (and of the phone drawer) */
 .fuel-mini {
   display: none;
-}
-
-@media (max-width: 899px) {
-  .sidebar .fuel {
-    display: none;
-  }
 }
 
 .fuel {

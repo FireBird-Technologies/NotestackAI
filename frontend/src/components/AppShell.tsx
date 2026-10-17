@@ -2,19 +2,17 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { UpgradeProvider } from "../hooks/useUpgrade";
-import type { User } from "../api/auth";
 import Logo from "./Logo";
-import { Modal } from "./ui";
+import { useMedia } from "./PaneResizer";
 import { FuelGauge, NudgeDock } from "./Nudges";
 import SkyCanvas from "./SkyCanvas";
 import UpgradeModal from "./UpgradeModal";
 import {
   ConnectorIcon,
   LaunchpadIcon,
-  ChevronIcon,
   LibraryIcon,
-  MenuIcon,
   MicIcon,
+  PanelMenuIcon,
   GearIcon,
   PlanetIcon,
   SatelliteDishIcon,
@@ -28,34 +26,6 @@ const NAV: { to: string; label: string; icon: typeof PlanetIcon; end?: boolean; 
   { to: "/app/launchpad", label: "Launchpad", icon: LaunchpadIcon, also: ["/app/resurface", "/app/launch-kit"] },
   { to: "/app/voices", label: "Manage voices", icon: MicIcon },
 ];
-
-/** Phones: the account, behind the hamburger. Who is signed in, the plan and what is left on it, and Sign out. */
-function AccountModal({ user, signingOut, logout, onClose }: {
-  user: User; signingOut: boolean; logout: () => void; onClose: () => void;
-}) {
-  const name = user.name?.trim() || user.email;
-  return (
-    <Modal title="Account" onClose={onClose}>
-      <div className="stack account-modal">
-        <div className="app-menu-profile">
-          {user.avatar_url ? (
-            <img className="app-menu-avatar" src={user.avatar_url} alt="" referrerPolicy="no-referrer" />
-          ) : (
-            <span className="app-menu-avatar" aria-hidden="true">{name.charAt(0).toUpperCase()}</span>
-          )}
-          <span className="app-menu-who">
-            <strong>{name}</strong>
-            {user.name?.trim() && <span className="muted small">{user.email}</span>}
-          </span>
-        </div>
-        <FuelGauge collapsed={false} />
-        <button type="button" className="btn app-menu-signout" onClick={logout} disabled={signingOut}>
-          {signingOut ? "Signing out..." : "Sign out"}
-        </button>
-      </div>
-    </Modal>
-  );
-}
 
 const COLLAPSED_KEY = "ns_sidebar_collapsed";
 
@@ -71,11 +41,24 @@ export default function AppShell() {
   const { user, loading, signingOut, logout } = useAuth();
   const location = useLocation();
   const notebookFocus = /^\/app\/notebooks\/[^/]+$/.test(location.pathname);
-  const [collapsed, setCollapsed] = useState(readCollapsed);
-  const [menuOpen, setMenuOpen] = useState(false); // small screens: the other tabs fold away under the current one
-  const [accountOpen, setAccountOpen] = useState(false); // small screens: profile, plan and Sign out, behind the hamburger
-  // Navigating anywhere (including the browser back button) closes the menu.
-  useEffect(() => setMenuOpen(false), [location.pathname]);
+  const [collapsedPref, setCollapsed] = useState(readCollapsed);
+  // Phones: the whole sidebar is a drawer from the left, opened from the top bar's menu button
+  const phone = useMedia("(max-width: 899px)");
+  const collapsed = collapsedPref && !phone; // the drawer always shows everything
+  const [menuOpen, setMenuOpen] = useState(false);
+  // Navigating anywhere (including the browser back button) closes the drawer; so does growing past phone size.
+  useEffect(() => setMenuOpen(false), [location.pathname, phone]);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMenuOpen(false);
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = overflow;
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpen]);
   const toggle = () =>
     setCollapsed((c) => {
       try {
@@ -90,16 +73,24 @@ export default function AppShell() {
 
   const isActive = (to: string, also?: string[]) =>
     location.pathname === to || location.pathname.startsWith(`${to}/`) || !!also?.some((p) => location.pathname.startsWith(p));
-  // Small screens show only the tab you are on; its chevron unfolds the rest.
-  const current = [...NAV, { to: "/app/connector", label: "Connector", icon: ConnectorIcon }, { to: "/app/settings", label: "Settings", icon: GearIcon }]
+  // The phone top bar names the tab you are on
+  const current = [...NAV, { to: "/app/connector", label: "Connector" }, { to: "/app/settings", label: "Settings" }]
     .find((n) => isActive(n.to, "also" in n ? n.also : undefined));
-  const CurrentIcon = current?.icon;
 
   return (
     <UpgradeProvider>
       <div className={`shell${collapsed ? " collapsed" : ""}${notebookFocus ? " notebook-focus" : ""}`}>
         <SkyCanvas intensity={0.35} />
-        <aside className="sidebar">
+        {/* Phones: the menu button and the tab you are on */}
+        <header className="app-topbar">
+          <button type="button" className="app-topbar-menu" onClick={() => setMenuOpen(true)} aria-label="Open menu"
+                  aria-expanded={menuOpen} aria-controls="app-sidebar">
+            <PanelMenuIcon size={22} strokeWidth={1.8} />
+          </button>
+          <span className="app-topbar-title">{current?.label ?? "Notestack"}</span>
+        </header>
+        {menuOpen && <div className="app-drawer-backdrop" onClick={() => setMenuOpen(false)} aria-hidden="true" />}
+        <aside id="app-sidebar" className={`sidebar${menuOpen ? " open" : ""}`}>
           <div className="sidebar-top">
             {collapsed ? (
               <button type="button" className="sidebar-brand sidebar-brand-btn" onClick={toggle} aria-label="Expand sidebar" title="Expand sidebar">
@@ -124,18 +115,13 @@ export default function AppShell() {
                 <path d={collapsed ? "M13 10l2 2-2 2" : "M15 10l-2 2 2 2"} />
               </svg>
             </button>
-            <button type="button" className="nav-toggle app-account-btn" onClick={() => setAccountOpen(true)}
-                    aria-label="Account" aria-haspopup="dialog">
-              <MenuIcon size={22} />
+            <button type="button" className="app-drawer-close" onClick={() => setMenuOpen(false)} aria-label="Close menu" title="Close">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true">
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
             </button>
           </div>
-          <button type="button" className="side-link active app-current" onClick={() => setMenuOpen((o) => !o)}
-                  aria-expanded={menuOpen} aria-controls="app-nav">
-            {CurrentIcon && <CurrentIcon />}
-            <span className="side-label">{current?.label ?? "Menu"}</span>
-            <ChevronIcon size={18} className={`icon app-current-chev${menuOpen ? " open" : ""}`} />
-          </button>
-          <nav id="app-nav" className={menuOpen ? "open" : undefined} aria-label="App">
+          <nav aria-label="App">
             {NAV.map(({ to, label, icon: Icon, end, also }) => (
               <NavLink
                 key={to}
@@ -163,11 +149,6 @@ export default function AppShell() {
                 </span>
               </span>
             </NavLink>
-            {/* Phones: Settings is one of the tabs (wide screens pin it to the sidebar's foot) */}
-            <NavLink to="/app/settings" className={({ isActive }) => `side-link app-nav-settings${isActive ? " active" : ""}`}>
-              <GearIcon />
-              <span className="side-label">Settings</span>
-            </NavLink>
           </nav>
           <FuelGauge collapsed={collapsed} />
           <NavLink to="/app/settings" title={collapsed ? "Settings" : undefined} className={({ isActive }) => `side-link side-settings${isActive ? " active" : ""}`}>
@@ -185,7 +166,6 @@ export default function AppShell() {
           <Outlet />
         </main>
       </div>
-      {accountOpen && <AccountModal user={user} signingOut={signingOut} logout={logout} onClose={() => setAccountOpen(false)} />}
       {/* Outside .shell: its children get position: relative, and these are fixed overlays. */}
       <NudgeDock />
       <UpgradeModal />
