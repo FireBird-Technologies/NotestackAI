@@ -6,7 +6,7 @@ import { Transcript } from "./ArtifactCard";
 import { Dropdown } from "./Dropdown";
 import { CheckIcon, ChevronIcon, DownloadIcon } from "./icons/Icons";
 import { LANGUAGES, Pills, SourceFocusFields, type SourceSelection } from "./SourceFocusFields";
-import { ConfirmButton, errorMessage, formatDate, JobProgress, Modal, StatusPill } from "./ui";
+import { DeleteButton, errorMessage, formatDate, JobProgress, Modal, StatusPill } from "./ui";
 import { ShareButton } from "./ShareDialog";
 import { PostButton } from "./launchpad/PostButton";
 import { CardFeedback } from "./CardFeedback";
@@ -349,7 +349,7 @@ export function AudioOverviewCard({ artifact: initial, onRemoved }: { artifact: 
             }
           }}><RetryIcon size={16} /></button>
         )}
-        <ConfirmButton onConfirm={remove} className="btn btn-small btn-icon-only card-delete" label="Delete" confirmLabel="Delete?" busyLabel="" nativeTitle={false}><TrashIcon size={16} /></ConfirmButton>
+        <DeleteButton heading="Delete audio overview?" name={artifact.title} onConfirm={remove}><TrashIcon size={16} /></DeleteButton>
         <CardFeedback artifact={artifact} />
       </footer>
       {viewing !== null && <AudioPreview artifact={artifact} startAt={viewing} onClose={() => setViewing(null)} />}

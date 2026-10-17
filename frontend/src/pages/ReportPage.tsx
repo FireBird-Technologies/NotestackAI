@@ -9,7 +9,7 @@ import { Reader } from "../components/Reader";
 import { reportMarkdown, ReportView } from "../components/ReportView";
 import { ConfirmDeleteModal, errorMessage, JobProgress, Loading } from "../components/ui";
 import { useJob } from "../hooks/useJob";
-import { DownloadIcon, MarkdownIcon, PdfIcon, ShareIcon } from "../components/icons/Icons";
+import { ArrowLeftIcon, DownloadIcon, MarkdownIcon, PdfIcon, ShareIcon } from "../components/icons/Icons";
 import { FloatingMenu, useMenu } from "../components/SlideDeck";
 
 /** One report, full page: /app/reports/:id. */
@@ -138,7 +138,7 @@ export default function ReportPage() {
 
   return (
     <div className="page-wrap rp-page">
-      <Link to={back} className="vw-back">Back</Link>
+      <Link to={back} className="vw-back"><ArrowLeftIcon size={16} /> Back</Link>
       <header className="rp-head">
         <p className="eyebrow">{artifact.content.format === "interactive" ? "Interactive report" : "Report"}</p>
         <h1>{artifact.title}</h1>

@@ -12,6 +12,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { artifactsApi, notebooksApi, topicsApi } from "../api/endpoints";
 import { SourcesNav } from "./Sources";
 import type { Job, TopicDetail, TopicMap as TopicMapData, TopicNode } from "../api/types";
+import { useMedia } from "../components/PaneResizer";
 import { Reader } from "../components/Reader";
 import { EmptyState, errorMessage, formatDate, JobProgress, Loading, PageHeader, Tabs } from "../components/ui";
 import { useJob } from "../hooks/useJob";
@@ -154,15 +155,49 @@ function layout(data: TopicMapData): Map<string, P> {
   return byId;
 }
 
+/** The part of `v` a box of this shape (height / width) shows. A box taller than the map (a phone) keeps the view's
+ * height and crops the sides around its centre, so the stars come out bigger; a wider box crops top and bottom. */
+function fitView(v: View, aspect: number): View {
+  const want = v.h / v.w;
+  if (!aspect || Math.abs(aspect - want) < 0.01) return v;
+  if (aspect > want) {
+    const w = v.h / aspect;
+    return { x: v.x + (v.w - w) / 2, y: v.y, w, h: v.h };
+  }
+  const h = v.w * aspect;
+  return { x: v.x, y: v.y + (v.h - h) / 2, w: v.w, h };
+}
+
 /** Wheel to zoom around the cursor, drag to pan, buttons and keys for the rest. */
 function useZoomPan(svgRef: RefObject<SVGSVGElement>) {
   const [view, setView] = useState<View>(HOME);
+  const [aspect, setAspect] = useState(H / W); // the box's height / width, which can differ from the map's on phones
   const drag = useRef<{ px: number; py: number; view: View; moved: boolean } | null>(null);
+
+  // Watches the box's shape. The map renders after its data loads, so this re-attaches whenever the element changes.
+  const watched = useRef<{ el: SVGSVGElement; ro: ResizeObserver } | null>(null);
+  useEffect(() => {
+    const el = svgRef.current;
+    if (watched.current?.el === el) return;
+    watched.current?.ro.disconnect();
+    watched.current = null;
+    if (!el) return;
+    const measure = () => {
+      const r = el.getBoundingClientRect();
+      if (r.width > 0) setAspect(r.height / r.width);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    watched.current = { el, ro };
+  });
+  useEffect(() => () => watched.current?.ro.disconnect(), []);
 
   const toSvg = useCallback(
     (clientX: number, clientY: number, v: View) => {
       const rect = svgRef.current!.getBoundingClientRect();
-      return { x: v.x + ((clientX - rect.left) / rect.width) * v.w, y: v.y + ((clientY - rect.top) / rect.height) * v.h };
+      const s = fitView(v, rect.height / rect.width);
+      return { x: s.x + ((clientX - rect.left) / rect.width) * s.w, y: s.y + ((clientY - rect.top) / rect.height) * s.h };
     },
     [svgRef],
   );
@@ -200,8 +235,9 @@ function useZoomPan(svgRef: RefObject<SVGSVGElement>) {
     const d = drag.current;
     if (!d || !svgRef.current) return;
     const rect = svgRef.current.getBoundingClientRect();
-    const dx = ((e.clientX - d.px) / rect.width) * d.view.w;
-    const dy = ((e.clientY - d.py) / rect.height) * d.view.h;
+    const s = fitView(d.view, rect.height / rect.width);
+    const dx = ((e.clientX - d.px) / rect.width) * s.w;
+    const dy = ((e.clientY - d.py) / rect.height) * s.h;
     if (Math.abs(dx) + Math.abs(dy) > 2) d.moved = true;
     setView({ ...d.view, x: d.view.x - dx, y: d.view.y - dy });
   };
@@ -225,6 +261,7 @@ function useZoomPan(svgRef: RefObject<SVGSVGElement>) {
 
   return {
     view,
+    shown: fitView(view, aspect),
     toSvg,
     zoomAt,
     pan,
@@ -309,7 +346,8 @@ export default function TopicMap() {
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
   const svgRef = useRef<SVGSVGElement>(null);
-  const { view, toSvg, zoomAt, pan, reset, focusOn, handlers } = useZoomPan(svgRef);
+  const { view, shown, toSvg, zoomAt, pan, reset, focusOn, handlers } = useZoomPan(svgRef);
+  const phone = useMedia("(max-width: 699px)");
   const [pins, setPins] = useState<Pins>({});
   const [dragging, setDragging] = useState(false);
   const justDragged = useRef(false);
@@ -473,7 +511,8 @@ export default function TopicMap() {
           onChange={setMode}
         />
         {data && data.nodes.length > 0 && (
-          <button className={`btn btn-small${briefing ? " btn-primary" : ""}`} onClick={() => setBriefing(!briefing)} aria-pressed={briefing}>
+          <button type="button" role="switch" aria-checked={briefing} className="map-brief-switch" onClick={() => setBriefing(!briefing)}>
+            <span className={`vw-switch${briefing ? " on" : ""}`} aria-hidden="true"><span /></span>
             Briefing
           </button>
         )}
@@ -578,12 +617,12 @@ export default function TopicMap() {
 
             <svg
               ref={svgRef}
-              viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
+              viewBox={`${shown.x} ${shown.y} ${shown.w} ${shown.h}`}
               role="img"
               aria-label="Topic constellation. Plus and minus zoom, arrow keys pan, 0 resets."
               tabIndex={0}
               className={`map-svg${dragging ? " dragging" : ""}`}
-              style={{ aspectRatio: `${W} / ${H}` }}
+              style={phone ? undefined : { aspectRatio: `${W} / ${H}` }} // phones: a taller box from CSS
               {...handlers}
               onKeyDown={(e) => {
                 const step = 0.12;

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { artifactsApi, videosApi } from "../api/endpoints";
 import type { Artifact, Citation } from "../api/types";
@@ -6,7 +6,7 @@ import { useJob } from "../hooks/useJob";
 import { Body } from "./ArtifactCard";
 import { SlideDeckViewer } from "./SlideDeck";
 import { TrashIcon } from "./icons/Icons";
-import { errorMessage, formatDate, formatDuration, JobProgress } from "./ui";
+import { DeleteButton, errorMessage, formatDate, formatDuration, JobProgress } from "./ui";
 import { ShareButton } from "./ShareDialog";
 
 function statusOf(a: Artifact, running: boolean): { label: string; tone: "done" | "busy" | "failed" } {
@@ -33,7 +33,6 @@ export function ArtifactRow({
 }) {
   const [artifact, setArtifact] = useState(initial);
   const [openRow, setOpenRow] = useState(false);
-  const [armed, setArmed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const job = useJob(artifact.job, () => {
     artifactsApi.get(artifact.id).then((a) => {
@@ -47,22 +46,11 @@ export function ArtifactRow({
   const isDeck = artifact.type === "slide_deck" && artifact.status === "ready";
   const [viewing, setViewing] = useState(false);
 
-  useEffect(() => {
-    if (!armed) return;
-    const t = setTimeout(() => setArmed(false), 4000);
-    return () => clearTimeout(t);
-  }, [armed]);
-
+  // Errors show in the warning modal, which stays open so the delete can be tried again.
   async function remove() {
-    if (!armed) return setArmed(true);
-    setArmed(false);
-    try {
-      // A blog2video video is also removed from blog2video.
-      await (isEditorVideo ? videosApi.remove(artifact.id) : artifactsApi.remove(artifact.id));
-      onRemoved?.(artifact.id);
-    } catch (e) {
-      setError(errorMessage(e));
-    }
+    // A blog2video video is also removed from blog2video.
+    await (isEditorVideo ? videosApi.remove(artifact.id) : artifactsApi.remove(artifact.id));
+    onRemoved?.(artifact.id);
   }
 
   async function retry() {
@@ -113,11 +101,10 @@ export function ArtifactRow({
           <button type="button" className="btn btn-small" onClick={retry}>Retry</button>
         )}
         {onRemoved && (
-          <button type="button" className={`icon-btn vw-list-delete${armed ? " armed" : ""}`}
-                  aria-label={armed ? "Click again to delete" : `Delete ${artifact.title}`}
-                  title={armed ? "Click again to delete" : "Delete"} onClick={remove}>
-            {armed ? <span className="small">Delete?</span> : <TrashIcon size={18} />}
-          </button>
+          <DeleteButton className="icon-btn vw-list-delete" label={`Delete ${artifact.title}`}
+                        heading={`Delete ${artifact.type_label.toLowerCase()}?`} name={artifact.title} onConfirm={remove}>
+            <TrashIcon size={18} />
+          </DeleteButton>
         )}
       </div>
       {running && job && <JobProgress job={job} compact />}

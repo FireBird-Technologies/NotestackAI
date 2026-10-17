@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { videosApi } from "../../api/endpoints";
 import type { Artifact } from "../../api/types";
 import { ShareButton } from "../ShareDialog";
-import { ConfirmButton, errorMessage, formatDate, Loading, Modal, StatusPill } from "../ui";
+import { DeleteButton, errorMessage, formatDate, Loading, Modal, StatusPill } from "../ui";
 import { canPost, PostButton } from "../launchpad/PostButton";
 import { CardFeedback } from "../CardFeedback";
 import { TrashIcon } from "../icons/Icons";
@@ -83,12 +83,12 @@ export function VideoCard({ artifact, onRemoved }: { artifact: Artifact; onRemov
         {canPost(artifact) && <PostButton artifactId={artifact.id} artifact={artifact} iconOnly />}
         {/* A link on Notestack's own address that plays this preview: /r/<token> */}
         <ShareButton artifact={artifact} iconOnly />
-        <ConfirmButton className="btn btn-small btn-icon-only card-delete" label="Delete" confirmLabel="Delete?" busyLabel="" nativeTitle={false} onConfirm={async () => {
+        <DeleteButton heading="Delete video?" name={artifact.title} onConfirm={async () => {
           await videosApi.remove(artifact.id);
           onRemoved(artifact.id);
         }}>
           <TrashIcon size={16} />
-        </ConfirmButton>
+        </DeleteButton>
         <CardFeedback artifact={artifact} />
       </footer>
       {previewing && (

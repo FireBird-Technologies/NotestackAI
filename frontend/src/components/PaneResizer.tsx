@@ -30,7 +30,7 @@ function write(side: Side, value: number | null) {
   }
 }
 
-function useMedia(query: string): boolean {
+export function useMedia(query: string): boolean {
   const [on, setOn] = useState(() => typeof window !== "undefined" && window.matchMedia(query).matches);
   useEffect(() => {
     const m = window.matchMedia(query);
