@@ -4,7 +4,7 @@ import { artifactsApi, notebooksApi } from "../api/endpoints";
 import { ApiError } from "../api/client";
 import { streamSSE } from "../api/stream";
 import { createTypewriter } from "../lib/typewriter";
-import type { AnswerFeedback as Feedback, Artifact, ChatSummary, Citation, Job, MemoryChange, Notebook } from "../api/types";
+import type { AnswerFeedback as Feedback, Artifact, ChatAction, ChatArtifact, ChatPreset, ChatSummary, Citation, Job, MemoryChange, Notebook } from "../api/types";
 import { AnswerFeedback } from "../components/AnswerFeedback";
 import { ArtifactCard, CitationList } from "../components/ArtifactCard";
 import ConnectorModal from "../components/ConnectorModal";
@@ -45,6 +45,17 @@ type Turn = {
   saved?: MemoryChange[];
   topic?: string; // what the answer is about, named in the next-step suggestions under it
   askKey?: string; // the question this answer belongs to, while it is on screen: what the stream's updates look for
+  action?: ChatAction; // a "create a quiz" answer: the settings dialog it opened, to open again
+};
+
+/** What each artifact is called, and its icon, on the "Open settings" button under a create answer. */
+const ARTIFACT_NAMES: Record<ChatArtifact, string> = {
+  audio_overview: "audio overview", slide_deck: "slide deck", video: "video", report: "report",
+  infographic: "infographic", quiz: "quiz", flashcards: "flashcards", mind_map: "Mind Constellation",
+};
+const ARTIFACT_ICONS: Record<ChatArtifact, typeof VideoIcon> = {
+  audio_overview: HeadphonesIcon, slide_deck: SlidesIcon, video: VideoIcon, report: ReportIcon,
+  infographic: InfographicIcon, quiz: QuizIcon, flashcards: FlashcardsIcon, mind_map: TelescopeIcon,
 };
 
 
@@ -94,12 +105,16 @@ function readToolsRailOpen(): boolean {
 }
 
 /** Create: one click per format with sensible defaults, options folded away; then what was made from this notebook. */
-function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, quizOpen, onQuizClose, onCreateQuiz, cardsOpen, onCardsClose, onCreateCards, infographicOpen, onInfographicClose, onCreateInfographic, audioOpen, onAudioClose, onCreateAudio, slidesOpen, onSlidesClose, onCreateSlides, reportOpen, onReportClose, onCreateReport, mapOpen, onMapClose, onCreateMap, onCreateVideo, onClose }: {
+function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, presets, presetKey, quizOpen, onQuizClose, onCreateQuiz, cardsOpen, onCardsClose, onCreateCards, infographicOpen, onInfographicClose, onCreateInfographic, audioOpen, onAudioClose, onCreateAudio, slidesOpen, onSlidesClose, onCreateSlides, reportOpen, onReportClose, onCreateReport, mapOpen, onMapClose, onCreateMap, onCreateVideo, onClose }: {
   notebookId: string;
   docs: { id: string; title: string; locked?: boolean }[];
   chats: ChatSummary[];
   currentChatId: string | null;
   disabled: boolean;
+  /** Settings asked for in the chat, per artifact: its dialog opens with them. */
+  presets: Partial<Record<ChatArtifact, ChatPreset>>;
+  /** Changes each time the chat opens a dialog, so one that is already open starts again from the new settings. */
+  presetKey: number;
   quizOpen: boolean; // the quiz settings are open (from here, or from the chat's own Quiz button)
   onQuizClose: () => void;
   onCreateQuiz: () => void;
@@ -325,20 +340,22 @@ function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, quizOpe
         ))}
       </div>}
       {reading && <Reader documentId={reading.id} highlight={{ start: reading.start, end: reading.end }} onClose={() => setReading(null)} />}
-      {quizOpen && <QuizDialog notebookId={notebookId} chats={chats} currentChatId={currentChatId} busy={false} error={null}
-                               onClose={onQuizClose} onCreate={makeQuiz} />}
-      {reportOpen && <ReportDialog notebookId={notebookId} chats={chats} currentChatId={currentChatId} busy={false}
-                                   error={null} onClose={onReportClose} onCreate={makeReport} />}
-      {infographicOpen && <InfographicDialog notebookId={notebookId} chats={chats} currentChatId={currentChatId}
-                                             busy={false} error={null} onClose={onInfographicClose} onCreate={makeInfographic} />}
-      {audioOpen && <AudioOverviewDialog notebookId={notebookId} chats={chats} currentChatId={currentChatId}
-                                         onClose={onAudioClose} onCreate={makeAudio} />}
-      {slidesOpen && <SlideDeckDialog notebookId={notebookId} chats={chats} currentChatId={currentChatId}
-                                      onClose={onSlidesClose} onCreate={makeSlides} />}
-      {cardsOpen && <FlashcardsDialog notebookId={notebookId} chats={chats} currentChatId={currentChatId} busy={false}
-                                      error={null} onClose={onCardsClose} onCreate={makeCards} />}
+      {quizOpen && <QuizDialog key={presetKey} notebookId={notebookId} chats={chats} currentChatId={currentChatId} busy={false}
+                               error={null} initial={presets.quiz} onClose={onQuizClose} onCreate={makeQuiz} />}
+      {reportOpen && <ReportDialog key={presetKey} notebookId={notebookId} chats={chats} currentChatId={currentChatId} busy={false}
+                                   error={null} initial={presets.report} onClose={onReportClose} onCreate={makeReport} />}
+      {infographicOpen && <InfographicDialog key={presetKey} notebookId={notebookId} chats={chats} currentChatId={currentChatId}
+                                             busy={false} error={null} initial={presets.infographic}
+                                             onClose={onInfographicClose} onCreate={makeInfographic} />}
+      {audioOpen && <AudioOverviewDialog key={presetKey} notebookId={notebookId} chats={chats} currentChatId={currentChatId}
+                                         initial={presets.audio_overview} onClose={onAudioClose} onCreate={makeAudio} />}
+      {slidesOpen && <SlideDeckDialog key={presetKey} notebookId={notebookId} chats={chats} currentChatId={currentChatId}
+                                      initial={presets.slide_deck} onClose={onSlidesClose} onCreate={makeSlides} />}
+      {cardsOpen && <FlashcardsDialog key={presetKey} notebookId={notebookId} chats={chats} currentChatId={currentChatId} busy={false}
+                                      error={null} initial={presets.flashcards} onClose={onCardsClose} onCreate={makeCards} />}
       {connectorOpen && <ConnectorModal onClose={() => setConnectorOpen(false)} />}
-      {mapOpen && <MindMapDialog docs={docs} busy={false} error={null} onClose={onMapClose} onCreate={makeMap} />}
+      {mapOpen && <MindMapDialog key={presetKey} docs={docs} busy={false} error={null} initialFocus={presets.mind_map?.focus}
+                                 onClose={onMapClose} onCreate={makeMap} />}
       {exploring && <MindMapExplorer artifact={exploring} onClose={() => setExploring(null)} />}
     </div>
   );
@@ -382,6 +399,10 @@ export default function NotebookView() {
   const [makingSlides, setMakingSlides] = useState(false); // the slide deck settings are open in a modal
   const [makingAudio, setMakingAudio] = useState(false); // the audio overview settings are open in a modal
   const [makingReport, setMakingReport] = useState(false); // the report dialog is open in a modal
+  // Settings asked for in the chat ("create a 10 minute audio overview"), per artifact: its dialog opens with them.
+  // A Create button or a next-step suggestion clears its artifact's, so those open with the usual defaults.
+  const [presets, setPresets] = useState<Partial<Record<ChatArtifact, ChatPreset>>>({});
+  const [presetKey, setPresetKey] = useState(0);
   const [toAdd, setToAdd] = useState<string[]>([]);
   const [addError, setAddError] = useState<string | null>(null);
   const [reading, setReading] = useState<{ id: string; start?: number; end?: number } | null>(null);
@@ -476,7 +497,7 @@ export default function NotebookView() {
     }
     // If the user selected another conversation while this request was running, ignore this older response.
     if (request !== chatLoad.current) return;
-    const history: Turn[] = msgs.map((m) => ({ id: m.id, feedback: m.feedback, role: m.role, text: m.text, citations: m.citations, topic: m.topic }));
+    const history: Turn[] = msgs.map((m) => ({ id: m.id, feedback: m.feedback, role: m.role, text: m.text, citations: m.citations, topic: m.topic, action: m.action ?? undefined }));
     // Early chats saved the answer but not the opening user message. Their title is the original question,
     // so restore it in the transcript instead of showing an assistant answer with no visible prompt.
     if (history[0]?.role === "assistant") {
@@ -577,7 +598,10 @@ export default function NotebookView() {
             patchAnswer({ text: d.message as string, status: undefined });
           } else if (event === "answer") {
             answered = d.text as string;
-            const final = { id: d.message_id as string, text: answered, citations: d.citations as Citation[], status: undefined, topic: (d.topic as string | undefined) || "" };
+            const action = (d.action as ChatAction | null | undefined) ?? undefined;
+            const final = { id: d.message_id as string, text: answered, citations: d.citations as Citation[], status: undefined, topic: (d.topic as string | undefined) || "", action };
+            // "Create a quiz on pricing": its settings open now, while this is still the question on screen.
+            if (action && latest() && chatLoad.current === sentIn) runAction(action);
             // Finish typing (the verified text, markers still hidden), then show it with its clickable citations.
             void typer.finish(streamingText(answered)).then(() => {
               finalized = true;
@@ -668,39 +692,51 @@ export default function NotebookView() {
   if (loadError) return <p className="error-text">{loadError}</p>;
   if (!nb) return <Loading label="Opening notebook" center="full" />;
 
-  const openReport = () => {
+  const openReport = (preset?: ChatPreset) => {
     seedDocs(nb.id, nb.documents);
+    setPresets((p) => ({ ...p, report: preset }));
     setMakingReport(true);
   };
 
-  const openInfographic = () => {
+  const openInfographic = (preset?: ChatPreset) => {
     seedDocs(nb.id, nb.documents);
+    setPresets((p) => ({ ...p, infographic: preset }));
     setMakingInfographic(true);
   };
 
-  const openAudio = () => {
+  const openAudio = (preset?: ChatPreset) => {
     seedDocs(nb.id, nb.documents);
+    setPresets((p) => ({ ...p, audio_overview: preset }));
     setMakingAudio(true);
   };
 
-  const openSlides = () => {
+  const openSlides = (preset?: ChatPreset) => {
     seedDocs(nb.id, nb.documents);
+    setPresets((p) => ({ ...p, slide_deck: preset }));
     setMakingSlides(true);
   };
 
-  const openCards = () => {
+  const openCards = (preset?: ChatPreset) => {
     seedDocs(nb.id, nb.documents);
+    setPresets((p) => ({ ...p, flashcards: preset }));
     setMakingCards(true);
   };
 
-  const openQuiz = () => {
+  const openQuiz = (preset?: ChatPreset) => {
     seedDocs(nb.id, nb.documents); // the posts this page already has: the dialog shows them at once
+    setPresets((p) => ({ ...p, quiz: preset }));
     setMakingQuiz(true);
   };
 
-  const openVideo = () => {
+  const openVideo = (preset?: ChatPreset) => {
     seedDocs(nb.id, nb.documents); // the posts this page already has: the wizard shows them at once
+    setPresets((p) => ({ ...p, video: preset }));
     setMakingVideo(true);
+  };
+
+  const openMap = (preset?: ChatPreset) => {
+    setPresets((p) => ({ ...p, mind_map: preset }));
+    setMakingMap(true);
   };
 
   // The next step suggested beside the last answer. The dialogs live in the Create panel, so it opens too.
@@ -708,20 +744,33 @@ export default function NotebookView() {
     setToolsRail(true);
     open();
   };
+
+  // An answer to "create an audio overview of 10 minutes": that dialog opens with the settings asked for (each one
+  // already snapped by the server to an option the dialog offers). Its dialogs live in the Create panel, so it opens too.
+  function runAction(a: ChatAction) {
+    const open: Record<ChatArtifact, (p: ChatPreset) => void> = {
+      audio_overview: openAudio, slide_deck: openSlides, report: openReport, infographic: openInfographic,
+      quiz: openQuiz, flashcards: openCards, mind_map: openMap, video: openVideo,
+    };
+    if (!open[a.artifact]) return;
+    setPresetKey((k) => k + 1); // a dialog that is already open starts again from these settings
+    if (a.artifact === "video") openVideo(a.settings);
+    else inPanel(() => open[a.artifact](a.settings ?? {}))();
+  }
   // The steps suggested under the last answer. With the answer's topic each one names it ("Quiz yourself on your
   // pricing posts"); without one (small talk, an answer from before topics were saved) the plain label shows.
   const nextSteps = (topic?: string): NextStep[] => {
     const t = topic?.trim();
     const say = (plain: string, named: (t: string) => string) => (t ? named(t) : plain);
     return [
-      { id: "audio", label: say("Make an audio overview", (x) => `Hear an audio overview of ${x}`), icon: <HeadphonesIcon size={14} />, run: inPanel(openAudio) },
-      { id: "slides", label: say("Create a slide deck", (x) => `Turn ${x} into a slide deck`), icon: <SlidesIcon size={14} />, run: inPanel(openSlides) },
-      { id: "video", label: say("Make a video", (x) => `Make a video about ${x}`), icon: <VideoIcon size={14} />, run: openVideo },
-      { id: "report", label: say("Generate a report", (x) => `Write a report on ${x}`), icon: <ReportIcon size={14} />, run: inPanel(openReport) },
-      { id: "quiz", label: say("Take a quiz", (x) => `Quiz yourself on ${x}`), icon: <QuizIcon size={14} />, run: inPanel(openQuiz) },
-      { id: "infographic", label: say("Generate an infographic", (x) => `Make an infographic on ${x}`), icon: <InfographicIcon size={14} />, run: inPanel(openInfographic) },
-      { id: "mindmap", label: say("Explore a Mind Constellation", (x) => `Map ${x} in a Mind Constellation`), icon: <TelescopeIcon size={14} />, run: inPanel(() => setMakingMap(true)) },
-      { id: "cards", label: say("Study with flashcards", (x) => `Study ${x} with flashcards`), icon: <FlashcardsIcon size={14} />, run: inPanel(openCards) },
+      { id: "audio", label: say("Make an audio overview", (x) => `Hear an audio overview of ${x}`), icon: <HeadphonesIcon size={14} />, run: inPanel(() => openAudio()) },
+      { id: "slides", label: say("Create a slide deck", (x) => `Turn ${x} into a slide deck`), icon: <SlidesIcon size={14} />, run: inPanel(() => openSlides()) },
+      { id: "video", label: say("Make a video", (x) => `Make a video about ${x}`), icon: <VideoIcon size={14} />, run: () => openVideo() },
+      { id: "report", label: say("Generate a report", (x) => `Write a report on ${x}`), icon: <ReportIcon size={14} />, run: inPanel(() => openReport()) },
+      { id: "quiz", label: say("Take a quiz", (x) => `Quiz yourself on ${x}`), icon: <QuizIcon size={14} />, run: inPanel(() => openQuiz()) },
+      { id: "infographic", label: say("Generate an infographic", (x) => `Make an infographic on ${x}`), icon: <InfographicIcon size={14} />, run: inPanel(() => openInfographic()) },
+      { id: "mindmap", label: say("Explore a Mind Constellation", (x) => `Map ${x} in a Mind Constellation`), icon: <TelescopeIcon size={14} />, run: inPanel(() => openMap()) },
+      { id: "cards", label: say("Study with flashcards", (x) => `Study ${x} with flashcards`), icon: <FlashcardsIcon size={14} />, run: inPanel(() => openCards()) },
     ];
   };
   const lastAnswerAt = turns.map((t) => t.role).lastIndexOf("assistant");
@@ -968,13 +1017,23 @@ export default function NotebookView() {
                   <p className="turn-text">{t.text}</p>
                 ))}
               {t.citations && <CitationList citations={t.citations} onCite={cite} collapsible />}
+              {t.role === "assistant" && t.action && t.text && !t.status && (
+                <button type="button" className="nbv-open-action" onClick={() => runAction(t.action!)}>
+                  {(() => {
+                    const Icon = ARTIFACT_ICONS[t.action.artifact] ?? VideoIcon;
+                    return <Icon size={15} />;
+                  })()}
+                  <span>Open {ARTIFACT_NAMES[t.action.artifact] ?? "the"} settings</span>
+                  <span className="nbv-open-action-arrow" aria-hidden="true">→</span>
+                </button>
+              )}
               {t.role === "assistant" && t.id && t.text && !t.status && (
                 <AnswerFeedback
                   key={t.id}
                   messageId={t.id}
                   initial={t.feedback}
                   text={t.text}
-                  extra={i === lastAnswerAt && !busy && nb.documents.length > 0 ? <NextStepHint actions={nextSteps(t.topic)} /> : undefined}
+                  extra={i === lastAnswerAt && !busy && !t.action && nb.documents.length > 0 ? <NextStepHint actions={nextSteps(t.topic)} /> : undefined}
                 />
               )}
               {t.saved && t.saved.length > 0 && (
@@ -1059,22 +1118,22 @@ export default function NotebookView() {
 
       {toolsOpen && <aside className="card nbv-pane nbv-side" aria-label="Notebook tools">
         <StudioPanel notebookId={nb.id} docs={nb.documents.map((d) => ({ id: d.id, title: d.title, locked: d.locked }))}
-                     chats={chats} currentChatId={chatId} quizOpen={makingQuiz}
-                     onQuizClose={() => setMakingQuiz(false)} onCreateQuiz={openQuiz}
-                     reportOpen={makingReport} onReportClose={() => setMakingReport(false)} onCreateReport={openReport}
-                     infographicOpen={makingInfographic} onInfographicClose={() => setMakingInfographic(false)} onCreateInfographic={openInfographic}
-                     audioOpen={makingAudio} onAudioClose={() => setMakingAudio(false)} onCreateAudio={openAudio}
-                     slidesOpen={makingSlides} onSlidesClose={() => setMakingSlides(false)} onCreateSlides={openSlides}
-                     cardsOpen={makingCards} onCardsClose={() => setMakingCards(false)} onCreateCards={openCards}
-                     mapOpen={makingMap} onMapClose={() => setMakingMap(false)} onCreateMap={() => setMakingMap(true)}
+                     chats={chats} currentChatId={chatId} presets={presets} presetKey={presetKey} quizOpen={makingQuiz}
+                     onQuizClose={() => setMakingQuiz(false)} onCreateQuiz={() => openQuiz()}
+                     reportOpen={makingReport} onReportClose={() => setMakingReport(false)} onCreateReport={() => openReport()}
+                     infographicOpen={makingInfographic} onInfographicClose={() => setMakingInfographic(false)} onCreateInfographic={() => openInfographic()}
+                     audioOpen={makingAudio} onAudioClose={() => setMakingAudio(false)} onCreateAudio={() => openAudio()}
+                     slidesOpen={makingSlides} onSlidesClose={() => setMakingSlides(false)} onCreateSlides={() => openSlides()}
+                     cardsOpen={makingCards} onCardsClose={() => setMakingCards(false)} onCreateCards={() => openCards()}
+                     mapOpen={makingMap} onMapClose={() => setMakingMap(false)} onCreateMap={() => openMap()}
                      disabled={nb.documents.length === 0}
-                     onCreateVideo={openVideo}
+                     onCreateVideo={() => openVideo()}
                      onClose={() => setToolsRail(false)} />
       </aside>}
 
       {makingVideo && (
         <Modal title="New video" onClose={() => setMakingVideo(false)} wide>
-          <VideoCreateForm startNotebook={nb.id} inModal />
+          <VideoCreateForm key={presetKey} startNotebook={nb.id} inModal initial={presets.video} />
         </Modal>
       )}
       {adding && (

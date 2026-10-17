@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProp
 import { createPortal } from "react-dom";
 import { artifactsApi, type EditSlide, type GenerateBody } from "../api/endpoints";
 import { addActions, convert, type DeckFmt, LAYOUTS, MAX_SLIDES, newSlide, problem, removable, removeField, setText } from "./slideDeckEdit";
-import type { Artifact, ChatSummary } from "../api/types";
+import type { Artifact, ChatPreset, ChatSummary } from "../api/types";
 import { Dropdown } from "./Dropdown";
 import { useJob } from "../hooks/useJob";
 import { CheckIcon, CollapseIcon, DownloadIcon, ExpandIcon, MoreIcon, PdfIcon, PlayIcon, PptxIcon, DesktopIcon, RetryIcon, ShareIcon, TrashIcon } from "./icons/Icons";
@@ -43,19 +43,21 @@ type DeckFormat = "detailed" | "presenter";
 type DeckLength = "short" | "default" | "long";
 
 /** The slide deck settings: a visual style on top, then the format, language, length, sources and what it should say. */
-export function SlideDeckDialog({ notebookId, chats, currentChatId, onClose, onCreate }: {
+export function SlideDeckDialog({ notebookId, chats, currentChatId, initial, onClose, onCreate }: {
   notebookId: string;
   chats: ChatSummary[];
   currentChatId?: string | null;
+  /** Settings asked for in the chat ("a 15 slide presenter deck"), already snapped to these options. */
+  initial?: ChatPreset;
   onClose: () => void;
   onCreate: (body: SlideDeckRequest) => void;
 }) {
   const [sel, setSel] = useState<SourceSelection | null>(null);
-  const [theme, setTheme] = useState<string>("dark-space");
-  const [format, setFormat] = useState<DeckFormat>("detailed");
-  const [length, setLength] = useState<DeckLength>("default");
-  const [language, setLanguage] = useState("English");
-  const [prompt, setPrompt] = useState("");
+  const [theme, setTheme] = useState<string>(() => SLIDE_THEMES.find((t) => t.id === initial?.theme)?.id ?? "dark-space");
+  const [format, setFormat] = useState<DeckFormat>(() => FORMATS.find((f) => f.id === initial?.format)?.id ?? "detailed");
+  const [length, setLength] = useState<DeckLength>(() => LENGTHS.find((l) => l.id === initial?.length)?.id ?? "default");
+  const [language, setLanguage] = useState(initial?.language ?? "English");
+  const [prompt, setPrompt] = useState(initial?.prompt ?? "");
 
   return (
     <Modal title="Customize slide deck" onClose={onClose} wide>

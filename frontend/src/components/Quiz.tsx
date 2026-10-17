@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
 import type { GenerateBody } from "../api/endpoints";
-import type { Artifact, ChatSummary, QuizQuestion, QuizQuestionType } from "../api/types";
+import type { Artifact, ChatPreset, ChatSummary, QuizQuestion, QuizQuestionType } from "../api/types";
 import { ArtifactFeedback, FeedbackActions } from "./ArtifactFeedback";
 import { CheckIcon, ChevronIcon } from "./icons/Icons";
 import { ViewButton } from "./cardActions";
@@ -23,19 +23,24 @@ export type QuizRequest = Omit<GenerateBody, "type">;
 
 /** The quiz settings, laid out like the video wizard's first step: what it is made from, what it should focus on, then
  * how it is asked. */
-export function QuizDialog({ notebookId, chats, currentChatId, busy, error, onClose, onCreate }: {
+export function QuizDialog({ notebookId, chats, currentChatId, busy, error, initial, onClose, onCreate }: {
   notebookId: string;
   chats: ChatSummary[];
   /** The chat open beside the dialog, ticked to start with. */
   currentChatId: string | null;
   busy: boolean;
   error: string | null;
+  /** Settings asked for in the chat ("a hard quiz with fill in the blanks"), already snapped to these options. */
+  initial?: ChatPreset;
   onClose: () => void;
   onCreate: (body: QuizRequest) => void;
 }) {
   const [sel, setSel] = useState<SourceSelection | null>(null);
-  const [level, setLevel] = useState<(typeof LEVELS)[number]["id"]>("medium");
-  const [types, setTypes] = useState<Set<QuizQuestionType>>(new Set(["multiple_choice"]));
+  const [level, setLevel] = useState<(typeof LEVELS)[number]["id"]>(() => LEVELS.find((l) => l.id === initial?.level)?.id ?? "medium");
+  const [types, setTypes] = useState<Set<QuizQuestionType>>(() => {
+    const asked = TYPES.map((t) => t.id).filter((t) => initial?.types?.includes(t));
+    return new Set(asked.length ? asked : ["multiple_choice"]);
+  });
 
   const toggleType = (t: QuizQuestionType) =>
     setTypes((cur) => {
@@ -72,7 +77,7 @@ export function QuizDialog({ notebookId, chats, currentChatId, busy, error, onCl
             </div>
           </div>
           <SourceFocusFields notebookId={notebookId} chats={chats} currentChatId={currentChatId}
-                             preselectChat what="quiz" largeSelection onChange={setSel} />
+                             preselectChat what="quiz" largeSelection initialCustom={initial?.focus} onChange={setSel} />
           <div className="qz-foot">
             <div>
               {!sel?.ready && <p className="muted small">Select at least one post or chat to generate a quiz.</p>}

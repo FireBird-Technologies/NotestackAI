@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { GenerateBody } from "../api/endpoints";
-import type { Artifact, ChatSummary, FlashcardData } from "../api/types";
+import type { Artifact, ChatPreset, ChatSummary, FlashcardData } from "../api/types";
 import { Pills, SourceFocusFields, sourceSummary, type SourceSelection } from "./SourceFocusFields";
 import { ArtifactFeedback } from "./ArtifactFeedback";
 import { StudyOverlay } from "./StudyOverlay";
@@ -16,17 +16,19 @@ const LEVELS = [
 export type FlashcardsRequest = Omit<GenerateBody, "type">;
 
 /** The flashcard settings: the same source and focus fields as the quiz and the video wizard, then how many cards. */
-export function FlashcardsDialog({ notebookId, chats, currentChatId, busy, error, onClose, onCreate }: {
+export function FlashcardsDialog({ notebookId, chats, currentChatId, busy, error, initial, onClose, onCreate }: {
   notebookId: string;
   chats: ChatSummary[];
   currentChatId: string | null;
   busy: boolean;
   error: string | null;
+  /** Settings asked for in the chat ("hard flashcards on pricing"), already snapped to these options. */
+  initial?: ChatPreset;
   onClose: () => void;
   onCreate: (body: FlashcardsRequest) => void;
 }) {
   const [sel, setSel] = useState<SourceSelection | null>(null);
-  const [level, setLevel] = useState<(typeof LEVELS)[number]["id"]>("medium");
+  const [level, setLevel] = useState<(typeof LEVELS)[number]["id"]>(() => LEVELS.find((l) => l.id === initial?.level)?.id ?? "medium");
 
   return (
     <Modal title="Flashcards" onClose={onClose} wide>
@@ -37,7 +39,7 @@ export function FlashcardsDialog({ notebookId, chats, currentChatId, busy, error
             <Pills label="Level of difficulty" value={level} options={LEVELS} onChange={setLevel} />
           </div>
           <SourceFocusFields notebookId={notebookId} chats={chats} currentChatId={currentChatId}
-                             preselectChat what="flashcard set" largeSelection onChange={setSel} />
+                             preselectChat what="flashcard set" largeSelection initialCustom={initial?.focus} onChange={setSel} />
           <div className="qz-foot">
             <div>
               {!sel?.ready && <p className="muted small">Select at least one post or chat to generate flashcards.</p>}

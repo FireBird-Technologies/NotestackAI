@@ -2353,6 +2353,48 @@ select.input option {
   margin-top: 8px;
 }
 
+/* Under a "create a quiz" answer: opens that dialog again with the settings asked for. A compact pill (the turn is a
+   grid, which would otherwise stretch it across the answer). */
+.nbv-open-action {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 14px 0 12px;
+  border: 1px solid var(--blue-35);
+  border-radius: 999px;
+  background: var(--blue-05);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+  max-width: 100%;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.nbv-open-action svg {
+  color: var(--blue);
+  flex: none;
+}
+
+.nbv-open-action:hover,
+.nbv-open-action:focus-visible {
+  border-color: var(--blue-60);
+  background: var(--blue-10);
+}
+
+.nbv-open-action-arrow {
+  opacity: 0.6;
+  transition: transform 0.2s;
+}
+
+.nbv-open-action:hover .nbv-open-action-arrow {
+  transform: translateX(2px);
+}
+
 /* Topic map zoom and pan */
 .map-canvas {
   position: relative;

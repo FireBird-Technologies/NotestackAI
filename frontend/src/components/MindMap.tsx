@@ -1079,17 +1079,20 @@ export function MindMapDialog({
   docs,
   busy,
   error,
+  initialFocus,
   onClose,
   onCreate,
 }: {
   docs: { id: string; title: string }[];
   busy: boolean;
+  /** What the map should be about, asked for in the chat ("a mind map of my growth posts"). */
+  initialFocus?: string;
   error: string | null;
   onClose: () => void;
   onCreate: (documentIds: string[], focus: string) => void;
 }) {
   const [picked, setPicked] = useState<Set<string>>(() => new Set(docs.map((d) => d.id)));
-  const [focus, setFocus] = useState("");
+  const [focus, setFocus] = useState(initialFocus ?? "");
   const [open, setOpen] = useState(docs.length <= 6);
   const all = picked.size === docs.length;
   const toggle = (id: string) =>

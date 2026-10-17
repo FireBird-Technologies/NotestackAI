@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { videosApi, videoVoicesApi, voiceApi } from "../api/endpoints";
 import type {
+  ChatPreset,
   VideoCatalog,
   VideoConfig,
   VideoCreateBody,
@@ -58,8 +59,10 @@ export default function VideoCreate() {
 
 /** The three-step video wizard: as a page, or inside a modal (inModal: no page header, no step-1 Back, no outer card;
  * the modal's own close button leaves it). */
-export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal = false }: {
+export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal = false, initial }: {
   startNotebook?: string | null; startDoc?: string | null; inModal?: boolean;
+  /** Settings asked for in the chat ("a vertical video about hiring"): the topic, the shape and the voice. */
+  initial?: ChatPreset;
 }) {
   const navigate = useNavigate();
   const { openUpgrade } = useUpgrade();
@@ -82,7 +85,7 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
   const topicsFor = useRef(""); // the sourceKey of the suggestions shown or on their way
   const [focus, setFocus] = useState<VideoFocusTopic | null>(null);
   // Or the user's own topic: one or the other (or neither, for a general video).
-  const [custom, setCustom] = useState("");
+  const [custom, setCustom] = useState(initial?.focus ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { playing, play, stop } = useAudio();
@@ -96,7 +99,7 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
 
   const [form, setForm] = useState<VideoOptions>({
     stock_footage_enabled: true,
-    aspect_ratio: "landscape",
+    aspect_ratio: initial?.aspect_ratio === "portrait" ? "portrait" : "landscape",
     video_length: "medium", // no length picker: the server sets it from a house style
     logo_position: "bottom_right",
     logo_opacity: 0.9,
@@ -104,7 +107,7 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
     video_style: "auto",
     ...FALLBACK_COLORS,
     content_language: null,
-    voice_gender: "female",
+    voice_gender: initial?.voice_gender === "male" ? "male" : "female",
     voice_accent: "american",
     bgm_volume: 0.1,
   });
@@ -141,7 +144,12 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
       if (house.length) setForm((f) => (house.some((s) => s.id === f.video_style) ? f : { ...f, video_style: house[0].id }));
     }).catch((e) => setLoadError(errorMessage(e)));
     loadVoices()
-      .then((v) => v.saved[0] && pickVoice(v.saved[0]))
+      .then((v) => {
+        // The first voice, or the first of the gender asked for in the chat (none of it: the built-in voice of it).
+        const want = initial?.voice_gender;
+        const first = want ? v.saved.find((x) => (x.gender === "male" ? "male" : "female") === want) : v.saved[0];
+        if (first) pickVoice(first);
+      })
       .catch(() => setVoices({ saved: [], library: [], notestack: [] }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config?.configured]);

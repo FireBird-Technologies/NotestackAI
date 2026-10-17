@@ -350,7 +350,9 @@ def chat_messages(chat_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
         cites = [_cite(c.marker, c.path, c.line_start, c.line_end, c.span or "", docs.get(c.document_id))
                  for c in sorted(m.citations, key=lambda c: c.marker)]
         out.append({"id": str(m.id), "role": m.role, "text": m.content, "citations": cites,
-                    "feedback": _feedback_out(fb.get(m.id)), "topic": (m.recall_json or {}).get("topic") or ""})
+                    "feedback": _feedback_out(fb.get(m.id)), "topic": (m.recall_json or {}).get("topic") or "",
+                    # A "create a quiz" answer: the dialog and settings it opened, so the chat can open them again.
+                    "action": (m.recall_json or {}).get("action")})
     return out
 
 
@@ -490,8 +492,8 @@ async def _learn(db, workspace_id: uuid.UUID, message_id: uuid.UUID, kind: str,
     if not settings.llm_api_key:
         trace.add("notes", "workspace notes: not updated (no LLM_API_KEY)")
         return []
-    if kind == "chitchat":
-        trace.add("notes", "workspace notes: not updated (small talk never holds a lasting note)")
+    if kind in ("chitchat", "create"):
+        trace.add("notes", f"workspace notes: not updated ({kind} never holds a lasting note)")
         return []
     job = create_job(db, workspace_id, "memory_update", {"message_id": str(message_id)}, max_attempts=2)
     started = time.monotonic()
@@ -660,8 +662,8 @@ async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)
         db.commit()
         trace.add("save", f"assistant message saved to Postgres with {len(citations)} citation row(s) and recall_json "
                           "(triage choices, memory notes shown, steps, timings)")
-        if result.kind == "chitchat":
-            trace.add("save", "chat-memory filing job: not queued (small talk is not filed)")
+        if result.kind in ("chitchat", "create"):
+            trace.add("save", f"chat-memory filing job: not queued ({result.kind} is not filed)")
         else:
             try:
                 queued = queue_chat_memory(db, ctx.workspace.id, chat_row.id)
@@ -691,6 +693,7 @@ async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)
             "unsupported": result.unsupported,
             "citations": citations,
             "topic": result.topic,  # what the answer is about, for the next-step suggestions
+            "action": result.action,  # a create request: the dialog to open, with its settings
             # How many questions the plan has left ({used, limit, left}), or None when chat is unlimited.
             "quota": chat_quota(db, ctx.workspace) if plan.chat_messages >= 0 else None,
         })

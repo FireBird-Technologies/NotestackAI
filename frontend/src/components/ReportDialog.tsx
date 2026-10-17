@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { reportsApi, type GenerateBody } from "../api/endpoints";
-import type { ChatSummary, ReportTemplate } from "../api/types";
+import type { ChatPreset, ChatSummary, ReportTemplate } from "../api/types";
 import { CheckIcon, SparkleIcon } from "./icons/Icons";
 import { suggestTemplates } from "../hooks/reportSuggestions";
 import { SourceFocusFields, type SourceSelection } from "./SourceFocusFields";
@@ -13,19 +13,21 @@ const fill = (prompt: string, about: string) => prompt.replaceAll("{about}", abo
 
 /** Create report: step 1 picks the format (and, for a document, a template); step 2 shows the instructions the writer
  * will get, already filled in from the topic and the sources, for the user to edit. */
-export function ReportDialog({ notebookId, chats, currentChatId, busy, error, onClose, onCreate }: {
+export function ReportDialog({ notebookId, chats, currentChatId, busy, error, initial, onClose, onCreate }: {
   notebookId: string;
   chats: ChatSummary[];
   currentChatId: string | null;
   busy: boolean;
   error: string | null;
+  /** Settings asked for in the chat ("an interactive report on AI"): the format or template, the topic and other asks. */
+  initial?: ChatPreset;
   onClose: () => void;
   onCreate: (body: ReportRequest) => void;
 }) {
   const [step, setStep] = useState<1 | 2>(1);
-  const [format, setFormat] = useState<Format>("document");
+  const [format, setFormat] = useState<Format>(initial?.format === "interactive" ? "interactive" : "document");
   const [catalog, setCatalog] = useState<{ templates: ReportTemplate[]; interactive: ReportTemplate } | null>(null);
-  const [templateId, setTemplateId] = useState("briefing");
+  const [templateId, setTemplateId] = useState(initial?.template ?? "briefing");
   const [sel, setSel] = useState<SourceSelection | null>(null);
   const [text, setText] = useState("");
   const [suggested, setSuggested] = useState<ReportTemplate[] | null>(null); // null: still on their way
@@ -37,8 +39,14 @@ export function ReportDialog({ notebookId, chats, currentChatId, busy, error, on
 
   const template = format === "interactive" ? catalog?.interactive
     : catalog?.templates.find((t) => t.id === templateId) ?? suggested?.find((t) => t.id === templateId);
-  const about = ""; // no topic box: the instructions text says what the report is about, so the template says "the selected sources"
-  const prefilled = useMemo(() => (template ? fill(template.prompt, about) : ""), [template, about]);
+  // No topic box: the instructions text says what the report is about, so the template says "the selected sources",
+  // or the topic asked for in the chat, with anything else asked for there after it.
+  const about = initial?.about?.trim() ?? "";
+  const asked = initial?.instructions?.trim() ?? "";
+  const prefilled = useMemo(
+    () => (template ? [fill(template.prompt, about), asked].filter(Boolean).join("\n\n") : ""),
+    [template, about, asked],
+  );
 
   // The suggested templates belong to the chosen sources (and topic): asked for once the choice is complete.
   // The server reads one kind of source for them: the posts when there are any, else the chats (as for the focus cards).
