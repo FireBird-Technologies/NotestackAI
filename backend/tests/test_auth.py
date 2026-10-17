@@ -96,6 +96,9 @@ def test_password_reset_revokes_old_tokens(client):
                     json={"email": "writer@example.com", "code": code, "password": "new-orbit-99"})
     assert r.status_code == 200
     assert client.get("/api/auth/me", headers=old).status_code == 401
+    assert client.post("/api/auth/refresh", json={"refresh_token": data["refresh_token"]}).status_code == 401
+    fresh = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    assert client.get("/api/auth/me", headers=fresh).status_code == 200
 
 
 def test_google_user_cannot_use_password(client, db_session):
