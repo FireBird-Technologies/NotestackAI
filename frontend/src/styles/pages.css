@@ -3621,6 +3621,12 @@ select.input,
   place-items: center;
 }
 
+/* While a conversation loads, its row fills the whole message area, so the loader sits in the middle of it */
+.nbv-turns:has(> .nbv-chat-loading) {
+  grid-template-rows: minmax(0, 1fr);
+  align-content: stretch;
+}
+
 .nbv-chat-loading .loading {
   flex-direction: column;
   padding: 32px;
@@ -4756,22 +4762,7 @@ details.map-legend[open] summary {
   }
 }
 
-@media (max-width: 899px) {
-  .sidebar {
-    position: relative;
-  }
 
-  .sidebar .side-settings {
-    position: absolute;
-    top: 14px;
-    right: 16px;
-    padding: 8px;
-  }
-
-  .sidebar .side-settings .side-label {
-    display: none;
-  }
-}
 
 @media (min-width: 900px) {
   .shell.collapsed .side-settings {
@@ -10643,6 +10634,16 @@ body.nbv-resizing iframe {
   margin: 4px 0 2px 9px;
 }
 
+/* The date groups (Today, Yesterday...) sit one step in from RECENT, as its children; their chats come with them */
+.nbv-history .nbv-chat-group {
+  padding-left: 14px;
+}
+
+/* POSTS starts at the same indent as RECENT above it, so the two headings line up */
+.nbv-history .nbv-posts > .nbv-section-head {
+  padding-left: 9px;
+}
+
 .nbv-history .nbv-group-toggle {
   display: flex;
   align-items: center;
@@ -10665,53 +10666,142 @@ body.nbv-resizing iframe {
   letter-spacing: 0;
 }
 
-.nbv-rail-chev {
-  transition: transform 0.15s;
-}
-
-.nbv-rail-chev.folded {
-  transform: rotate(-90deg);
-}
-
-/* Phones: the rail sits above the chat at its natural height. It folds to its top bar, and Chats and Posts open one
-   at a time, each showing about three rows and scrolling the rest. */
+/* Phones, like a chat app: the chat fills the screen. The chats rail (hamburger, left) and the Create panel (right)
+   slide in over it as drawers, one at a time, and close with their X, the backdrop or Escape. */
 @media (max-width: 899px) {
-  .nbv-history {
+  .nbv,
+  .nbv.nbv-tools-closed,
+  .nbv.nbv-history-closed {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "chat";
+    height: calc(100dvh - var(--main-pad-top) - var(--main-pad-bottom));
+    min-height: 420px;
+  }
+
+  .nbv-chat {
+    min-width: 0;
+    min-height: 0;
+  }
+
+  /* The conversation never pushes the page sideways: long words and links wrap, wide code and tables scroll inside */
+  .nbv-turns {
+    grid-template-columns: minmax(0, 1fr);
+    overflow-x: hidden;
+  }
+
+  .nbv-turns > *,
+  .nbv-turns .turn,
+  .nbv-turns .turn > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .nbv-turns p,
+  .nbv-turns li,
+  .nbv-turns a,
+  .nbv-turns blockquote {
+    overflow-wrap: anywhere;
+  }
+
+  .nbv-turns pre,
+  .nbv-turns table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .nbv-turns img {
+    max-width: 100%;
+    height: auto;
+  }
+
+  .nbv-drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(2px);
+    animation: nbv-fade 0.18s ease-out;
+  }
+
+  .nbv-drawer {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    z-index: 61;
+    width: min(88vw, 380px);
+    height: 100dvh;
     max-height: none;
+    margin: 0;
+    padding: 14px;
+    border-radius: 0;
+    background: var(--black);
+    visibility: hidden;
+    transition: transform 0.22s ease, visibility 0s linear 0.22s;
   }
 
-  .nbv-history-folded {
-    gap: 0;
+  .nbv-drawer-left {
+    left: 0;
+    border-width: 0 1px 0 0;
+    transform: translateX(-100%);
   }
 
-  .nbv-history .nbv-history-head {
-    min-height: 0;
-    padding: 6px 4px 6px 8px;
-    border-bottom: 0;
-  }
-
-  .nbv-history .nbv-chat-list {
-    flex: none;
-    max-height: 8.25rem;
-    padding: 0;
-  }
-
-  .nbv-history .nbv-chat-list:empty {
-    display: none;
-  }
-
-  .nbv-history .nbv-posts {
-    flex: none;
-    min-height: 0;
-    padding: 8px 0 0 8px;
-    overflow: visible;
-  }
-
-  .nbv-history .nbv-posts .nbv-docs {
-    max-height: 10.5rem;
+  .nbv-drawer-right {
+    right: 0;
+    border-width: 0 0 0 1px;
+    transform: translateX(100%);
     overflow-y: auto;
-    scrollbar-width: thin;
-    scrollbar-color: var(--line-strong) transparent;
+  }
+
+  .nbv-drawer.open {
+    visibility: visible;
+    transform: none;
+    transition: transform 0.22s ease, visibility 0s;
+  }
+}
+
+/* Phones: the app's top bar (logo, the tab menu, the account button) stays above a notebook too, and the chat takes
+   exactly the rest of the screen under it */
+@media (max-width: 899px) {
+  .shell.notebook-focus {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    min-height: 0;
+  }
+
+  .shell.notebook-focus > .sidebar {
+    display: flex; /* the drawer, still there to open (wide screens hide it on a notebook) */
+  }
+
+  .shell.notebook-focus > .app-topbar {
+    flex: none;
+  }
+
+  .shell.notebook-focus > .shell-main {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .shell.notebook-focus .nbv {
+    flex: 1;
+    height: auto;
+    min-height: 0;
+  }
+}
+
+@keyframes nbv-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nbv-drawer,
+  .nbv-drawer.open {
+    transition: none;
   }
 }
 

@@ -112,3 +112,12 @@
   .sup-bubble, .sup-typing i { animation: none; }
   .sup-fab { transition: none; }
 }
+
+/* Phones: no support chat (its button covered the send button and drawer content); the Support page stays reachable */
+@media (max-width: 899px) {
+  .sup-fab,
+  .sup-bubble,
+  .sup-panel {
+    display: none;
+  }
+}

@@ -333,6 +333,13 @@ export const MenuIcon = (p: P) => (
   </Icon>
 );
 
+/** Two lines, the lower one shorter: open a side panel (like a chat app's sidebar button). */
+export const PanelMenuIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M4 8.5h16M4 15.5h9" />
+  </Icon>
+);
+
 /** An X: close. */
 export const CloseIcon = (p: P) => (
   <Icon {...p}>
