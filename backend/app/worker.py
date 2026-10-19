@@ -49,9 +49,9 @@ from app.models import (
 )
 from app.pipeline import flashcards, generate, infographic, launchkit, media, quiz, report, slides
 from app.pipeline.generate import NothingToDo
-from app.pipeline.ingest import FeedNotFound, entry_from_upload, extract_article, ingest_source, store_entries
+from app.pipeline.ingest import FeedNotFound, UnreadableFile, entry_from_upload, extract_article, ingest_source, store_entries
 from app.pipeline.memory import learn_from_message
-from app.services import launchpad, report_suggestions, tts, video_quota
+from app.services import launchpad, report_suggestions, tts, video_quota, video_status
 from app.services.email import email_service
 from app.services.email_verification import purge_old_codes
 from app.services.jobs import (
@@ -210,7 +210,10 @@ def handle_import_upload(db: Session, job: Job):
     source = db.get(Source, uuid.UUID(job.params["source_id"]))
     upload = db.get(Upload, uuid.UUID(job.params["upload_id"]))
     update_job(db, job, progress=0.1, message=f"Reading {upload.filename}")
-    entry = entry_from_upload(upload.filename, upload.content_type, storage.get_bytes(upload.key))
+    try:
+        entry = entry_from_upload(upload.filename, upload.content_type, storage.get_bytes(upload.key))
+    except UnreadableFile as exc:
+        raise PermanentJobError(str(exc)) from exc
     if not entry.sections and not entry.html:
         raise PermanentJobError("We could not read any text in that file.")
     _require_room(db, source, entry.url)
@@ -496,6 +499,8 @@ class Periodic:
     # Run on the wall clock's multiples of every_seconds (1800: at :00 and :30 UTC), not every_seconds after the last
     # run. The first run is still at start-up, to catch up on anything already due.
     align: bool = False
+    # The first run this long after the worker starts (0: at once), then every every_seconds from there.
+    first_after: float = 0.0
 
     def schedule_next(self, now: float, wall: float | None = None) -> None:
         if not self.align:
@@ -510,16 +515,18 @@ ALIGN_GRACE_SECONDS = 2
 
 PERIODIC = [
     Periodic("recover_stale", 60, recover_stale),
-    # Posts are scheduled on half hours (in the user's zone), so they go out on the :00 / :30 run. Zones on a :45
-    # offset (Nepal) get slots between runs: those go out at the next run, up to 15 minutes late.
-    Periodic("publish_due", 1800, launchpad.publish_due, align=True),
+    # Scheduled posts, update emails and blog2video video statuses: once 30s after start-up, then every 30 minutes
+    # from there, so the database is not kept busy. A post goes out at the first run at or after its time (up to 30
+    # minutes late).
+    Periodic("publish_due", 1800, launchpad.publish_due, first_after=30),
     Periodic("social_health", 600, social_health),
     Periodic("sync_engagement", 3600, launchpad.sync_engagement),
-    Periodic("update_email_batch", 300, update_email_batch),
+    Periodic("update_email_batch", 1800, update_email_batch, first_after=30),  # a campaign's daily batch, in its send hour
     Periodic("topics_backfill", 900, topics_backfill),
     Periodic("daily_cleanup", 24 * 3600, daily_cleanup),
     Periodic("video_period_reset", 3600, video_quota.reset_due_video_periods),
-    Periodic("video_refund_sweep", 600, video_quota.sweep_failed_videos),
+    # Videos that changed on blog2video while nobody watched (or our server was down): finished, failed, ran again
+    Periodic("video_reconcile", 1800, video_status.reconcile_videos, first_after=30),
     Periodic("video_capacity_check", 3600, video_quota.check_capacity),
 ]
 
@@ -555,6 +562,10 @@ def run_loop(stop: threading.Event, worker_id: str | None = None) -> None:
     pool = ThreadPoolExecutor(max_workers=settings.worker_concurrency, thread_name_prefix="job")
     running: set[Future] = set()
     log.info("worker %s up, concurrency=%s", worker_id, settings.worker_concurrency)
+    started = time.monotonic()
+    for task in PERIODIC:
+        if task.first_after:
+            task.next_at = started + task.first_after
 
     while not stop.is_set():
         running = {f for f in running if not f.done()}

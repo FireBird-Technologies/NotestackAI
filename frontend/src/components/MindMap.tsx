@@ -702,9 +702,10 @@ export function MindMapExplorer({ artifact, onClose, warp = true, startAt = "roo
               </button>
             )
           ) : (
-            <button type="button" className="mm-btn" onClick={onClose} aria-label="Close Mind Constellation">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                <path d="M6 6l12 12M18 6L6 18" />
+            // Back to where it was opened from: first in the bar, the same size as like and dislike
+            <button type="button" className="mm-btn mm-back" onClick={onClose} aria-label="Back" title="Back">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 12H5M11 18l-6-6 6-6" />
               </svg>
             </button>
           )}

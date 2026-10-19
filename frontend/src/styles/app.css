@@ -1047,6 +1047,28 @@ button.side-link {
   white-space: nowrap;
 }
 
+.app-topbar-title a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* The Notestack mark, between the menu button and the tab's name */
+.app-topbar-logo {
+  display: grid;
+  flex: none;
+  place-items: center;
+}
+
+.app-topbar-logo .logo {
+  display: flex;
+}
+
+/* What is open in the tab, after it: "Notebooks / Resume" */
+.app-topbar-crumb {
+  color: var(--text-3);
+  font: 400 0.85rem var(--font-body);
+}
+
 @media (max-width: 899px) {
   .shell {
     align-content: start;

@@ -24,6 +24,7 @@ from app.corpus import Corpus
 from app.llm.provider import provider_name
 from app.models import (
     Artifact,
+    B2VVideo,
     Chat,
     Citation,
     Document,
@@ -299,12 +300,27 @@ def remove_document(notebook_id: uuid.UUID, document_id: uuid.UUID, ctx: Ctx = D
     return {"ok": True}
 
 
+def _fresh_videos(ctx: Ctx, rows: list[Artifact]) -> list[Artifact]:
+    """Videos that may have changed on blog2video (generating, rendering, in an edit job, failed) are asked again, so
+    the panel shows what blog2video says now. One whose first generation failed was refunded and removed: left out."""
+    from app.services import blog2video as b2v
+    from app.services import video_status
+
+    maybe = [a for a in rows if a.type == "video" and (a.status in video_status.BUSY_STATUSES or a.status == "failed")]
+    if not maybe or not b2v.configured():
+        return rows
+    vids = {r.artifact_id: r for r in ctx.db.scalars(select(B2VVideo).where(B2VVideo.artifact_id.in_([a.id for a in maybe])))}
+    gone = video_status.refresh_busy(ctx.db, [(a, vids[a.id]) for a in maybe if a.id in vids], limit=5)
+    return [a for a in rows if a.id not in gone]
+
+
 @router.get("/{notebook_id}/artifacts")
 def notebook_artifacts(notebook_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
     nb = _get(ctx, notebook_id)
     rows = list(ctx.db.scalars(
         select(Artifact).where(Artifact.notebook_id == nb.id).order_by(Artifact.created_at.desc())
     ).all())
+    rows = _fresh_videos(ctx, rows)
     jobs = latest_jobs(ctx.db, [a.id for a in rows])
     from app.services import artifact_feedback  # the ratings ride along on each artifact the panel lists
 

@@ -83,9 +83,29 @@ export function looksLikeArticle(raw: string): boolean {
 }
 
 /** Imports each file as its own post. Returns how many failed. */
+/** A file the import can read. Dropped files skip the picker's FILE_ACCEPT, so they are checked here: an image would
+ *  otherwise be stored as a "post" of its raw bytes. */
+export function isDocumentFile(f: File): boolean {
+  return /\.(md|markdown|txt|vtt|html?|pdf)$/i.test(f.name);
+}
+
+/** What to say after an upload: how many failed, naming files that are not documents at all. */
+export function uploadError(files: File[], failed: number): string | null {
+  if (!failed) return null;
+  const skipped = files.filter((f) => !isDocumentFile(f)).map((f) => f.name);
+  const why = skipped.length
+    ? ` ${skipped.slice(0, 3).join(", ")}${skipped.length > 3 ? " and others" : ""} ${skipped.length === 1 ? "isn't a" : "aren't"} supported (Markdown, text, VTT, HTML or PDF).`
+    : "";
+  return `${failed} of ${files.length} files could not be uploaded.${why}`;
+}
+
 export async function importFiles(files: File[], onAdded: (source: Source, job: Job) => void, notebookId?: string): Promise<number> {
   let failed = 0;
   for (const f of files) {
+    if (!isDocumentFile(f)) {
+      failed += 1;
+      continue;
+    }
     try {
       const res = await sourcesApi.importFile(f, notebookId);
       onAdded(res.source, res.job);
@@ -102,8 +122,11 @@ export function AddSource({
   notebookId,
   onUploadStart,
   onUploadSettled,
+  compact = false,
 }: {
   onAdded: (source: Source, job: Job) => void;
+  /** Smaller Connect and Upload buttons (inside a dialog). */
+  compact?: boolean;
   /** Added from inside a notebook: the posts join it. */
   notebookId?: string;
   onUploadStart?: (count: number) => void;
@@ -142,7 +165,7 @@ export function AddSource({
     onUploadStart?.(list.length);
     const failed = await importFiles(list, onAdded, notebookId);
     onUploadSettled?.(failed, list.length);
-    if (failed) setError(`${failed} of ${list.length} files could not be uploaded.`);
+    setError(uploadError(list, failed));
     setBusy(false);
     if (fileRef.current) fileRef.current.value = "";
   };
@@ -160,17 +183,19 @@ export function AddSource({
           }}
           aria-label="Blog, newsletter or article link"
         />
-        <button className="btn btn-primary" type="submit" disabled={busy || !value.trim()}>
+        <button className={`btn btn-primary${compact ? " btn-small" : ""}`} type="submit" disabled={busy || !value.trim()}>
           {busy ? (mode === "feed" ? "Finding posts..." : "Working...") : mode === "feed" ? "Connect" : "Import article"}
         </button>
         <span className="muted small">or</span>
-        <button type="button" className="btn" disabled={busy} onClick={() => fileRef.current?.click()}>
+        <button type="button" className={`btn${compact ? " btn-small" : ""}`} disabled={busy} onClick={() => fileRef.current?.click()}>
           Upload files
         </button>
         <input ref={fileRef} type="file" multiple accept={FILE_ACCEPT} hidden onChange={(e) => upload(e.target.files)} aria-label="Files to upload" />
       </form>
       <p className="muted small">
-        {!value.trim() && "Substack, Ghost, WordPress, Medium or any site with a feed. Markdown, text, VTT transcripts, HTML and PDF files work too; drop them anywhere on this page."}
+        {!value.trim() && (compact
+          ? "Any blog or newsletter link, or Markdown, text, HTML and PDF files."
+          : "Substack, Ghost, WordPress, Medium or any site with a feed. Markdown, text, VTT transcripts, HTML and PDF files work too; drop them anywhere on this page.")}
         {value.trim() && mode === "feed" && (
           <>
             We will pull in the whole archive and keep it in sync.{" "}
@@ -328,7 +353,7 @@ export default function Sources() {
         importsStarted(files.length);
         const failed = await importFiles(files, added);
         importsSettled(failed, files.length);
-        setError(failed ? `${failed} of ${files.length} files could not be uploaded.` : null);
+        setError(uploadError(files, failed));
       }}
     >
       <SourcesNav />

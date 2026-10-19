@@ -29,6 +29,16 @@ PLATFORMS = {
 }
 
 
+def _optional(part: str, artifact: Artifact, fn, empty):
+    """A part the kit can do without (SEO pack, carousel, quotes): a failure there, a model refusing it included,
+    leaves that part empty instead of failing the whole kit."""
+    try:
+        return fn()
+    except Exception:
+        log.warning("launch kit %s: %s failed, made without it", artifact.id, part, exc_info=True)
+        return empty
+
+
 def build_launch_kit(db: Session, job: Job, artifact: Artifact) -> dict:
     doc = db.get(Document, artifact.document_id) if artifact.document_id else None
     if not doc or not doc.path:
@@ -51,7 +61,9 @@ def build_launch_kit(db: Session, job: Job, artifact: Artifact) -> dict:
         if refs and c.get("claim"):
             claims.append({"claim": c["claim"], "sources": refs})
     if not claims:
-        raise RuntimeError("No verifiable claims found in this post")
+        # A property of the post (too little substance, or no readable text), not a hiccup: no point retrying
+        raise NothingToDo("This post has no claims we could check, so there is nothing to build a Launch Kit "
+                          "from. Try a post with more substance.")
     claim_inputs = [{"claim": c["claim"], "sources": [{k: s[k] for k in ("path", "line_start", "line_end")}
                                                       for s in c["sources"]]} for c in claims]
 
@@ -71,16 +83,19 @@ def build_launch_kit(db: Session, job: Job, artifact: Artifact) -> dict:
     related = []
     if corpus.exists(INDEX):
         related = [ln for ln in corpus.read_lines(INDEX) if "|" in ln and doc.path not in ln][:150]
-    seo = run.predict(SeoPack, db=db, workspace_id=ws, job=job, title=doc.title, passages=passages,
-                      related_posts="\n".join(related)).get("seo") or {}
+    seo = _optional("SEO pack", artifact, lambda: run.predict(
+        SeoPack, db=db, workspace_id=ws, job=job, title=doc.title, passages=passages,
+        related_posts="\n".join(related)).get("seo") or {}, {})
 
     step(0.82, "Designing the carousel")
-    slides = run.predict(CarouselSlides, db=db, workspace_id=ws, job=job, passages=passages,
-                         voice_profile=voice).get("slides") or []
+    slides = _optional("carousel", artifact, lambda: run.predict(
+        CarouselSlides, db=db, workspace_id=ws, job=job, passages=passages, voice_profile=voice).get("slides") or [], [])
 
     step(0.9, "Choosing quotes")
     quotes = []
-    for pick in run.predict(PickQuotes, db=db, workspace_id=ws, job=job, passages=passages, n=3).get("quotes") or []:
+    picks = _optional("quotes", artifact, lambda: run.predict(
+        PickQuotes, db=db, workspace_id=ws, job=job, passages=passages, n=3).get("quotes") or [], [])
+    for pick in picks:
         refs = verify_refs(tools, [pick.get("source") or {}])
         if refs and pick.get("quote"):
             quotes.append({"quote": pick["quote"][:380], "source": refs[0]})

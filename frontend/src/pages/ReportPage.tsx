@@ -56,7 +56,7 @@ export default function ReportPage() {
   }, [drawing, artifact, load]);
 
   if (error) return <p className="error-text">{error}</p>;
-  if (!artifact) return <Loading label="Opening report" />;
+  if (!artifact) return <Loading label="Opening report" center="full" />;
   const running = job && (job.status === "queued" || job.status === "running");
   // Each suggestion card that is being built shows its own loader: the ones the server lists, and the ones just clicked.
   const addingNow: Record<string, { message?: string | null }> = Object.fromEntries(pending.map((id) => [id, {}]));

@@ -1815,6 +1815,13 @@ select.input option {
     grid-template-columns: 64px 1fr;
   }
 
+  /* A notebook hides the app sidebar: one full-width column even when the sidebar is collapsed elsewhere (the rule
+     above would otherwise squeeze the whole notebook into its 64px column) */
+  .shell.notebook-focus,
+  .shell.collapsed.notebook-focus {
+    grid-template-columns: 1fr;
+  }
+
   .shell.collapsed .sidebar {
     padding: 16px 10px;
     align-items: center;
@@ -3497,6 +3504,13 @@ select.input,
   background: rgba(239, 68, 68, 0.22);
 }
 
+/* Phones and touch screens have no hover to reveal it: the delete button is always there */
+@media (max-width: 899px), (hover: none) {
+  .nbv-chat-delete {
+    opacity: 1;
+  }
+}
+
 .nbv-history-empty {
   padding: 16px 9px;
   line-height: 1.5;
@@ -4787,6 +4801,23 @@ details.map-legend[open] summary {
   padding: 0 22px;
 }
 
+/* Compact (inside a dialog), and on phones everywhere (the Sources page too): shorter and narrower buttons */
+.add-smart .btn.btn-small {
+  height: 36px;
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 640px) {
+  .add-smart .btn {
+    height: 36px;
+    min-height: 36px;
+    padding: 0 14px;
+    font-size: 0.85rem;
+  }
+}
+
 .page-wrap.drop-over {
   outline: 2px dashed var(--blue);
   outline-offset: 8px;
@@ -5720,6 +5751,51 @@ details.map-legend[open] summary {
   margin-left: 0;
 }
 
+/* Back first, at the left edge, the same 30px circle as like and dislike beside it */
+.mm-top > .mm-back {
+  order: -2;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+}
+
+.mm-top > .card-fb {
+  order: -1;
+  margin-left: 0;
+}
+
+/* Narrow screens: the title on its own row at the top; under it like, dislike and back on the left, and the shape
+   tabs small on the right (they shrink rather than run off the screen) */
+@media (max-width: 819px) {
+  .mm-top {
+    flex-wrap: wrap;
+    align-items: center;
+    row-gap: 10px;
+    gap: 8px;
+  }
+
+  .mm-title {
+    order: -3;
+    flex: 1 1 100%;
+  }
+
+  .mm-shapes {
+    display: flex;
+    flex: 0 1 auto;
+    min-width: 0;
+    margin-left: auto;
+  }
+
+  .mm-shape {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 5px 8px;
+    font-size: 0.7rem;
+    text-align: center;
+    white-space: nowrap;
+  }
+}
+
 /* Thumbs up / down under an answer */
 .fb {
   display: grid;
@@ -6565,6 +6641,13 @@ details.map-legend[open] summary {
   max-width: 820px;
   margin: 0 auto;
   padding: 20px var(--gutter) 56px;
+}
+
+/* A shared link still loading: the loader in the middle of the window */
+.rp-public.rp-public-loading {
+  align-content: center;
+  justify-items: center;
+  padding-block: 0;
 }
 
 .rp-public-empty {
@@ -7430,32 +7513,117 @@ details.map-legend[open] summary {
 /* Phones: two template cards a row, with less padding and a smaller pencil, so the names and descriptions get the
    room; the "Writing templates..." note drops below its label instead of squeezing it onto two lines. */
 @media (max-width: 640px) {
+  /* The source picker and the Interactive / Document cards: compact */
+  .rp-dialog .sp-trigger {
+    min-height: 36px;
+    padding: 0 12px 0 14px;
+    font-size: 0.85rem;
+  }
+
+  .rp-split > .rp-formats {
+    gap: 8px;
+  }
+
+  .rp-split .rp-format {
+    gap: 2px;
+    padding: 10px 14px;
+  }
+
+  .rp-format strong {
+    font-size: 0.9rem;
+  }
+
+  .rp-format .muted {
+    font-size: 0.78rem;
+    line-height: 1.4;
+  }
+
   .rp-split .rp-templates {
     gap: 8px;
   }
 
   .rp-template-main {
-    padding: 12px 38px 12px 12px;
+    gap: 4px;
+    padding: 10px 34px 10px 10px;
   }
 
   .rp-template-main strong {
-    font-size: 0.95rem;
+    font-size: 0.85rem;
   }
 
   .rp-template-main .muted {
-    font-size: 0.8rem;
+    font-size: 0.72rem;
   }
 
   .rp-pencil {
-    top: 8px;
-    right: 8px;
-    width: 28px;
-    height: 28px;
+    top: 6px;
+    right: 6px;
+    width: 24px;
+    height: 24px;
+  }
+
+  .rp-pencil svg {
+    width: 12px;
+    height: 12px;
   }
 
   .rp-template.wait {
-    min-height: 88px;
-    padding: 12px;
+    gap: 8px;
+    min-height: 68px;
+    padding: 10px;
+  }
+
+  /* The instructions step: a smaller template card and type; the long tip goes (the note under the box says it) */
+  .rp-edit {
+    gap: 14px;
+  }
+
+  .rp-edit-side {
+    gap: 12px;
+  }
+
+  .rp-back {
+    padding: 2px;
+    font-size: 0.9rem;
+  }
+
+  .rp-edit-side .rp-header {
+    gap: 4px;
+    padding: 12px 14px;
+  }
+
+  .rp-edit-side .rp-header strong {
+    font-size: 1.05rem;
+  }
+
+  .rp-edit-side .rp-header .muted {
+    font-size: 0.8rem;
+    line-height: 1.45;
+  }
+
+  .rp-edit-tip {
+    display: none;
+  }
+
+  .rp-editor-top .vw-label {
+    font-size: 0.9rem;
+  }
+
+  .rp-edit-main .rp-instructions.input {
+    min-height: 240px;
+    padding: 12px 14px;
+    font-size: 0.88rem;
+    line-height: 1.55;
+  }
+
+  .rp-editor > small {
+    font-size: 0.75rem;
+  }
+
+  .rp-foot .vw-next {
+    height: 40px;
+    min-height: 40px;
+    font-size: 0.9rem;
   }
 
   .rp-suggest-label {
@@ -8136,6 +8304,7 @@ a.rp-src-main:hover .rp-src-out {
   }
 }
 
+
 .rp-infographic {
   display: grid;
   gap: 10px;
@@ -8430,6 +8599,49 @@ a.rp-src-main:hover .rp-src-out {
 
   .rp-node {
     left: -30px;
+  }
+}
+
+/* Without the contents column (hidden up to 960px) the report takes the full width; the later desktop column rules
+   above would otherwise keep it in a 240px column */
+@media (max-width: 960px) {
+  .rp-layout.has-toc {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+}
+
+/* Phones: a slimmer progress rail and shallower list indents, so the text gets most of the width */
+@media (max-width: 640px) {
+  .rp {
+    padding-left: 28px; /* a little air between the rail and the text */
+  }
+
+  .rp-path {
+    left: 4px;
+  }
+
+  .rp-path-ship {
+    width: 10px;
+    height: 10px;
+    margin: -5px 0 0 -5px;
+  }
+
+  .rp-node {
+    left: -29px; /* centred on the rail */
+    width: 12px;
+    height: 12px;
+  }
+
+  .rp-prose ul,
+  .rp-prose ol {
+    padding-left: 18px;
+  }
+
+  .rp-prose p,
+  .rp-prose li {
+    font-size: 1rem;
+    line-height: 1.7;
   }
 }
 
@@ -9176,6 +9388,119 @@ a.rp-src-main:hover .rp-src-out {
   line-height: 1.55;
 }
 
+/* Phones: the quiz, flashcard and infographic settings a size smaller (pills, cards, source picker, topics, prompt, button) */
+@media (max-width: 640px) {
+  .qz-setup {
+    gap: 18px;
+  }
+
+  .qz-setup .vw-chips {
+    gap: 6px;
+  }
+
+  .qz-setup .vw-chip {
+    min-height: 32px;
+    padding: 5px 12px;
+    font-size: 0.8rem;
+  }
+
+  .qz-setup .field > small {
+    font-size: 0.75rem;
+  }
+
+  .qz-setup .ig-themes {
+    gap: 8px;
+  }
+
+  .qz-setup .ig-theme {
+    gap: 2px;
+    padding: 6px;
+    border-radius: 10px;
+  }
+
+  .qz-setup .ig-theme img {
+    border-radius: 6px;
+  }
+
+  .qz-setup .ig-theme-name {
+    margin-top: 2px;
+    font-size: 0.82rem;
+  }
+
+  .qz-setup .ig-theme .small {
+    font-size: 0.7rem;
+    line-height: 1.35;
+  }
+
+  .qz-setup .sp-trigger {
+    min-height: 36px;
+    padding: 0 12px 0 14px;
+    font-size: 0.85rem;
+  }
+
+  .qz-setup .ig-prompt.input {
+    min-height: 110px;
+    padding: 10px 14px;
+    font-size: 0.88rem;
+    line-height: 1.5;
+  }
+
+  .qz-setup .vw-focus-grid {
+    gap: 6px;
+  }
+
+  .qz-setup .vw-focus-card {
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    font-size: 0.82rem;
+  }
+
+  .qz-setup .vw-focus-text strong {
+    font-size: 0.82rem;
+  }
+
+  .qz-setup .vw-focus-desc {
+    font-size: 0.72rem;
+  }
+
+  .qz-setup .vw-focus-card svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .qz-setup .vw-focus-custom {
+    gap: 6px;
+    padding: 8px 10px;
+    border-radius: 10px;
+  }
+
+  .qz-setup .vw-focus-custom-head {
+    font-size: 0.82rem;
+  }
+
+  .qz-setup .vw-focus-custom textarea {
+    min-height: 90px;
+    padding: 8px 10px;
+    font-size: 0.85rem;
+    line-height: 1.45;
+  }
+
+  .qz-setup .vw-focus-custom-foot small {
+    font-size: 0.7rem;
+  }
+
+  .qz-setup .qz-foot {
+    padding-top: 12px;
+  }
+
+  .qz-setup .vw-next {
+    height: 40px;
+    min-height: 40px;
+    font-size: 0.9rem;
+  }
+}
+
 /* The infographic viewer: wide by default (the modal is as wide as the window's height lets the whole page be), or tall */
 .modal.modal-wide:has(.ig-viewer.landscape) {
   width: min(calc((100vh - 170px) * 2260 / 1600 + 36px), 100%);
@@ -9911,6 +10236,24 @@ a.rp-src-main:hover .rp-src-out {
   font: 500 0.85rem var(--font-mono, monospace);
 }
 
+/* The slide deck dialog's pills and dropdowns (Format, Length, Language, Made from): one compact size, like the audio dialog's */
+.sd-dialog .vw-chip,
+.sd-dialog .dropdown-btn,
+.sd-dialog .sp-trigger {
+  height: 40px;
+  min-height: 40px;
+  font-size: 0.875rem;
+}
+
+.sd-dialog .vw-chip {
+  padding: 0 14px;
+}
+
+.sd-dialog .dropdown-btn,
+.sd-dialog .sp-trigger {
+  padding: 0 12px 0 14px;
+}
+
 @media (max-width: 760px) {
   .sd-opts {
     grid-template-columns: 1fr;
@@ -9918,6 +10261,15 @@ a.rp-src-main:hover .rp-src-out {
 
   .sd-opts .vw-chips {
     flex-wrap: wrap;
+  }
+
+  /* Phones: a size smaller again */
+  .sd-dialog .vw-chip,
+  .sd-dialog .dropdown-btn,
+  .sd-dialog .sp-trigger {
+    height: 36px;
+    min-height: 36px;
+    font-size: 0.85rem;
   }
 
   .modal:has(.sd-view) .modal-head {
@@ -10209,6 +10561,29 @@ body.nbv-resizing iframe {
 @media (max-width: 760px) {
   .ao-styles {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  /* Smaller style cards: as tall as their text, tighter padding and type */
+  .ao-style {
+    gap: 4px;
+    min-height: 0;
+    padding: 10px 12px 12px;
+    border-radius: 14px;
+  }
+
+  .ao-style-head strong {
+    font-size: 0.88rem;
+  }
+
+  .ao-radio {
+    width: 18px;
+    height: 18px;
+  }
+
+  .ao-style-blurb {
+    font-size: 0.75rem;
+    line-height: 1.4;
   }
 
   .ao-opts > .field {
@@ -10578,6 +10953,7 @@ body.nbv-resizing iframe {
   box-shadow: var(--glow-lg);
 }
 
+
 /* Posts live under the chat history, in the left rail: the chat list and the posts each scroll in their own share of it */
 .nbv-history .nbv-chat-list {
   flex: 0 1 auto;
@@ -10714,20 +11090,107 @@ body.nbv-resizing iframe {
   color: var(--white);
 }
 
+/* The chats rail (and the phone Menu tab): Chats and Posts as two cards of their own, one under the other; it scrolls as a whole */
+.nbv-history.nbv-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  background: none;
+  backdrop-filter: none;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+/* Wide screens: a little room above "All notebooks" (phones have the tabs there) */
+@media (min-width: 900px) {
+  .nbv-history.nbv-menu {
+    padding-top: 20px;
+  }
+
+  .nbv-history.nbv-menu .nbv-history-back {
+    font-size: 0.9rem;
+  }
+
+  .nbv-history.nbv-menu .nbv-history-top .nbv-close-history {
+    width: 36px;
+    height: 36px;
+  }
+
+  /* The notebook's name sits on the same line as "All notebooks" beside it */
+  .nbv-chat > .chat-bar {
+    padding-top: 8px;
+  }
+}
+
+.nbv-history.nbv-menu .nbv-menu-card {
+  display: grid;
+  flex: none;
+  align-content: start;
+  gap: 8px;
+  min-height: 0;
+  max-height: none;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  backdrop-filter: blur(6px);
+  overflow: visible;
+}
+
+.nbv-history.nbv-menu .nbv-chat-list {
+  max-height: none;
+  overflow: visible;
+}
+
+.nbv-history.nbv-menu .nbv-chat-group {
+  padding-left: 0;
+}
+
+/* Each card's head is just its name and buttons: no subtitle, no rule under it */
+.nbv-history.nbv-menu .nbv-history-head {
+  min-height: 0;
+  padding: 2px 2px 2px 6px;
+  border-bottom: 0;
+}
+
+.nbv-history.nbv-menu .nbv-history-actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* + New, View posts, + Add: compact pills */
+.nbv-history.nbv-menu .nbv-history-actions .btn-small {
+  min-height: 28px;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+}
+
+.nbv-history.nbv-menu .nbv-posts > p {
+  margin: 0;
+  padding: 0 6px 4px;
+}
+
+
 .nbv-group-count {
   margin-left: auto;
   color: var(--text-3);
   letter-spacing: 0;
 }
 
-/* Phones, like a chat app: the chat fills the screen. The chats rail (hamburger, left) and the Create panel (right)
-   slide in over it as drawers, one at a time, and close with their X, the backdrop or Escape. */
+/* Phones, like a chat app: one pane fills the screen at a time, picked with the Menu / Chat / Studio tabs above it. */
 @media (max-width: 899px) {
   .nbv,
   .nbv.nbv-tools-closed,
   .nbv.nbv-history-closed {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "chat";
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas:
+      "tabs"
+      "pane";
+    row-gap: 12px;
     height: calc(100dvh - var(--main-pad-top) - var(--main-pad-bottom));
     min-height: 420px;
   }
@@ -10769,48 +11232,82 @@ body.nbv-resizing iframe {
     height: auto;
   }
 
-  .nbv-drawer-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 60;
-    background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(2px);
-    animation: nbv-fade 0.18s ease-out;
+  /* The tabs sit close under the app's top bar */
+  .shell.notebook-focus {
+    --main-pad-top: 8px;
   }
 
-  .nbv-drawer {
-    position: fixed;
-    top: 0;
-    bottom: 0;
-    z-index: 61;
-    width: min(88vw, 380px);
-    height: 100dvh;
+  .nbv-tabs {
+    position: relative;
+    display: flex;
+    grid-area: tabs;
+    gap: 4px;
+    padding: 3px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+  }
+
+  /* The blue pill under the selected tab: slides to it (--tab is its index) */
+  .nbv-tabs::before {
+    content: "";
+    position: absolute;
+    top: 3px;
+    bottom: 3px;
+    left: 3px;
+    width: calc((100% - 14px) / 3); /* 3px padding each side + two 4px gaps */
+    border-radius: 999px;
+    background: var(--blue);
+    transform: translateX(calc(var(--tab, 1) * (100% + 4px)));
+    transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  .nbv-tab {
+    position: relative;
+    flex: 1;
+    min-height: 28px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-3);
+    font: 500 0.85rem var(--font-body);
+    cursor: pointer;
+    transition: color 0.2s;
+  }
+
+  .nbv-tab:hover {
+    color: var(--text-2);
+  }
+
+  .nbv-tab.active {
+    color: var(--white);
+  }
+
+  .nbv-tab-panel {
+    grid-area: pane;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .nbv-tab-panel:not(.is-active) {
+    display: none;
+  }
+
+  .nbv-tab-panel.is-active {
+    animation: nbv-tab-in 0.22s ease-out;
+  }
+
+  .nbv-history.nbv-tab-panel,
+  .nbv-side.nbv-tab-panel {
+    height: 100%;
     max-height: none;
     margin: 0;
-    padding: 14px;
-    border-radius: 0;
-    background: var(--black);
-    visibility: hidden;
-    transition: transform 0.22s ease, visibility 0s linear 0.22s;
-  }
-
-  .nbv-drawer-left {
-    left: 0;
-    border-width: 0 1px 0 0;
-    transform: translateX(-100%);
-  }
-
-  .nbv-drawer-right {
-    right: 0;
-    border-width: 0 0 0 1px;
-    transform: translateX(100%);
     overflow-y: auto;
   }
 
-  .nbv-drawer.open {
-    visibility: visible;
-    transform: none;
-    transition: transform 0.22s ease, visibility 0s;
+  .nbv-history.nbv-tab-panel:not(.is-active) {
+    display: none;
   }
 }
 
@@ -10846,16 +11343,18 @@ body.nbv-resizing iframe {
   }
 }
 
-@keyframes nbv-fade {
+@keyframes nbv-tab-in {
   from {
     opacity: 0;
+    transform: translateY(6px);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .nbv-drawer,
-  .nbv-drawer.open {
+  .nbv-tabs::before,
+  .nbv-tab-panel.is-active {
     transition: none;
+    animation: none;
   }
 }
 

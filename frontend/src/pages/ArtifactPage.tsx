@@ -24,7 +24,7 @@ export default function ArtifactPage() {
   const job = useJob(artifact?.job, () => void load());
 
   if (error) return <p className="error-text">{error}</p>;
-  if (!artifact) return <Loading label="Opening" />;
+  if (!artifact) return <Loading label="Opening" center="full" />;
   const back = artifact.notebook_id ? `/app/notebooks/${artifact.notebook_id}` : "/app/archive";
   if (artifact.type === "report") return <Navigate to={`/app/reports/${artifact.id}`} replace />;
   if (artifact.type === "video") return <Navigate to={`/app/videos/${artifact.id}`} replace />;

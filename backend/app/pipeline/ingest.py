@@ -45,6 +45,20 @@ class FeedNotFound(ValueError):
     pass
 
 
+class UnreadableFile(ValueError):
+    """An upload that is not a document we can read (an image, a binary file): never imported as a post."""
+
+
+# The files an import reads (the Sources page offers the same list)
+DOCUMENT_EXTENSIONS = (".md", ".markdown", ".txt", ".vtt", ".html", ".htm", ".pdf")
+DOCUMENT_TYPES = {"text/markdown", "text/plain", "text/html", "text/vtt", "application/pdf"}
+
+
+def _looks_binary(text: str) -> bool:
+    """Bytes that were never text: NULs, or many characters UTF-8 could not decode."""
+    return "\x00" in text or text.count("\ufffd") > max(5, len(text) // 100)
+
+
 # Feed discovery
 
 
@@ -744,9 +758,14 @@ def entry_from_upload(filename: str, content_type: str, data: bytes) -> FeedEntr
     stem = re.sub(r"\.[A-Za-z0-9]+$", "", name).replace("-", " ").replace("_", " ").strip() or "Untitled"
     lower = name.lower()
     url = f"upload://{name}"
+    unreadable = UnreadableFile(f"{name} is not a document Notestack can read (Markdown, text, VTT, HTML or PDF).")
+    if not lower.endswith(DOCUMENT_EXTENSIONS) and content_type not in DOCUMENT_TYPES:
+        raise unreadable  # an image or other binary file: decoding it would store its bytes as a "post"
     if content_type == "application/pdf" or lower.endswith(".pdf"):
         return FeedEntry(title=stem, url=url, published_at=None, html="", sections=pdf_to_sections(data))
     text = data.decode("utf-8", errors="replace")
+    if _looks_binary(text):
+        raise unreadable
     if content_type == "text/html" or lower.endswith((".html", ".htm")):
         soup = BeautifulSoup(text, "html.parser")
         title = soup.title.get_text(strip=True) if soup.title else stem
