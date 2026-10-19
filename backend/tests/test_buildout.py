@@ -238,6 +238,31 @@ def test_import_url_and_markdown_upload(client, auth, run_jobs, monkeypatch):
     assert len(sources) == 1 and sources[0]["is_imports"]
 
 
+def test_an_image_is_never_imported_as_a_post(client, auth, run_jobs):
+    """A dropped screenshot skipped the file picker's filter and was stored as a "post" of its raw bytes."""
+    start = client.post("/api/storage/uploads", json={"filename": "screenshot.jpg", "content_type": "image/jpeg",
+                                                      "size_bytes": 64}, headers=auth).json()
+    client.put(start["upload_url"].split("8000", 1)[1], content=b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01" + bytes(range(256)))
+    client.post(f"/api/storage/uploads/{start['upload_id']}/complete", headers=auth)
+    client.post("/api/sources/upload", json={"upload_id": start["upload_id"]}, headers=auth)
+    job = run_jobs()[0]
+    assert job.status == "failed" and job.attempts == 1  # permanent: not retried
+    assert "screenshot.jpg is not a document Notestack can read" in job.error
+    assert docs(client, auth) == []
+
+
+def test_uploads_read_only_documents():
+    from app.pipeline.ingest import UnreadableFile, entry_from_upload
+
+    with pytest.raises(UnreadableFile):
+        entry_from_upload("photo.png", "image/png", b"\x89PNG\r\n\x1a\n" + bytes(200))
+    with pytest.raises(UnreadableFile):  # a binary file named .txt
+        entry_from_upload("notes.txt", "text/plain", bytes(range(256)) * 4)
+    assert entry_from_upload("notes.md", "text/markdown", b"# Field Notes\n\nIt rained.\n").title == "Field Notes"
+    assert entry_from_upload("talk.vtt", "text/vtt", b"WEBVTT\n\n00:00.000 --> 00:01.000\nHello there\n").sections
+    assert entry_from_upload("page.html", "text/html", b"<title>Page</title><p>Hi</p>").title == "Page"
+
+
 # Notebooks
 
 
@@ -621,6 +646,46 @@ def test_launch_kit(client, auth, run_jobs, feed, llm, monkeypatch, db_session):
     assert kit["status"] == "ready"
     assert kit["content"]["quotes"] and kit["content"]["quote_card_ids"] == []
     assert client.delete(f"/api/artifacts/{art['id']}", headers=auth).status_code == 200
+
+
+def test_a_launch_kit_without_claims_fails_once_and_says_why(client, auth, run_jobs, feed, llm):
+    connect(client, auth, run_jobs)
+    doc = next(d for d in docs(client, auth) if d["title"] == "On Pricing")
+    llm["ExtractClaims"] = {"claims": []}
+    art = client.post("/api/artifacts/generate", json={"type": "launch_kit", "document_id": doc["id"]},
+                      headers=auth).json()
+    job = run_jobs()[0]
+    assert job.status == "failed" and job.attempts == 1  # a property of the post: no retry
+    kit = client.get(f"/api/artifacts/{art['id']}", headers=auth).json()
+    assert kit["status"] == "failed"
+    assert llm["_calls"].count("ExtractClaims") == 1 and "no claims we could check" in job.error
+
+
+def test_a_refused_carousel_does_not_sink_the_launch_kit(client, auth, run_jobs, feed, llm, monkeypatch):
+    from app.services import renderer
+
+    connect(client, auth, run_jobs)
+    doc = next(d for d in docs(client, auth) if d["title"] == "On Pricing")
+    ref = {"path": doc["path"], "line_start": 12, "line_end": 14}
+
+    def refuse(**_):
+        raise ValueError("Adapter JSONAdapter failed to parse the LM response: I can't turn this into a carousel")
+
+    llm.update({
+        "ExtractClaims": {"claims": [{"claim": "Higher prices signal value", "sources": [ref]}]},
+        "HookGenerator": {"hooks": [{"text": "I doubled my price.", "strength": 0.9, "rationale": "number"}]},
+        "PlatformAdapter": lambda platform, **_: {"posts": [f"{platform} post"]},
+        "SeoPack": {"seo": {"title_options": ["On Pricing"]}},
+        "CarouselSlides": refuse,
+        "PickQuotes": {"quotes": []},
+    })
+    monkeypatch.setattr(renderer, "available", lambda: False)
+    art = client.post("/api/artifacts/generate", json={"type": "launch_kit", "document_id": doc["id"]},
+                      headers=auth).json()
+    run_jobs()
+    kit = client.get(f"/api/artifacts/{art['id']}", headers=auth).json()
+    assert kit["status"] == "ready" and kit["content"]["carousel"] == []
+    assert kit["content"]["claims"] and kit["content"]["posts"]["linkedin"] == ["linkedin post"]
 
 
 # Launchpad

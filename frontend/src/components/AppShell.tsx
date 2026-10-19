@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { NavLink, Outlet, Navigate, useLocation } from "react-router-dom";
+import { Link, NavLink, Outlet, Navigate, useLocation, useOutletContext } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { UpgradeProvider } from "../hooks/useUpgrade";
 import Logo from "./Logo";
@@ -29,6 +29,17 @@ const NAV: { to: string; label: string; icon: typeof PlanetIcon; end?: boolean; 
 
 const COLLAPSED_KEY = "ns_sidebar_collapsed";
 
+type ShellContext = { setCrumb: (name: string | null) => void };
+
+/** Phones: a page names what is open after the tab in the top bar ("Notebooks / Resume"), until it unmounts. */
+export function useTopbarCrumb(name: string | null | undefined) {
+  const { setCrumb } = useOutletContext<ShellContext>();
+  useEffect(() => {
+    setCrumb(name ?? null);
+    return () => setCrumb(null);
+  }, [name, setCrumb]);
+}
+
 function readCollapsed(): boolean {
   try {
     return localStorage.getItem(COLLAPSED_KEY) === "1";
@@ -46,6 +57,7 @@ export default function AppShell() {
   const phone = useMedia("(max-width: 899px)");
   const collapsed = collapsedPref && !phone; // the drawer always shows everything
   const [menuOpen, setMenuOpen] = useState(false);
+  const [crumb, setCrumb] = useState<string | null>(null);
   // Navigating anywhere (including the browser back button) closes the drawer; so does growing past phone size.
   useEffect(() => setMenuOpen(false), [location.pathname, phone]);
   useEffect(() => {
@@ -79,7 +91,8 @@ export default function AppShell() {
 
   return (
     <UpgradeProvider>
-      <div className={`shell${collapsed ? " collapsed" : ""}${notebookFocus ? " notebook-focus" : ""}`}>
+      {/* A notebook hides the app sidebar, so it never takes the collapsed sidebar's column */}
+      <div className={`shell${collapsed && !notebookFocus ? " collapsed" : ""}${notebookFocus ? " notebook-focus" : ""}`}>
         <SkyCanvas intensity={0.35} />
         {/* Phones: the menu button and the tab you are on */}
         <header className="app-topbar">
@@ -87,7 +100,13 @@ export default function AppShell() {
                   aria-expanded={menuOpen} aria-controls="app-sidebar">
             <PanelMenuIcon size={22} strokeWidth={1.8} />
           </button>
-          <span className="app-topbar-title">{current?.label ?? "Notestack"}</span>
+          <Link to="/app/notebooks" className="app-topbar-logo" aria-label="Notestack home">
+            <Logo size={26} withWordmark={false} />
+          </Link>
+          <span className="app-topbar-title">
+            {crumb && current ? <Link to={current.to}>{current.label}</Link> : current?.label ?? "Notestack"}
+            {crumb && <span className="app-topbar-crumb"> / {crumb}</span>}
+          </span>
         </header>
         {menuOpen && <div className="app-drawer-backdrop" onClick={() => setMenuOpen(false)} aria-hidden="true" />}
         <aside id="app-sidebar" className={`sidebar${menuOpen ? " open" : ""}`}>
@@ -163,7 +182,7 @@ export default function AppShell() {
           </div>
         </aside>
         <main className="shell-main">
-          <Outlet />
+          <Outlet context={{ setCrumb } satisfies ShellContext} />
         </main>
       </div>
       {/* Outside .shell: its children get position: relative, and these are fixed overlays. */}

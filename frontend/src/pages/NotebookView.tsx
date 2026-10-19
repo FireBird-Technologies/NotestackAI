@@ -1,16 +1,16 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { artifactsApi, notebooksApi } from "../api/endpoints";
 import { ApiError } from "../api/client";
 import { streamSSE } from "../api/stream";
 import { createTypewriter } from "../lib/typewriter";
-import type { AnswerFeedback as Feedback, Artifact, ChatSummary, Citation, Job, MemoryChange, Notebook } from "../api/types";
+import type { AnswerFeedback as Feedback, Artifact, ChatAction, ChatArtifact, ChatPreset, ChatSummary, Citation, Job, MemoryChange, Notebook } from "../api/types";
 import { AnswerFeedback } from "../components/AnswerFeedback";
 import { ArtifactCard, CitationList } from "../components/ArtifactCard";
 import ConnectorModal from "../components/ConnectorModal";
 import { Markdown } from "../components/Markdown";
 import { DocPicker } from "../components/DocPicker";
-import { ConnectorIcon, FlashcardsIcon, HeadphonesIcon, InfographicIcon, PanelMenuIcon, QuizIcon, ReportIcon, RocketIcon, SlidesIcon, TelescopeIcon, VideoIcon } from "../components/icons/Icons";
+import { ConnectorIcon, FlashcardsIcon, HeadphonesIcon, InfographicIcon, QuizIcon, ReportIcon, RocketIcon, SlidesIcon, TelescopeIcon, VideoIcon } from "../components/icons/Icons";
 import { ScheduleModal } from "../components/ScheduleModal";
 import { MindMapDialog, MindMapExplorer, MindMapCard } from "../components/MindMap";
 import { NextStepHint, type NextStep } from "../components/NextStepHint";
@@ -28,6 +28,7 @@ import { PaneResizer, useMedia, usePaneWidths } from "../components/PaneResizer"
 import { Reader } from "../components/Reader";
 import { seedDocs } from "../components/video/sourceCache";
 import { errorMessage, formatDate, JobProgress, Loading, Modal } from "../components/ui";
+import { useTopbarCrumb } from "../components/AppShell";
 import { useJob } from "../hooks/useJob";
 import { AddSource } from "./Sources";
 import { VideoCreateForm } from "./VideoCreate";
@@ -45,6 +46,17 @@ type Turn = {
   saved?: MemoryChange[];
   topic?: string; // what the answer is about, named in the next-step suggestions under it
   askKey?: string; // the question this answer belongs to, while it is on screen: what the stream's updates look for
+  action?: ChatAction; // a "create a quiz" answer: the settings dialog it opened, to open again
+};
+
+/** What each artifact is called, and its icon, on the "Open settings" button under a create answer. */
+const ARTIFACT_NAMES: Record<ChatArtifact, string> = {
+  audio_overview: "audio overview", slide_deck: "slide deck", video: "video", report: "report",
+  infographic: "infographic", quiz: "quiz", flashcards: "flashcards", mind_map: "Mind Constellation",
+};
+const ARTIFACT_ICONS: Record<ChatArtifact, typeof VideoIcon> = {
+  audio_overview: HeadphonesIcon, slide_deck: SlidesIcon, video: VideoIcon, report: ReportIcon,
+  infographic: InfographicIcon, quiz: QuizIcon, flashcards: FlashcardsIcon, mind_map: TelescopeIcon,
 };
 
 
@@ -93,15 +105,21 @@ function readToolsRailOpen(): boolean {
   }
 }
 
+/** Video statuses that can still change on blog2video's side. */
+const VIDEO_BUSY = new Set(["generating", "pending", "rendering", "regenerating", "voice_regenerating",
+  "language_regenerating", "script_regenerating"]);
+
 /** Create: one click per format with sensible defaults, options folded away; then what was made from this notebook. */
-function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, quizOpen, onQuizClose, onCreateQuiz, cardsOpen, onCardsClose, onCreateCards, infographicOpen, onInfographicClose, onCreateInfographic, audioOpen, onAudioClose, onCreateAudio, slidesOpen, onSlidesClose, onCreateSlides, reportOpen, onReportClose, onCreateReport, mapOpen, onMapClose, onCreateMap, onCreateVideo, onClose, closeAsX = false }: {
-  /** Phones: the panel is a drawer, closed with a plain X */
-  closeAsX?: boolean;
+function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, presets, presetKey, quizOpen, onQuizClose, onCreateQuiz, cardsOpen, onCardsClose, onCreateCards, infographicOpen, onInfographicClose, onCreateInfographic, audioOpen, onAudioClose, onCreateAudio, slidesOpen, onSlidesClose, onCreateSlides, reportOpen, onReportClose, onCreateReport, mapOpen, onMapClose, onCreateMap, onCreateVideo, onClose }: {
   notebookId: string;
   docs: { id: string; title: string; locked?: boolean }[];
   chats: ChatSummary[];
   currentChatId: string | null;
   disabled: boolean;
+  /** Settings asked for in the chat, per artifact: its dialog opens with them. */
+  presets: Partial<Record<ChatArtifact, ChatPreset>>;
+  /** Changes each time the chat opens a dialog, so one that is already open starts again from the new settings. */
+  presetKey: number;
   quizOpen: boolean; // the quiz settings are open (from here, or from the chat's own Quiz button)
   onQuizClose: () => void;
   onCreateQuiz: () => void;
@@ -124,8 +142,8 @@ function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, quizOpe
   onMapClose: () => void;
   onCreateMap: () => void;
   onCreateVideo: () => void;
-  /** Closes the right column (the chat takes its room). */
-  onClose: () => void;
+  /** Closes the right column (the chat takes its room). Phones leave it out: the Studio tab replaces the button. */
+  onClose?: () => void;
 }) {
   const [artifacts, setArtifacts] = useState<Artifact[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -139,6 +157,17 @@ function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, quizOpe
   useEffect(() => {
     load();
   }, [load]);
+
+  // A video still being made (or rendering, or in an edit job): ask again now and then. The server checks it with
+  // blog2video, so its card turns ready (or goes, if it failed and was refunded) without a reload.
+  const videoBusy = (artifacts ?? []).some((a) => a.type === "video" && VIDEO_BUSY.has(a.status));
+  useEffect(() => {
+    if (!videoBusy) return;
+    const t = setInterval(() => {
+      if (!document.hidden) load().catch(() => undefined);
+    }, 15000);
+    return () => clearInterval(t);
+  }, [videoBusy, load]);
 
   // The voices for the audio overview settings take a few seconds to list: ask now so they are ready when it opens.
   useEffect(() => {
@@ -207,18 +236,14 @@ function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, quizOpe
     <div className="stack">
       <div className="nbv-tools-head">
         <span className="vw-label">Create</span>
-        <button type="button" className="nbv-close-tools" onClick={onClose} aria-label="Close tools panel" title="Close tools panel">
-          {closeAsX ? (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true">
-              <path d="M6 6l12 12M18 6L6 18" />
-            </svg>
-          ) : (
+        {onClose && (
+          <button type="button" className="nbv-close-tools" onClick={onClose} aria-label="Close tools panel" title="Close tools panel">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
               <path d="M15 4.5v15M9 10l2 2-2 2" />
             </svg>
-          )}
-        </button>
+          </button>
+        )}
       </div>
       <div className="nbv-make">
         <button className="nbv-make-stars" disabled={off} onClick={onCreateMap}>
@@ -333,20 +358,22 @@ function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, quizOpe
         ))}
       </div>}
       {reading && <Reader documentId={reading.id} highlight={{ start: reading.start, end: reading.end }} onClose={() => setReading(null)} />}
-      {quizOpen && <QuizDialog notebookId={notebookId} chats={chats} currentChatId={currentChatId} busy={false} error={null}
-                               onClose={onQuizClose} onCreate={makeQuiz} />}
-      {reportOpen && <ReportDialog notebookId={notebookId} chats={chats} currentChatId={currentChatId} busy={false}
-                                   error={null} onClose={onReportClose} onCreate={makeReport} />}
-      {infographicOpen && <InfographicDialog notebookId={notebookId} chats={chats} currentChatId={currentChatId}
-                                             busy={false} error={null} onClose={onInfographicClose} onCreate={makeInfographic} />}
-      {audioOpen && <AudioOverviewDialog notebookId={notebookId} chats={chats} currentChatId={currentChatId}
-                                         onClose={onAudioClose} onCreate={makeAudio} />}
-      {slidesOpen && <SlideDeckDialog notebookId={notebookId} chats={chats} currentChatId={currentChatId}
-                                      onClose={onSlidesClose} onCreate={makeSlides} />}
-      {cardsOpen && <FlashcardsDialog notebookId={notebookId} chats={chats} currentChatId={currentChatId} busy={false}
-                                      error={null} onClose={onCardsClose} onCreate={makeCards} />}
+      {quizOpen && <QuizDialog key={presetKey} notebookId={notebookId} chats={chats} currentChatId={currentChatId} busy={false}
+                               error={null} initial={presets.quiz} onClose={onQuizClose} onCreate={makeQuiz} />}
+      {reportOpen && <ReportDialog key={presetKey} notebookId={notebookId} chats={chats} currentChatId={currentChatId} busy={false}
+                                   error={null} initial={presets.report} onClose={onReportClose} onCreate={makeReport} />}
+      {infographicOpen && <InfographicDialog key={presetKey} notebookId={notebookId} chats={chats} currentChatId={currentChatId}
+                                             busy={false} error={null} initial={presets.infographic}
+                                             onClose={onInfographicClose} onCreate={makeInfographic} />}
+      {audioOpen && <AudioOverviewDialog key={presetKey} notebookId={notebookId} chats={chats} currentChatId={currentChatId}
+                                         initial={presets.audio_overview} onClose={onAudioClose} onCreate={makeAudio} />}
+      {slidesOpen && <SlideDeckDialog key={presetKey} notebookId={notebookId} chats={chats} currentChatId={currentChatId}
+                                      initial={presets.slide_deck} onClose={onSlidesClose} onCreate={makeSlides} />}
+      {cardsOpen && <FlashcardsDialog key={presetKey} notebookId={notebookId} chats={chats} currentChatId={currentChatId} busy={false}
+                                      error={null} initial={presets.flashcards} onClose={onCardsClose} onCreate={makeCards} />}
       {connectorOpen && <ConnectorModal onClose={() => setConnectorOpen(false)} />}
-      {mapOpen && <MindMapDialog docs={docs} busy={false} error={null} onClose={onMapClose} onCreate={makeMap} />}
+      {mapOpen && <MindMapDialog key={presetKey} docs={docs} busy={false} error={null} initialFocus={presets.mind_map?.focus}
+                                 onClose={onMapClose} onCreate={makeMap} />}
       {exploring && <MindMapExplorer artifact={exploring} onClose={() => setExploring(null)} />}
     </div>
   );
@@ -367,10 +394,10 @@ export default function NotebookView() {
   const [deletingChat, setDeletingChat] = useState<{ id: string; title: string } | null>(null); // the chat awaiting confirmation
   const [deleteChatBusy, setDeleteChatBusy] = useState(false);
   const [deleteChatError, setDeleteChatError] = useState<string | null>(null);
-  const [postsOpen, setPostsOpen] = useState(true);
-  const [chatsOpen, setChatsOpen] = useState(true);
-  const [openGroups, setOpenGroups] = useState<string[]>(["Today"]); // date headings unfolded: only Today to start
-  // Phones: the chat fills the screen; the chats rail and the Create panel slide in over it, one at a time.
+  // Date headings unfolded. null until one is clicked: then the newest heading (Today, if there is one) starts open.
+  const [openGroupsPref, setOpenGroups] = useState<string[] | null>(null);
+  const [viewingPosts, setViewingPosts] = useState(false); // the post list, behind a "View posts" button
+  // Phones: one pane fills the screen at a time, picked with the Menu / Chat / Studio tabs. null is the chat.
   const phone = useMedia("(max-width: 899px)");
   const [drawer, setDrawer] = useState<"history" | "tools" | null>(null);
   const [chats, setChats] = useState<ChatSummary[]>([]);
@@ -392,6 +419,7 @@ export default function NotebookView() {
   const [adding, setAdding] = useState(false);
   const [imports, setImports] = useState<Job[]>([]);
   const [makingVideo, setMakingVideo] = useState(false); // the video wizard is open in a modal
+  const [videoLimit, setVideoLimit] = useState(false); // the wizard is showing "Video limit reached" instead
   const [makingMap, setMakingMap] = useState(false); // the Mind Constellation settings are open
   const [makingQuiz, setMakingQuiz] = useState(false); // the quiz settings are open in a modal
   const [makingInfographic, setMakingInfographic] = useState(false); // the infographic settings are open in a modal
@@ -399,8 +427,13 @@ export default function NotebookView() {
   const [makingSlides, setMakingSlides] = useState(false); // the slide deck settings are open in a modal
   const [makingAudio, setMakingAudio] = useState(false); // the audio overview settings are open in a modal
   const [makingReport, setMakingReport] = useState(false); // the report dialog is open in a modal
+  // Settings asked for in the chat ("create a 10 minute audio overview"), per artifact: its dialog opens with them.
+  // A Create button or a next-step suggestion clears its artifact's, so those open with the usual defaults.
+  const [presets, setPresets] = useState<Partial<Record<ChatArtifact, ChatPreset>>>({});
+  const [presetKey, setPresetKey] = useState(0);
   const [toAdd, setToAdd] = useState<string[]>([]);
   const [addError, setAddError] = useState<string | null>(null);
+  const [addBusy, setAddBusy] = useState(false); // the picked posts are being added
   const [reading, setReading] = useState<{ id: string; start?: number; end?: number } | null>(null);
   const [quoted, setQuoted] = useState<Citation | null>(null); // a chat citation: the earlier words, shown in a popup
   const [editingTitle, setEditingTitle] = useState(false);
@@ -420,22 +453,14 @@ export default function NotebookView() {
   const panes = usePaneWidths(layout, { leftOpen: historyOpen, rightOpen: toolsOpen }); // the side panels' dragged widths
   const railShown = phone || historyOpen; // on a phone both panels stay mounted (their dialogs live there) as drawers
   const toolsShown = phone || toolsOpen;
-  const chatsShown = chatsOpen;
-  const postsShown = postsOpen;
-  const closeDrawer = () => setDrawer(null);
+  const postsShown = viewingPosts;
+  const chatGroups = groupChats(chats);
+  const openGroups = openGroupsPref ?? chatGroups.slice(0, 1).map((g) => g.label);
+  const closeDrawer = () => setDrawer(null); // back to the Chat tab
+  const tabClass = (tab: typeof drawer) => (phone ? ` nbv-tab-panel${drawer === tab ? " is-active" : ""}` : "");
+  useTopbarCrumb(nb?.title);
 
-  // An open drawer: Escape shuts it and the page behind does not scroll. Growing past phone size drops it.
-  useEffect(() => {
-    if (!phone || !drawer) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setDrawer(null);
-    const overflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflow = overflow;
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [phone, drawer]);
+  // Growing past phone size goes back to the Chat tab.
   useEffect(() => {
     if (!phone) setDrawer(null);
   }, [phone]);
@@ -514,7 +539,7 @@ export default function NotebookView() {
     }
     // If the user selected another conversation while this request was running, ignore this older response.
     if (request !== chatLoad.current) return;
-    const history: Turn[] = msgs.map((m) => ({ id: m.id, feedback: m.feedback, role: m.role, text: m.text, citations: m.citations, topic: m.topic }));
+    const history: Turn[] = msgs.map((m) => ({ id: m.id, feedback: m.feedback, role: m.role, text: m.text, citations: m.citations, topic: m.topic, action: m.action ?? undefined }));
     // Early chats saved the answer but not the opening user message. Their title is the original question,
     // so restore it in the transcript instead of showing an assistant answer with no visible prompt.
     if (history[0]?.role === "assistant") {
@@ -615,7 +640,10 @@ export default function NotebookView() {
             patchAnswer({ text: d.message as string, status: undefined });
           } else if (event === "answer") {
             answered = d.text as string;
-            const final = { id: d.message_id as string, text: answered, citations: d.citations as Citation[], status: undefined, topic: (d.topic as string | undefined) || "" };
+            const action = (d.action as ChatAction | null | undefined) ?? undefined;
+            const final = { id: d.message_id as string, text: answered, citations: d.citations as Citation[], status: undefined, topic: (d.topic as string | undefined) || "", action };
+            // "Create a quiz on pricing": its settings open now, while this is still the question on screen.
+            if (action && latest() && chatLoad.current === sentIn) runAction(action);
             // Finish typing (the verified text, markers still hidden), then show it with its clickable citations.
             void typer.finish(streamingText(answered)).then(() => {
               finalized = true;
@@ -706,39 +734,51 @@ export default function NotebookView() {
   if (loadError) return <p className="error-text">{loadError}</p>;
   if (!nb) return <Loading label="Opening notebook" center="full" />;
 
-  const openReport = () => {
+  const openReport = (preset?: ChatPreset) => {
     seedDocs(nb.id, nb.documents);
+    setPresets((p) => ({ ...p, report: preset }));
     setMakingReport(true);
   };
 
-  const openInfographic = () => {
+  const openInfographic = (preset?: ChatPreset) => {
     seedDocs(nb.id, nb.documents);
+    setPresets((p) => ({ ...p, infographic: preset }));
     setMakingInfographic(true);
   };
 
-  const openAudio = () => {
+  const openAudio = (preset?: ChatPreset) => {
     seedDocs(nb.id, nb.documents);
+    setPresets((p) => ({ ...p, audio_overview: preset }));
     setMakingAudio(true);
   };
 
-  const openSlides = () => {
+  const openSlides = (preset?: ChatPreset) => {
     seedDocs(nb.id, nb.documents);
+    setPresets((p) => ({ ...p, slide_deck: preset }));
     setMakingSlides(true);
   };
 
-  const openCards = () => {
+  const openCards = (preset?: ChatPreset) => {
     seedDocs(nb.id, nb.documents);
+    setPresets((p) => ({ ...p, flashcards: preset }));
     setMakingCards(true);
   };
 
-  const openQuiz = () => {
+  const openQuiz = (preset?: ChatPreset) => {
     seedDocs(nb.id, nb.documents); // the posts this page already has: the dialog shows them at once
+    setPresets((p) => ({ ...p, quiz: preset }));
     setMakingQuiz(true);
   };
 
-  const openVideo = () => {
+  const openVideo = (preset?: ChatPreset) => {
     seedDocs(nb.id, nb.documents); // the posts this page already has: the wizard shows them at once
+    setPresets((p) => ({ ...p, video: preset }));
     setMakingVideo(true);
+  };
+
+  const openMap = (preset?: ChatPreset) => {
+    setPresets((p) => ({ ...p, mind_map: preset }));
+    setMakingMap(true);
   };
 
   // The next step suggested beside the last answer. The dialogs live in the Create panel, so it opens too.
@@ -746,20 +786,33 @@ export default function NotebookView() {
     setToolsRail(true);
     open();
   };
+
+  // An answer to "create an audio overview of 10 minutes": that dialog opens with the settings asked for (each one
+  // already snapped by the server to an option the dialog offers). Its dialogs live in the Create panel, so it opens too.
+  function runAction(a: ChatAction) {
+    const open: Record<ChatArtifact, (p: ChatPreset) => void> = {
+      audio_overview: openAudio, slide_deck: openSlides, report: openReport, infographic: openInfographic,
+      quiz: openQuiz, flashcards: openCards, mind_map: openMap, video: openVideo,
+    };
+    if (!open[a.artifact]) return;
+    setPresetKey((k) => k + 1); // a dialog that is already open starts again from these settings
+    if (a.artifact === "video") openVideo(a.settings);
+    else inPanel(() => open[a.artifact](a.settings ?? {}))();
+  }
   // The steps suggested under the last answer. With the answer's topic each one names it ("Quiz yourself on your
   // pricing posts"); without one (small talk, an answer from before topics were saved) the plain label shows.
   const nextSteps = (topic?: string): NextStep[] => {
     const t = topic?.trim();
     const say = (plain: string, named: (t: string) => string) => (t ? named(t) : plain);
     return [
-      { id: "audio", label: say("Make an audio overview", (x) => `Hear an audio overview of ${x}`), icon: <HeadphonesIcon size={14} />, run: inPanel(openAudio) },
-      { id: "slides", label: say("Create a slide deck", (x) => `Turn ${x} into a slide deck`), icon: <SlidesIcon size={14} />, run: inPanel(openSlides) },
-      { id: "video", label: say("Make a video", (x) => `Make a video about ${x}`), icon: <VideoIcon size={14} />, run: openVideo },
-      { id: "report", label: say("Generate a report", (x) => `Write a report on ${x}`), icon: <ReportIcon size={14} />, run: inPanel(openReport) },
-      { id: "quiz", label: say("Take a quiz", (x) => `Quiz yourself on ${x}`), icon: <QuizIcon size={14} />, run: inPanel(openQuiz) },
-      { id: "infographic", label: say("Generate an infographic", (x) => `Make an infographic on ${x}`), icon: <InfographicIcon size={14} />, run: inPanel(openInfographic) },
-      { id: "mindmap", label: say("Explore a Mind Constellation", (x) => `Map ${x} in a Mind Constellation`), icon: <TelescopeIcon size={14} />, run: inPanel(() => setMakingMap(true)) },
-      { id: "cards", label: say("Study with flashcards", (x) => `Study ${x} with flashcards`), icon: <FlashcardsIcon size={14} />, run: inPanel(openCards) },
+      { id: "audio", label: say("Make an audio overview", (x) => `Hear an audio overview of ${x}`), icon: <HeadphonesIcon size={14} />, run: inPanel(() => openAudio()) },
+      { id: "slides", label: say("Create a slide deck", (x) => `Turn ${x} into a slide deck`), icon: <SlidesIcon size={14} />, run: inPanel(() => openSlides()) },
+      { id: "video", label: say("Make a video", (x) => `Make a video about ${x}`), icon: <VideoIcon size={14} />, run: () => openVideo() },
+      { id: "report", label: say("Generate a report", (x) => `Write a report on ${x}`), icon: <ReportIcon size={14} />, run: inPanel(() => openReport()) },
+      { id: "quiz", label: say("Take a quiz", (x) => `Quiz yourself on ${x}`), icon: <QuizIcon size={14} />, run: inPanel(() => openQuiz()) },
+      { id: "infographic", label: say("Generate an infographic", (x) => `Make an infographic on ${x}`), icon: <InfographicIcon size={14} />, run: inPanel(() => openInfographic()) },
+      { id: "mindmap", label: say("Explore a Mind Constellation", (x) => `Map ${x} in a Mind Constellation`), icon: <TelescopeIcon size={14} />, run: inPanel(() => openMap()) },
+      { id: "cards", label: say("Study with flashcards", (x) => `Study ${x} with flashcards`), icon: <FlashcardsIcon size={14} />, run: inPanel(() => openCards()) },
     ];
   };
   const lastAnswerAt = turns.map((t) => t.role).lastIndexOf("assistant");
@@ -774,59 +827,53 @@ export default function NotebookView() {
     <div ref={layout} className={`nbv${historyOpen ? "" : " nbv-history-closed"}${toolsOpen ? "" : " nbv-tools-closed"}`} style={panes.style}>
       <PaneResizer side="left" panes={panes} container={layout} label="Resize the chats panel" />
       <PaneResizer side="right" panes={panes} container={layout} label="Resize the create panel" />
-      {phone && drawer && <div className="nbv-drawer-backdrop" onClick={closeDrawer} aria-hidden="true" />}
-      {railShown && <aside className={`nbv-pane nbv-history${phone ? ` nbv-drawer nbv-drawer-left${drawer === "history" ? " open" : ""}` : ""}`}
-                           aria-label="Notebook chats">
-        {/* The top line: back to all notebooks, and the button that closes this column */}
-        <div className="nbv-history-top">
+      {phone && (
+        <div className="nbv-tabs" role="tablist" aria-label="Notebook"
+             style={{ "--tab": drawer === "history" ? 0 : drawer === "tools" ? 2 : 1 } as CSSProperties}>
+          {([["history", "Menu"], [null, "Chat"], ["tools", "Studio"]] as const).map(([tab, label]) => (
+            <button key={label} type="button" role="tab" className={`nbv-tab${drawer === tab ? " active" : ""}`}
+                    aria-selected={drawer === tab} onClick={() => setDrawer(tab)}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+      {railShown && <aside className={`nbv-pane nbv-history nbv-menu${tabClass("history")}`} aria-label="Notebook chats">
+        {/* The top line: back to all notebooks, and the button that closes this column (phones: the tabs do both) */}
+        {!phone && <div className="nbv-history-top">
           <Link to="/app/notebooks" className="nbv-history-back">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="m15 18-6-6 6-6" />
             </svg>
             All notebooks
           </Link>
-          {phone ? (
-            <button type="button" className="nbv-close-history" onClick={closeDrawer} aria-label="Close chats" title="Close">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true">
-                <path d="M6 6l12 12M18 6L6 18" />
-              </svg>
-            </button>
-          ) : (
-            <button type="button" className="nbv-close-history" onClick={() => setChatRail(false)} aria-label="Close chat sidebar" title="Close chat sidebar">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
-                <path d="M9 4.5v15M15 10l-2 2 2 2" />
-              </svg>
-            </button>
-          )}
-        </div>
+          <button type="button" className="nbv-close-history" onClick={() => setChatRail(false)} aria-label="Close chat sidebar" title="Close chat sidebar">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
+              <path d="M9 4.5v15M15 10l-2 2 2 2" />
+            </svg>
+          </button>
+        </div>}
+        {/* Chats and Posts: two separate cards, one under the other */}
+        <section className="nbv-menu-card">
         <div className="nbv-history-head">
           <div>
             <h2>Chats</h2>
-            <span className="muted">In this notebook</span>
           </div>
           <div className="nbv-history-actions">
-            <button type="button" className="nbv-new-chat" onClick={() => { newChat(); closeDrawer(); }} disabled={busy} aria-label="New chat" title="New chat">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true">
-                <path d="M12 5v14M5 12h14" />
-              </svg>
+            <button type="button" className="btn btn-small" onClick={() => { newChat(); closeDrawer(); }} disabled={busy}>
+              + New
             </button>
           </div>
         </div>
         <nav className="nbv-chat-list" aria-label="Chat history">
-          {chats.length > 0 && (
-            <button type="button" className="nbv-posts-toggle nbv-chats-toggle" aria-expanded={chatsOpen} onClick={() => setChatsOpen(!chatsOpen)}>
-              <svg className={`nbv-posts-chev${chatsOpen ? " open" : ""}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
-              Recent <span className="nbv-posts-count">{chats.length}</span>
-            </button>
-          )}
-          {!chatsShown ? null : chats.length === 0 ? (
+          {chats.length === 0 ? (
             <p className="nbv-history-empty muted small">Your conversations in this notebook will appear here.</p>
           ) : (
-            groupChats(chats).map((g) => (
+            chatGroups.map((g) => (
               <div key={g.label} className="nbv-chat-group">
                 <button type="button" className="nbv-chat-list-label nbv-group-toggle" aria-expanded={openGroups.includes(g.label)}
-                        onClick={() => setOpenGroups((o) => (o.includes(g.label) ? o.filter((x) => x !== g.label) : [...o, g.label]))}>
+                        onClick={() => setOpenGroups(openGroups.includes(g.label) ? openGroups.filter((x) => x !== g.label) : [...openGroups, g.label])}>
                   <svg className={`nbv-posts-chev${openGroups.includes(g.label) ? " open" : ""}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
                   {g.label} <span className="nbv-group-count">{g.items.length}</span>
                 </button>
@@ -868,19 +915,29 @@ export default function NotebookView() {
             ))
           )}
         </nav>
+        </section>
 
         {/* Posts: below the chat history */}
-        <section className="nbv-section nbv-posts">
-          <div className="nbv-section-head">
-            <button type="button" className="nbv-posts-toggle" aria-expanded={postsShown} onClick={() => setPostsOpen(!postsOpen)}>
-              <svg className={`nbv-posts-chev${postsShown ? " open" : ""}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
-              Posts <span className="nbv-posts-count">{nb.documents.length}</span>
-            </button>
-            <button className="btn btn-small" onClick={() => setAdding(true)}
-                    title={nb.is_archive ? "Connect a blog or newsletter, import an article, or upload files" : "Connect a source or add posts you already have"}>
-              + Add
-            </button>
+        <section className="nbv-section nbv-posts nbv-menu-card">
+          <div className="nbv-history-head">
+            <h2>Posts</h2>
+            <div className="nbv-history-actions">
+              {nb.documents.length > 0 && (
+                <button type="button" className="btn btn-small" aria-expanded={viewingPosts} onClick={() => setViewingPosts(!viewingPosts)}>
+                  {viewingPosts ? "Hide posts" : "View posts"}
+                </button>
+              )}
+              <button className="btn btn-small" onClick={() => setAdding(true)}
+                      title={nb.is_archive ? "Connect a blog or newsletter, import an article, or upload files" : "Connect a source or add posts you already have"}>
+                + Add
+              </button>
+            </div>
           </div>
+          {!viewingPosts && nb.documents.length > 0 && (
+            <p className="muted small">
+              {nb.documents.length} {nb.documents.length === 1 ? "post is" : "posts are"} connected to this notebook.
+            </p>
+          )}
           {imports.map((j) => (
             <ImportProgress key={j.id} job={j} onDone={() => {
               setImports((cur) => cur.filter((x) => x.id !== j.id));
@@ -924,14 +981,10 @@ export default function NotebookView() {
         </section>
       </aside>}
 
-      <section className="card nbv-pane nbv-chat">
-        <div className="chat-bar">
-          {phone ? (
-            <button type="button" className="nbv-show-history" onClick={() => setDrawer("history")} aria-label="Open chats and posts"
-                    title="Chats and posts" aria-expanded={drawer === "history"}>
-              <PanelMenuIcon size={22} strokeWidth={1.8} />
-            </button>
-          ) : !railShown && (
+      <section className={`card nbv-pane nbv-chat${tabClass(null)}`}>
+        {/* Phones: the top bar names the notebook and the tabs open the other panes */}
+        {!phone && <div className="chat-bar">
+          {!railShown && (
             <button type="button" className="nbv-show-history" onClick={() => setChatRail(true)} aria-label="Show chat sidebar" title="Show chat sidebar">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
@@ -979,17 +1032,15 @@ export default function NotebookView() {
               </h2>
             )}
           </div>
-          {(phone || !toolsOpen) && (
-            <button type="button" className="nbv-show-tools" onClick={() => (phone ? setDrawer("tools") : setToolsRail(true))}
-                    aria-label={phone ? "Open the Create panel" : "Show tools panel"} title={phone ? "Create" : "Show tools panel"}
-                    aria-expanded={phone ? drawer === "tools" : undefined}>
+          {!toolsOpen && (
+            <button type="button" className="nbv-show-tools" onClick={() => setToolsRail(true)} aria-label="Show tools panel" title="Show tools panel">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
                 <path d="M15 4.5v15M11 10l-2 2 2 2" />
               </svg>
             </button>
           )}
-        </div>
+        </div>}
         <div className="nbv-turns" aria-busy={Boolean(loadingChatId)}>
           {loadingChatId ? (
             <div className="nbv-chat-loading">
@@ -1030,13 +1081,23 @@ export default function NotebookView() {
                   <p className="turn-text">{t.text}</p>
                 ))}
               {t.citations && <CitationList citations={t.citations} onCite={cite} collapsible />}
+              {t.role === "assistant" && t.action && t.text && !t.status && (
+                <button type="button" className="nbv-open-action" onClick={() => runAction(t.action!)}>
+                  {(() => {
+                    const Icon = ARTIFACT_ICONS[t.action.artifact] ?? VideoIcon;
+                    return <Icon size={15} />;
+                  })()}
+                  <span>Open {ARTIFACT_NAMES[t.action.artifact] ?? "the"} settings</span>
+                  <span className="nbv-open-action-arrow" aria-hidden="true">→</span>
+                </button>
+              )}
               {t.role === "assistant" && t.id && t.text && !t.status && (
                 <AnswerFeedback
                   key={t.id}
                   messageId={t.id}
                   initial={t.feedback}
                   text={t.text}
-                  extra={i === lastAnswerAt && !busy && nb.documents.length > 0 ? <NextStepHint actions={nextSteps(t.topic)} /> : undefined}
+                  extra={i === lastAnswerAt && !busy && !t.action && nb.documents.length > 0 ? <NextStepHint actions={nextSteps(t.topic)} /> : undefined}
                 />
               )}
               {t.saved && t.saved.length > 0 && (
@@ -1119,29 +1180,28 @@ export default function NotebookView() {
         </form>
       </section>
 
-      {toolsShown && <aside className={`card nbv-pane nbv-side${phone ? ` nbv-drawer nbv-drawer-right${drawer === "tools" ? " open" : ""}` : ""}`}
-                            aria-label="Notebook tools">
+      {toolsShown && <aside className={`card nbv-pane nbv-side${tabClass("tools")}`} aria-label="Notebook tools">
         <StudioPanel notebookId={nb.id} docs={nb.documents.map((d) => ({ id: d.id, title: d.title, locked: d.locked }))}
-                     chats={chats} currentChatId={chatId} quizOpen={makingQuiz}
-                     onQuizClose={() => setMakingQuiz(false)} onCreateQuiz={openQuiz}
-                     reportOpen={makingReport} onReportClose={() => setMakingReport(false)} onCreateReport={openReport}
-                     infographicOpen={makingInfographic} onInfographicClose={() => setMakingInfographic(false)} onCreateInfographic={openInfographic}
-                     audioOpen={makingAudio} onAudioClose={() => setMakingAudio(false)} onCreateAudio={openAudio}
-                     slidesOpen={makingSlides} onSlidesClose={() => setMakingSlides(false)} onCreateSlides={openSlides}
-                     cardsOpen={makingCards} onCardsClose={() => setMakingCards(false)} onCreateCards={openCards}
-                     mapOpen={makingMap} onMapClose={() => setMakingMap(false)} onCreateMap={() => setMakingMap(true)}
+                     chats={chats} currentChatId={chatId} presets={presets} presetKey={presetKey} quizOpen={makingQuiz}
+                     onQuizClose={() => setMakingQuiz(false)} onCreateQuiz={() => openQuiz()}
+                     reportOpen={makingReport} onReportClose={() => setMakingReport(false)} onCreateReport={() => openReport()}
+                     infographicOpen={makingInfographic} onInfographicClose={() => setMakingInfographic(false)} onCreateInfographic={() => openInfographic()}
+                     audioOpen={makingAudio} onAudioClose={() => setMakingAudio(false)} onCreateAudio={() => openAudio()}
+                     slidesOpen={makingSlides} onSlidesClose={() => setMakingSlides(false)} onCreateSlides={() => openSlides()}
+                     cardsOpen={makingCards} onCardsClose={() => setMakingCards(false)} onCreateCards={() => openCards()}
+                     mapOpen={makingMap} onMapClose={() => setMakingMap(false)} onCreateMap={() => openMap()}
                      disabled={nb.documents.length === 0}
-                     onCreateVideo={openVideo}
-                     closeAsX={phone} onClose={() => (phone ? closeDrawer() : setToolsRail(false))} />
+                     onCreateVideo={() => openVideo()}
+                     onClose={phone ? undefined : () => setToolsRail(false)} />
       </aside>}
 
       {makingVideo && (
-        <Modal title="New video" onClose={() => setMakingVideo(false)} wide>
-          <VideoCreateForm startNotebook={nb.id} inModal />
+        <Modal title={videoLimit ? "Video limit reached" : "New video"} onClose={() => { setMakingVideo(false); setVideoLimit(false); }} wide>
+          <VideoCreateForm key={presetKey} startNotebook={nb.id} inModal initial={presets.video} onLimit={setVideoLimit} />
         </Modal>
       )}
       {adding && (
-        <Modal title={nb.is_archive ? "Connect a source" : `Add to ${nb.title}`} onClose={() => setAdding(false)} wide>
+        <Modal title={nb.is_archive ? "Connect a source" : `Add to ${nb.title}`} onClose={addBusy ? () => undefined : () => setAdding(false)} wide>
           {nb.is_archive ? (
             <p className="muted small">This archive already contains all your posts. Posts from a new source join it automatically.</p>
           ) : (
@@ -1150,20 +1210,23 @@ export default function NotebookView() {
               <p className="muted small">Every post it imports joins this notebook.</p>
             </>
           )}
-          <AddSource notebookId={nb.is_archive ? undefined : nb.id} onAdded={(_, job) => {
+          <AddSource compact notebookId={nb.is_archive ? undefined : nb.id} onAdded={(_, job) => {
             setImports((cur) => [...cur, job]);
             setAdding(false);
           }} />
           {!nb.is_archive && (
             <>
               <p className="eyebrow muted">Or add posts you already have</p>
-              <DocPicker selected={toAdd} onChange={setToAdd} exclude={nb.documents.map((d) => d.id)} />
+              <DocPicker selected={toAdd} onChange={setToAdd} exclude={nb.documents.map((d) => d.id)}
+                         allExcludedText="All your posts are connected to this notebook." />
               {addError && <p className="error-text">{addError}</p>}
               <div className="row end">
                 <button
                   className="btn btn-primary"
-                  disabled={!toAdd.length}
+                  disabled={!toAdd.length || addBusy}
                   onClick={async () => {
+                    setAddError(null);
+                    setAddBusy(true);
                     try {
                       await notebooksApi.addDocs(nb.id, toAdd);
                       setToAdd([]);
@@ -1171,10 +1234,12 @@ export default function NotebookView() {
                       load();
                     } catch (e) {
                       setAddError(errorMessage(e));
+                    } finally {
+                      setAddBusy(false);
                     }
                   }}
                 >
-                  Add {toAdd.length} posts
+                  {addBusy ? "Adding..." : `Add ${toAdd.length} ${toAdd.length === 1 ? "post" : "posts"}`}
                 </button>
               </div>
             </>

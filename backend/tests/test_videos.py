@@ -36,7 +36,7 @@ from app.models import (
     VoiceProfile,
     Workspace,
 )
-from app.services import blog2video, video_focus, video_limits, video_quota
+from app.services import blog2video, video_focus, video_limits, video_quota, video_status
 from tests.conftest import last_code
 
 KEY = "b2v_live_test_key"
@@ -1037,27 +1037,98 @@ def test_script_review_flow(client, b2v, owner, db_session):
 # Status, refunds, sweep
 
 
-def test_failure_refunds_once_from_poller_and_sweep(client, b2v, owner, db_session, session_factory):
-    headers, ws = owner
-    art = make_video(client, headers)
-    failed = (200, {"status": "failed", "step": 1, "running": False, "error": "unreachable url"})
-    b2v.queue("GET", "/api/v1/videos/812/status", failed, failed)
-    assert client.get(f"/api/videos/{art['id']}/status", headers=headers).json()["artifact_status"] == "failed"
-    assert used(db_session, ws) == 0
-    client.get(f"/api/videos/{art['id']}/status", headers=headers)
-    age(db_session, db_session.scalar(select(B2VVideo)))
-    video_quota.sweep_failed_videos(session_factory)
-    assert used(db_session, ws) == 0
+def aged(db, art) -> Artifact:
+    """A video made a while ago (the reconcile leaves brand new ones to the request that made them)."""
+    a = db.get(Artifact, uuid.UUID(art["id"]))
+    a.created_at = datetime.now(UTC) - timedelta(hours=1)
+    db.commit()
+    return a
 
 
-def test_sweep_refunds_videos_nobody_polled(client, b2v, owner, db_session, session_factory):
+def test_a_failed_video_is_refunded_once_and_removed(client, b2v, owner, db_session, session_factory):
     headers, ws = owner
     art = make_video(client, headers)
-    age(db_session, db_session.scalar(select(B2VVideo)))
-    b2v.queue("GET", "/api/v1/videos/812/status", (404, {"detail": "Not found"}))
-    assert video_quota.sweep_failed_videos(session_factory) == 1
+    b2v.queue("GET", "/api/v1/videos/812/status", (200, {"status": "failed", "step": 1, "running": False,
+                                                          "error": "unreachable url"}))
+    got = client.get(f"/api/videos/{art['id']}/status", headers=headers).json()
+    assert got["artifact_status"] == "failed" and got["ready"] is False  # the poll still hears it, once
+    assert used(db_session, ws) == 0
+    assert db_session.get(Artifact, uuid.UUID(art["id"])) is None  # gone, so it never comes back
+    row = db_session.scalar(select(B2VVideo))
+    assert row.status == "deleted" and row.quota_state == "refunded" and row.artifact_id is None
+    assert client.get(f"/api/videos/{art['id']}/status", headers=headers).status_code == 404
+    assert client.get("/api/videos", headers=headers).json() == []  # not restored from its row
+    video_status.reconcile_videos(session_factory)
+    assert used(db_session, ws) == 0
+    assert "/api/projects/812" not in b2v.paths("DELETE")  # blog2video removes a failed project itself
+
+
+def test_a_leftover_error_does_not_fail_a_finished_video(client, b2v, owner, db_session):
+    """blog2video keeps the last error in its progress after a later run succeeds: generated wins."""
+    headers, ws = owner
+    art = make_video(client, headers)
+    b2v.queue("GET", "/api/v1/videos/812/status", (200, {"status": "generated", "ready": True, "step": 4,
+                                                          "error": "Video generation failed"}))
+    got = client.get(f"/api/videos/{art['id']}/status", headers=headers).json()
+    assert got["artifact_status"] == "ready" and used(db_session, ws) == 1
+
+
+def test_reconcile_catches_up_a_video_that_finished_unwatched(client, b2v, owner, db_session, session_factory):
+    headers, _ = owner
+    art = make_video(client, headers)
+    aged(db_session, art)
+    b2v.queue("GET", "/api/v1/videos/812/status", (200, {"status": "generated", "ready": True, "step": 4}))
+    assert video_status.reconcile_videos(session_factory) == 1
     db_session.expire_all()
-    assert used(db_session, ws) == 0 and db_session.get(Artifact, uuid.UUID(art["id"])).status == "failed"
+    assert db_session.get(Artifact, uuid.UUID(art["id"])).status == "ready"
+    assert db_session.scalar(select(B2VVideo)).quota_state == "kept"
+
+
+def test_reconcile_removes_a_video_blog2video_lost(client, b2v, owner, db_session, session_factory):
+    headers, ws = owner
+    art = make_video(client, headers)
+    aged(db_session, art)
+    b2v.queue("GET", "/api/v1/videos/812/status", (404, {"detail": "Not found"}))
+    video_status.reconcile_videos(session_factory)
+    db_session.expire_all()
+    assert used(db_session, ws) == 0 and db_session.get(Artifact, uuid.UUID(art["id"])) is None
+
+
+def test_reconcile_leaves_videos_alone_when_blog2video_is_down(client, b2v, owner, db_session, session_factory):
+    headers, ws = owner
+    art = make_video(client, headers)
+    aged(db_session, art)
+    b2v.queue("GET", "/api/v1/videos/812/status", (503, {"detail": "down"}), (503, {"detail": "down"}),
+              (503, {"detail": "down"}), (503, {"detail": "down"}))
+    assert video_status.reconcile_videos(session_factory) == 0
+    db_session.expire_all()
+    assert db_session.get(Artifact, uuid.UUID(art["id"])).status == "generating" and used(db_session, ws) == 1
+
+
+def test_a_wrongly_failed_video_comes_back_when_blog2video_finished_it(client, b2v, owner, db_session,
+                                                                        session_factory):
+    headers, ws = owner
+    art = make_video(client, headers)
+    a = aged(db_session, art)
+    row = db_session.scalar(select(B2VVideo))
+    video_quota.refund(db_session, row, "failed")  # the old stale-error logic refunded it and kept the item
+    a.status = "failed"
+    db_session.commit()
+    assert used(db_session, ws) == 0
+    b2v.queue("GET", "/api/v1/videos/812/status", (200, {"status": "done", "ready": True, "step": 4}))
+    video_status.reconcile_videos(session_factory)
+    db_session.expire_all()
+    assert db_session.get(Artifact, uuid.UUID(art["id"])).status == "ready"
+    assert used(db_session, ws) == 1 and db_session.scalar(select(B2VVideo)).quota_state == "kept"
+
+
+def test_the_notebook_panel_shows_blog2videos_status(client, b2v, owner, db_session):
+    headers, _ = owner
+    nb = client.post("/api/notebooks", json={"title": "Pricing"}, headers=headers).json()
+    art = make_video(client, headers, notebook_id=nb["id"])
+    b2v.queue("GET", "/api/v1/videos/812/status", (200, {"status": "generated", "ready": True, "step": 4}))
+    listed = client.get(f"/api/notebooks/{nb['id']}/artifacts", headers=headers).json()
+    assert [(x["id"], x["status"]) for x in listed] == [(art["id"], "ready")]
 
 
 def test_a_finished_video_is_not_refunded_by_a_later_error(client, b2v, owner, db_session):
@@ -1451,3 +1522,36 @@ def test_a_video_is_listed_in_the_notebook_it_was_made_in(client, b2v, owner, ot
     db_session.commit()
     stray = make_video(client, headers, url=None, document_id=str(doc.id), notebook_id=str(theirs.id))
     assert db_session.get(Artifact, uuid.UUID(stray["id"])).notebook_id == nb.id  # someone else's notebook is ignored
+
+
+# Ready is blog2video's own status: a preview link minted early (the editor opened mid-generation) must not end the
+# progress screen while blog2video is still recording voiceovers and fetching clips.
+
+
+def test_status_is_not_ready_mid_generation_even_with_a_stored_preview(client, b2v, owner):
+    headers, _ = owner
+    art = make_video(client, headers)
+    b2v.queue("GET", "/api/projects/812", (200, {"id": 812, "status": "scripted", "r2_video_url": None, "scenes": []}))
+    opened = client.get(f"/api/videos/{art['id']}", headers=headers).json()
+    assert opened["preview_url"] is None  # not minted for a half-made video
+    s = client.get(f"/api/videos/{art['id']}/status", headers=headers).json()
+    assert s["ready"] is False and s["status"] == "scripted"
+    b2v.queue("GET", "/api/v1/videos/812/status", (200, {"status": "generated", "step": 4, "running": False, "ready": True}))
+    s = client.get(f"/api/videos/{art['id']}/status", headers=headers).json()
+    assert s["ready"] is True and s["preview_url"]
+
+
+def test_a_custom_templates_stock_clip_shows_on_its_scene(client, b2v, owner):
+    """blog2video writes clips into layoutProps on every template, custom ones (house styles) too."""
+    headers, _ = owner
+    art = make_video(client, headers)
+    code = jsonlib.dumps({"layout": "hero", "layoutConfig": {"titleFontSize": 60},
+                          "layoutProps": {"assignedVideo": "scene_1_clip.mp4"}})
+    b2v.queue("GET", "/api/projects/812", (200, {
+        "id": 812, "status": "generated", "template": "custom_7", "r2_video_url": None,
+        "scenes": [{"id": 1, "order": 1, "title": "A", "remotion_code": code}],
+        "assets": [{"id": 5, "asset_type": "video", "filename": "scene_1_clip.mp4", "r2_url": "https://r2.test/c.mp4"}]}))
+    scene = client.get(f"/api/videos/{art['id']}", headers=headers).json()["project"]["scenes"][0]
+    assert scene["images"] == [{"filename": "scene_1_clip.mp4", "asset_id": 5, "kind": "video",
+                                "url": "https://r2.test/c.mp4"}]
+    assert scene["title_font_size"] == 60

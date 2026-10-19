@@ -934,6 +934,8 @@ class TriageMessage(dspy.Signature):
     - chitchat: greetings, thanks, reactions, small talk.
     - about_app: how to use Notestack itself (sources, notebooks, audio, launch kits).
     - off_topic: general knowledge, coding, math, news, or anything the posts cannot answer.
+    - create: asks to make something from the posts: an audio overview or podcast, a slide deck, a video, a report,
+      an infographic, a quiz, flashcards or a mind map (Mind Constellation). The app opens its settings.
     For archive, rewrite the message into a standalone question using the conversation, and pick depth:
     quick for a single fact or lookup, deep for synthesis across many posts. For the other kinds, write
     a short, warm reply (1 to 3 sentences) that answers or gently steers back to what the archive can
@@ -942,7 +944,7 @@ class TriageMessage(dspy.Signature):
     conversation: str = dspy.InputField(desc="Recent turns, oldest first")
     message: str = dspy.InputField()
     notebook: str = dspy.InputField(desc="Notebook title and some of its post titles")
-    kind: Literal["archive", "chitchat", "about_app", "off_topic"] = dspy.OutputField()
+    kind: Literal["archive", "chitchat", "about_app", "off_topic", "create"] = dspy.OutputField()
     standalone_question: str = dspy.OutputField(desc="For archive: the question with follow ups resolved")
     depth: Literal["quick", "deep"] = dspy.OutputField()
     reply: str = dspy.OutputField(desc="For non archive kinds: the reply to show. Empty for archive")
@@ -959,6 +961,47 @@ class TriageWithMemory(TriageMessage):
                                        "`slug | label | last active | gist`")
     topic: str = dspy.OutputField(desc="The slug of the topic the message belongs to, or none")
     memory: Literal["none", "lookup", "replay", "compose"] = dspy.OutputField()
+
+
+class ParseCreateRequest(dspy.Signature):
+    """The writer asked the chat to make something from their posts. Say what they want made and copy out every
+    setting they named, in their own terms. Leave a field empty when the message (and the conversation) does not say.
+    Never guess a setting they did not ask for.
+    - artifact: audio_overview (also: podcast, audio), slide_deck (slides, deck, presentation), video, report,
+      infographic, quiz, flashcards, mind_map (Mind Constellation, map of ideas).
+    - minutes: how long an audio overview or video should be, as a number of minutes ("half an hour" is 30).
+    - slide_count: how many slides, as a number.
+    - hosts: 1 or 2 for an audio overview ("solo", "one voice" is 1; "two hosts", "conversation" is 2).
+    - style: for audio, one of deep_dive, brief, critique, debate. For an infographic layout, one of flowchart,
+      timeline, compare, hierarchy, overview. For a slide deck, detailed or presenter. For a report, document or
+      interactive, or a template: briefing, study_guide, blog_post.
+    - difficulty: easy, medium or hard (quiz and flashcards).
+    - question_types: for a quiz, any of multiple_choice, fill_blank, short_answer, comma separated.
+    - theme: a look or colour they asked for ("dark", "light", "black and blue", "white").
+    - orientation: for a video, landscape (wide, horizontal, YouTube) or portrait (vertical, TikTok, Reels, Shorts).
+    - voice: for a video narrator, female or male.
+    - language: the language to make it in, in English ("Spanish"), only when they name one.
+    - topic: what it should be about, in a few words, only when the message names a subject or points back at the
+      conversation ("this", "that", "it", "what you just said"); then resolve it into the actual subject. Otherwise
+      empty: it is about the whole notebook, whatever the conversation was about.
+    - requests: anything else they asked for about content, audience or tone, in one sentence. Empty if none."""
+
+    conversation: str = dspy.InputField(desc="Recent turns, oldest first")
+    message: str = dspy.InputField()
+    artifact: Literal["audio_overview", "slide_deck", "video", "report", "infographic", "quiz", "flashcards",
+                      "mind_map", "none"] = dspy.OutputField()
+    minutes: str = dspy.OutputField(desc="A number, or empty")
+    slide_count: str = dspy.OutputField(desc="A number, or empty")
+    hosts: str = dspy.OutputField(desc="1, 2, or empty")
+    style: str = dspy.OutputField(desc="One of the style words above, or empty")
+    difficulty: str = dspy.OutputField(desc="easy, medium, hard, or empty")
+    question_types: str = dspy.OutputField(desc="Comma separated quiz question types, or empty")
+    theme: str = dspy.OutputField(desc="The look in their words, or empty")
+    orientation: str = dspy.OutputField(desc="landscape, portrait, or empty")
+    voice: str = dspy.OutputField(desc="female, male, or empty")
+    language: str = dspy.OutputField(desc="A language name in English, or empty")
+    topic: str = dspy.OutputField(desc="What it is about in a few words, or empty")
+    requests: str = dspy.OutputField(desc="Other asks about content, audience or tone, or empty")
 
 
 class FocusTopic(BaseModel):

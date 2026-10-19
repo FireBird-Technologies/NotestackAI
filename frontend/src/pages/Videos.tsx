@@ -36,6 +36,10 @@ function shortUrl(url: string | null | undefined): string | null {
   return s.length > 34 ? `${s.slice(0, 34)}…` : s;
 }
 
+/** Video statuses that can still change on blog2video's side. */
+const BUSY = new Set(["generating", "pending", "rendering", "regenerating", "voice_regenerating", "language_regenerating",
+  "script_regenerating"]);
+
 export default function Videos() {
   const [videos, setVideos] = useState<VideoListItem[] | null>(null);
   const [quota, setQuota] = useState<VideoQuota | null>(null);
@@ -51,6 +55,19 @@ export default function Videos() {
     videosApi.list().then(setVideos).catch((e) => setError(errorMessage(e)));
     videosApi.quota().then(setQuota).catch(() => undefined);
   }, []);
+
+  // While a video is still being made (or rendering, or in an edit job), ask again now and then: the list checks those
+  // with blog2video, so one that finishes, or fails and is refunded, updates here without a reload.
+  const anyBusy = (videos ?? []).some((v) => BUSY.has(v.status));
+  useEffect(() => {
+    if (!anyBusy) return;
+    const t = setInterval(() => {
+      if (document.hidden) return;
+      videosApi.list().then(setVideos).catch(() => undefined);
+      videosApi.quota().then(setQuota).catch(() => undefined);
+    }, 15000);
+    return () => clearInterval(t);
+  }, [anyBusy]);
 
   function askDelete(v: VideoListItem) {
     setDeleteError(null);

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { artifactsApi, videoVoicesApi, type GenerateBody } from "../api/endpoints";
-import type { Artifact, ChatSummary, Segment, VideoSavedVoice } from "../api/types";
+import type { Artifact, ChatPreset, ChatSummary, Segment, VideoSavedVoice } from "../api/types";
 import { useJob } from "../hooks/useJob";
 import { Transcript } from "./ArtifactCard";
 import { Dropdown } from "./Dropdown";
@@ -45,19 +45,21 @@ export function prefetchVoices(fresh = false): Promise<VideoSavedVoice[]> {
 
 /** The audio overview settings: a style, one or two hosts and their voices, length, language, the sources, and what
  * the hosts should focus on. */
-export function AudioOverviewDialog({ notebookId, chats, currentChatId, onClose, onCreate }: {
+export function AudioOverviewDialog({ notebookId, chats, currentChatId, initial, onClose, onCreate }: {
   notebookId: string;
   chats: ChatSummary[];
   currentChatId?: string | null;
+  /** Settings asked for in the chat ("a 10 minute debate"), already snapped to these options. */
+  initial?: ChatPreset;
   onClose: () => void;
   onCreate: (body: AudioOverviewRequest) => void;
 }) {
   const [sel, setSel] = useState<SourceSelection | null>(null);
-  const [style, setStyle] = useState<Style>("deep_dive");
-  const [hosts, setHosts] = useState<"1" | "2">("2");
-  const [minutes, setMinutes] = useState("6");
-  const [language, setLanguage] = useState("English");
-  const [focus, setFocus] = useState("");
+  const [style, setStyle] = useState<Style>(() => STYLES.find((s) => s.id === initial?.style)?.id ?? "deep_dive");
+  const [hosts, setHosts] = useState<"1" | "2">(initial?.hosts === "1" ? "1" : "2");
+  const [minutes, setMinutes] = useState(LENGTHS.some((l) => l.value === initial?.minutes) ? initial!.minutes! : "6");
+  const [language, setLanguage] = useState(initial?.language ?? "English");
+  const [focus, setFocus] = useState(initial?.focus ?? "");
   // The hosts' voices, from the workspace's voices (none to pick when they cannot load: the default voices are used).
   const [voices, setVoices] = useState<VideoSavedVoice[] | null>(null);
   const [voice, setVoice] = useState<[string, string]>(["", ""]);

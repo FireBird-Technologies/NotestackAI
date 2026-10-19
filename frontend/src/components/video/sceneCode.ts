@@ -74,7 +74,13 @@ export function withProps(scene: VideoScene, template: string, patch: Record<str
  *  (SceneEditModal handleRemoveStockFootage): `hideImage` so the player does not fill the slot with a generic image,
  *  and `visualClearedByUser` so a later regenerate does not put a spare clip back. Assigning media clears both. */
 export function withoutMedia(scene: VideoScene, template: string, filename: string): string {
-  const props = propsOf(parseCode(scene), template);
+  const code = parseCode(scene);
+  // blog2video writes stills and clips into layoutProps on every template, custom ones too: edit whichever object
+  // actually holds this file.
+  const holds = (p: unknown) => !!p && typeof p === "object" && Object.values(p).some((v) => v === filename
+    || (Array.isArray(v) && v.includes(filename)));
+  const key = holds(code[propsKey(template)]) ? propsKey(template) : holds(code.layoutProps) ? "layoutProps" : propsKey(template);
+  const props = { ...((code[key] as Record<string, unknown> | undefined) ?? {}) };
   const patch: Record<string, unknown> = {};
   for (const one of ["assignedImage", "assignedVideo"]) if (props[one] === filename) patch[one] = undefined;
   for (const many of ["assignedImages", "assignedVideos"]) {
@@ -95,7 +101,11 @@ export function withoutMedia(scene: VideoScene, template: string, filename: stri
       patch.videoStartSeconds = undefined;
     }
   }
-  return withProps(scene, template, patch);
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === undefined) delete props[k];
+    else props[k] = v;
+  }
+  return JSON.stringify({ ...code, [key]: props });
 }
 
 /** The template's own name for a layout (blog2video's layout_names, e.g. "News Headline: Broadsheet" for

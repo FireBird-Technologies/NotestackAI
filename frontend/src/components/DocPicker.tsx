@@ -13,6 +13,7 @@ export function DocPicker({
   max,
   docs: given,
   count = true,
+  allExcludedText,
 }: {
   selected: string[];
   onChange: (ids: string[]) => void;
@@ -22,6 +23,8 @@ export function DocPicker({
   docs?: Doc[];
   /** Show "N selected" next to the controls (off when the caller says it elsewhere). */
   count?: boolean;
+  /** Said instead of the list when every post is in `exclude` (e.g. all of them are in the notebook already). */
+  allExcludedText?: string;
 }) {
   const [fetched, setFetched] = useState<Doc[] | null>(null);
   const [q, setQ] = useState("");
@@ -51,6 +54,7 @@ export function DocPicker({
 
   if (!docs) return <Loading label="Loading posts" />;
   if (docs.length === 0) return <p className="muted">No posts yet. Connect a source first.</p>;
+  if (allExcludedText && docs.every((d) => exclude.includes(d.id))) return <p className="muted">{allExcludedText}</p>;
 
   const selectAll = () => {
     if (firstFew) return onChange(firstFew);

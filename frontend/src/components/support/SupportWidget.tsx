@@ -27,6 +27,9 @@ function readDismissed(): boolean {
   }
 }
 
+/** Fired (on window) to open the support chat from anywhere, e.g. a "Contact support" button in an error popup. */
+export const OPEN_SUPPORT_EVENT = "ns:open-support";
+
 /** The bottom right help button. Hidden where it would distract from focused or unauthenticated pages (the sign in
  * screens, onboarding, legal pages and shared previews). While the chat is closed it can be dragged anywhere on the
  * screen; opening the chat brings it back to its corner, beside the panel. */
@@ -51,6 +54,16 @@ export function SupportWidget() {
   useEffect(() => {
     const t = window.setTimeout(() => setBubbleReady(true), 2500);
     return () => window.clearTimeout(t);
+  }, []);
+
+  // Opened from elsewhere in the app: the chat opens in its corner
+  useEffect(() => {
+    const openChat = () => {
+      setOffset({ x: 0, y: 0 });
+      setOpen(true);
+    };
+    window.addEventListener(OPEN_SUPPORT_EVENT, openChat);
+    return () => window.removeEventListener(OPEN_SUPPORT_EVENT, openChat);
   }, []);
 
   const isLegalPage = pathname === "/privacy" || pathname === "/terms" || pathname === "/support";

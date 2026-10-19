@@ -9,6 +9,7 @@ import html
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from datetime import datetime
 
 from app.config import settings
 
@@ -23,6 +24,7 @@ class OutgoingEmail:
     text: str
     headers: dict[str, str] | None = None
     reply_to: str | None = None
+    scheduled_at: datetime | None = None  # sent later by the provider (Resend holds it until then)
 
 
 class BaseEmailProvider(ABC):
@@ -42,13 +44,16 @@ class ResendEmailProvider(BaseEmailProvider):
             "from": settings.from_email,
             "to": [email.to],
             "subject": email.subject,
-            "html": email.html,
             "text": email.text,
         }
+        if email.html:  # a plain text email (the feedback note) sends no HTML part at all
+            params["html"] = email.html
         if email.headers:
             params["headers"] = email.headers
         if email.reply_to:
             params["reply_to"] = email.reply_to
+        if email.scheduled_at:
+            params["scheduled_at"] = email.scheduled_at.isoformat()
         result = self._resend.Emails.send(params)
         return result.get("id") if isinstance(result, dict) else None
 
@@ -59,7 +64,8 @@ class ConsoleEmailProvider(BaseEmailProvider):
     def send(self, email: OutgoingEmail) -> str | None:
         ConsoleEmailProvider.sent.append(email)
         # Warning, not info: locally this is the only place a sign up or reset code shows up.
-        log.warning("[email] to=%s subject=%s\n%s", email.to, email.subject, email.text)
+        when = f" scheduled_at={email.scheduled_at.isoformat()}" if email.scheduled_at else ""
+        log.warning("[email] to=%s subject=%s%s\n%s", email.to, email.subject, when, email.text)
         return None
 
 
@@ -140,22 +146,22 @@ class EmailService:
             )
         )
 
-    def send_welcome(self, to: str, name: str | None, user_id: str) -> bool:
-        first = (name or "there").split(" ")[0]
-        url = f"{settings.frontend_url}/app"
-        body = (
-            f"Hi {html.escape(first)},<br><br>Your knowledge is about to come into orbit. Connect any blog, newsletter "
-            "or site, or upload your markdown files, and Notestack will index your posts, learn your voice and get "
-            "your first audio overview ready."
-            + _button("Open Mission Control", url)
-        )
+    def send_feedback_request(self, to: str, user_id: str, at: datetime) -> bool:
+        """A personal note from the developer asking a new user about their experience, delivered at `at` (Resend
+        schedules it). Plain text only, no HTML: it reads as a note from a person, not a product email. Replies go
+        to Arslan; the List-Unsubscribe header still lets mail apps offer unsubscribe."""
         return self._send(
             OutgoingEmail(
                 to=to,
-                subject="Welcome to Notestack",
-                html=_layout("Welcome aboard", body, self._unsubscribe_footer(user_id)),
-                text=f"Hi {first}, welcome to Notestack. Open Mission Control: {url}",
+                subject="Notestack AI Feedback",
+                html="",
+                text="Hi,\nThis is Arslan, the dev behind NoteStack AI (notestack.ai).\n"
+                     "You signed up to the product, can I learn more about your experience?\n\n"
+                     "Will only take 5 mins of your time.\n\n"
+                     "Thank you in advance",
                 headers=self._list_unsubscribe(user_id),
+                reply_to=settings.alerts_email,
+                scheduled_at=at,
             )
         )
 

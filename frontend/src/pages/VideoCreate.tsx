@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { videosApi, videoVoicesApi, voiceApi } from "../api/endpoints";
+import { ApiError } from "../api/client";
 import type {
+  ChatPreset,
   VideoCatalog,
   VideoConfig,
   VideoCreateBody,
@@ -16,7 +18,8 @@ import type {
 } from "../api/types";
 import { Dropdown } from "../components/Dropdown";
 import { CheckIcon, SparkleIcon, ArrowLeftIcon } from "../components/icons/Icons";
-import { ErrorText, errorMessage, Loading, PageHeader } from "../components/ui";
+import { ErrorText, errorMessage, Loading, Modal, PageHeader } from "../components/ui";
+import { OPEN_SUPPORT_EVENT } from "../components/support/SupportWidget";
 import { SourcePicker, type VideoSource } from "../components/video/SourcePicker";
 import { loadArchiveId, sourceCache } from "../components/video/sourceCache";
 import { PlayButton, TemplateThumb, useAudio } from "../components/video/parts";
@@ -58,8 +61,12 @@ export default function VideoCreate() {
 
 /** The three-step video wizard: as a page, or inside a modal (inModal: no page header, no step-1 Back, no outer card;
  * the modal's own close button leaves it). */
-export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal = false }: {
+export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal = false, initial, onLimit }: {
   startNotebook?: string | null; startDoc?: string | null; inModal?: boolean;
+  /** In a modal: told when the limit message replaces the wizard, so the modal can show it as its title. */
+  onLimit?: (hit: boolean) => void;
+  /** Settings asked for in the chat ("a vertical video about hiring"): the topic, the shape and the voice. */
+  initial?: ChatPreset;
 }) {
   const navigate = useNavigate();
   const { openUpgrade } = useUpgrade();
@@ -82,9 +89,17 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
   const topicsFor = useRef(""); // the sourceKey of the suggestions shown or on their way
   const [focus, setFocus] = useState<VideoFocusTopic | null>(null);
   // Or the user's own topic: one or the other (or neither, for a general video).
-  const [custom, setCustom] = useState("");
+  const [custom, setCustom] = useState(initial?.focus ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [limitHit, setLimitHit] = useState(false); // Generate with no videos left (or the server refused it)
+  // The video service could not take it (our blog2video account is out of videos, or it is down): an apology popup.
+  // The user was not charged; the server refunds and alerts us.
+  const [serviceIssue, setServiceIssue] = useState(false);
+  useEffect(() => {
+    onLimit?.(limitHit);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [limitHit]);
   const { playing, play, stop } = useAudio();
 
   /** Notestack voices have no stored sample: the Voice page speaks a line in them. */
@@ -96,7 +111,7 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
 
   const [form, setForm] = useState<VideoOptions>({
     stock_footage_enabled: true,
-    aspect_ratio: "landscape",
+    aspect_ratio: initial?.aspect_ratio === "portrait" ? "portrait" : "landscape",
     video_length: "medium", // no length picker: the server sets it from a house style
     logo_position: "bottom_right",
     logo_opacity: 0.9,
@@ -104,7 +119,7 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
     video_style: "auto",
     ...FALLBACK_COLORS,
     content_language: null,
-    voice_gender: "female",
+    voice_gender: initial?.voice_gender === "male" ? "male" : "female",
     voice_accent: "american",
     bgm_volume: 0.1,
   });
@@ -141,7 +156,12 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
       if (house.length) setForm((f) => (house.some((s) => s.id === f.video_style) ? f : { ...f, video_style: house[0].id }));
     }).catch((e) => setLoadError(errorMessage(e)));
     loadVoices()
-      .then((v) => v.saved[0] && pickVoice(v.saved[0]))
+      .then((v) => {
+        // The first voice, or the first of the gender asked for in the chat (none of it: the built-in voice of it).
+        const want = initial?.voice_gender;
+        const first = want ? v.saved.find((x) => (x.gender === "male" ? "male" : "female") === want) : v.saved[0];
+        if (first) pickVoice(first);
+      })
       .catch(() => setVoices({ saved: [], library: [], notestack: [] }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config?.configured]);
@@ -228,6 +248,11 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
 
   async function submit() {
     setError(null);
+    // No videos left: the wizard can be filled in, but Generate says so instead of asking the server
+    if (left === 0) {
+      setLimitHit(true);
+      return;
+    }
     setBusy(true);
     try {
       const from = sourceFields();
@@ -237,7 +262,11 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
       const a = await videosApi.create({ ...options(), ...from, ...focusFields(), ...(notebook ? { notebook_id: notebook } : {}) });
       navigate(`/app/videos/${a.id}`);
     } catch (e) {
-      setError(errorMessage(e)); // 402 also opens the upgrade popup (api/client.ts)
+      // Out of videos since the quota was read: the wizard gives way to the limit message (402 also opens the
+      // upgrade popup, api/client.ts).
+      if (e instanceof ApiError && e.status === 402) setLimitHit(true);
+      else if (e instanceof ApiError && (e.status === 503 || e.status === 502)) setServiceIssue(true);
+      else setError(errorMessage(e));
       setBusy(false);
     }
   }
@@ -260,10 +289,55 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
     );
   }
 
+  // Generate was clicked with no videos left: the limit message replaces the wizard.
+  if (limitHit) {
+    return (
+      <div className={inModal ? "vw-in-modal" : "page-wrap"}>
+        {!inModal && (
+          <button type="button" className="vw-back"
+                  onClick={() => (window.history.length > 1 ? navigate(-1) : navigate("/app/archive?tab=videos"))}>
+            <ArrowLeftIcon size={16} /> Back
+          </button>
+        )}
+        <section className={`${inModal ? "" : "card "}stack vw-limit`}>
+          {/* In a modal the heading is the modal's own title */}
+          {!inModal && <h2>Video limit reached</h2>}
+          <p className="muted">
+            You have used all of the videos included in your current plan. Upgrade to a bigger plan to keep turning
+            your posts and chats into videos.
+          </p>
+          <div className="row">
+            {/* The upgrade popup, over this dialog (its plan preselected) */}
+            <button type="button" className="btn btn-primary" onClick={() => openUpgrade()}>Upgrade</button>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   const currentVoice = saved.find((v) => v.voice_id === form.custom_voice_id);
 
   return (
     <div className={inModal ? "stack vw-in-modal" : "page-wrap"}>
+      {serviceIssue && (
+        <Modal title="Oops, we are sorry!" onClose={() => setServiceIssue(false)}>
+          <div className="stack">
+            <p className="muted">
+              We have faced some issue generating your video. Please try again in a while, or contact support for
+              help.
+            </p>
+            <div className="row">
+              <button type="button" className="btn btn-primary" onClick={() => {
+                setServiceIssue(false);
+                window.dispatchEvent(new Event(OPEN_SUPPORT_EVENT));
+              }}>
+                Contact support
+              </button>
+              <button type="button" className="btn" onClick={() => setServiceIssue(false)}>OK</button>
+            </div>
+          </div>
+        </Modal>
+      )}
       {inModal ? (
         left !== null && <span className="mono muted small vw-modal-quota">{left} of {quota!.limit} video{quota!.limit === 1 ? "" : "s"} left</span>
       ) : (
@@ -485,12 +559,6 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
             </div>
 
             {error && <ErrorText message={error} />}
-            {left === 0 && (
-              <p className="notice">
-                You have used all your videos{quota?.resets_at ? " this period" : " on your plan"}.{" "}
-                <button type="button" className="link-btn" onClick={() => openUpgrade()}>See plans</button>
-              </p>
-            )}
             <div className="vw-nav">
               <button className="btn" onClick={() => setStep(2)} disabled={busy}>Back</button>
               <button className="btn btn-primary vw-next" onClick={submit} disabled={busy}>

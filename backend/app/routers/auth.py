@@ -56,10 +56,15 @@ def _serialize_user(user: User) -> dict:
     }
 
 
+FEEDBACK_EMAIL_DELAY = timedelta(hours=2)  # a new sign-up hears from the developer this long after signing up
+
+
 def _record_login(db: Session, user: User, created: bool) -> None:
     user.last_login_at = datetime.now(UTC)
+    # A fresh sign-up: one email, the developer's feedback request, scheduled for later (welcome_email_sent_at marks
+    # that it is scheduled, so nobody gets it twice and existing users get nothing).
     if created and not user.welcome_email_sent_at:
-        if email_service.send_welcome(user.email, user.name, str(user.id)):
+        if email_service.send_feedback_request(user.email, str(user.id), at=user.last_login_at + FEEDBACK_EMAIL_DELAY):
             user.welcome_email_sent_at = datetime.now(UTC)
     db.commit()
 

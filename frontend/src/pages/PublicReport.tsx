@@ -193,7 +193,7 @@ function PublicView() {
       </main>
     );
   }
-  if (!shared) return <main className="rp-public"><Loading label="Opening" /></main>;
+  if (!shared) return <main className="rp-public rp-public-loading"><Loading label="Opening" /></main>;
   if (shared.kind === "pending" || shared.kind === "failed") {
     return (
       <PublicShell kind={shared.artifact_type} title={shared.title}>

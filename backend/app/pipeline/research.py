@@ -45,6 +45,7 @@ from app.llm.signatures import (
     TriageWithMemory,
 )
 from app.pipeline import writer
+from app.pipeline.create_intent import parse_create
 from app.pipeline.prefetch import (
     DEEP_PER_POST,
     DEEP_TOP_K,
@@ -83,10 +84,11 @@ class ResearchResult:
     prompt_tokens: int = 0
     completion_tokens: int = 0
     steps: list[tuple[str, str]] = field(default_factory=list)
-    kind: str = "archive"  # archive | chitchat | about_app | off_topic
+    kind: str = "archive"  # archive | chitchat | about_app | off_topic | create
     question: str = ""  # the standalone question that was researched
     recall: dict = field(default_factory=dict)  # how recall behaved for this answer (saved with the message)
     topic: str = ""  # what the answer is about in a few words (from the writer), for the next-step suggestions
+    action: dict | None = None  # kind create: {"artifact", "settings"}, the dialog the app opens with those settings
 
 
 @dataclass
@@ -179,7 +181,13 @@ JEV_INTENT = {
     },
     "about_app": {
         "what": "How to use Notestack itself: sources, notebooks, audio, video, launch kits, settings",
-        "examples": ["How do I add another Substack?", "Can you make a podcast from this?"],
+        "examples": ["How do I add another Substack?", "Where do I find my audio overviews?"],
+    },
+    "create": {
+        "what": "Asks to make something from the posts: an audio overview or podcast, slide deck, video, report, "
+                "infographic, quiz, flashcards or mind map",
+        "examples": ["Create an audio overview of 10 minutes", "Make a slide deck on my pricing posts",
+                     "Quiz me on this, hard questions", "Turn that into an infographic"],
     },
     "off_topic": {
         "what": "General knowledge, coding, math, news, homework or tasks unrelated to the writer's posts",
@@ -230,6 +238,22 @@ _REWRITE = re.compile(r"^\s*(can you |could you |please )?(make (it|that|this) (
                       r"shorten (it|that|this)|(put|format|turn) (it|that|this) (in|into|as)\b|in bullets?\b|"
                       r"as (a )?(list|table|bullets)\b|rephrase|reword|summari[sz]e (that|this|it)\b|"
                       r"translate (it|that|this)\b)", re.IGNORECASE)
+
+
+# An explicit ask to make something, said as a request: "create an audio overview of 10 minutes", "can you make me
+# a hard quiz", "turn this into slides". Questions about the posts ("what did I make of the report?") do not start so.
+_CREATE = re.compile(
+    r"^\s*(please |pls |ok(ay)?,? |now,? |so,? )?((can|could|would|will) you (please )?|i want( you to)?( to)? |"
+    r"i'?d like( you to)?( to)? |let'?s )?"
+    r"(create|make|generate|build|produce|prepare|draft|design|give me|i (want|need) (a|an|some)|turn\b.{0,60}\binto|quiz me|test me)\b"
+    r".{0,80}?\b(audio overviews?|podcasts?|audio|slides?|slide ?decks?|decks?|presentations?|videos?|reports?|"
+    r"infographics?|quiz(zes)?|flash ?cards?|mind ?maps?|(mind )?constellations?|study guides?|briefing docs?)\b"
+    r"|^\s*(please )?(quiz|test) me\b",
+    re.IGNORECASE)
+
+
+def asks_to_create(message: str) -> bool:
+    return bool(_CREATE.search(message))
 
 
 def answer_length_from_text(message: str) -> str | None:
@@ -355,6 +379,9 @@ def _phrase_rules(route: Triage, message: str, history: list[Turn]) -> Triage:
     if route.kind == "off_topic" and _has_answer(history) and refers_back(message):
         route.notes.append("off_topic, but the message refers to the conversation (a follow up) -> archive")
         route.kind, route.reply = "archive", ""
+    if route.kind != "create" and asks_to_create(message):
+        route.notes.append(f"{route.kind}, but the message asks to make something in so many words -> create")
+        route.kind, route.reply = "create", ""
     asked = answer_length_from_text(message)
     if asked and asked != route.detail:
         route.notes.append(f"the message asks for a {asked} answer in so many words -> detail={asked}")
@@ -398,10 +425,10 @@ def triage_llm(message: str, history: list[Turn], notebook: str, mem: ChatMemory
         return Triage("archive", message, "deep", "",
                       notes=[f"triage model failed ({type(exc).__name__}) -> archive, deep"])
     notes: list[str] = []
-    kind = pred.kind if pred.kind in {"archive", "chitchat", "about_app", "off_topic"} else "archive"
+    kind = pred.kind if pred.kind in {"archive", "chitchat", "about_app", "off_topic", "create"} else "archive"
     question = (pred.standalone_question or "").strip() or message
     reply = strip_em_dashes((pred.reply or "").strip())
-    if kind != "archive" and not reply:
+    if kind not in ("archive", "create") and not reply:
         notes.append(f"model said {kind} but wrote no reply -> archive")
         kind = "archive"  # nothing to say without research: research it
     topic, memory = "", "none"
@@ -771,6 +798,24 @@ def research(
     with trace.stage("triage"):
         route = triage(question, history, notebook_brief(notebook_title, allowed), chat_memory)
     _trace_triage(trace, route)
+    if route.kind == "create":
+        action, reply, p_tok, c_tok = None, "", 0, 0
+        with trace.stage("parse-create"):
+            try:
+                action, reply, p_tok, c_tok = parse_create(question, conversation_text(history, limit=4))
+            except Exception:  # never fail the chat over it: the app help says where the Create panel is
+                logging.getLogger(__name__).warning("Could not read the create request %r", question[:200], exc_info=True)
+        recall = {"route": _route_info(route), "triage_detail": _triage_detail(route),
+                  "memory_loaded": chat_memory is not None}
+        prompt, completion = route.prompt_tokens + p_tok, route.completion_tokens + c_tok
+        if action:
+            trace.add("route", f"CREATE: opens the {action['artifact']} settings with {action['settings']} "
+                               "(no research agent)")
+            return ResearchResult(reply, False, [], prompt, completion, kind="create", question=question,
+                                  recall={**recall, "action": action}, action=action)
+        trace.add("route", "CREATE, but the request named nothing the app makes: the app help is sent instead")
+        return ResearchResult(canned_reply("about_app", allowed), False, [], prompt, completion, kind="about_app",
+                              question=question, recall=recall)
     if route.kind != "archive":
         # App help is always the vetted template: a model would invent product facts.
         if context_log_enabled():

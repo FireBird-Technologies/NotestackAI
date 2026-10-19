@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db import SessionLocal
-from app.models import Artifact, B2VVideo, Subscription, Workspace
+from app.models import B2VVideo, Subscription, Workspace
 from app.services import blog2video as b2v
 from app.services.plans import PLANS, effective_plan
 
@@ -34,7 +34,7 @@ LIVE = {"active", "trialing", "past_due"}
 RENEWAL_WINDOW = timedelta(days=45)  # a Stripe renewal this close to the period start does the reset instead
 FAILED = {"failed", "error"}
 FINISHED = {"generated", "done"}
-SWEEP_AFTER = timedelta(minutes=30)  # the sweep only looks at videos older than this (users who closed the tab)
+SWEEP_AFTER = timedelta(minutes=30)  # a create with no blog2video id after this long is refunded (video_status)
 
 
 def add_month(when: datetime) -> datetime:
@@ -174,40 +174,17 @@ def record_status(db: Session, row: B2VVideo, status: str) -> None:
         db.refresh(row)
 
 
-def sweep_failed_videos(session_factory: Callable[[], Session] = SessionLocal) -> int:
-    """Refund videos that failed while nobody was polling (the user closed the tab). Runs from PERIODIC."""
-    if not b2v.configured():
-        return 0
-    cutoff = datetime.now(UTC) - SWEEP_AFTER
-    refunded = 0
-    with session_factory() as db:
-        rows = db.scalars(select(B2VVideo).where(B2VVideo.quota_state == "charged",
-                                                 B2VVideo.status.not_in(FINISHED),
-                                                 B2VVideo.created_at < cutoff)).all()
-        for row in rows:
-            if row.b2v_video_id is None:
-                # The create never got an answer and the request died before refunding.
-                refunded += refund(db, row, "failed")
-                continue
-            try:
-                s = b2v.status(row.b2v_video_id, row.created_via)
-            except b2v.NotFound:
-                s = {"status": "failed", "error": "Video not found"}
-            except b2v.B2VError as e:
-                log.warning("video sweep: status of %s failed: %s", row.b2v_video_id, e)
-                continue
-            raw = str(s.get("status") or "")
-            if s.get("error") and raw not in FAILED:
-                raw = "failed"
-            if raw in FAILED:
-                refunded += refund(db, row, "failed")
-                if row.artifact_id and (a := db.get(Artifact, row.artifact_id)):
-                    a.status = "failed"
-                    a.content_json = {**(a.content_json or {}), "b2v_status": raw, "error": s.get("error")}
-                    db.commit()
-            elif raw:
-                record_status(db, row, raw)
-    return refunded
+def recharge(db: Session, row: B2VVideo) -> bool:
+    """A video refunded as failed that blog2video went on to finish: it is a real video again, so it counts (once,
+    refunded -> kept). True if this call did it."""
+    won = db.execute(update(B2VVideo).where(B2VVideo.id == row.id, B2VVideo.quota_state == "refunded")
+                     .values(quota_state="kept", updated_at=datetime.now(UTC))).rowcount == 1
+    if won:
+        db.execute(update(Subscription).where(Subscription.workspace_id == row.workspace_id)
+                   .values(videos_used=Subscription.videos_used + 1))
+    db.commit()
+    db.refresh(row)
+    return won
 
 
 AI_EDITS_ALERT_BELOW = 200
