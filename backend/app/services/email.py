@@ -155,7 +155,7 @@ class EmailService:
                 to=to,
                 subject="Notestack AI Feedback",
                 html="",
-                text="Hi this is Arslan the dev behind NoteStack AI (notestack.ai)\n"
+                text="Hi,\nThis is Arslan, the dev behind NoteStack AI (notestack.ai).\n"
                      "You signed up to the product, can I learn more about your experience?\n\n"
                      "Will only take 5 mins of your time.\n\n"
                      "Thank you in advance",

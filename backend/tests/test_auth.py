@@ -219,7 +219,7 @@ def test_a_new_sign_up_gets_the_feedback_note_two_hours_later_once(client):
     note = notes[0]
     assert note.to == "writer@example.com" and note.reply_to == settings.alerts_email
     assert before + timedelta(hours=2) - timedelta(minutes=1) <= note.scheduled_at <= datetime.now(UTC) + timedelta(hours=2)
-    assert "Hi this is Arslan the dev behind NoteStack AI (notestack.ai)" in note.text
+    assert note.text.startswith("Hi,\nThis is Arslan, the dev behind NoteStack AI (notestack.ai).")
     assert "Will only take 5 mins of your time." in note.text and "Thank you in advance" in note.text
     assert note.headers and "List-Unsubscribe" in note.headers
     assert note.html == ""  # plain text only
