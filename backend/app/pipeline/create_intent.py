@@ -16,6 +16,7 @@ import dspy
 from app.llm.postprocess import strip_em_dashes
 from app.llm.provider import track_usage, triage_lm
 from app.llm.signatures import ParseCreateRequest
+from app.services import blog2video as b2v
 
 log = logging.getLogger(__name__)
 
@@ -27,7 +28,14 @@ NAMES = {"audio_overview": "audio overview", "slide_deck": "slide deck", "video"
 LANGUAGES = ["English", "Spanish", "French", "German", "Italian", "Portuguese", "Dutch", "Polish", "Hindi", "Arabic",
              "Japanese", "Korean", "Chinese", "Turkish", "Russian", "Indonesian"]
 
+# The video wizard's content_language codes (routers/videos.py LANGUAGES, the same languages in the same order)
+VIDEO_LANGUAGE_CODES = dict(zip(LANGUAGES, ["en", "es", "fr", "de", "it", "pt", "nl", "pl", "hi", "ar", "ja", "ko",
+                                            "zh", "tr", "ru", "id"], strict=True))
+# The wizard's house styles: each sets the video's length (services/b2v_access.py HOUSE_STYLES)
+VIDEO_STYLES = {"overview": "Overview (usually under a minute)", "deep_dive": "Deep dive (usually 1 to 2 minutes)"}
+
 AUDIO_MINUTES = {3: "Short", 6: "Default", 12: "Long"}
+AUDIO_BY_LENGTH = {"short": 3, "default": 6, "long": 12}
 AUDIO_STYLES = {"deep_dive": "Deep Dive", "brief": "Brief", "critique": "Critique", "debate": "Debate"}
 # Slide counts each deck length makes (components/SlideDeck.tsx LENGTHS): the middle of each range is what is compared.
 DECK_LENGTHS = {"short": (6, 8, "Short"), "default": (9, 11, "Default"), "long": (12, 16, "Long")}
@@ -44,7 +52,7 @@ REPORT_TEMPLATES = {"briefing": "Briefing Doc", "study_guide": "Study Guide", "b
 _DARK = re.compile(r"dark|night|black|stellar|space|midnight|blue", re.IGNORECASE)
 _LIGHT = re.compile(r"light|moon|white|paper|orbit|bright", re.IGNORECASE)
 _STYLE_WORDS = {
-    "deep_dive": r"deep|dive|conversation|discussion", "brief": r"brief|short|quick|summary", "critique": r"critiq|review|feedback",
+    "deep_dive": r"deep|dive|conversation|discussion|explainer", "brief": r"brief|bite.?sized", "critique": r"critiq|review|feedback",
     "debate": r"debate|argue|versus|\bvs\b", "flowchart": r"flow|process|steps", "timeline": r"timeline|chronolog|history",
     "compare": r"compar|side by side|versus|\bvs\b", "hierarchy": r"hierarch|tree|parts", "overview": r"overview|key ideas|numbers",
     "presenter": r"present|speaker|talk", "detailed": r"detail|reading|email", "interactive": r"interactive",
@@ -86,6 +94,49 @@ def _word(value: str, choices) -> str | None:
     return None
 
 
+def _length_word(raw: dict) -> str | None:
+    """short, default or long from the length the writer gave in words (none from a bare number)."""
+    v = f"{raw.get('length') or ''}".lower()
+    if re.search(r"short|quick|brief|bite|small|tiny", v):
+        return "short"
+    if re.search(r"long|depth|detail|full|extend|big", v):
+        return "long"
+    if re.search(r"default|normal|medium|standard|regular", v):
+        return "default"
+    return None
+
+
+def _video_template(value: str) -> dict | None:
+    """The built-in template the writer named: the exact name, then the name's words, then its description. None
+    when nothing fits (the wizard can still match one of the workspace's own templates by name)."""
+    want = (value or "").strip().lower()
+    want = re.sub(r"\b(template|style|look|theme|format)s?\b", "", want).strip()
+    if not want:
+        return None
+    try:
+        templates = [t for t in b2v.builtin_templates() if isinstance(t, dict) and t.get("id")]
+    except Exception:  # the catalog unreachable: no template, the wizard keeps its own
+        log.warning("Video templates unavailable for the chat's create request", exc_info=True)
+        return None
+    words = set(_WORD.findall(want)) - _STOP
+    if not words:
+        return None
+    name = lambda t: str(t.get("name") or t.get("id")).lower()  # noqa: E731
+    for t in templates:
+        if name(t) == want or str(t["id"]).lower() == want.replace(" ", "_"):
+            return t
+    for t in templates:
+        if words <= set(_WORD.findall(name(t))) | {str(t["id"]).lower()}:
+            return t
+    for t in templates:
+        if words & set(_WORD.findall(name(t))):
+            return t
+    for t in templates:
+        if words <= set(_WORD.findall(str(t.get("description") or "").lower())):
+            return t
+    return None
+
+
 def _theme(value: str, dark: str, light: str) -> str | None:
     if not (value or "").strip():
         return None
@@ -114,10 +165,13 @@ def snap(artifact: str, raw: dict) -> dict:
     out: dict = {}
     style, lang = raw.get("style") or "", _language(raw.get("language") or "")
     topic, focus = (raw.get("topic") or "").strip(), _focus(raw)
+    length = _length_word(raw)
     if artifact == "audio_overview":
         minutes = _number(raw.get("minutes") or "")
         if minutes is not None:
             out["minutes"] = str(min(AUDIO_MINUTES, key=lambda m: (abs(m - minutes), m)))
+        elif length:
+            out["minutes"] = str(AUDIO_BY_LENGTH[length])
         hosts = _number(raw.get("hosts") or "")
         if hosts in (1, 2):
             out["hosts"] = str(int(hosts))
@@ -133,6 +187,8 @@ def snap(artifact: str, raw: dict) -> dict:
         count = _number(raw.get("slide_count") or "")
         if count is not None:
             out["length"] = min(DECK_LENGTHS, key=lambda k: abs((DECK_LENGTHS[k][0] + DECK_LENGTHS[k][1]) / 2 - count))
+        elif length:
+            out["length"] = length
         if picked := _word(style, DECK_FORMATS):
             out["format"] = picked
         if picked := _theme(raw.get("theme") or "", "dark-space", "light-space"):
@@ -172,16 +228,40 @@ def snap(artifact: str, raw: dict) -> dict:
         if focus:
             out["focus"] = focus
     elif artifact == "video":
+        # The style sets the length (there is no length picker): short is Overview, long is Deep dive
+        minutes = _number(raw.get("minutes") or "")
+        if minutes is not None:
+            out["video_style"] = "overview" if minutes <= 1 else "deep_dive"
+        elif length in ("short", "long"):
+            out["video_style"] = "overview" if length == "short" else "deep_dive"
+        elif re.search(r"deep|dive|explainer|in.?depth", style, re.IGNORECASE):
+            out["video_style"] = "deep_dive"
+        elif re.search(r"overview|summary|quick", style, re.IGNORECASE):
+            out["video_style"] = "overview"
+        if (asked := (raw.get("template") or "").strip()):
+            if picked := _video_template(asked):
+                out["template"] = str(picked["id"])
+            out["template_name"] = asked  # the wizard can still find one of the workspace's own templates by it
         orientation = (raw.get("orientation") or "").lower()
-        if re.search(r"portrait|vertical|tiktok|reel|short|story|9:16", orientation):
+        # "Shorts" (YouTube) is vertical; a "short video" is about length
+        if re.search(r"portrait|vertical|tiktok|reel|shorts|story|9:16", orientation):
             out["aspect_ratio"] = "portrait"
         elif re.search(r"landscape|wide|horizontal|youtube|16:9", orientation):
             out["aspect_ratio"] = "landscape"
         voice = (raw.get("voice") or "").lower()
-        if re.search(r"\bmale|\bman\b|\bmen\b", voice) and not re.search(r"female|woman", voice):
-            out["voice_gender"] = "male"
-        elif re.search(r"female|woman", voice):
-            out["voice_gender"] = "female"
+        if re.search(r"\bnone\b|\bno\b|without|silent|music only|mute", voice):
+            out["voice_gender"] = "none"
+        else:
+            if re.search(r"\bmale|\bman\b|\bmen\b", voice) and not re.search(r"female|woman", voice):
+                out["voice_gender"] = "male"
+            elif re.search(r"female|woman", voice):
+                out["voice_gender"] = "female"
+            if re.search(r"brit|english accent|\buk\b", voice):
+                out["voice_accent"] = "british"
+            elif re.search(r"americ|\bus\b|\busa\b", voice):
+                out["voice_accent"] = "american"
+        if lang:
+            out["content_language"] = VIDEO_LANGUAGE_CODES[lang]
         if focus:
             out["focus"] = focus
     return out
@@ -209,7 +289,9 @@ def reply_text(artifact: str, settings: dict, raw: dict) -> str:
             bits.append(f"{AUDIO_MINUTES[m]} (about {m} min{near})")
         if "style" in settings:
             bits.append(AUDIO_STYLES[settings["style"]])
-        if "hosts" in settings:
+        if settings.get("style") == "debate" and _number(raw.get("hosts") or "") == 1:
+            bits.append("2 hosts (a debate needs two)")
+        elif "hosts" in settings:
             bits.append("1 host" if settings["hosts"] == "1" else "2 hosts")
     elif artifact == "slide_deck":
         if "length" in settings:
@@ -237,12 +319,23 @@ def reply_text(artifact: str, settings: dict, raw: dict) -> str:
         elif "template" in settings:
             bits.append(REPORT_TEMPLATES[settings["template"]])
     elif artifact == "video":
+        if "video_style" in settings:
+            bits.append(VIDEO_STYLES[settings["video_style"]])
+        if "template" in settings:
+            picked = _video_template(raw.get("template") or "")
+            bits.append(f"{(picked or {}).get('name') or settings['template']} template")
         if "aspect_ratio" in settings:
             bits.append("vertical" if settings["aspect_ratio"] == "portrait" else "landscape")
-        if "voice_gender" in settings:
-            bits.append(f"{settings['voice_gender']} voice")
+        if settings.get("voice_gender") == "none":
+            bits.append("no voiceover")
+        elif "voice_gender" in settings or "voice_accent" in settings:
+            who = " ".join(x for x in (settings.get("voice_accent", "").replace("british", "British")
+                                       .replace("american", "American"), settings.get("voice_gender", "")) if x)
+            bits.append(f"{who} voice")
     if settings.get("language"):
         bits.append(f"in {settings['language']}")
+    elif settings.get("content_language"):
+        bits.append(f"in {next(n for n, c in VIDEO_LANGUAGE_CODES.items() if c == settings['content_language'])}")
     about = (raw.get("topic") or "").strip()
     if about:
         bits.append(f"about {about}")
@@ -261,8 +354,8 @@ def parse_create(message: str, conversation: str) -> tuple[dict | None, str, int
     if not artifact:
         return None, "", usage.prompt_tokens, usage.completion_tokens
     raw = {k: str(getattr(pred, k, "") or "").strip() for k in
-           ("minutes", "slide_count", "hosts", "style", "difficulty", "question_types", "theme", "orientation",
-            "voice", "language", "topic", "requests")}
+           ("minutes", "length", "slide_count", "hosts", "style", "difficulty", "question_types", "theme",
+            "orientation", "voice", "template", "language", "topic", "requests")}
     raw = {k: ("" if v.lower() in ("none", "null", "n/a", "-") else v) for k, v in raw.items()}
     for k in ("topic", "requests"):
         if not _from_message(raw[k], message):

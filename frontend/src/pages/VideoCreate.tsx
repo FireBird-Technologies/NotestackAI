@@ -118,9 +118,9 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
     template: "default",
     video_style: "auto",
     ...FALLBACK_COLORS,
-    content_language: null,
-    voice_gender: initial?.voice_gender === "male" ? "male" : "female",
-    voice_accent: "american",
+    content_language: initial?.content_language ?? null,
+    voice_gender: initial?.voice_gender === "male" ? "male" : initial?.voice_gender === "none" ? "none" : "female",
+    voice_accent: initial?.voice_accent === "british" ? "british" : "american",
     bgm_volume: 0.1,
   });
   const set = (patch: Partial<VideoOptions>) => setForm((f) => ({ ...f, ...patch }));
@@ -147,19 +147,33 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
     if (!config?.configured) return;
     videosApi.catalog().then((c) => {
       setCatalog(c);
-      // Start on a random built-in template, unless the form already names a real one.
-      const first = c.templates[Math.floor(Math.random() * c.templates.length)];
-      const known = new Set([...c.my_templates, ...c.templates].map((t) => t.id));
-      if (first) setForm((f) => (known.has(f.template) ? f : { ...f, ...templateFields(first) }));
-      // Start on the first house style (Overview) unless the form already names one on offer.
+      const all = [...c.my_templates, ...c.templates];
+      // The template asked for in the chat: its id, else one (the workspace's own first) whose name matches the words.
+      const words = (initial?.template_name ?? "").toLowerCase().replace(/\b(template|style|look|theme)s?\b/g, "")
+        .split(/[^a-z0-9]+/).filter((w) => w.length > 1);
+      const asked = all.find((t) => t.id === initial?.template)
+        ?? (words.length ? all.find((t) => words.every((w) => t.name.toLowerCase().includes(w))) : undefined);
+      // Otherwise a random built-in template, unless the form already names a real one.
+      const first = asked ?? c.templates[Math.floor(Math.random() * c.templates.length)];
+      const known = new Set(all.map((t) => t.id));
+      if (first) setForm((f) => (!asked && known.has(f.template) ? f : { ...f, ...templateFields(first) }));
+      // The style asked for (Overview is short, Deep dive long), else the first house style unless one is on offer.
       const house = c.video_styles.filter((s) => s.kind === "house");
-      if (house.length) setForm((f) => (house.some((s) => s.id === f.video_style) ? f : { ...f, video_style: house[0].id }));
+      const styleName = initial?.video_style === "deep_dive" ? "deep dive" : initial?.video_style === "overview" ? "overview" : null;
+      const askedStyle = styleName ? c.video_styles.find((s) => (s.name ?? "").toLowerCase() === styleName) : undefined;
+      if (askedStyle) setForm((f) => ({ ...f, video_style: askedStyle.id }));
+      else if (house.length) setForm((f) => (house.some((s) => s.id === f.video_style) ? f : { ...f, video_style: house[0].id }));
     }).catch((e) => setLoadError(errorMessage(e)));
     loadVoices()
       .then((v) => {
-        // The first voice, or the first of the gender asked for in the chat (none of it: the built-in voice of it).
+        // No voiceover asked for: leave it off. Otherwise the first voice, or the first of the gender (and accent)
+        // asked for in the chat; none of it saved: the form keeps that gender and accent for the built-in voice.
         const want = initial?.voice_gender;
-        const first = want ? v.saved.find((x) => (x.gender === "male" ? "male" : "female") === want) : v.saved[0];
+        if (want === "none") return;
+        const accent = initial?.voice_accent;
+        const fits = (x: VideoSavedVoice) => (!want || (x.gender === "male" ? "male" : "female") === want)
+          && (!accent || (x.accent === "british" ? "british" : "american") === accent);
+        const first = want || accent ? v.saved.find(fits) : v.saved[0];
         if (first) pickVoice(first);
       })
       .catch(() => setVoices({ saved: [], library: [], notestack: [] }));

@@ -113,8 +113,11 @@ export type ChatPreset = {
   minutes?: string; hosts?: string; style?: string; language?: string; focus?: string; // audio (style, focus); slides; infographic (style)
   theme?: string; format?: string; length?: string; prompt?: string; // slides (format: detailed | presenter), infographic (theme, prompt)
   level?: string; types?: string[]; // quiz and flashcards
-  about?: string; template?: string; instructions?: string; // report (format: document | interactive)
-  aspect_ratio?: string; voice_gender?: string; // video
+  about?: string; template?: string; instructions?: string; // report (format: document | interactive); video template id
+  aspect_ratio?: string; voice_gender?: string; // video (voice_gender "none": no voiceover)
+  video_style?: string; // video: "overview" | "deep_dive" (the house style, which sets the length)
+  template_name?: string; // video: the template asked for by name (template holds its id when it is built in)
+  voice_accent?: string; content_language?: string; // video: "american" | "british"; a language code
 };
 
 export type ArtifactType = "summary" | "audio_overview" | "video" | "quote_card" | "carousel" | "launch_kit" | "mind_map" | "quiz" | "flashcards" | "report" | "infographic" | "slide_deck" | "upload";
