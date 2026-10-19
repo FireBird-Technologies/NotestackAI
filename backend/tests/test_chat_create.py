@@ -18,8 +18,9 @@ from tests.test_memory import _signup
 
 
 def _raw(**kw):
-    return {k: kw.get(k, "") for k in ("minutes", "slide_count", "hosts", "style", "difficulty", "question_types",
-                                       "theme", "orientation", "voice", "language", "topic", "requests")}
+    return {k: kw.get(k, "") for k in ("minutes", "length", "slide_count", "hosts", "style", "difficulty",
+                                       "question_types", "theme", "orientation", "voice", "template", "language",
+                                       "topic", "requests")}
 
 
 # Snapping to the dialog's options
@@ -73,6 +74,80 @@ def test_the_reply_names_the_closest_match():
     assert text == ("Opening the audio overview settings: Long (about 12 min, the closest to the 10 you asked for), "
                     "about pricing. Check them and press Generate.")
     assert ci.reply_text("quiz", {}, _raw()) == "Opening the quiz settings. Check them and press Generate."
+
+
+def test_audio_length_in_words_and_short_is_not_the_brief_style():
+    got = ci.snap("audio_overview", _raw(length="short", style="short"))
+    assert got == {"minutes": "3"}  # "short" is a length, never the Brief style
+    assert ci.snap("audio_overview", _raw(length="in depth"))["minutes"] == "12"
+    assert ci.snap("audio_overview", _raw(length="normal"))["minutes"] == "6"
+    assert ci.snap("audio_overview", _raw(style="brief"))["style"] == "brief"
+
+
+def test_a_one_host_debate_keeps_debate_and_says_why_it_has_two_hosts():
+    raw = _raw(length="short", hosts="1", style="debate")
+    got = ci.snap("audio_overview", raw)
+    assert got == {"minutes": "3", "hosts": "2", "style": "debate"}
+    assert ci.reply_text("audio_overview", got, raw) == (
+        "Opening the audio overview settings: Short (about 3 min), Debate, 2 hosts (a debate needs two). "
+        "Check them and press Generate.")
+
+
+def test_a_deck_length_in_words():
+    assert ci.snap("slide_deck", _raw(length="long", theme="light"))["length"] == "long"
+    assert ci.snap("slide_deck", _raw(length="quick"))["length"] == "short"
+
+
+TEMPLATES = [{"id": "newscast", "name": "Newscast", "description": "Breaking-news themed template"},
+             {"id": "newspaper", "name": "Newspaper", "description": "Editorial news-style template with headline cards"},
+             {"id": "whiteboard", "name": "Stick Man", "description": "Hand-drawn marker motion"}]
+
+
+@pytest.fixture()
+def templates(monkeypatch):
+    monkeypatch.setattr(ci.b2v, "builtin_templates", lambda: TEMPLATES)
+
+
+def test_a_short_video_on_a_named_template(templates):
+    raw = _raw(length="short", template="newspaper template")
+    got = ci.snap("video", raw)
+    assert got == {"video_style": "overview", "template": "newspaper", "template_name": "newspaper template"}
+    assert ci.reply_text("video", got, raw) == (
+        "Opening the video settings: Overview (usually under a minute), Newspaper template. "
+        "Check them and press Generate.")
+    assert ci.snap("video", _raw(template="stick man"))["template"] == "whiteboard"
+
+
+def test_an_unknown_template_is_not_claimed(templates):
+    raw = _raw(template="neon cyberpunk")
+    got = ci.snap("video", raw)
+    assert "template" not in got and got["template_name"] == "neon cyberpunk"
+    assert "template" not in ci.reply_text("video", got, raw)
+
+
+def test_video_length_style_voice_language_and_orientation(templates):
+    assert ci.snap("video", _raw(length="long"))["video_style"] == "deep_dive"
+    assert ci.snap("video", _raw(minutes="2"))["video_style"] == "deep_dive"
+    assert ci.snap("video", _raw(minutes="1"))["video_style"] == "overview"
+    assert ci.snap("video", _raw(voice="no voiceover")) == {"voice_gender": "none"}
+    assert ci.snap("video", _raw(voice="british male")) == {"voice_gender": "male", "voice_accent": "british"}
+    assert "aspect_ratio" not in ci.snap("video", _raw(orientation="short"))  # a short video, not a vertical one
+    assert ci.snap("video", _raw(orientation="YouTube Shorts"))["aspect_ratio"] == "portrait"
+    raw = _raw(length="long", orientation="vertical", voice="british male", language="Spanish")
+    got = ci.snap("video", raw)
+    assert got == {"video_style": "deep_dive", "aspect_ratio": "portrait", "voice_gender": "male",
+                   "voice_accent": "british", "content_language": "es"}
+    assert ci.reply_text("video", got, raw) == (
+        "Opening the video settings: Deep dive (usually 1 to 2 minutes), vertical, British male voice, in Spanish. "
+        "Check them and press Generate.")
+
+
+def test_report_instructions_and_map_focus_with_requests():
+    got = ci.snap("report", _raw(style="blog post", topic="pricing", requests="keep it under 800 words"))
+    assert got == {"format": "document", "template": "blog_post", "about": "pricing",
+                   "instructions": "keep it under 800 words"}
+    assert ci.snap("mind_map", _raw(topic="growth", requests="only 2024 posts")) == {
+        "focus": "Focus on growth. only 2024 posts"}
 
 
 # Routing

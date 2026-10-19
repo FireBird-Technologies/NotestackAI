@@ -970,20 +970,28 @@ class ParseCreateRequest(dspy.Signature):
     - artifact: audio_overview (also: podcast, audio), slide_deck (slides, deck, presentation), video, report,
       infographic, quiz, flashcards, mind_map (Mind Constellation, map of ideas).
     - minutes: how long an audio overview or video should be, as a number of minutes ("half an hour" is 30).
+    - length: the length in words when they give no number: short ("short", "quick", "bite sized"), default
+      ("normal", "medium", "standard") or long ("long", "in depth", "detailed", "long form", "full").
     - slide_count: how many slides, as a number.
     - hosts: 1 or 2 for an audio overview ("solo", "one voice" is 1; "two hosts", "conversation" is 2).
-    - style: for audio, one of deep_dive, brief, critique, debate. For an infographic layout, one of flowchart,
-      timeline, compare, hierarchy, overview. For a slide deck, detailed or presenter. For a report, document or
-      interactive, or a template: briefing, study_guide, blog_post.
+    - style: for audio, one of deep_dive, brief, critique, debate (brief only when they say "brief" or "bite sized";
+      "short" is a length). For a video, overview or deep_dive ("deep dive", "explainer"). For an infographic
+      layout, one of flowchart, timeline, compare, hierarchy, overview. For a slide deck, detailed or presenter. For
+      a report, document or interactive, or a template: briefing, study_guide, blog_post.
     - difficulty: easy, medium or hard (quiz and flashcards).
     - question_types: for a quiz, any of multiple_choice, fill_blank, short_answer, comma separated.
     - theme: a look or colour they asked for ("dark", "light", "black and blue", "white").
     - orientation: for a video, landscape (wide, horizontal, YouTube) or portrait (vertical, TikTok, Reels, Shorts).
-    - voice: for a video narrator, female or male.
+      A "short video" is about length, not orientation.
+    - voice: for a video narrator: female or male, and an accent when named (american, british); or none when they
+      want no voiceover ("no voiceover", "without narration", "silent", "music only").
+    - template: for a video, the template or visual look they named ("newspaper", "Bloomberg", "stick man",
+      "magazine"), in their words. "A video on the newspaper template" names a template, not a topic.
     - language: the language to make it in, in English ("Spanish"), only when they name one.
     - topic: what it should be about, in a few words, only when the message names a subject or points back at the
       conversation ("this", "that", "it", "what you just said"); then resolve it into the actual subject. Otherwise
-      empty: it is about the whole notebook, whatever the conversation was about.
+      empty: it is about the whole notebook, whatever the conversation was about. Never a setting: a template,
+      length, style, voice or number of hosts is not a topic.
     - requests: anything else they asked for about content, audience or tone, in one sentence. Empty if none."""
 
     conversation: str = dspy.InputField(desc="Recent turns, oldest first")
@@ -991,6 +999,7 @@ class ParseCreateRequest(dspy.Signature):
     artifact: Literal["audio_overview", "slide_deck", "video", "report", "infographic", "quiz", "flashcards",
                       "mind_map", "none"] = dspy.OutputField()
     minutes: str = dspy.OutputField(desc="A number, or empty")
+    length: str = dspy.OutputField(desc="short, default, long, or empty")
     slide_count: str = dspy.OutputField(desc="A number, or empty")
     hosts: str = dspy.OutputField(desc="1, 2, or empty")
     style: str = dspy.OutputField(desc="One of the style words above, or empty")
@@ -998,7 +1007,8 @@ class ParseCreateRequest(dspy.Signature):
     question_types: str = dspy.OutputField(desc="Comma separated quiz question types, or empty")
     theme: str = dspy.OutputField(desc="The look in their words, or empty")
     orientation: str = dspy.OutputField(desc="landscape, portrait, or empty")
-    voice: str = dspy.OutputField(desc="female, male, or empty")
+    voice: str = dspy.OutputField(desc="female or male (with an accent if named), none, or empty")
+    template: str = dspy.OutputField(desc="The video template or look they named, or empty")
     language: str = dspy.OutputField(desc="A language name in English, or empty")
     topic: str = dspy.OutputField(desc="What it is about in a few words, or empty")
     requests: str = dspy.OutputField(desc="Other asks about content, audience or tone, or empty")
