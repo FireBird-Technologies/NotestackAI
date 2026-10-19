@@ -35,6 +35,7 @@ from app.models import (Artifact, B2VVideo, Chat, Document, Message, Notebook, N
 from app.routers.sources import is_locked
 from app.services import b2v_access, video_focus, video_limits, video_quota
 from app.services import blog2video as b2v
+from app.services import video_status as vstatus
 from app.services.artifacts import serialize_artifact
 from app.services.notebook_titles import visible_notebook_title
 from app.services.plans import Plan, plan_limit_error
@@ -66,14 +67,11 @@ LANGUAGES = [("en", "English"), ("es", "Spanish"), ("fr", "French"), ("de", "Ger
              ("ja", "Japanese"), ("ko", "Korean"), ("zh", "Chinese"), ("tr", "Turkish"), ("ru", "Russian"),
              ("id", "Indonesian")]
 
-# blog2video status -> our artifact status
-STATUS_MAP = {"failed": "failed", "error": "failed", "awaiting_stock_footage_review": "review",
-              "awaiting_script_review": "review", "rendering": "rendering"}
-# blog2video's statuses while an edit job runs on a finished video, kept on the artifact as they are so the list and
-# the editor can tell them from first generation: regenerating is a template switch (its relayout).
-JOB_STATUSES = {"regenerating", "voice_regenerating", "language_regenerating", "script_regenerating"}
-# Statuses the video list re-checks with blog2video, in case the work ended while nobody was watching.
-BUSY_STATUSES = JOB_STATUSES | {"generating", "rendering"}
+# blog2video status -> our artifact status: one mapping for every caller (app/services/video_status.py)
+STATUS_MAP = vstatus.STATUS_MAP
+JOB_STATUSES = vstatus.JOB_STATUSES
+# blog2video statuses with a finished, editable video (rendering = making the MP4 of one).
+B2V_READY = {"generated", "done", "rendering"}
 
 
 def b2v_ready(ctx: Ctx = Depends(get_ctx)) -> None:
@@ -100,43 +98,14 @@ def upstream():
         raise HTTPException(e.status if e.status == 503 else 502, str(e)) from None
 
 
-ROW_FIELDS = {"video_url", "preview_url", "title"}
-
-
 def store(ctx: Ctx, a: Artifact, row: B2VVideo | None = None, **fields) -> None:
-    """Merge fields into content_json (and status), and the reference fields into the video's row, committing only
-    when something changed."""
-    if row is not None:
-        for key in ROW_FIELDS & fields.keys():
-            if fields[key] is not None and getattr(row, key) != fields[key]:
-                setattr(row, key, fields[key])
-                ctx.db.commit()
-    content = dict(a.content_json or {})
-    status = fields.pop("status", None)
-    changed = {k: v for k, v in fields.items() if v is not None and content.get(k) != v}
-    if changed or (status and status != a.status):
-        a.content_json = {**content, **changed}
-        if status:
-            a.status = status
-        ctx.db.commit()
+    """Merge fields into content_json (and status), and the reference fields into the video's row."""
+    vstatus.store(ctx.db, a, row, **fields)
 
 
-def sync_status(ctx: Ctx, a: Artifact, row: B2VVideo, s: dict) -> None:
-    raw = str(s.get("status") or "")
-    # The v1 status endpoint calls this `video_url`; some project/job responses use
-    # `r2_video_url`. Treat both as the same finished MP4 so every caller sees it.
-    video_url = s.get("video_url") or s.get("r2_video_url")
-    video_quota.record_status(ctx.db, row, "failed" if s.get("error") and raw not in STATUS_MAP else raw)
-    if s.get("error") or raw in STATUS_MAP:
-        status = STATUS_MAP.get(raw, "failed")
-    elif raw in JOB_STATUSES:
-        status = raw
-    elif s.get("ready") or raw in {"generated", "done"}:
-        status = "ready"
-    else:
-        status = "generating"
-    store(ctx, a, row, status=status, b2v_status=raw or None, step=s.get("step"), video_url=video_url,
-          error=s.get("error"))
+def sync_status(ctx: Ctx, a: Artifact, row: B2VVideo, s: dict) -> str | None:
+    """The artifact's status after blog2video's answer, or None when its first generation failed and it was deleted."""
+    return vstatus.apply_status(ctx.db, a, row, s)
 
 
 # The wizard's options (every field of blog2video's 3 steps)
@@ -739,24 +708,13 @@ def list_videos(ctx: Ctx = Depends(get_ctx), limit: int = 30, offset: int = 0):
     rows = {r.artifact_id: r for r in ctx.db.scalars(
         select(B2VVideo).where(B2VVideo.artifact_id.in_([a.id for a in arts])))} if arts else {}
     _refresh_titles(ctx, [(a, rows[a.id]) for a in arts if a.id in rows])
-    _refresh_busy(ctx, [(a, rows[a.id]) for a in arts if a.id in rows])
+    gone = vstatus.refresh_busy(ctx.db, [(a, rows[a.id]) for a in arts if a.id in rows])
     out = []
-    for a in arts:
+    for a in [a for a in arts if a.id not in gone]:
         row, content = rows.get(a.id), a.content_json or {}
         out.append({**serialize_artifact(a), "source_url": row.source_url if row else None,
                     "scenes": content.get("scenes"), "b2v_status": (row.status if row else content.get("b2v_status"))})
     return out
-
-
-def _refresh_busy(ctx: Ctx, pairs: list[tuple[Artifact, B2VVideo]], limit: int = 10) -> None:
-    """Ask blog2video about videos still generating, rendering or in an edit job, so one that finished (or failed)
-    while nobody had it open shows its real state. A few per page; a blog2video hiccup leaves the stored status."""
-    busy = [(a, r) for a, r in pairs if a.status in BUSY_STATUSES and r.b2v_video_id is not None][:limit]
-    for a, row in busy:
-        try:
-            sync_status(ctx, a, row, b2v.status(row.b2v_video_id, row.created_via))
-        except b2v.B2VError as e:
-            log.info("status refresh for video %s skipped: %s", row.b2v_video_id, e)
 
 
 def _legacy(a: Artifact) -> dict:
@@ -788,7 +746,16 @@ def widget_video_status(response: Response, ticket: str = Body(media_type="text/
         raise HTTPException(404, "Not found")
     ctx = Ctx(user=user, workspace=workspace, db=db)
     info = video_status(artifact_id, ctx, None)
-    a, vid, row = b2v_access.owned_video(ctx, artifact_id)
+    try:
+        a, vid, row = b2v_access.owned_video(ctx, artifact_id)
+    except HTTPException as e:
+        if e.status_code != 404:
+            raise
+        # Its first generation failed and the video was removed (refunded): say so.
+        return {"kind": "video", "artifact_id": str(artifact_id), "status": "failed", "ready": False,
+                "title": info.get("title") or "Video", "video_url": None, "preview_url": None,
+                "error": info.get("error") or "Video generation failed.",
+                "open_url": f"{settings.frontend_url.rstrip('/')}/app/videos/{artifact_id}"}
     video_url = info.get("video_url")
     live_preview = info.get("preview_url")
     content = a.content_json or {}
@@ -829,20 +796,25 @@ def video_status(artifact_id: uuid.UUID, ctx: Ctx = Depends(get_ctx), _: None = 
         if e.status_code != 404:
             raise
         s = {"status": "failed", "error": "The video service lost this video."}
-    sync_status(ctx, a, row, s)
+    title = row.title or (a.content_json or {}).get("title") or "Video"
+    if sync_status(ctx, a, row, s) is None:
+        # Its first generation failed: refunded and deleted. This answer still says so, once.
+        return {**s, "video_id": vid, "artifact_status": "failed", "title": title, "ready": False,
+                "video_url": None, "preview_url": None}
     # Return the persisted URL as a fallback. It may have been learned by an
     # earlier status poll even when a later upstream response omits it.
     video_url = s.get("video_url") or s.get("r2_video_url") or row.video_url or (a.content_json or {}).get("video_url")
     live_preview = row.preview_url or (a.content_json or {}).get("preview_url")
+    # Ready is blog2video's own answer: it sets `generated` only once every scene has its voiceover and clips. A stored
+    # preview link says nothing about that (the editor can mint one mid-generation), so it must not count as ready.
     # `generated` means the editable live preview is ready. An MP4 only exists
     # after the writer explicitly renders/downloads it, so chat clients must not
     # wait for video_url before showing the finished video.
-    if (s.get("ready") or str(s.get("status") or "") in {"generated", "done"}) and not live_preview:
+    ready = bool(s.get("ready")) or str(s.get("status") or "") in B2V_READY
+    if ready and not live_preview:
         live_preview = preview_url(ctx, a, vid, row)
-    return {**s, "video_id": vid, "artifact_status": a.status,
-            "title": row.title or (a.content_json or {}).get("title") or "Video",
-            "ready": bool(video_url or live_preview) or bool(s.get("ready")),
-            "video_url": video_url, "preview_url": live_preview}
+    return {**s, "video_id": vid, "artifact_status": a.status, "title": title,
+            "ready": ready, "video_url": video_url, "preview_url": live_preview}
 
 
 def preview_url(ctx: Ctx, a: Artifact, vid: int, row: B2VVideo | None = None) -> str | None:
@@ -882,18 +854,22 @@ def _enrich(project: dict) -> dict:
             code = {}
         custom = str(project.get("template") or "").startswith("custom_")
         props = (code.get("layoutConfig") if custom else code.get("layoutProps")) or {}
+        # blog2video writes a scene's still or clip into layoutProps on every template (custom ones too)
+        media_props = [p for p in (code.get("layoutProps"), code.get("layoutConfig")) if isinstance(p, dict)]
         audio = None
         if sc.get("voiceover_path"):
             name = re.split(r"[/\\]", sc["voiceover_path"])[-1]
             asset = latest.get(("audio", name))
             audio = _media_url(pid, asset, "audio", name) + (f"?v={asset['id']}" if asset else "")
-        pics = []
+        pics, seen = [], set()
         # Stills sit in assignedImage(s); a stock clip in assignedVideo(s). Both fill the scene's visual slot.
         for key in ("assignedImage", "assignedImages", "image", "images", "assignedVideo", "assignedVideos"):
-            vals = props.get(key)
+            vals = [v for mp in media_props for v in ([mp.get(key)] if isinstance(mp.get(key), str)
+                                                      else mp.get(key) if isinstance(mp.get(key), list) else [])]
             clip = key.startswith("assignedVideo")
-            for name in ([vals] if isinstance(vals, str) else vals if isinstance(vals, list) else []):
-                if isinstance(name, str) and name and not name.startswith("http"):
+            for name in vals:
+                if isinstance(name, str) and name and not name.startswith("http") and name not in seen:
+                    seen.add(name)
                     first, second = ("video", "image") if clip else ("image", "video")
                     asset = latest.get((first, name)) or latest.get((second, name))
                     kind = asset.get("asset_type") if asset else first
@@ -922,8 +898,11 @@ def get_video(artifact_id: uuid.UUID, ctx: Ctx = Depends(get_ctx), _: None = Dep
         _set_title(ctx, row, a, project.get("name"))
     rendered_url = project.get("r2_video_url") or row.video_url or (a.content_json or {}).get("video_url")
     store(ctx, a, row, video_url=rendered_url, scenes=len(project.get("scenes") or []) or None)
+    # The preview link is minted only for a finished video: mid-generation the embed would show a half-made project.
+    live = preview_url(ctx, a, vid, row) if str(project.get("status") or "") in B2V_READY \
+        else row.preview_url or (a.content_json or {}).get("preview_url")
     return {"video_id": vid, "status": project.get("status"), "project": _enrich(project),
-            "preview_url": preview_url(ctx, a, vid, row), "video_url": rendered_url,
+            "preview_url": live, "video_url": rendered_url,
             "artifact": serialize_artifact(a)}
 
 

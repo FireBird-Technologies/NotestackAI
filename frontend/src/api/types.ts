@@ -101,6 +101,20 @@ export type ChatMessage = {
   feedback?: AnswerFeedback | null;
   /** What an answer is about in a few words ("BlogHub's featured listings"); "" when there is none. */
   topic?: string;
+  /** A "create a quiz" answer: the dialog it opened and the settings it opened with. */
+  action?: ChatAction | null;
+};
+
+export type ChatArtifact = "audio_overview" | "slide_deck" | "video" | "report" | "infographic" | "quiz" | "flashcards" | "mind_map";
+/** What the chat asked the page to open: an artifact's settings dialog, preset to what the writer asked for (the
+ * server snaps each value to an option the dialog offers: backend/app/pipeline/create_intent.py). */
+export type ChatAction = { artifact: ChatArtifact; settings: ChatPreset };
+export type ChatPreset = {
+  minutes?: string; hosts?: string; style?: string; language?: string; focus?: string; // audio (style, focus); slides; infographic (style)
+  theme?: string; format?: string; length?: string; prompt?: string; // slides (format: detailed | presenter), infographic (theme, prompt)
+  level?: string; types?: string[]; // quiz and flashcards
+  about?: string; template?: string; instructions?: string; // report (format: document | interactive)
+  aspect_ratio?: string; voice_gender?: string; // video
 };
 
 export type ArtifactType = "summary" | "audio_overview" | "video" | "quote_card" | "carousel" | "launch_kit" | "mind_map" | "quiz" | "flashcards" | "report" | "infographic" | "slide_deck" | "upload";

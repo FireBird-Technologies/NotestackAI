@@ -1,4 +1,7 @@
-from app.services.email import ConsoleEmailProvider
+from datetime import UTC, datetime, timedelta
+
+from app.config import settings
+from app.services.email import ConsoleEmailProvider, OutgoingEmail, ResendEmailProvider
 from tests.conftest import last_code
 
 
@@ -13,7 +16,7 @@ def _signup(client, email="writer@example.com", password="stardust-42"):
 def test_signup_login_me_logout(client):
     data = _signup(client)
     assert data["created"] is True
-    assert any(e.subject == "Welcome to Notestack" for e in ConsoleEmailProvider.sent)
+    assert not any(e.subject == "Welcome to Notestack" for e in ConsoleEmailProvider.sent)  # replaced by the note below
     headers = {"Authorization": f"Bearer {data['access_token']}"}
     assert client.get("/api/auth/me", headers=headers).json()["email"] == "writer@example.com"
 
@@ -206,3 +209,40 @@ def test_google_id_token_check_allows_for_a_laptop_clock_that_runs_behind(monkey
     monkeypatch.setattr(auth_router.google_id_token, "verify_oauth2_token", verify)
     auth_router.exchange_google_code("code")
     assert seen == [auth_router.GOOGLE_CLOCK_SKEW_SECONDS] and seen[0] >= 5
+
+
+def test_a_new_sign_up_gets_the_feedback_note_two_hours_later_once(client):
+    before = datetime.now(UTC)
+    data = _signup(client)
+    notes = [e for e in ConsoleEmailProvider.sent if e.subject == "Notestack AI Feedback"]
+    assert len(notes) == 1
+    note = notes[0]
+    assert note.to == "writer@example.com" and note.reply_to == settings.alerts_email
+    assert before + timedelta(hours=2) - timedelta(minutes=1) <= note.scheduled_at <= datetime.now(UTC) + timedelta(hours=2)
+    assert note.text.startswith("Hi,\nThis is Arslan, the dev behind NoteStack AI (notestack.ai).")
+    assert "Will only take 5 mins of your time." in note.text and "Thank you in advance" in note.text
+    assert note.headers and "List-Unsubscribe" in note.headers
+    assert note.html == ""  # plain text only
+
+    r = client.post("/api/auth/email/login", json={"email": "writer@example.com", "password": "stardust-42"})
+    assert r.status_code == 200 and data["created"] is True
+    assert len([e for e in ConsoleEmailProvider.sent if e.subject == "Notestack AI Feedback"]) == 1  # not again
+
+
+def test_resend_is_asked_to_hold_a_scheduled_email(monkeypatch):
+    sent = {}
+
+    class FakeEmails:
+        @staticmethod
+        def send(params):
+            sent.update(params)
+            return {"id": "em_1"}
+
+    provider = ResendEmailProvider.__new__(ResendEmailProvider)
+    provider._resend = type("R", (), {"Emails": FakeEmails})
+    at = datetime(2026, 10, 20, 12, 0, tzinfo=UTC)
+    assert provider.send(OutgoingEmail(to="a@b.c", subject="s", html="h", text="t", scheduled_at=at)) == "em_1"
+    assert sent["scheduled_at"] == at.isoformat() and sent["html"] == "h"
+    sent.clear()
+    provider.send(OutgoingEmail(to="a@b.c", subject="s", html="", text="just text"))
+    assert "html" not in sent and sent["text"] == "just text"  # a plain text email sends no HTML part

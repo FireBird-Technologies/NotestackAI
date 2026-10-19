@@ -88,7 +88,7 @@ export function Pills<T extends string>({ label, value, options, onChange }: {
 /** What it is made from (chats, or a notebook's posts, or a single post) and what to focus on (suggested cards or your
  * own topic): the video wizard's first step, shared by the quiz, flashcard and report dialogs. Holds its own state
  * and reports the choice through onChange. */
-export function SourceFocusFields({ notebookId, chats, currentChatId, preselectChat = false, largeSelection = false, what, columns = false, extra, below, noFocus = false, onChange }: {
+export function SourceFocusFields({ notebookId, chats, currentChatId, preselectChat = false, largeSelection = false, what, columns = false, extra, below, noFocus = false, initialCustom, onChange }: {
   notebookId: string;
   chats: ChatSummary[];
   /** The chat open beside the dialog. */
@@ -107,6 +107,8 @@ export function SourceFocusFields({ notebookId, chats, currentChatId, preselectC
   below?: ReactNode;
   /** No focus cards and no custom topic (the report's own instructions say what it should be about). */
   noFocus?: boolean;
+  /** A custom topic to start with (asked for in the chat: "a quiz on pricing"). */
+  initialCustom?: string;
   onChange: (s: SourceSelection) => void;
 }) {
   const limits = useArtifactLimits();
@@ -120,7 +122,7 @@ export function SourceFocusFields({ notebookId, chats, currentChatId, preselectC
   const [topics, setTopics] = useState<VideoFocusTopic[] | null>(null);
   const topicsFor = useRef(""); // the key of the suggestions shown or on their way
   const [focus, setFocus] = useState<VideoFocusTopic | null>(null);
-  const [custom, setCustom] = useState("");
+  const [custom, setCustom] = useState((initialCustom ?? "").slice(0, 500));
 
   // Posts, chats, or both together.
   const sourceReady = chatIds.length > 0 || postIds.length > 0;

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ApiError } from "../api/client";
 import { videoEditApi, videosApi, type LayoutInfo, type LayoutSchema } from "../api/endpoints";
-import type { LegacyVideo, ScriptScene, VideoCatalog, VideoConfig, VideoJobState, VideoProject, VideoStatus } from "../api/types";
+import type { LegacyVideo, ScriptScene, VideoCatalog, VideoConfig, VideoJobState, VideoProject, VideoProjectData, VideoStatus } from "../api/types";
 import { CheckIcon, DownloadIcon, SparkleIcon } from "../components/icons/Icons";
 import { ConfirmButton, ErrorText, errorMessage, Loading, Modal, PageHeader, StatusPill, Tabs, VIDEO_UPDATING } from "../components/ui";
 import { ImagesPanel, VoicePanel, type PanelProps } from "../components/video/EditorPanels";
@@ -10,13 +10,40 @@ import { LookPanel } from "../components/video/SettingsPanel";
 import { SceneList } from "../components/video/SceneList";
 import { PhoneIcon, ScreenIcon } from "../components/video/parts";
 import { usePoll } from "../hooks/usePoll";
+import { useMediaPreload, type MediaItem } from "../hooks/useMediaPreload";
 import { finished, jobPercent } from "../components/video/jobState";
 import { useUpgrade } from "../hooks/useUpgrade";
 import { ShareButton } from "../components/ShareDialog";
 import { CardFeedback } from "../components/CardFeedback";
 
 const STEPS = ["Reading the source", "Writing the script", "Building scenes", "Finishing"];
+// After blog2video says ready, every scene's files are fetched before the preview: still part of Finishing
+const LOADING_STEP = STEPS.length;
+const FINISH_CAP_MS = 90_000; // loading media never holds the editor back longer than this
 const REVIEW = new Set(["awaiting_stock_footage_review", "awaiting_script_review"]);
+// blog2video's statuses for a finished, editable video. Before that it says created / scraped / scripted (steps 1-3:
+// reading, script, scenes with their voiceovers and clips), and only sets generated once every scene is done.
+const B2V_READY = new Set(["generated", "done", "rendering"]);
+// Failed is blog2video saying so: an `error` beside another status can be left over from an earlier run.
+const isFailed = (s: VideoStatus) => s.status === "failed" || s.status === "error";
+
+/** Every file the scenes use (images, clips, voiceovers), and whether all of them exist yet: each scene has its
+ *  voiceover (unless the video has no voice) and each picture or clip has its asset. */
+function mediaOf(p: VideoProjectData): { items: MediaItem[]; complete: boolean } {
+  const scenes = p.scenes ?? [];
+  const voiced = p.voice_gender !== "none";
+  const items: MediaItem[] = [];
+  let complete = scenes.length > 0;
+  for (const sc of scenes) {
+    if (sc.audio_url) items.push({ url: sc.audio_url, kind: "audio" });
+    else if (voiced) complete = false;
+    for (const img of sc.images ?? []) {
+      if (img.asset_id === null) complete = false;
+      items.push({ url: img.url, kind: img.kind === "video" ? "video" : "image" });
+    }
+  }
+  return { items, complete };
+}
 
 type Panel = "scenes" | "images" | "audio" | "settings";
 
@@ -110,6 +137,12 @@ function JobProgress({ label, name, state }: { label: string; name: string; stat
   );
 }
 
+/** Ready by blog2video's own status, not only the flag: a stale "ready" can never end the progress screen while it
+ *  still reports created / scraped / scripted. An edit job's status counts (the job has its own screen). */
+function isReady(s: VideoStatus): boolean {
+  return s.ready && (B2V_READY.has(s.status) || s.status in JOBS);
+}
+
 export default function VideoEditor() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
@@ -195,12 +228,43 @@ export default function VideoEditor() {
     intervalMs: 4000,
     key: `${id}:${genKey}`,
     // Also stops on an edit job's status: that job has its own poll (below), not this one.
-    until: (s) => !!s.legacy || s.ready || !!s.error || s.status === "failed" || REVIEW.has(s.status) || s.status in JOBS,
+    until: (s) => !!s.legacy || isReady(s) || isFailed(s) || REVIEW.has(s.status) || s.status in JOBS,
   });
   const status = gen.data;
+  // A failed first generation is refunded and deleted on the server: reloading would only find it gone, and replace
+  // the "could not be made" screen with "not found".
+  const genFailed = !!status && isFailed(status);
   useEffect(() => {
-    if (gen.done) reload();
-  }, [gen.done, reload]);
+    if (gen.done && !genFailed) reload();
+  }, [gen.done, genFailed, reload]);
+
+  // After a generation watched here (not on opening a finished video): once blog2video says ready, keep the progress
+  // screen up until every scene's files exist and have loaded, so the preview opens once, on the whole video, instead
+  // of starting while its media is still arriving and buffering again and again.
+  const [finishing, setFinishing] = useState(false);
+  const storedGenerating = ["generating", "pending"].includes(project?.artifact.status ?? "");
+  const genRunning = !!status && !isReady(status) && !isFailed(status) && !REVIEW.has(status.status)
+    && !(status.status in JOBS);
+  useEffect(() => {
+    if (genRunning || (!status && storedGenerating)) setFinishing(true);
+  }, [genRunning, status, storedGenerating]);
+  const genReady = !!status && isReady(status) && !(status.status in JOBS);
+  const finishingNow = finishing && genReady;
+  // The scenes and their files, asked again until each one exists
+  const media = project ? mediaOf(project.project) : null;
+  usePoll<VideoProject | LegacyVideo>(finishingNow && !media?.complete ? () => videosApi.get(id).then((p) => {
+    setProject(p);
+    return p;
+  }) : null, { intervalMs: 4000, key: `media:${id}`, until: (p) => !!p.legacy || mediaOf(p.project).complete });
+  const preload = useMediaPreload(finishingNow && media?.complete ? media.items : null);
+  useEffect(() => {
+    if (finishingNow && preload.done) setFinishing(false);
+  }, [finishingNow, preload.done]);
+  useEffect(() => {
+    if (!finishingNow) return;
+    const t = setTimeout(() => setFinishing(false), FINISH_CAP_MS); // a file that never comes does not trap the screen
+    return () => clearTimeout(t);
+  }, [finishingNow]);
 
   // One background job at a time (template, voice, language, add scene, script refresh, render).
   const job = usePoll<VideoJobState | null>(running ? running.poll : null, { intervalMs: 3000, key: running, until: finished });
@@ -294,22 +358,23 @@ export default function VideoEditor() {
   if (!project && !status) return <div className="loading-center full"><Loading label="Loading video" /></div>;
 
   const title = project?.artifact.title ?? "Video";
-  const failed = !!status && (!!status.error || status.status === "failed");
+  const failed = genFailed;
   // Until the first /status answer, our stored status decides (as for edit jobs), so reopening a video that is still
   // being made goes straight to its progress screen instead of showing the editor first.
   const stored = !status && genKey === 0 ? project?.artifact.status : null;
   // First generation only: an edit job on a finished video has its own progress screen.
-  const generating = status
-    ? !status.ready && !failed && !REVIEW.has(status.status) && !(status.status in JOBS)
-    : stored === "generating" || stored === "pending";
+  const generating = finishingNow || (status
+    ? !isReady(status) && !failed && !REVIEW.has(status.status) && !(status.status in JOBS)
+    : stored === "generating" || stored === "pending");
   // Stored as waiting on a review or failed: /status says which screen, so the editor stays hidden until it answers.
   const awaiting = stored === "review" || stored === "failed";
-  const step: number = status?.step ?? (typeof project?.artifact.content?.step === "number" ? project.artifact.content.step : 1);
+  const step: number = finishingNow ? LOADING_STEP
+    : status?.step ?? (typeof project?.artifact.content?.step === "number" ? project.artifact.content.step : 1);
   // The live preview only while blog2video says the video is ready (generated / done, or rendering its MP4). The preview link is minted once
   // and kept, so it is there in every state; mid-job it would show a half-changed video. Until /status answers, our
   // stored status decides.
   const previewReady = status
-    ? (status.ready || ["generated", "done", "rendering"].includes(status.status)) && JOBS[status.status]?.view !== "bar"
+    ? B2V_READY.has(status.status) && JOBS[status.status]?.view !== "bar"
     : ["ready", "rendering"].includes(project?.artifact.status ?? "");
   // The pill follows blog2video during an edit job, so it agrees with the screen even before our copy catches up.
   const pillStatus = status?.status && status.status in JOBS ? status.status : project?.artifact.status;
@@ -446,7 +511,7 @@ export default function VideoEditor() {
                     pushes every change to the embed over its live channel and the player refetches by itself (forcing a
                     remount as well made it load twice). */}
                 <iframe key={portrait ? "portrait" : "landscape"} src={embedUrl(project.preview_url)} title="Live preview"
-                        allow="autoplay; fullscreen" allowFullScreen loading="lazy" />
+                        allow="autoplay; fullscreen" allowFullScreen />
               </div>
             ) : project.preview_url ? (
               <div className={`vw-preview vw-preview-wait${portrait ? " portrait" : ""}`} role="status">

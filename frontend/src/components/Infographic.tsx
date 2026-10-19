@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { artifactsApi, type GenerateBody } from "../api/endpoints";
-import type { Artifact, ChatSummary } from "../api/types";
+import type { Artifact, ChatPreset, ChatSummary } from "../api/types";
 import { SourceFocusFields, sourceSummary, type SourceSelection } from "./SourceFocusFields";
 import { ArtifactFeedback } from "./ArtifactFeedback";
 import { ShareDialog } from "./ShareDialog";
@@ -142,7 +142,7 @@ export function ThemePicker({ value, onChange, disabled = false }: { value: stri
 }
 
 /** The infographic settings: what it is made from (posts and/or chats), what it should show, and a theme. */
-export function InfographicDialog({ notebookId, chats, currentChatId, busy, error, onClose, onCreate, title = "Infographic" }: {
+export function InfographicDialog({ notebookId, chats, currentChatId, busy, error, onClose, onCreate, title = "Infographic", initial }: {
   notebookId: string;
   chats: ChatSummary[];
   currentChatId?: string | null;
@@ -151,11 +151,13 @@ export function InfographicDialog({ notebookId, chats, currentChatId, busy, erro
   onClose: () => void;
   onCreate: (body: InfographicRequest) => void;
   title?: string;
+  /** Settings asked for in the chat ("a timeline infographic"), already snapped to these options. */
+  initial?: ChatPreset;
 }) {
   const [sel, setSel] = useState<SourceSelection | null>(null);
-  const [theme, setTheme] = useState<string>("midnight");
-  const [style, setStyle] = useState<string>("auto");
-  const [prompt, setPrompt] = useState("");
+  const [theme, setTheme] = useState<string>(() => INFOGRAPHIC_THEMES.find((t) => t.id === initial?.theme)?.id ?? "midnight");
+  const [style, setStyle] = useState<string>(() => INFOGRAPHIC_STYLES.find((t) => t.id === initial?.style)?.id ?? "auto");
+  const [prompt, setPrompt] = useState((initial?.prompt ?? "").slice(0, 600));
 
   return (
     <Modal title={title} onClose={onClose} wide>
