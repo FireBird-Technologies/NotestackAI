@@ -233,7 +233,7 @@ export const voiceApi = {
       use_as,
     }),
   preview: (voice_id: string, opts: { text?: string; host?: "host_a" | "host_b"; delivery?: Delivery } = {}) =>
-    post<{ url: string; seconds: number }>("/api/voice/preview", { voice_id, ...opts }),
+    post<{ url: string; seconds: number | null }>("/api/voice/preview", { voice_id, ...opts }),
   readingScript: () => api<{ title: string; text: string; words: number }>("/api/voice/reading-script"),
   quota: () => api<Quota>("/api/voice/quota"),
   revoke: () => del<VoiceState>("/api/voice/consent"),

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { videosApi, videoVoicesApi, voiceApi } from "../api/endpoints";
+import { videosApi, videoVoicesApi } from "../api/endpoints";
+import { prefetchVoicePreviews, voicePreviewUrl } from "../components/voice/YourVoices";
 import { ApiError } from "../api/client";
 import type {
   ChatPreset,
@@ -106,7 +107,7 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
   function playVoice(v: VideoSavedVoice) {
     if (v.source !== "notestack") return play(v.voice_id, v.preview_url);
     if (playing === v.voice_id) return stop();
-    voiceApi.preview(v.voice_id).then((r) => play(v.voice_id, r.url)).catch((e) => setError(errorMessage(e)));
+    voicePreviewUrl(v.voice_id).then((url) => play(v.voice_id, url)).catch((e) => setError(errorMessage(e)));
   }
 
   const [form, setForm] = useState<VideoOptions>({
@@ -129,6 +130,7 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
   const loadVoices = useCallback(
     () => videoVoicesApi.list().then((v) => {
       setVoices(v);
+      prefetchVoicePreviews(v.saved); // the workspace's own voices: their samples ready before a play
       return v;
     }),
     [],
@@ -173,7 +175,9 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
         const accent = initial?.voice_accent;
         const fits = (x: VideoSavedVoice) => (!want || (x.gender === "male" ? "male" : "female") === want)
           && (!accent || (x.accent === "british" ? "british" : "american") === accent);
-        const first = want || accent ? v.saved.find(fits) : v.saved[0];
+        // A built-in voice to start with: the workspace's own (its clone, say) only when picked.
+        const builtIn = v.saved.filter((x) => x.source !== "notestack");
+        const first = want || accent ? builtIn.find(fits) : builtIn[0];
         if (first) pickVoice(first);
       })
       .catch(() => setVoices({ saved: [], library: [], notestack: [] }));
@@ -198,8 +202,9 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
   const houseStyles = listed.some((s) => s.kind === "house");
   const styles: VideoStyleItem[] = houseStyles ? listed : [{ id: "auto", name: "Auto", kind: "builtin" }, ...listed];
   const picked = styles.find((s) => s.id === form.video_style);
-  // A video speaks in a free built-in voice; a Notestack voice (made on the Voice page) is for audio overviews.
-  const saved = (voices?.saved ?? []).filter((v) => v.source !== "notestack");
+  // Every saved voice, the workspace's own included (its clone, designed and added voices): blog2video shares the
+  // ElevenLabs account.
+  const saved = voices?.saved ?? [];
   const left = quota ? Math.max(quota.limit - quota.used, 0) : null;
 
   function pickTemplate(t: VideoTemplate) {

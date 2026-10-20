@@ -1162,6 +1162,12 @@ def test_voice_library_preview_and_script(client, auth, monkeypatch, feed, run_j
                                                    "delivery": {"stability": 0.3, "similarity_boost": 0.8,
                                                                 "style": 0, "speed": 0.9}}, headers=auth).json()
     assert prev["seconds"] == 0.5 and client.get(prev["url"].split("8000", 1)[1]).status_code == 200
+    # Played again: served from the cache at once, no new speech and nothing metered
+    monkeypatch.setattr(tts, "synthesize", lambda *a, **k: pytest.fail("a cached preview was spoken again"))
+    again = client.post("/api/voice/preview", json={"voice_id": "added-lib-voice-1", "text": "Hello there",
+                                                    "delivery": {"stability": 0.3, "similarity_boost": 0.8,
+                                                                 "style": 0, "speed": 0.9}}, headers=auth).json()
+    assert again["url"].split("?")[0] == prev["url"].split("?")[0]
 
     connect(client, auth, run_jobs)
     script = client.get("/api/voice/reading-script", headers=auth).json()

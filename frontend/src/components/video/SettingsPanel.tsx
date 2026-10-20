@@ -181,8 +181,8 @@ export function LookPanel(p: PanelProps & { catalog: VideoCatalog | null }) {
   }, [pr]);
 
   useEffect(() => {
-    // A video speaks in the free built-in voices; a Notestack voice (made on the Voice page) is for audio overviews.
-    videoVoicesApi.list().then((v) => setVoices(v.saved.filter((x) => x.source !== "notestack"))).catch(() => undefined);
+    // Every saved voice, the workspace's own included (blog2video shares the ElevenLabs account).
+    videoVoicesApi.list().then((v) => setVoices(v.saved)).catch(() => undefined);
   }, []);
 
   const templates = [...(p.catalog?.my_templates ?? []), ...(p.catalog?.templates ?? [])];

@@ -130,6 +130,11 @@ def _cache_key(workspace_id, text: str, voice_id: str, vs: VoiceSettings, varian
     return keys.tts_cache(workspace_id, text, voice_id, json.dumps(vs.body(), sort_keys=True) + model_id() + variant)
 
 
+def clip_key(workspace_id, text: str, voice_id: str, voice_settings: VoiceSettings | None = None) -> str:
+    """Where `synthesize` keeps a line spoken on its own (no neighbours): a preview can be served from it directly."""
+    return _cache_key(workspace_id, text, voice_id, voice_settings or VoiceSettings(), OUTPUT + "||")
+
+
 def synthesize(workspace_id, text: str, voice_id: str, voice_settings: VoiceSettings | None = None,
                previous_text: str | None = None, next_text: str | None = None) -> bytes:
     vs = voice_settings or VoiceSettings()

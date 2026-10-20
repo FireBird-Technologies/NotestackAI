@@ -235,7 +235,10 @@ export function RenderVideoModal({ video, onClose, onRendered }: {
             </span>
           </>
         )}
-        {step === "done" && <p className="muted">The MP4 is ready. Schedule it now, or pick it from the list later.</p>}
+        {step === "done" && (
+          <p className="muted">The MP4 is ready. Schedule it now, or pick it from the list later. We've also emailed you a
+            link to download it.</p>
+        )}
         {error && <p className="error-text">{error}</p>}
         <div className="row end">
           {step === "confirm" && (

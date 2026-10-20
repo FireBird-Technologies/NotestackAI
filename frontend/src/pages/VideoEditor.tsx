@@ -159,6 +159,14 @@ export default function VideoEditor() {
   const [downloading, setDownloading] = useState(false); // the download modal is open
   const [stoppingRender, setStoppingRender] = useState(false); // the "stop rendering?" warning is open
   const isRendering = running?.label === "Rendering";
+  // A render just finished: for 3 seconds, say the download link was emailed too (a browser can block the download
+  // the editor starts by itself).
+  const [rendered3s, setRendered3s] = useState(false);
+  useEffect(() => {
+    if (!rendered3s) return;
+    const t = setTimeout(() => setRendered3s(false), 3000);
+    return () => clearTimeout(t);
+  }, [rendered3s]);
   useEffect(() => {
     if (!isRendering) setStoppingRender(false); // the render ended: a warning left open is no longer needed
   }, [isRendering]);
@@ -272,6 +280,7 @@ export default function VideoEditor() {
     if (!job.done || !running) return;
     const err = job.data?.error;
     if (err) setError(`${running.label} failed: ${err}`); // no banner on success: the reloaded video shows it
+    if (running.label === "Rendering" && !err) setRendered3s(true);
     if (running.label === "Rendering" && autoDownload.current) {
       setAutoDownload(false);
       if (!err) {
@@ -436,6 +445,19 @@ export default function VideoEditor() {
 
   return (
     <div className="page-wrap">
+      {rendered3s && (
+        <div className="render-toast" role="status" aria-live="polite">
+          <span className="render-toast-mark" aria-hidden="true">✓</span>
+          <span className="render-toast-text">
+            <strong>Video rendered</strong>
+            <span>We've emailed you a download link. You can download it from there too.</span>
+          </span>
+          <button type="button" className="btn btn-small btn-primary" onClick={() => { setRendered3s(false); void downloadNow(); }}>
+            Download now
+          </button>
+          <button type="button" className="render-toast-close" aria-label="Close" onClick={() => setRendered3s(false)}>×</button>
+        </div>
+      )}
       <PageHeader eyebrow="Videos" title={title}>
         {project && !generating && pillStatus && <StatusPill status={pillStatus} />}
       </PageHeader>

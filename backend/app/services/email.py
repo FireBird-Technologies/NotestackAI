@@ -103,6 +103,32 @@ def _button(label: str, url: str) -> str:
     )
 
 
+def _video_ready_layout(first: str, title: str, url: str) -> str:
+    """The "your video is ready to download" email: a header band with the wordmark, the news, one button, a footer.
+    Inline styles only; Notestack's black, #217cff blue and white."""
+    year = datetime.now().year
+    return f"""<!doctype html><html><body style="margin:0;background:#05070d;padding:40px 16px;
+font-family:Inter,Arial,sans-serif;color:#ffffff">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
+<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;
+border:1px solid rgba(33,124,255,0.35);border-radius:16px;overflow:hidden;background:#000000">
+<tr><td style="height:4px;background:#217cff;font-size:0;line-height:0">&nbsp;</td></tr>
+<tr><td align="center" style="padding:36px 24px;background:#0a1224;border-bottom:1px solid rgba(33,124,255,0.25)">
+<span style="font-size:30px;font-weight:700;letter-spacing:-0.02em;color:#ffffff">Note<span style="color:#217cff">stack</span></span>
+</td></tr>
+<tr><td style="padding:36px 40px 8px;font-size:22px;font-weight:600;line-height:1.35;color:#ffffff">
+Hi {html.escape(first)}, your video is ready to download!</td></tr>
+<tr><td style="padding:12px 40px 0;font-size:16px;line-height:1.6;color:rgba(255,255,255,0.8)">
+Your Notestack video <strong style="color:#ffffff">&ldquo;{html.escape(title)}&rdquo;</strong> has finished rendering and is
+ready for download.</td></tr>
+<tr><td style="padding:16px 40px 36px">{_button("Download video", url)}</td></tr>
+<tr><td align="center" style="padding:22px 24px;border-top:1px solid rgba(255,255,255,0.08);background:#05070d;
+font-size:13px;line-height:1.6;color:rgba(255,255,255,0.5)">
+You received this because you rendered a video on Notestack.<br>
+&copy; {year} Notestack &middot; All rights reserved.</td></tr>
+</table></td></tr></table></body></html>"""
+
+
 def _code_block(code: str) -> str:
     return (
         f'<p style="font-family:JetBrains Mono,monospace;font-size:32px;letter-spacing:0.3em;'
@@ -173,6 +199,19 @@ class EmailService:
                 subject=f"Your {what} is ready",
                 html=_layout("Launch complete", body),
                 text=f"Your {what} is ready: {url}",
+            )
+        )
+
+    def send_video_rendered(self, to: str, name: str | None, title: str, url: str) -> bool:
+        """A render finished: the MP4's own R2 link, which downloads it (for when the browser blocked the download)."""
+        first = (name or "").strip().split(" ")[0] or "there"
+        return self._send(
+            OutgoingEmail(
+                to=to,
+                subject=f'Your video "{title}" is ready to download',
+                html=_video_ready_layout(first, title, url),
+                text=(f"Hi {first}, your video is ready to download!\n\n"
+                      f'Your Notestack video "{title}" has finished rendering. Download it here:\n{url}'),
             )
         )
 

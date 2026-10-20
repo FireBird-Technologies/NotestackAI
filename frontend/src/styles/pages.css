@@ -13137,3 +13137,88 @@ body.nbv-resizing iframe {
     font-size: 0.72rem;
   }
 }
+
+/* After a render: "Video rendered, we've emailed you a download link" for 3 seconds, at the bottom of the screen */
+.render-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(560px, calc(100vw - 32px));
+  padding: 12px 12px 12px 14px;
+  border: 1px solid var(--blue-60);
+  border-radius: var(--radius);
+  background: rgba(5, 9, 20, 0.96);
+  box-shadow: var(--glow-lg);
+  transform: translateX(-50%);
+  animation: render-toast-in 0.25s ease-out;
+}
+
+.render-toast-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--blue);
+  color: var(--white);
+  font-weight: 700;
+}
+
+.render-toast-text {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  font-size: 0.85rem;
+  color: var(--text-2);
+}
+
+.render-toast-text strong {
+  color: var(--white);
+}
+
+.render-toast .btn {
+  flex: none;
+}
+
+.render-toast-close {
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-3);
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+@keyframes render-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+  }
+}
+
+@media (max-width: 599px) {
+  .render-toast {
+    flex-wrap: wrap;
+    bottom: 16px;
+  }
+
+  .render-toast-text {
+    flex-basis: calc(100% - 70px);
+  }
+
+  .render-toast .btn {
+    margin-left: 40px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .render-toast {
+    animation: none;
+  }
+}

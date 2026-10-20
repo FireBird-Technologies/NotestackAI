@@ -514,6 +514,25 @@ def test_own_references_pass(client, b2v, owner, db_session):
     make_video(client, headers, template="custom_58", video_style="custom:7", custom_voice_id=SARAH)
 
 
+def test_the_workspaces_own_voice_narrates_a_video(client, b2v, owner, other, db_session):
+    """Its clone (or a designed or added voice) works for videos: blog2video shares the ElevenLabs account. Another
+    workspace's clone is still refused."""
+
+    headers, ws = owner
+    def consent(workspace, email, voice_id):
+        user = db_session.scalar(select(User).where(User.email == email))
+        db_session.add(VoiceConsent(workspace_id=workspace.id, user_id=user.id, sample_key="k", consent_text="ok",
+                                    elevenlabs_voice_id=voice_id))
+        db_session.commit()
+
+    consent(ws, "ada@example.com", "vc_mine")
+    consent(other[1], "grace@example.com", "vc_grace")
+    make_video(client, headers, custom_voice_id="vc_mine")
+    assert creates(b2v)[0]["json"]["custom_voice_id"] == "vc_mine"
+    r = client.post("/api/videos", json={"url": "https://ada.example.com/p/a", "custom_voice_id": "vc_grace"}, headers=headers)
+    assert r.status_code == 404 and len(creates(b2v)) == 1
+
+
 def test_template_still_generating_is_refused(client, b2v, owner, db_session):
     headers, ws = owner
     db_session.add(B2VTemplate(b2v_template_id=58, workspace_id=ws.id, name="Mine", ready=False))
@@ -1239,7 +1258,7 @@ def test_any_number_of_voices_can_be_saved(client, b2v, owner, db_session):
     assert len(got["saved"]) == 9 and "max_saved" not in got
 
 
-def test_notestack_voices_are_saved_for_audio_but_not_used_in_videos(client, b2v, owner, other, db_session):
+def test_notestack_voices_are_saved_and_narrate_videos(client, b2v, owner, other, db_session):
     headers, ws = owner
     notestack_voice(db_session, ws)
     got = client.get("/api/video-voices", headers=headers).json()
@@ -1247,9 +1266,10 @@ def test_notestack_voices_are_saved_for_audio_but_not_used_in_videos(client, b2v
     r = client.post("/api/video-voices/saved", json={"voice_id": "nv_narrator"}, headers=headers)
     assert r.status_code == 201 and r.json()["source"] == "notestack"
     saved = client.get("/api/video-voices", headers=headers).json()["saved"]
-    assert [v["source"] for v in saved if v["voice_id"] == "nv_narrator"] == ["notestack"]  # kept, for audio overviews
-    r = client.post("/api/videos", json={"url": "https://a.test/x", "custom_voice_id": "nv_narrator"}, headers=headers)
-    assert r.status_code == 404 and not creates(b2v)  # a video uses the free built-in voices
+    assert [v["source"] for v in saved if v["voice_id"] == "nv_narrator"] == ["notestack"]
+    # It narrates a video too (blog2video shares the ElevenLabs account)
+    make_video(client, headers, custom_voice_id="nv_narrator")
+    assert creates(b2v)[0]["json"]["custom_voice_id"] == "nv_narrator"
 
 
 def test_revoking_the_clone_drops_it_from_video_voices(client, b2v, owner, db_session, monkeypatch):
@@ -1555,3 +1575,40 @@ def test_a_custom_templates_stock_clip_shows_on_its_scene(client, b2v, owner):
     assert scene["images"] == [{"filename": "scene_1_clip.mp4", "asset_id": 5, "kind": "video",
                                 "url": "https://r2.test/c.mp4"}]
     assert scene["title_font_size"] == 60
+
+
+# A finished render emails a download link
+
+
+def _emails(monkeypatch) -> list[tuple]:
+    from app.services.email import email_service
+
+    sent: list[tuple] = []
+    monkeypatch.setattr(email_service, "send_video_rendered",
+                        lambda to, name, title, url: sent.append((to, name, title, url)) or True)
+    return sent
+
+
+def test_a_finished_render_emails_its_mp4_link_once(client, b2v, owner, db_session, monkeypatch):
+    headers, ws = owner
+    sent = _emails(monkeypatch)
+    art = make_video(client, headers)
+    a = db_session.get(Artifact, uuid.UUID(art["id"]))
+    a.status = "rendering"  # as POST .../render leaves it
+    db_session.commit()
+    mp4 = "https://pub-x.r2.dev/dev/users/1/projects/812/output/video_1792500442.mp4"
+    done = {"status": "done", "ready": True, "video_url": mp4}
+    b2v.queue("GET", "/api/v1/videos/812/status", (200, done), (200, done))
+    client.get(f"/api/videos/{art['id']}/status", headers=headers)
+    client.get(f"/api/videos/{art['id']}/status", headers=headers)  # checked again: no second email
+    assert [(to, name) for to, name, _, _ in sent] == [("ada@example.com", "Ada")]
+    assert sent[0][3] == mp4  # the R2 file itself: the email's button downloads it straight away
+
+
+def test_a_first_generation_sends_no_render_email(client, b2v, owner, monkeypatch):
+    headers, _ = owner
+    sent = _emails(monkeypatch)
+    art = make_video(client, headers)
+    b2v.queue("GET", "/api/v1/videos/812/status", (200, {"status": "generated", "ready": True, "video_url": None}))
+    client.get(f"/api/videos/{art['id']}/status", headers=headers)
+    assert sent == []
