@@ -880,6 +880,27 @@ def test_postable_lists_what_can_be_posted(client, auth, db_session):
     assert summary["prefill"]["linkedin"] == "Raise prices once a year." and summary["media"] == "text"
 
 
+def test_library_pages_the_postable_items(client, auth, db_session):
+    ws = db_session.query(Workspace).first()
+    for i in range(12):
+        _made(db_session, ws, "summary", summary=f"Point {i}.", title=f"Pricing note {i}")
+    _made(db_session, ws, "launch_kit", title="Kit")
+    _made(db_session, ws, "video", status="ready", provider="blog2video", b2v_status="generated", title="Demo video")
+    _made(db_session, ws, "video", status="processing", provider="blog2video")  # not made yet: never listed
+
+    def page(**params):
+        return client.get("/api/launchpad/library", params=params, headers=auth).json()
+
+    first, second = page(limit=10), page(limit=10, offset=10)
+    assert first["total"] == second["total"] == 14 and len(first["items"]) == 10 and len(second["items"]) == 4
+    assert not {a["id"] for a in first["items"]} & {a["id"] for a in second["items"]}  # no repeats across pages
+    assert page(kits="false")["total"] == 13  # the composer never offers launch kits
+    assert [a["title"] for a in page(kind="kits")["items"]] == ["Kit"]
+    videos = page(kind="video")
+    assert videos["total"] == 1 and videos["items"][0]["editable_video"] is True
+    assert page(q="PRICING NOTE 1")["total"] == 3  # 1, 10, 11: by title, any case
+
+
 def test_scheduling_refuses_what_cannot_go_out(client, auth, db_session):
     ws = db_session.query(Workspace).first()
     audio = _made(db_session, ws, "audio_overview", key="ws/a/audio.mp3")

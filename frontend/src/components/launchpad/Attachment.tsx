@@ -5,7 +5,7 @@ import { ApiError } from "../../api/client";
 import { artifactsApi, launchpadApi, videoEditApi, videosApi } from "../../api/endpoints";
 import type { PostableArtifact } from "../../api/types";
 import { ArrowRightIcon, DownloadIcon, FilmIcon, HeadphonesIcon, InfographicIcon, ReportIcon, SlidesIcon, SparkleIcon, UploadIcon } from "../icons/Icons";
-import { errorMessage, formatDate, Loading, Modal } from "../ui";
+import { errorMessage, formatDate, Loading, Modal, Pager } from "../ui";
 import { finished, jobPercent } from "../video/jobState";
 import { AttachmentPreviewModal } from "./AttachmentPreview";
 
@@ -355,6 +355,7 @@ function deleteWording(a: PostableArtifact): { title: string; body: string } {
 }
 
 type Kind = "all" | "kits" | "video" | "decks" | "reports" | "infographics" | "audio" | "uploads";
+const PAGE = 10;
 const KINDS: { id: Kind; label: string }[] = [
   { id: "all", label: "All" },
   { id: "kits", label: "Launch kits" },
@@ -365,11 +366,6 @@ const KINDS: { id: Kind; label: string }[] = [
   { id: "audio", label: "Audio" },
   { id: "uploads", label: "Uploads" },
 ];
-/** Which rows a tab shows: Videos is only the ones the video service made (uploaded videos are under Uploads). */
-const matches = (a: PostableArtifact, kind: Kind) =>
-  kind === "all" || (kind === "kits" ? a.type === "launch_kit" : kind === "uploads" ? a.type === "upload"
-    : kind === "decks" ? a.type === "slide_deck" : kind === "reports" ? a.type === "report"
-    : kind === "infographics" ? a.type === "infographic" : kind === "audio" ? a.type === "audio_overview" : a.editable_video);
 
 /** Saves a file from its (presigned, attachment) link. */
 function download(url: string) {
@@ -467,6 +463,8 @@ export function LibraryPicker({ onPick, onPickKit, onCreateKit, fill = false, on
     try {
       await artifactsApi.remove(deleting.id);
       setItems((list) => list?.filter((x) => x.id !== deleting.id) ?? list);
+      setTotal((t) => t - 1);
+      void load().catch(() => undefined); // the next item moves up, so the page stays full
       setDeleting(null);
     } catch (e) {
       setDeleteError(errorMessage(e));
@@ -511,10 +509,27 @@ export function LibraryPicker({ onPick, onPickKit, onCreateKit, fill = false, on
     }
   };
 
-  const load = useCallback(() => launchpadApi.postable(q).then((list) => {
-    setItems(list);
-    return list;
-  }), [q, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Kits only on the Schedule a launch page (they open the kit); as an attachment they are never offered.
+  const kits = Boolean(onPickKit);
+  // A page of 10 at a time, of the chosen kind and search, from the server.
+  const [page, setPage] = useState(0);
+  const [total, setTotal] = useState(0);
+  const asking = useRef("");
+  const load = useCallback(() => {
+    const asked = `${kind}|${q}|${page}|${refreshKey}`;
+    asking.current = asked;
+    return launchpadApi.library({ q, kind, kits, limit: PAGE, offset: page * PAGE }).then((p) => {
+      if (asking.current !== asked) return p.items; // another page, kind or search was asked for meanwhile
+      setTotal(p.total);
+      // A page emptied by deletes (the last one): the one before it.
+      if (!p.items.length && page > 0) setPage(page - 1);
+      else setItems(p.items);
+      return p.items;
+    });
+  }, [q, kind, kits, page, refreshKey]);
+
+  // Another kind or search starts on the first page.
+  useEffect(() => setPage(0), [kind, q]);
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -522,6 +537,17 @@ export function LibraryPicker({ onPick, onPickKit, onCreateKit, fill = false, on
     }, 200);
     return () => clearTimeout(t);
   }, [load]);
+
+  // Another page or kind: the loader until its items arrive, never the last ones meanwhile.
+  const goTo = (p: number) => {
+    setItems(null);
+    setPage(p);
+  };
+  const pickKind = (k: Kind) => {
+    if (k === kind) return;
+    setItems(null);
+    setKind(k);
+  };
 
   // Videos rendering (from here, the editor, or another tab): check on them, and reload once one is done.
   const renderingIds = useMemo(() => (items ?? []).filter((a) => a.rendering).map((a) => a.id).join(","), [items]);
@@ -536,18 +562,16 @@ export function LibraryPicker({ onPick, onPickKit, onCreateKit, fill = false, on
   }, [renderingIds, load]);
 
   const rendered = useCallback((id: string, schedule: boolean) => {
-    void load().then((list) => {
-      if (!schedule) return;
-      const found = list.find((a) => a.id === id);
+    void load().catch(() => undefined);
+    if (!schedule) return;
+    // Asked for by id: once rendered it may sit on another page of the list.
+    void launchpadApi.postableOne(id).then((found) => {
       setRendering(null);
-      if (found && !found.needs_render) onPick(found);
+      if (!found.needs_render) onPick(found);
     }).catch((e) => setError(errorMessage(e)));
   }, [load, onPick]);
 
-  // Kits only on the Schedule a launch page (they open the kit); as an attachment they are never offered.
-  const kits = Boolean(onPickKit);
-  const shown = useMemo(() => (items ?? []).filter((a) => (kits || a.type !== "launch_kit") && matches(a, kind)),
-                        [items, kind, kits]);
+  const shown = items ?? []; // already of the chosen kind, filtered by the server
 
   return (
       <div className="stack">
@@ -555,7 +579,7 @@ export function LibraryPicker({ onPick, onPickKit, onCreateKit, fill = false, on
           <div className="gen-chips" role="group" aria-label="Kind">
             {KINDS.filter((k) => kits || k.id !== "kits").map((k) => (
               <button key={k.id} type="button" className={`chip${kind === k.id ? " on" : ""}`} aria-pressed={kind === k.id}
-                      onClick={() => setKind(k.id)}>
+                      onClick={() => pickKind(k.id)}>
                 {k.label}
               </button>
             ))}
@@ -698,6 +722,7 @@ export function LibraryPicker({ onPick, onPickKit, onCreateKit, fill = false, on
             );
           })}
         </ul>
+        <Pager page={page} pages={Math.ceil(total / PAGE)} onChange={goTo} />
         {rendering && <RenderVideoModal video={rendering} onClose={() => setRendering(null)} onRendered={rendered} />}
         {previewing && <MediaPreviewModal a={previewing} onClose={() => setPreviewing(null)} />}
         {audio && <AudioOnlyModal title={audio.title} downloadUrl={audio.download_url} onClose={() => setAudio(null)} />}

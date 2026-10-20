@@ -987,7 +987,7 @@ def test_the_list_rechecks_a_video_whose_job_ended_unwatched(client, b2v, owner,
               (200, {"status": "generated", "ready": True}))
     client.get(f"/api/videos/{art['id']}/status", headers=headers)
     assert artifact_status(db_session, art) == "regenerating"
-    listed = client.get("/api/videos", headers=headers).json()
+    listed = client.get("/api/videos", headers=headers).json()["items"]
     assert listed[0]["status"] == "ready" and listed[0]["b2v_status"] == "generated"
 
 
@@ -1057,7 +1057,7 @@ def test_a_failed_video_is_refunded_once_and_removed(client, b2v, owner, db_sess
     row = db_session.scalar(select(B2VVideo))
     assert row.status == "deleted" and row.quota_state == "refunded" and row.artifact_id is None
     assert client.get(f"/api/videos/{art['id']}/status", headers=headers).status_code == 404
-    assert client.get("/api/videos", headers=headers).json() == []  # not restored from its row
+    assert client.get("/api/videos", headers=headers).json() == {"items": [], "total": 0}  # not restored from its row
     video_status.reconcile_videos(session_factory)
     assert used(db_session, ws) == 0
     assert "/api/projects/812" not in b2v.paths("DELETE")  # blog2video removes a failed project itself
@@ -1486,12 +1486,12 @@ def test_list_restores_a_video_whose_library_item_went_missing(client, b2v, owne
     row.artifact_id, row.status = None, "generated"
     db_session.delete(db_session.get(Artifact, uuid.UUID(art["id"])))
     db_session.commit()
-    listed = client.get("/api/videos", headers=headers).json()
+    listed = client.get("/api/videos", headers=headers).json()["items"]
     assert len(listed) == 1 and listed[0]["status"] == "ready"
     b2v.calls.clear()
     client.get(f"/api/videos/{listed[0]['id']}/status", headers=headers)
     assert "/api/v1/videos/812/status" in b2v.paths("GET")  # the same blog2video video
-    assert len(client.get("/api/videos", headers=headers).json()) == 1  # restored once
+    assert client.get("/api/videos", headers=headers).json()["total"] == 1  # restored once
 
 
 # The notebook a video is made in lists it

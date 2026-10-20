@@ -22,7 +22,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Response, UploadFile
 from pydantic import BaseModel, Field, ValidationError, model_validator
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.auth import Ctx, decode_token_full, get_ctx
 from app.config import settings
@@ -698,13 +698,15 @@ def _refresh_titles(ctx: Ctx, pairs: list[tuple[Artifact, B2VVideo]]) -> None:
 
 
 @router.get("")
-def list_videos(ctx: Ctx = Depends(get_ctx), limit: int = 30, offset: int = 0):
-    """The workspace's videos, newest first, with what the list rows show: title, status, source, scenes, date."""
+def list_videos(ctx: Ctx = Depends(get_ctx), limit: int = 10, offset: int = 0):
+    """One page of the workspace's videos, newest first, with what the list rows show (title, status, source, scenes,
+    date), and the total for the pager."""
     _restore_missing_artifacts(ctx)
-    arts = [a for a in ctx.db.scalars(
-        select(Artifact).where(Artifact.workspace_id == ctx.workspace.id, Artifact.type == "video")
-        .order_by(Artifact.created_at.desc()).limit(min(limit, 100)).offset(offset)
-    ).all() if (a.content_json or {}).get("provider") == "blog2video"]
+    mine = select(Artifact).where(Artifact.workspace_id == ctx.workspace.id, Artifact.type == "video",
+                                  Artifact.content_json["provider"].as_string() == "blog2video")
+    total = ctx.db.scalar(select(func.count()).select_from(mine.subquery())) or 0
+    arts = ctx.db.scalars(mine.order_by(Artifact.created_at.desc())
+                          .limit(max(1, min(limit, 100))).offset(max(0, offset))).all()
     rows = {r.artifact_id: r for r in ctx.db.scalars(
         select(B2VVideo).where(B2VVideo.artifact_id.in_([a.id for a in arts])))} if arts else {}
     _refresh_titles(ctx, [(a, rows[a.id]) for a in arts if a.id in rows])
@@ -714,7 +716,7 @@ def list_videos(ctx: Ctx = Depends(get_ctx), limit: int = 30, offset: int = 0):
         row, content = rows.get(a.id), a.content_json or {}
         out.append({**serialize_artifact(a), "source_url": row.source_url if row else None,
                     "scenes": content.get("scenes"), "b2v_status": (row.status if row else content.get("b2v_status"))})
-    return out
+    return {"items": out, "total": max(total - len(gone), len(out))}
 
 
 def _legacy(a: Artifact) -> dict:

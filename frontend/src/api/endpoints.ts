@@ -279,6 +279,10 @@ export const launchpadApi = {
   postable: (q = "") => api<PostableArtifact[]>(`/api/launchpad/postable${qs({ q: q || undefined })}`),
   /** One item to attach, however old (the Library's Post button). */
   postableOne: (id: string) => api<PostableArtifact>(`/api/launchpad/postable/${id}`),
+  /** One page of the attach picker: the same items as `postable`, of one kind, with the total for the pager.
+   * `kits: false` leaves launch kits out. */
+  library: (p: { q?: string; kind?: string; kits?: boolean; limit?: number; offset?: number } = {}) =>
+    api<Page<PostableArtifact>>(`/api/launchpad/library${qs(p)}`),
   /** A file from the user's computer, sent to storage: make it postable (an `upload` in the picker). */
   uploadToPost: async (file: File, duration_s?: number) => {
     const { upload_id } = await uploadFile(file);
@@ -370,7 +374,8 @@ export const videosApi = {
   config: () => api<VideoConfig>("/api/videos/config"),
   quota: () => api<VideoQuota>("/api/videos/quota"),
   catalog: () => api<VideoCatalog>("/api/videos/catalog"),
-  list: () => api<VideoListItem[]>("/api/videos"),
+  /** One page of the workspace's videos, newest first, with the total for the pager. */
+  list: (p: { limit?: number; offset?: number } = {}) => api<Page<VideoListItem>>(`/api/videos${qs(p)}`),
   create: (body: VideoCreateBody) => post<Artifact>("/api/videos", body),
   /** Three topics the AI suggests a video from this source could focus on. */
   focusTopics: (body: VideoFocusSource) => post<{ topics: VideoFocusTopic[] }>("/api/videos/focus-topics", body),

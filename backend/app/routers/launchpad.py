@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.auth import Ctx, decode_token_full, encode_signed, get_ctx
@@ -442,28 +442,31 @@ def postable_one(artifact_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
     return artifact_brief(a)
 
 
-@router.get("/launchpad/postable")
-def postable(ctx: Ctx = Depends(get_ctx), q: str = "", limit: int = 60):
-    """What can be attached to a post: finished videos, quote cards, carousels, summaries, launch kits, mind maps,
-    slide decks, reports and infographics, newest first, and audio overviews (listed to download: they can't be posted). Videos made but not
-    rendered yet are listed too, flagged needs_render (they can only be posted once rendered), and so are videos being
-    rendered, flagged rendering."""
-    rows = ctx.db.scalars(select(Artifact).where(Artifact.workspace_id == ctx.workspace.id,
-                                                 Artifact.type.in_(LISTED))
-                          .order_by(Artifact.created_at.desc()).limit(400))
-    needle = q.strip().lower()
-    out = []
-    for a in rows:
-        # A blog2video video counts once blog2video made it (ready), rendered or not; anything else once it is ready.
-        # A blog2video video mid-render stays listed (flagged rendering).
-        ready = a.status == "ready" or (is_blog2video(a) and (bool((a.content_json or {}).get("video_url"))
-                                                              or a.status == "rendering"))
-        title = ((a.content_json or {}).get("title") or "").lower()
-        if ready and (not needle or needle in title):
-            out.append(artifact_brief(a))
-        if len(out) >= min(limit, 200):
-            break
-    # What each one already has coming up (scheduled, still ahead), soonest first: the list offers to reschedule it
+# The picker's kind chips, as artifact types ("video" is the video service's own videos, any type).
+LIBRARY_KINDS = {"kits": ("launch_kit",), "decks": ("slide_deck",), "reports": ("report",),
+                 "infographics": ("infographic",), "audio": ("audio_overview",), "uploads": ("upload",)}
+
+
+def _postable_query(ctx: Ctx, q: str = "", kind: str = "all", kits: bool = True):
+    """What can be attached to a post, filtered in the database: finished items, plus blog2video videos made (rendered
+    or not) or mid-render, of one kind (or all), whose title has `q`. Newest first."""
+    content = Artifact.content_json
+    b2v = content["provider"].as_string() == "blog2video"
+    ready = or_(Artifact.status == "ready",
+                and_(b2v, or_(func.coalesce(content["video_url"].as_string(), "") != "", Artifact.status == "rendering")))
+    types = LIBRARY_KINDS.get(kind, LISTED)
+    if not kits and kind != "kits":
+        types = tuple(t for t in types if t != "launch_kit")
+    query = select(Artifact).where(Artifact.workspace_id == ctx.workspace.id, Artifact.type.in_(types), ready)
+    if kind == "video":
+        query = query.where(b2v)
+    if needle := q.strip().lower():
+        query = query.where(func.lower(func.coalesce(content["title"].as_string(), "")).contains(needle, autoescape=True))
+    return query.order_by(Artifact.created_at.desc())
+
+
+def _with_schedule(ctx: Ctx, out: list[dict]) -> list[dict]:
+    """What each one already has coming up (scheduled, still ahead), soonest first: the list offers to reschedule it."""
     upcoming = ctx.db.scalars(select(CalendarItem).where(
         CalendarItem.workspace_id == ctx.workspace.id, CalendarItem.status == "scheduled",
         CalendarItem.scheduled_at > datetime.now(UTC),
@@ -476,6 +479,27 @@ def postable(ctx: Ctx = Depends(get_ctx), q: str = "", limit: int = 60):
     for b in out:
         b["scheduled"] = by_artifact.get(b["id"], [])
     return out
+
+
+@router.get("/launchpad/postable")
+def postable(ctx: Ctx = Depends(get_ctx), q: str = "", limit: int = 60):
+    """What can be attached to a post: finished videos, quote cards, carousels, summaries, launch kits, mind maps,
+    slide decks, reports and infographics, newest first, and audio overviews (listed to download: they can't be posted). Videos made but not
+    rendered yet are listed too, flagged needs_render (they can only be posted once rendered), and so are videos being
+    rendered, flagged rendering."""
+    rows = ctx.db.scalars(_postable_query(ctx, q).limit(min(limit, 200)))
+    return _with_schedule(ctx, [artifact_brief(a) for a in rows])
+
+
+@router.get("/launchpad/library")
+def library_page(ctx: Ctx = Depends(get_ctx), q: str = "", kind: str = "all", kits: bool = True,
+                 limit: int = 10, offset: int = 0):
+    """One page of the attach picker (the same items as /launchpad/postable), of one kind, with the total for its pager.
+    `kits=false` leaves launch kits out (the composer attaches; only the Schedule a launch page opens kits)."""
+    query = _postable_query(ctx, q, kind, kits)
+    total = ctx.db.scalar(select(func.count()).select_from(query.order_by(None).subquery())) or 0
+    rows = ctx.db.scalars(query.limit(max(1, min(limit, 50))).offset(max(0, offset)))
+    return {"items": _with_schedule(ctx, [artifact_brief(a) for a in rows]), "total": total}
 
 
 # Social accounts
@@ -496,7 +520,9 @@ def serialize_account(a: SocialAccount) -> dict:
 
 @router.get("/social/accounts")
 def list_accounts(ctx: Ctx = Depends(get_ctx)):
-    accounts = ctx.db.scalars(select(SocialAccount).where(SocialAccount.workspace_id == ctx.workspace.id)
+    # One the user disconnected is gone from the list: the platform offers a fresh Connect, for any account.
+    accounts = ctx.db.scalars(select(SocialAccount).where(SocialAccount.workspace_id == ctx.workspace.id,
+                                                          SocialAccount.status != "disconnected")
                               .order_by(SocialAccount.created_at)).all()
     return {
         "accounts": [serialize_account(a) for a in accounts],
@@ -511,12 +537,14 @@ def disconnect(account_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
                                                         SocialAccount.workspace_id == ctx.workspace.id))
     if not account:
         raise HTTPException(404, "Account not found")
-    # Kept (its posts stay linked to it), tokens gone, posts paused: reconnecting the same account resumes them.
-    account.status = "revoked"
+    # Disconnected by the user: no longer listed (the platform shows a plain Connect again), tokens gone, its posts
+    # paused. The row stays only so those posts keep their account: whichever account is connected next for this
+    # platform takes them over and resumes them (see _upsert_account).
+    account.status = "disconnected"
     account.access_token = ""  # no usable token kept
     account.refresh_token = None
     label = PLATFORM_LABELS[account.platform]
-    pause_account_posts(ctx.db, account, f"{label} disconnected. Reconnect {label} to resume.")
+    pause_account_posts(ctx.db, account, f"{label} disconnected. Connect {label} to resume.")
     ctx.db.commit()
     return {"ok": True}
 
@@ -537,6 +565,13 @@ def _upsert_account(db: Session, workspace_id: uuid.UUID, platform: str, info: d
     account.expires_at = datetime.now(UTC) + timedelta(seconds=int(expires_in)) if expires_in else None
     account.scopes = scopes
     account.status = "active"
+    # Posts paused when the user disconnected an account of this platform (this one, or another) are this one's now.
+    db.flush()  # a new account needs its id first
+    gone = select(SocialAccount.id).where(SocialAccount.workspace_id == workspace_id, SocialAccount.platform == platform,
+                                          SocialAccount.status == "disconnected", SocialAccount.id != account.id)
+    for item in db.scalars(select(CalendarItem).where(CalendarItem.social_account_id.in_(gone),
+                                                      CalendarItem.status == "paused")):
+        item.social_account_id = account.id
     resume_account_posts(db, account)  # its paused posts still ahead go back to scheduled
     db.commit()
 

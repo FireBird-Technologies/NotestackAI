@@ -452,7 +452,7 @@ class SocialAccount(IdMixin, TimestampMixin, Base):
     refresh_token: Mapped[str | None] = mapped_column(Text)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     scopes: Mapped[str | None] = mapped_column(String(500))
-    status: Mapped[str] = mapped_column(String(20), default="active")  # active | expired | revoked
+    status: Mapped[str] = mapped_column(String(20), default="active")  # active | expired | revoked | disconnected
     avatar_url: Mapped[str | None] = mapped_column(String(1000))
 
 

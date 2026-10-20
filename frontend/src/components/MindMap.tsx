@@ -8,7 +8,7 @@ import { Reader } from "./Reader";
 import { ShareButton } from "./ShareDialog";
 import { CardFeedback } from "./CardFeedback";
 import { cardClick, ViewButton } from "./cardActions";
-import { DownloadIcon, ImageIcon, MarkdownIcon, PdfIcon, RetryIcon, TrashIcon } from "./icons/Icons";
+import { ChevronIcon, DownloadIcon, ImageIcon, MarkdownIcon, PdfIcon, RetryIcon, TrashIcon } from "./icons/Icons";
 import { FloatingMenu, useMenu } from "./SlideDeck";
 
 /* ---------- Layout: a galaxy. The centre idea, branches orbiting it, sub-themes orbiting each branch, points
@@ -297,7 +297,10 @@ export function MindMapExplorer({ artifact, onClose, warp = true, startAt = "roo
   const drag = useRef<{ px: number; py: number; cam: Cam; moved: boolean } | null>(null);
   const [reading, setReading] = useState<{ id: string; start: number; end: number } | null>(null);
   const [panelOpen, setPanelOpen] = useState(true);
+  // Phones: the details sit under the map as a sheet, shut to its heading at first so the map has the screen
+  const [sheetOpen, setSheetOpen] = useState(false);
   const wide = size.w >= 820;
+  const sheetShut = !wide && !sheetOpen;
   const panelW = panelOpen && wide ? PANEL_W : 0;
 
   useEffect(() => {
@@ -514,7 +517,7 @@ export function MindMapExplorer({ artifact, onClose, warp = true, startAt = "roo
   for (let c: Placed | null = focused; c; c = c.parent) trail.unshift(c);
 
   const view = (
-    <div className={`mm-overlay${embedded ? " mm-embedded" : ""}`} role={embedded ? "group" : "dialog"} aria-modal={embedded ? undefined : true}
+    <div className={`mm-overlay${embedded ? " mm-embedded" : ""}${sheetShut ? " mm-sheet-min" : ""}`} role={embedded ? "group" : "dialog"} aria-modal={embedded ? undefined : true}
          aria-label={mindConstellationTitle(artifact.title)}>
       <div className="mm-stage" ref={wrapRef}>
         <svg
@@ -759,16 +762,23 @@ export function MindMapExplorer({ artifact, onClose, warp = true, startAt = "roo
         </div>
         <p className="mm-hint mono muted">Scroll to dive in. Drag to move. Click a star to fly to it.</p>
 
-        <aside className={`mm-panel${panelOpen ? "" : " is-closed"}`} style={{ "--c": accentOf(focused) } as CSSProperties} aria-label="Selected topic">
+        <aside className={`mm-panel${panelOpen ? "" : " is-closed"}${sheetShut ? " is-sheet-closed" : ""}`} style={{ "--c": accentOf(focused) } as CSSProperties} aria-label="Selected topic">
           <div className="mm-panel-head">
             <span className="eyebrow">{["Centre", "Theme", "Sub-theme", "Point"][focused.level]}</span>
-            {wide && (
+            {wide ? (
               <button type="button" className="mm-btn mm-btn-sm" onClick={() => setPanelOpen(false)} aria-label="Hide details">
                 &rsaquo;
               </button>
+            ) : (
+              // Up opens the details over the map, down shuts them back to this heading
+              <button type="button" className="mm-btn mm-btn-sm mm-sheet-toggle" aria-expanded={sheetOpen}
+                      aria-label={sheetOpen ? "Hide details" : "Show details"} title={sheetOpen ? "Hide details" : "Show details"}
+                      onClick={() => setSheetOpen((o) => !o)}>
+                <ChevronIcon size={14} className={sheetOpen ? undefined : "mm-chev-up"} />
+              </button>
             )}
           </div>
-          <h3>{focused.node.label}</h3>
+          <h3 onClick={wide ? undefined : () => setSheetOpen((o) => !o)}>{focused.node.label}</h3>
           {focused.node.note && <p className="mm-note-text">{focused.node.note}</p>}
           {focused.node.children.length > 0 && (
             <>

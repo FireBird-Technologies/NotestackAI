@@ -171,7 +171,7 @@ export function AddSource({
   };
 
   return (
-    <div className="card add-source">
+    <div className={`card add-source${compact ? " add-source-compact" : ""}`}>
       <form onSubmit={submit} className="add-smart">
         <input
           className="input"
