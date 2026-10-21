@@ -124,7 +124,7 @@ export const missionPosts: BlogPost[] = [
         heading: "So which should you pick",
         paragraphs: [
           "If you want a thinking partner for drafting and reasoning, use Claude. If you want a quick, grounded read of a few uploaded documents, NotebookLM is a fine choice. If your sources are your own growing archive, you need the answers to be traceable, and you want the results available inside Claude, Notestack is built for that.",
-          "If you are still comparing the wider field, our guide to [NotebookLM alternatives](/blogs/notebooklm-alternatives) covers research tools, open source options and more, and there is a free plan on [pricing](/pricing) if you want to try Notestack on your latest posts.",
+          "If you are still comparing the wider field, our guide to [NotebookLM alternatives](/blogs/notebooklm-alternatives) covers research tools, open source options and more, and there is a free plan on [pricing](/#pricing) if you want to try Notestack on your latest posts.",
         ],
       },
     ],
@@ -161,7 +161,7 @@ export const missionPosts: BlogPost[] = [
       },
       {
         question: "Can I try Notestack for free?",
-        answer: "Yes. There is a free plan that lets you try grounded chat on your latest posts. See [pricing](/pricing).",
+        answer: "Yes. There is a free plan that lets you try grounded chat on your latest posts. See [pricing](/#pricing).",
       },
     ],
     distributionPlan: [
@@ -339,7 +339,7 @@ export const missionPosts: BlogPost[] = [
         heading: "Getting started with Notestack",
         paragraphs: [
           "Connect your Substack, Ghost, Medium or any RSS feed and Notestack indexes your posts into citable passages. Ask questions, build notebooks around a theme, and see every answer traced back to the exact lines.",
-          "From there, turn a notebook into an audio overview, a video through Blog2Video, or a Launch Kit for LinkedIn and beyond. There is a free plan so you can try it on your latest posts before deciding. See [pricing](/pricing) for what each plan adds, and the wider guide to [NotebookLM alternatives](/blogs/notebooklm-alternatives) if you are still comparing options.",
+          "From there, turn a notebook into an audio overview, a video through Blog2Video, or a Launch Kit for LinkedIn and beyond. There is a free plan so you can try it on your latest posts before deciding. See [pricing](/#pricing) for what each plan adds, and the wider guide to [NotebookLM alternatives](/blogs/notebooklm-alternatives) if you are still comparing options.",
         ],
         callout: "Try Notestack for free at notestack.ai.",
       },
@@ -392,7 +392,7 @@ export const missionPosts: BlogPost[] = [
       },
       {
         question: "Can I try Notestack for free?",
-        answer: "Yes. There is a free plan that lets you try grounded chat on your latest posts. See [pricing](/pricing).",
+        answer: "Yes. There is a free plan that lets you try grounded chat on your latest posts. See [pricing](/#pricing).",
       },
     ],
     distributionPlan: [

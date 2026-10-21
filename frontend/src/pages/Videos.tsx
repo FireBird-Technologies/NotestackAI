@@ -1,11 +1,13 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { videosApi } from "../api/endpoints";
 import type { VideoListItem, VideoQuota } from "../api/types";
 import { TrashIcon } from "../components/icons/Icons";
-import { EmptyState, errorMessage, formatDate, Loading, Modal } from "../components/ui";
+import { EmptyState, errorMessage, formatDate, Loading, Modal, Pager } from "../components/ui";
 import { useUpgrade } from "../hooks/useUpgrade";
 import { PostButton } from "../components/launchpad/PostButton";
+
+const PAGE = 10;
 
 const JOB_LABELS: Record<string, string> = {
   regenerating: "Changing template",
@@ -50,11 +52,33 @@ export default function Videos() {
   const [error, setError] = useState<string | null>(null);
   const { openUpgrade, status } = useUpgrade();
   const notice = (useLocation().state as { notice?: string } | null)?.notice;
+  // A page of 10 at a time, from the server.
+  const [page, setPage] = useState(0);
+  const [total, setTotal] = useState(0);
+  const pageRef = useRef(page);
+  pageRef.current = page;
+  const loadPage = useCallback((at: number) =>
+    videosApi.list({ limit: PAGE, offset: at * PAGE }).then((p) => {
+      if (pageRef.current !== at) return; // another page was asked for meanwhile
+      setTotal(p.total);
+      // A page emptied by deletes (the last one): the one before it.
+      if (!p.items.length && at > 0) setPage(at - 1);
+      else setVideos(p.items);
+    }), []);
 
   useEffect(() => {
-    videosApi.list().then(setVideos).catch((e) => setError(errorMessage(e)));
+    loadPage(page).catch((e) => setError(errorMessage(e)));
+  }, [page, loadPage]);
+
+  useEffect(() => {
     videosApi.quota().then(setQuota).catch(() => undefined);
   }, []);
+
+  // Another page: the loader until its videos arrive, never the last page's meanwhile.
+  const goTo = (p: number) => {
+    setVideos(null);
+    setPage(p);
+  };
 
   // While a video is still being made (or rendering, or in an edit job), ask again now and then: the list checks those
   // with blog2video, so one that finishes, or fails and is refunded, updates here without a reload.
@@ -63,7 +87,7 @@ export default function Videos() {
     if (!anyBusy) return;
     const t = setInterval(() => {
       if (document.hidden) return;
-      videosApi.list().then(setVideos).catch(() => undefined);
+      loadPage(pageRef.current).catch(() => undefined);
       videosApi.quota().then(setQuota).catch(() => undefined);
     }, 15000);
     return () => clearInterval(t);
@@ -83,7 +107,9 @@ export default function Videos() {
     try {
       await videosApi.remove(id);
       setVideos((v) => (v ?? []).filter((x) => x.id !== id));
+      setTotal((t) => t - 1);
       setDeleting(null);
+      void loadPage(page).catch(() => undefined); // the next video moves up, so the page stays full
     } catch (e) {
       setDeleteError(errorMessage(e));
     } finally {
@@ -148,6 +174,7 @@ export default function Videos() {
           })}
         </ul>
       )}
+      <Pager page={page} pages={Math.ceil(total / PAGE)} onChange={goTo} />
 
       {deleting && (
         // While the delete runs, Escape, the backdrop and the close button do nothing.

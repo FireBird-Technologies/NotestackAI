@@ -1041,6 +1041,23 @@ class VideoFocusAngles(dspy.Signature):
     topics: list[FocusAngle] = dspy.OutputField(desc="Exactly 3 focus topics")
 
 
+class TopicFitsNotebook(dspy.Signature):
+    """A writer asked for a video on a topic, and a keyword search of their notebook found no post about it. Decide
+    whether the topic still belongs with this notebook. "related": the topic is broad (lessons learned, growth, how
+    their thinking changed, the main themes) or touches what the notebook is about without using its words, so an
+    overview of the notebook can be framed around it. "unrelated": the notebook does not deal with the subject at all,
+    so the video should be a plain overview that ignores the topic. Never use em dashes."""
+
+    topic: str = dspy.InputField(desc="The topic the writer asked for, in their words")
+    notebook_title: str = dspy.InputField()
+    notebook_summary: str = dspy.InputField(desc="What the notebook is about. May be empty")
+    post_titles: list[str] = dspy.InputField(desc="The notebook's post titles, newest first")
+    topic_names: list[str] = dspy.InputField(desc="Topics the notebook's posts are tagged with. May be empty")
+    verdict: Literal["related", "unrelated"] = dspy.OutputField()
+    angle: str = dspy.OutputField(desc="When related: one short sentence on how the topic connects to the notebook. "
+                                       "Empty when unrelated")
+
+
 # Slide decks: an outline, each slide written from the lines it cites, every claim checked against those lines,
 # then a conclusion written from the slides themselves. The model writes words only; code lays them out.
 

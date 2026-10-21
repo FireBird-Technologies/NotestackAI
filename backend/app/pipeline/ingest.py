@@ -14,6 +14,7 @@ import logging
 import re
 import time
 import uuid
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -262,6 +263,22 @@ def pdf_to_sections(data: bytes) -> list[tuple[str | None, str]]:
     # PDF text keeps hard line breaks inside paragraphs; blank lines separate paragraphs.
     paragraphs = [re.sub(r"\s*\n\s*", " ", p).strip() for p in re.split(r"\n\s*\n", text)]
     return [(None, "\n\n".join(p for p in paragraphs if p))] if any(paragraphs) else []
+
+
+# Stamps scanning apps print on every page: on a scan with no text layer they are all the text a PDF gives.
+SCANNER_MARKS = re.compile(r"cam\s*scanner|scanned\s+(with|by|using)\s+\S+|adobe\s+scan|genius\s+scan|tiny\s*scanner"
+                           r"|clear\s*scan|(microsoft|office)\s+lens", re.IGNORECASE)
+MIN_PDF_TEXT = 150  # letters and digits of real text a PDF must give: fewer is a scan with no text layer
+STAMP_CHARS = 40  # a paragraph this short that repeats on page after page is a stamp, a header or a footer
+STAMP_REPEATS = 3
+
+
+def _readable_chars(sections: list[tuple[str | None, str]]) -> int:
+    """Letters and digits of real text in a PDF's sections: page stamps, running headers and scanner marks left out."""
+    paragraphs = [p.strip() for _, body in sections for p in body.split("\n\n") if p.strip()]
+    seen = Counter(p.lower() for p in paragraphs)
+    kept = [p for p in paragraphs if len(p) >= STAMP_CHARS or seen[p.lower()] < STAMP_REPEATS]
+    return len(re.findall(r"\w", SCANNER_MARKS.sub(" ", " ".join(kept))))
 
 
 def _meta(soup: BeautifulSoup, *names: str) -> str | None:
@@ -762,7 +779,13 @@ def entry_from_upload(filename: str, content_type: str, data: bytes) -> FeedEntr
     if not lower.endswith(DOCUMENT_EXTENSIONS) and content_type not in DOCUMENT_TYPES:
         raise unreadable  # an image or other binary file: decoding it would store its bytes as a "post"
     if content_type == "application/pdf" or lower.endswith(".pdf"):
-        return FeedEntry(title=stem, url=url, published_at=None, html="", sections=pdf_to_sections(data))
+        sections = pdf_to_sections(data)
+        # A phone scan with no text layer gives only the scanner's stamp ("CamScanner" on every page): never a post, or
+        # everything made from it later (flashcards, ideas, a voice profile) has nothing to read.
+        if _readable_chars(sections) < MIN_PDF_TEXT:
+            raise UnreadableFile(f"{name} looks like a scanned PDF with no text in it, so Notestack cannot read it. "
+                                 "Export it with text recognition (OCR) turned on, or upload a text version.")
+        return FeedEntry(title=stem, url=url, published_at=None, html="", sections=sections)
     text = data.decode("utf-8", errors="replace")
     if _looks_binary(text):
         raise unreadable

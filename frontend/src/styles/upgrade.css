@@ -2,10 +2,11 @@
    Strict palette: black, #217cff, white. */
 
 /* ---------- Popup ---------- */
+/* Above the phone menu drawer (70-71), where the plan card's "View plans" and "Upgrade now" open it from */
 .upg-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  z-index: 80;
   display: grid;
   place-items: center;
   padding: 16px;
@@ -262,15 +263,41 @@
   }
 }
 
+/* A column, so the button (margin-top: auto) sits at the very bottom: every card's lines up */
 .upg-plan {
   position: relative;
-  display: grid;
-  align-content: start;
+  display: flex;
+  flex-direction: column;
   gap: 6px;
   padding: 18px;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
   background: var(--surface);
+}
+
+/* "View plans": all three plans fit on one row */
+@media (min-width: 640px) {
+  .upg-plans.upg-plans-all {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  }
+}
+
+.upg-plans-all .upg-price .tier-amount {
+  font-size: 1.7rem;
+}
+
+.upg-plan-features {
+  gap: 6px;
+  margin: 10px 0 14px;
+  font-size: 0.8rem;
+}
+
+.upg-plan-features li {
+  align-items: flex-start;
+}
+
+.upg-plan-features .icon {
+  margin-top: 2px;
 }
 
 .upg-plan.pick {
@@ -299,8 +326,10 @@
 
 .upg-price {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: 4px;
+  white-space: nowrap;
   margin-top: 6px !important;
 }
 
@@ -364,6 +393,61 @@
 
 .upg-foot .row {
   gap: 16px;
+}
+
+/* Phones: smaller text throughout, so a plan card fits on screen */
+@media (max-width: 600px) {
+  .upg-head h2 {
+    font-size: 1.3rem;
+  }
+
+  .upg-head > p {
+    font-size: 0.82rem;
+  }
+
+  .upg-cycle .cycle-toggle button {
+    font-size: 0.8rem;
+  }
+
+  .upg-plan {
+    padding: 14px;
+  }
+
+  .upg-plan h3 {
+    font-size: 1.05rem;
+  }
+
+  .upg-plan .small {
+    font-size: 0.75rem;
+  }
+
+  .upg-price .tier-amount,
+  .upg-plans-all .upg-price .tier-amount {
+    font-size: 1.5rem;
+  }
+
+  .upg-price .tier-was,
+  .upg-price .muted {
+    font-size: 0.8rem;
+  }
+
+  .upg-boosts li {
+    padding: 2px 8px;
+    font-size: 0.66rem;
+  }
+
+  .upg-plan-features {
+    font-size: 0.75rem;
+  }
+
+  .upg-cta {
+    height: 40px;
+    font-size: 0.85rem;
+  }
+
+  .upg-foot {
+    font-size: 0.72rem;
+  }
 }
 
 .upg-foot a {
@@ -558,6 +642,11 @@
   justify-content: center;
   gap: 6px;
   margin-top: 4px;
+}
+
+.fuel-plans {
+  justify-self: start;
+  margin-top: 2px;
 }
 
 @media (min-width: 900px) {

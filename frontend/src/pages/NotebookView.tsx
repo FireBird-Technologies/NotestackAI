@@ -9,7 +9,7 @@ import { AnswerFeedback } from "../components/AnswerFeedback";
 import { ArtifactCard, CitationList } from "../components/ArtifactCard";
 import ConnectorModal from "../components/ConnectorModal";
 import { Markdown } from "../components/Markdown";
-import { DocPicker } from "../components/DocPicker";
+import { NotebookPostsManager } from "../components/NotebookPostsManager";
 import { ConnectorIcon, FlashcardsIcon, HeadphonesIcon, InfographicIcon, QuizIcon, ReportIcon, RocketIcon, SlidesIcon, TelescopeIcon, VideoIcon } from "../components/icons/Icons";
 import { ScheduleModal } from "../components/ScheduleModal";
 import { MindMapDialog, MindMapExplorer, MindMapCard } from "../components/MindMap";
@@ -110,7 +110,7 @@ const VIDEO_BUSY = new Set(["generating", "pending", "rendering", "regenerating"
   "language_regenerating", "script_regenerating"]);
 
 /** Create: one click per format with sensible defaults, options folded away; then what was made from this notebook. */
-function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, presets, presetKey, quizOpen, onQuizClose, onCreateQuiz, cardsOpen, onCardsClose, onCreateCards, infographicOpen, onInfographicClose, onCreateInfographic, audioOpen, onAudioClose, onCreateAudio, slidesOpen, onSlidesClose, onCreateSlides, reportOpen, onReportClose, onCreateReport, mapOpen, onMapClose, onCreateMap, onCreateVideo, onClose }: {
+function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, presets, presetKey, quizOpen, onQuizClose, onCreateQuiz, cardsOpen, onCardsClose, onCreateCards, infographicOpen, onInfographicClose, onCreateInfographic, audioOpen, onAudioClose, onCreateAudio, slidesOpen, onSlidesClose, onCreateSlides, reportOpen, onReportClose, onCreateReport, mapOpen, onMapClose, onCreateMap, onCreateVideo, onClose, section, onStarted }: {
   notebookId: string;
   docs: { id: string; title: string; locked?: boolean }[];
   chats: ChatSummary[];
@@ -142,8 +142,12 @@ function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, presets
   onMapClose: () => void;
   onCreateMap: () => void;
   onCreateVideo: () => void;
-  /** Closes the right column (the chat takes its room). Phones leave it out: the Studio tab replaces the button. */
+  /** Closes the right column (the chat takes its room). Phones leave it out: the Create and Library tabs replace it. */
   onClose?: () => void;
+  /** Phones: only the Create buttons, or only what was made (the Library tab). Left out, both show. */
+  section?: "create" | "library";
+  /** A make has started (phones open the Library tab, where its card appears). */
+  onStarted?: () => void;
 }) {
   const [artifacts, setArtifacts] = useState<Artifact[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -191,6 +195,7 @@ function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, presets
   const launch = async (label: string, close: () => void, request: () => Promise<Artifact>, after?: (a: Artifact) => void) => {
     setError(null);
     close();
+    onStarted?.();
     setStarting((l) => [...l, label]);
     try {
       const a = await request();
@@ -231,9 +236,12 @@ function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, presets
   const cite = (c: Citation) => c.document_id && setReading({ id: c.document_id, start: c.line_start, end: c.line_end });
   const off = disabled;
   const [launching, setLaunching] = useState(false); // the Launch composer is open
+  const showCreate = section !== "library";
+  const showMade = section !== "create";
 
   return (
-    <div className="stack">
+    <div className={`stack${section === "create" ? " nbv-studio-create" : ""}`}>
+      {showCreate && <>
       <div className="nbv-tools-head">
         <span className="vw-label">Create</span>
         {onClose && (
@@ -314,11 +322,15 @@ function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, presets
           </span>
         </button>
       </div>
+      </>}
       {launching && <ScheduleModal platform="linkedin" posts={[]} onClose={() => setLaunching(false)} />}
-      {disabled && <p className="muted small">Add posts to this notebook to start creating.</p>}
+      {showCreate && disabled && <p className="muted small">Add posts to this notebook to start creating.</p>}
       {error && <p className="error-text">{error}</p>}
-      {(!others || others.length > 0 || starting.length > 0) && <span className="vw-label nbv-made-label">Made from this notebook</span>}
-      {(!others || others.length > 0 || starting.length > 0) && <div className="studio-list nbv-made">
+      {showMade && (!others || others.length > 0 || starting.length > 0) && <span className="vw-label nbv-made-label">Made from this notebook</span>}
+      {section === "library" && others?.length === 0 && starting.length === 0 && (
+        <p className="muted small">Nothing made yet. Use the Create tab to make audio, slides, videos and more.</p>
+      )}
+      {showMade && (!others || others.length > 0 || starting.length > 0) && <div className="studio-list nbv-made">
         {!artifacts && <Loading />}
         {starting.map((label, i) => (
           <div key={`${label}-${i}`} className="nbv-starting" role="status" aria-live="polite">
@@ -387,19 +399,14 @@ export default function NotebookView() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [q, setQ] = useState("");
-  const [postFilter, setPostFilter] = useState("");
-  const [removing, setRemoving] = useState<{ id: string; title: string } | null>(null); // the post awaiting confirmation
-  const [removeBusy, setRemoveBusy] = useState(false);
-  const [removeError, setRemoveError] = useState<string | null>(null);
   const [deletingChat, setDeletingChat] = useState<{ id: string; title: string } | null>(null); // the chat awaiting confirmation
   const [deleteChatBusy, setDeleteChatBusy] = useState(false);
   const [deleteChatError, setDeleteChatError] = useState<string | null>(null);
   // Date headings unfolded. null until one is clicked: then the newest heading (Today, if there is one) starts open.
   const [openGroupsPref, setOpenGroups] = useState<string[] | null>(null);
-  const [viewingPosts, setViewingPosts] = useState(false); // the post list, behind a "View posts" button
   // Phones: one pane fills the screen at a time, picked with the Menu / Chat / Studio tabs. null is the chat.
   const phone = useMedia("(max-width: 899px)");
-  const [drawer, setDrawer] = useState<"history" | "tools" | null>(null);
+  const [drawer, setDrawer] = useState<"history" | "tools" | "library" | null>(null);
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [busy, setBusy] = useState(false);
   const upgrade = useUpgrade();
@@ -414,8 +421,8 @@ export default function NotebookView() {
         : null;
   const outOfChat = quota !== null && quota.left <= 0;
   const [loadingChatId, setLoadingChatId] = useState<string | null>(null);
-  // The Add dialog: connect a source (all its posts join this notebook) and pick posts already indexed. The imports
-  // under way are listed under Posts (All posts gathers every post anyway).
+  // The Add & modify dialog: connect a source (all its posts join this notebook), and add or remove posts one click at a
+  // time. The imports under way are listed under Posts (All posts gathers every post anyway).
   const [adding, setAdding] = useState(false);
   const [imports, setImports] = useState<Job[]>([]);
   const [makingVideo, setMakingVideo] = useState(false); // the video wizard is open in a modal
@@ -431,9 +438,6 @@ export default function NotebookView() {
   // A Create button or a next-step suggestion clears its artifact's, so those open with the usual defaults.
   const [presets, setPresets] = useState<Partial<Record<ChatArtifact, ChatPreset>>>({});
   const [presetKey, setPresetKey] = useState(0);
-  const [toAdd, setToAdd] = useState<string[]>([]);
-  const [addError, setAddError] = useState<string | null>(null);
-  const [addBusy, setAddBusy] = useState(false); // the picked posts are being added
   const [reading, setReading] = useState<{ id: string; start?: number; end?: number } | null>(null);
   const [quoted, setQuoted] = useState<Citation | null>(null); // a chat citation: the earlier words, shown in a popup
   const [editingTitle, setEditingTitle] = useState(false);
@@ -453,7 +457,6 @@ export default function NotebookView() {
   const panes = usePaneWidths(layout, { leftOpen: historyOpen, rightOpen: toolsOpen }); // the side panels' dragged widths
   const railShown = phone || historyOpen; // on a phone both panels stay mounted (their dialogs live there) as drawers
   const toolsShown = phone || toolsOpen;
-  const postsShown = viewingPosts;
   const chatGroups = groupChats(chats);
   const openGroups = openGroupsPref ?? chatGroups.slice(0, 1).map((g) => g.label);
   const closeDrawer = () => setDrawer(null); // back to the Chat tab
@@ -829,8 +832,8 @@ export default function NotebookView() {
       <PaneResizer side="right" panes={panes} container={layout} label="Resize the create panel" />
       {phone && (
         <div className="nbv-tabs" role="tablist" aria-label="Notebook"
-             style={{ "--tab": drawer === "history" ? 0 : drawer === "tools" ? 2 : 1 } as CSSProperties}>
-          {([["history", "Menu"], [null, "Chat"], ["tools", "Studio"]] as const).map(([tab, label]) => (
+             style={{ "--tab": drawer === "history" ? 0 : drawer === "tools" ? 2 : drawer === "library" ? 3 : 1 } as CSSProperties}>
+          {([["history", "Sources"], [null, "Chat"], ["tools", "Create"], ["library", "Library"]] as const).map(([tab, label]) => (
             <button key={label} type="button" role="tab" className={`nbv-tab${drawer === tab ? " active" : ""}`}
                     aria-selected={drawer === tab} onClick={() => setDrawer(tab)}>
               {label}
@@ -922,18 +925,13 @@ export default function NotebookView() {
           <div className="nbv-history-head">
             <h2>Posts</h2>
             <div className="nbv-history-actions">
-              {nb.documents.length > 0 && (
-                <button type="button" className="btn btn-small" aria-expanded={viewingPosts} onClick={() => setViewingPosts(!viewingPosts)}>
-                  {viewingPosts ? "Hide posts" : "View posts"}
-                </button>
-              )}
               <button className="btn btn-small" onClick={() => setAdding(true)}
-                      title={nb.is_archive ? "Connect a blog or newsletter, import an article, or upload files" : "Connect a source or add posts you already have"}>
-                + Add
+                      title={nb.is_archive ? "Connect a blog or newsletter, import an article, or upload files" : "Connect a source, or add and remove posts"}>
+                Add & modify
               </button>
             </div>
           </div>
-          {!viewingPosts && nb.documents.length > 0 && (
+          {nb.documents.length > 0 && (
             <p className="muted small">
               {nb.documents.length} {nb.documents.length === 1 ? "post is" : "posts are"} connected to this notebook.
             </p>
@@ -944,40 +942,6 @@ export default function NotebookView() {
               load();
             }} />
           ))}
-          {postsShown && (
-            <>
-              {nb.is_archive && <p className="muted small">Every indexed post. New posts join automatically.</p>}
-              {!nb.is_archive && nb.documents.length === 0 && <p className="muted small">No posts yet. Add some to start asking and creating.</p>}
-              {nb.documents.length > 6 && (
-                <input className="input nbv-posts-search" type="search" placeholder="Find a post" value={postFilter} onChange={(e) => setPostFilter(e.target.value)} aria-label="Find a post" />
-              )}
-              <ul className="nbv-docs">
-                {nb.documents.filter((d) => d.title.toLowerCase().includes(postFilter.trim().toLowerCase())).map((d) => (
-                  <li key={d.id} className="nbv-doc">
-                    <button className="link-btn" onClick={() => setReading({ id: d.id })} title={d.title}>
-                      {d.title}
-                    </button>
-                    {d.published_at && <span className="mono muted">{formatDate(d.published_at)}</span>}
-                    {!nb.is_archive && (
-                      <button
-                        className="icon-btn nbv-remove"
-                        aria-label={`Remove ${d.title} from this notebook`}
-                        title="Remove from this notebook (the post itself is kept)"
-                        onClick={() => {
-                          setRemoveError(null);
-                          setRemoving({ id: d.id, title: d.title });
-                        }}
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
-                          <path d="M6 6l12 12M18 6L6 18" />
-                        </svg>
-                      </button>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
         </section>
       </aside>}
 
@@ -1180,7 +1144,7 @@ export default function NotebookView() {
         </form>
       </section>
 
-      {toolsShown && <aside className={`card nbv-pane nbv-side${tabClass("tools")}`} aria-label="Notebook tools">
+      {toolsShown && <aside className={`card nbv-pane nbv-side${tabClass(drawer === "library" ? "library" : "tools")}`} aria-label="Notebook tools">
         <StudioPanel notebookId={nb.id} docs={nb.documents.map((d) => ({ id: d.id, title: d.title, locked: d.locked }))}
                      chats={chats} currentChatId={chatId} presets={presets} presetKey={presetKey} quizOpen={makingQuiz}
                      onQuizClose={() => setMakingQuiz(false)} onCreateQuiz={() => openQuiz()}
@@ -1192,7 +1156,9 @@ export default function NotebookView() {
                      mapOpen={makingMap} onMapClose={() => setMakingMap(false)} onCreateMap={() => openMap()}
                      disabled={nb.documents.length === 0}
                      onCreateVideo={() => openVideo()}
-                     onClose={phone ? undefined : () => setToolsRail(false)} />
+                     onClose={phone ? undefined : () => setToolsRail(false)}
+                     section={phone ? (drawer === "library" ? "library" : "create") : undefined}
+                     onStarted={phone ? () => setDrawer("library") : undefined} />
       </aside>}
 
       {makingVideo && (
@@ -1201,49 +1167,17 @@ export default function NotebookView() {
         </Modal>
       )}
       {adding && (
-        <Modal title={nb.is_archive ? "Connect a source" : `Add to ${nb.title}`} onClose={addBusy ? () => undefined : () => setAdding(false)} wide>
+        <Modal title={nb.is_archive ? "Connect a source" : `Add to ${nb.title}`} onClose={() => setAdding(false)} wide>
           {nb.is_archive ? (
             <p className="muted small">This archive already contains all your posts. Posts from a new source join it automatically.</p>
           ) : (
-            <>
-              <p className="eyebrow muted">Connect a source</p>
-              <p className="muted small">Every post it imports joins this notebook.</p>
-            </>
+            <p className="muted small">Every post it imports joins this notebook.</p>
           )}
           <AddSource compact notebookId={nb.is_archive ? undefined : nb.id} onAdded={(_, job) => {
             setImports((cur) => [...cur, job]);
             setAdding(false);
           }} />
-          {!nb.is_archive && (
-            <>
-              <p className="eyebrow muted">Or add posts you already have</p>
-              <DocPicker selected={toAdd} onChange={setToAdd} exclude={nb.documents.map((d) => d.id)}
-                         allExcludedText="All your posts are connected to this notebook." />
-              {addError && <p className="error-text">{addError}</p>}
-              <div className="row end">
-                <button
-                  className="btn btn-primary"
-                  disabled={!toAdd.length || addBusy}
-                  onClick={async () => {
-                    setAddError(null);
-                    setAddBusy(true);
-                    try {
-                      await notebooksApi.addDocs(nb.id, toAdd);
-                      setToAdd([]);
-                      setAdding(false);
-                      load();
-                    } catch (e) {
-                      setAddError(errorMessage(e));
-                    } finally {
-                      setAddBusy(false);
-                    }
-                  }}
-                >
-                  {addBusy ? "Adding..." : `Add ${toAdd.length} ${toAdd.length === 1 ? "post" : "posts"}`}
-                </button>
-              </div>
-            </>
-          )}
+          <NotebookPostsManager notebookId={nb.id} docs={nb.documents} readOnly={nb.is_archive} onChanged={load} />
         </Modal>
       )}
       {reading && <Reader documentId={reading.id} highlight={reading.start ? { start: reading.start, end: reading.end ?? reading.start } : undefined} onClose={() => setReading(null)} />}
@@ -1271,39 +1205,6 @@ export default function NotebookView() {
                 }}
               >
                 {deleteChatBusy ? "Deleting..." : "Delete chat"}
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
-      {removing && (
-        // While the removal runs, Escape, the backdrop and the close button do nothing.
-        <Modal title="Remove this post?" onClose={removeBusy ? () => undefined : () => setRemoving(null)}>
-          <div className="stack">
-            <p>
-              "<strong>{removing.title}</strong>" will be removed from this notebook. The post itself is kept in your
-              library, and you can add it back later.
-            </p>
-            {removeError && <p className="error-text">{removeError}</p>}
-            <div className="vw-nav">
-              <button className="btn" onClick={() => setRemoving(null)} disabled={removeBusy}>Cancel</button>
-              <button
-                className="btn btn-danger vw-delete-confirm"
-                disabled={removeBusy}
-                onClick={async () => {
-                  setRemoveBusy(true);
-                  try {
-                    await notebooksApi.removeDoc(nb.id, removing.id);
-                    setRemoving(null);
-                    load();
-                  } catch (e) {
-                    setRemoveError(errorMessage(e));
-                  } finally {
-                    setRemoveBusy(false);
-                  }
-                }}
-              >
-                {removeBusy ? "Removing..." : "Remove post"}
               </button>
             </div>
           </div>

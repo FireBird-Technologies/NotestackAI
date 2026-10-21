@@ -1,8 +1,5 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import AppShell from "./components/AppShell";
-import { PublicFooter, PublicNav } from "./components/PublicChrome";
-import PricingTiers from "./components/PricingTiers";
-import SkyCanvas from "./components/SkyCanvas";
 import AuthCallback from "./pages/AuthCallback";
 import AuthPage from "./pages/AuthPage";
 import { Blog, BlogPostPage } from "./pages/Blog";
@@ -31,27 +28,13 @@ import { SupportWidget } from "./components/support/SupportWidget";
 import StartRoute from "./pages/StartRoute";
 import { PrivacyPolicy, SupportPage, TermsOfService } from "./pages/Legal";
 
-function PricingPage() {
-  return (
-    <div className="page">
-      <SkyCanvas intensity={0.7} />
-      <PublicNav />
-      <main className="container section">
-        <p className="eyebrow">Pricing</p>
-        <h1 className="section-title">Pick your trajectory</h1>
-        <PricingTiers />
-      </main>
-      <PublicFooter />
-    </div>
-  );
-}
-
 export default function App() {
   return (
     <>
     <Routes>
       <Route path="/" element={<Landing />} />
-      <Route path="/pricing" element={<PricingPage />} />
+      {/* The pricing page is gone: old links land on the homepage's pricing section */}
+      <Route path="/pricing" element={<Navigate to={{ pathname: "/", hash: "#pricing" }} replace />} />
       <Route path="/notebooklm-alternative" element={<NotebookLMAlternative />} />
       <Route path="/tools" element={<ToolsHub />} />
       <Route path="/tools/:slug" element={<ToolPage />} />

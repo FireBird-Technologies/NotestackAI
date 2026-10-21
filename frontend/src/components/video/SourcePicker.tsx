@@ -3,24 +3,28 @@ import { Link } from "react-router-dom";
 import type { ChatSummary, Doc, NotebookSummary } from "../../api/types";
 import { DocPicker } from "../DocPicker";
 import { Dropdown } from "../Dropdown";
-import { Loading } from "../ui";
 import { SourcesMenu } from "./PostsMenu";
 import { freshlySeeded, loadDocs, loadNotebooks, sourceCache } from "./sourceCache";
 
-/** What a video is made from: a notebook's (or the whole archive's) ticked posts, combined into one video, or one
- * post. */
+/** What a video is made from: a whole notebook (or the whole archive), searched for the video's topic, or one post.
+ * The other create dialogs (compact) use a notebook's ticked posts. */
 export type VideoSource = { kind: "notebook"; id: string } | { kind: "post"; id: string };
 
 const ONE_POST = "__post";
 /** Most posts one video can combine. */
 export const MAX_VIDEO_POSTS = 5;
 
-/** Step 1's source: a notebook (its first MAX_VIDEO_POSTS indexed posts ticked, retick to change) or a single post. */
+const NO_TICKS: string[] = [];
+const ignoreTicks = () => undefined;
+
+/** Step 1's source: a notebook or the archive as a whole (the video wizard), or a single post. Compact (the other create
+ * dialogs): the notebook's posts and chats to tick (its first MAX_VIDEO_POSTS indexed posts ticked to start with). */
 export function SourcePicker({
   source,
   onSource,
-  postIds,
-  onPostIds,
+  postIds = NO_TICKS,
+  onPostIds = ignoreTicks,
+  onPostCount,
   max = MAX_VIDEO_POSTS,
   what = "video",
   compact = false,
@@ -33,8 +37,11 @@ export function SourcePicker({
 }: {
   source: VideoSource | null;
   onSource: (s: VideoSource | null) => void;
-  postIds: string[];
-  onPostIds: (ids: string[]) => void;
+  /** Compact: the ticked posts. */
+  postIds?: string[];
+  onPostIds?: (ids: string[]) => void;
+  /** Not compact: how many posts the chosen notebook has (null until known, or for a single post). */
+  onPostCount?: (n: number | null) => void;
   /** Most posts that can be ticked. */
   max?: number;
   /** What is being made, for the wording ("video", "quiz"). */
@@ -67,8 +74,16 @@ export function SourcePicker({
   const notebookId = source?.kind === "notebook" ? source.id : null;
   const postId = source?.kind === "post" ? source.id : null;
 
+  // The wizard's notebook is read whole on the server: only its post count is needed (an empty one cannot make a video).
+  const count = notebookId ? notebooks?.find((n) => n.id === notebookId)?.document_count ?? null : null;
+  const reportCount = useRef(onPostCount);
+  reportCount.current = onPostCount;
   useEffect(() => {
-    if (!notebookId) return;
+    if (!compact) reportCount.current?.(count);
+  }, [count, compact]);
+
+  useEffect(() => {
+    if (!notebookId || !compact) return;
     let live = true;
     const tickable = (list: Doc[]) => list.filter((d) => !d.locked).map((d) => d.id);
     const firstFew = (list: Doc[]) => tickable(list).slice(0, Math.min(autoCount ?? max, max));
@@ -91,10 +106,7 @@ export function SourcePicker({
     return () => {
       live = false;
     };
-  }, [notebookId, onPostIds, max, autoSelect, autoCount]);
-
-  const ticked = docs ? postIds.length : 0;
-  const pickable = docs?.filter((d) => !d.locked).length ?? 0;
+  }, [notebookId, onPostIds, max, autoSelect, autoCount, compact]);
 
   // Compact (the quiz, flashcard, report and other create dialogs): the notebook is fixed by where the dialog was opened,
   // so there is no notebook choice, just one dropdown with its posts and chats.
@@ -144,35 +156,10 @@ export function SourcePicker({
         <DocPicker selected={postId ? [postId] : []} onChange={(ids) => onSource({ kind: "post", id: ids[0] })} single />
       )}
 
-      {notebookId && !choosing && (
-        !docs ? (
-          // Same shape as the loaded list, so the form does not jump when the posts arrive.
-          <div className="field">
-            {!compact && <span className="vw-label">Posts</span>}
-            <div className="picker">
-              <div className="picker-bar">
-                <input className="input input-sm" placeholder="Search posts" disabled aria-label="Search posts" />
-                <div className="picker-actions mono muted"><span>Loading</span></div>
-              </div>
-              <div className="picker-list vw-posts-wait"><Loading label="Loading posts" /></div>
-            </div>
-            <small className="muted">&nbsp;</small>
-          </div>
-        ) : docs.length === 0 ? (
-          <p className="muted">
-            This notebook has no posts yet. <Link to="/app/sources">Connect a source</Link> or pick another notebook.
-          </p>
-        ) : (
-          <div className="field">
-            {!compact && <span className="vw-label">Posts</span>}
-            <DocPicker docs={docs} selected={postIds} onChange={onPostIds} max={max} count={false} />
-            <small className="muted vw-hint">
-              {ticked === 0
-                ? "Tick at least one post."
-                : `You can select up to ${Math.min(max, pickable)} (${ticked} selected). They are combined into one ${what}.`}
-            </small>
-          </div>
-        )
+      {notebookId && !choosing && count === 0 && (
+        <p className="muted">
+          This notebook has no posts yet. <Link to="/app/sources">Connect a source</Link> or pick another notebook.
+        </p>
       )}
     </>
   );

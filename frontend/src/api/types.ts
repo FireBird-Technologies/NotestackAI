@@ -673,6 +673,7 @@ export type VideoOptions = {
 /** A focus topic the AI suggests: a short title, and two sentences on what the video would cover. */
 export type VideoFocusTopic = { title: string; description: string };
 
+/** One source: a post, ticked posts, chats, or `notebook_id` alone (the whole notebook or archive). */
 export type VideoFocusSource = { document_id?: string; document_ids?: string[]; chat_ids?: string[]; notebook_id?: string };
 
 export type VideoCreateBody = VideoOptions & {
@@ -685,7 +686,8 @@ export type VideoCreateBody = VideoOptions & {
   document_id?: string;
   /** A notebook's ticked posts, combined into one video. */
   document_ids?: string[];
-  /** Names a combined video after its notebook. */
+  /** Names a combined video after its notebook. Alone, the whole notebook: its posts are searched for the topic
+   * (`focus` or `focus_prompt`, one of them required), or an overview of it is made when none cover the topic. */
   notebook_id?: string;
   /** Notebook chats: their transcripts, after a prompt saying what they are (combined into one video). */
   chat_ids?: string[];

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { launchpadApi } from "../api/endpoints";
 import type { CalendarItem, PostableArtifact, SocialAccounts } from "../api/types";
@@ -103,10 +103,12 @@ function ItemModal({
         {item.status === "paused" ? (
           <div className="lp-paused">
             <span>{item.error ?? "Paused: it won't go out until resumed."}</span>
-            {(item.platform === "x" || item.platform === "linkedin")
-              && accounts?.accounts.some((a) => a.platform === item.platform && a.needs_reconnect) && (
+            {/* Its connection is down (Reconnect), or was disconnected and none is connected now (Connect: any account
+                takes its posts over) */}
+            {(item.platform === "x" || item.platform === "linkedin") && accounts
+              && !accounts.accounts.some((a) => a.platform === item.platform && !a.needs_reconnect) && (
               <button className="btn btn-small btn-primary" onClick={() => onReconnect(item.platform as "x" | "linkedin")}>
-                Reconnect {item.platform_label}
+                {accounts.accounts.some((a) => a.platform === item.platform) ? "Reconnect" : "Connect"} {item.platform_label}
               </button>
             )}
             <span className="muted small">Pick a time still ahead and Save to resume it.</span>
@@ -319,12 +321,13 @@ function ConnectionsPanel({ accounts, onConnect, onChanged }: {
         <Modal title={`Disconnect ${PLATFORMS.find((p) => p.id === disconnecting.platform)?.label ?? "account"}?`} onClose={closeDisconnect}>
           <div className="stack">
             <p>
-              <strong>{disconnecting.handle}</strong> will be disconnected. Its scheduled posts pause until you reconnect.
+              <strong>{disconnecting.handle}</strong> will be disconnected and removed from here. Its scheduled posts pause
+              until you connect an account again (this one or another), which then posts them.
             </p>
             {error && <p className="error-text">{error}</p>}
             <div className="row end">
               <button type="button" className="btn" onClick={closeDisconnect} disabled={busy}>Cancel</button>
-              <button type="button" className="btn btn-danger" onClick={disconnect} disabled={busy}>
+              <button type="button" className="btn btn-danger vw-delete-confirm" onClick={disconnect} disabled={busy}>
                 {busy ? "Disconnecting..." : "Disconnect"}
               </button>
             </div>
@@ -363,13 +366,20 @@ export default function Launchpad() {
     const end = days.findIndex((d, i) => i > 7 && d.getMonth() !== month.getMonth()); // the day after the month ends
     return end < 0 ? days : days.slice(0, Math.ceil(end / 7) * 7);
   }, [days, month]);
+  // The month (or agenda) the calendar is showing: an answer for one just left is dropped when it arrives late.
+  const asked = useRef("");
   const load = useCallback(() => {
     const start = view === "month" ? days[0] : new Date(Date.now() - 7 * 864e5);
     const end = view === "month" ? new Date(days[41].getTime() + 864e5) : new Date(Date.now() + 120 * 864e5);
-    return launchpadApi.items({ start: start.toISOString(), end: end.toISOString() }).then(setItems);
+    const key = `${view}|${start.toISOString()}`;
+    asked.current = key;
+    return launchpadApi.items({ start: start.toISOString(), end: end.toISOString() })
+      .then((list) => asked.current === key && setItems(list));
   }, [days, view]);
 
+  // Another month or view: the spinner until its posts arrive, never the last month's meanwhile.
   useEffect(() => {
+    setItems(null);
     load();
   }, [load]);
   // Posts with a video or images upload in the background: check back until they are posted (or failed).

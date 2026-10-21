@@ -8,13 +8,15 @@ import { ONBOARDED_KEY } from "../pages/Welcome";
 
 /**
  * The upgrade system: billing status (plan, meters, nudges), the upgrade popup and nudge dismissals.
- * Popup modes: explore (the opening pitch), limit (a request hit a 402 plan_limit), welcome (back from checkout).
+ * Popup modes: explore (the opening pitch), limit (a request hit a 402 plan_limit), welcome (back from checkout),
+ * plans (every plan side by side, the current one highlighted; Studio on Free).
  */
 
 export type UpgradeModal =
   | { mode: "explore"; highlight?: string | null }
   | { mode: "limit"; limit: PlanLimitDetail }
-  | { mode: "welcome" };
+  | { mode: "welcome" }
+  | { mode: "plans" };
 
 type UpgradeState = {
   status: BillingStatus | null;
@@ -23,6 +25,8 @@ type UpgradeState = {
   openUpgrade: (highlight?: string | null) => void;
   /** The out of fuel popup without a refused request: an early warning, such as chat messages running low. */
   openLimit: (limit: PlanLimitDetail) => void;
+  /** Every plan, the current one included: "View plans" on the plan card. */
+  openPlans: () => void;
   close: () => void;
   refresh: () => Promise<void>;
   dismissNudge: (id: string) => void;
@@ -180,6 +184,10 @@ export function UpgradeProvider({ children }: { children: ReactNode }) {
       openLimit: (limit) => {
         setError(null);
         setModal({ mode: "limit", limit });
+      },
+      openPlans: () => {
+        setError(null);
+        setModal({ mode: "plans" });
       },
       close: () => {
         setModal(null);

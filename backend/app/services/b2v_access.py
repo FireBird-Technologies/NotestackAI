@@ -14,6 +14,7 @@ from sqlalchemy import select
 from app.auth import Ctx
 from app.models import Artifact, B2VStyle, B2VTemplate, B2VVideo
 from app.services import blog2video as b2v
+from app.services.notestack_voices import is_notestack_voice
 from app.services.plans import Plan, effective_plan
 
 BUILTIN_STYLES = {"auto", "explainer", "storytelling", "promotional"}
@@ -131,8 +132,11 @@ def check_style(ctx: Ctx, style: str) -> None:
     raise not_found("Video style not found")  # includes your_style, which learns from every workspace's edits
 
 
-def check_voice(voice_id: str) -> None:
-    """Any built-in voice (blog2video and NoteStack share one ElevenLabs account)."""
+def check_voice(ctx: Ctx, voice_id: str) -> None:
+    """Any built-in voice, or one of this workspace's own (its clone, designed or added voices): blog2video and
+    NoteStack share one ElevenLabs account, so the workspace's voices narrate videos too."""
+    if is_notestack_voice(ctx.db, ctx.workspace.id, voice_id):
+        return
     voice = next((v for v in b2v.prebuilt_voices() if v.get("voice_id") == voice_id), None)
     if not voice:
         raise not_found("Voice not found")
@@ -146,7 +150,7 @@ def check_refs(ctx: Ctx, body: dict, plan: Plan | None = None) -> Plan:
     if body.get("video_style"):
         check_style(ctx, str(body["video_style"]))
     if body.get("custom_voice_id") and body.get("voice_gender") != "none":
-        check_voice(str(body["custom_voice_id"]))
+        check_voice(ctx, str(body["custom_voice_id"]))
     if str(body.get("video_length") or "") not in {"", "short", "medium"}:
         raise HTTPException(400, "That video length is not available.")
     if body.get("voice_emotion"):
