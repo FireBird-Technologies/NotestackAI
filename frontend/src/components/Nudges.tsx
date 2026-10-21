@@ -52,13 +52,14 @@ function fuelLeft(m: { used: number; limit: number; unit: string }): string {
 }
 
 export function FuelGauge({ collapsed }: { collapsed: boolean }) {
-  const { status, openUpgrade, openPlans } = useUpgrade();
+  const { status, openPlans } = useUpgrade();
   if (!status) return null;
   const meters = status.meters.filter((m) => m.key !== "sources");
   const low = meters.some((m) => m.limit >= 0 && m.pct >= 0.8);
+  // Upgrading means picking a plan: the button opens every plan side by side, and is the card's only button.
   if (collapsed) {
     return status.can_upgrade ? (
-      <button className={`icon-btn fuel-mini${low ? " low" : ""}`} onClick={() => openUpgrade()} title="Upgrade" aria-label="Upgrade">
+      <button className={`icon-btn fuel-mini${low ? " low" : ""}`} onClick={openPlans} title="Upgrade" aria-label="Upgrade">
         <RocketIcon />
       </button>
     ) : null;
@@ -81,11 +82,11 @@ export function FuelGauge({ collapsed }: { collapsed: boolean }) {
         </div>
       ))}
       {status.can_upgrade && (
-        <button className="btn btn-primary btn-small fuel-cta" onClick={() => openUpgrade()}>
+        <button className="btn btn-primary btn-small fuel-cta" onClick={openPlans}>
           <RocketIcon size={16} /> Upgrade now
         </button>
       )}
-      <button className="link-btn mono small fuel-plans" onClick={openPlans}>View plans</button>
+      {!status.can_upgrade && <button className="link-btn mono small fuel-plans" onClick={openPlans}>View plans</button>}
     </div>
   );
 }
