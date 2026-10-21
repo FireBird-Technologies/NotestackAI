@@ -10627,17 +10627,14 @@ body.pv-full-open .modal-backdrop {
   transition: opacity 0.15s;
 }
 
-/* Presenting: the slide fills the screen, letterboxed in its own sky colour; the controls fade when the mouse rests. */
+/* Presenting: the slide fills the screen, letterboxed in black whatever its theme (a white deck too, so the slide's
+   edges show); the controls fade when the mouse rests. */
 .sd-present {
   position: fixed;
   inset: 0;
   z-index: 1000;
   background: #000;
   cursor: pointer;
-}
-
-.sd-present.light {
-  background: #ffffff;
 }
 
 .sd-present-stage {
