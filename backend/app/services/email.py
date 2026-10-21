@@ -11,7 +11,6 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
 
 from app.config import settings
 
@@ -109,14 +108,10 @@ def _button(label: str, url: str) -> str:
     )
 
 
-# The logo travels inside the email (an inline attachment): a linked image would need a public URL and is often
-# blocked until the reader allows images.
-LOGO_CID = "notestack-logo"
-LOGO_PATH = Path(__file__).resolve().parent.parent / "assets" / "logo-email.png"
-
-
-def _logo_png() -> bytes:
-    return LOGO_PATH.read_bytes()
+def _logo_url() -> str:
+    """The logo as the site serves it (a PNG): Gmail and Outlook show a linked image, but neither shows an SVG, and an
+    inline (cid:) attachment came through as a broken image."""
+    return f"{settings.frontend_url.rstrip('/')}/icon-192.png"
 
 
 def _video_ready_layout(first: str, title: str, url: str) -> str:
@@ -131,7 +126,7 @@ border:1px solid rgba(33,124,255,0.35);border-radius:16px;overflow:hidden;backgr
 <tr><td style="height:4px;background:#217cff;font-size:0;line-height:0">&nbsp;</td></tr>
 <tr><td align="center" style="padding:36px 24px;background:#0a1224;border-bottom:1px solid rgba(33,124,255,0.25)">
 <table role="presentation" cellpadding="0" cellspacing="0"><tr>
-<td style="padding-right:12px;vertical-align:middle"><img src="cid:{LOGO_CID}" width="40"
+<td style="padding-right:12px;vertical-align:middle"><img src="{_logo_url()}" width="40"
 height="40" alt="" style="display:block;width:40px;height:40px;border-radius:10px;background:#ffffff;border:0"></td>
 <td style="vertical-align:middle;font-family:'Space Grotesk',Inter,Arial,sans-serif;font-size:26px;font-weight:600;
 letter-spacing:0.01em;color:#ffffff">Notestack</td>
@@ -231,7 +226,6 @@ class EmailService:
                 to=to,
                 subject=f'Your video "{title}" is ready to download',
                 html=_video_ready_layout(first, title, url),
-                inline_images={LOGO_CID: ("notestack.png", _logo_png())},
                 text=(f"Hi {first}, your video is ready to download!\n\n"
                       f'Your Notestack video "{title}" has finished rendering. Download it here:\n{url}'),
             )
