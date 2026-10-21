@@ -21,7 +21,8 @@ export function NotebookPostsManager({ notebookId, docs, readOnly = false, onCha
   const [removeError, setRemoveError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!readOnly) docsApi.list({ sort: "added", limit: 5000 }).then((p) => setAll(p.items));
+    // Indexed posts only: one past the plan's limit cannot be added, so it is not offered.
+    if (!readOnly) docsApi.list({ sort: "added", limit: 5000, indexed_only: true }).then((p) => setAll(p.items));
   }, [readOnly]);
 
   const needle = q.trim().toLowerCase();
