@@ -263,6 +263,45 @@ def test_uploads_read_only_documents():
     assert entry_from_upload("page.html", "text/html", b"<title>Page</title><p>Hi</p>").title == "Page"
 
 
+
+SCANNED = [(None, "\n\n".join(["CamScanner"] * 14))]  # what a phone scan with no text layer gives
+ESSAY = ("Raising prices once a year keeps the paid tier honest: readers know when it changes and why, and the free "
+         "tier stays generous enough to bring new people in.")
+
+
+def test_a_scanned_pdf_with_no_text_is_refused(monkeypatch):
+    from app.pipeline import ingest
+
+    def pdf(sections):
+        monkeypatch.setattr(ingest, "pdf_to_sections", lambda data: sections)
+        return ingest.entry_from_upload("Bg Immune ch4.pdf", "application/pdf", b"%PDF-1.4")
+
+    with pytest.raises(ingest.UnreadableFile, match="scanned PDF with no text.*OCR"):
+        pdf(SCANNED)
+    with pytest.raises(ingest.UnreadableFile):
+        pdf([])  # no text at all
+    with pytest.raises(ingest.UnreadableFile):  # a running header on every page, and a line of text
+        pdf([(None, "\n\n".join(["Chapter 4 notes"] * 6 + ["Blood groups."]))])
+    # Real text with the scanner's stamp on every page is a readable post
+    page = f"{ESSAY}\n\nScanned with CamScanner"
+    assert pdf([(None, "\n\n".join([page] * 3))]).sections
+
+
+def test_a_scanned_pdf_upload_fails_the_import_and_makes_no_post(client, auth, run_jobs, monkeypatch):
+    from app.pipeline import ingest
+
+    monkeypatch.setattr(ingest, "pdf_to_sections", lambda data: SCANNED)
+    start = client.post("/api/storage/uploads", json={"filename": "scan.pdf", "content_type": "application/pdf",
+                                                      "size_bytes": 8}, headers=auth).json()
+    client.put(start["upload_url"].split("8000", 1)[1], content=b"%PDF-1.4")
+    client.post(f"/api/storage/uploads/{start['upload_id']}/complete", headers=auth)
+    client.post("/api/sources/upload", json={"upload_id": start["upload_id"]}, headers=auth)
+    job = run_jobs()[0]
+    assert job.status == "failed" and job.attempts == 1  # permanent: not retried
+    assert "scan.pdf looks like a scanned PDF with no text in it" in job.error
+    assert docs(client, auth) == []
+
+
 # Notebooks
 
 
