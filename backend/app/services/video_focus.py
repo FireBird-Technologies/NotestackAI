@@ -86,7 +86,7 @@ def build_pool(db: Session, workspace_id: uuid.UUID, sources: dict[str, dict[uui
     """Every tag of the source's posts, best first. A source is a post (itself, weight 1) or a chat (the posts it
     cites). Score: the tag's weight summed over the sources that carry it, times the share of sources that do, so a
     theme running through the selection beats one post's strongest tag."""
-    tags = _doc_tags(db, workspace_id, docs)
+    tags = doc_tags(db, workspace_id, docs)
     score: dict[str, float] = defaultdict(float)
     carried: dict[str, set[str]] = defaultdict(set)
     summaries: dict[str, str] = {}
@@ -107,7 +107,7 @@ def build_pool(db: Session, workspace_id: uuid.UUID, sources: dict[str, dict[uui
     return sorted(pool, key=lambda c: (-c.score, c.name))
 
 
-def _doc_tags(db: Session, workspace_id: uuid.UUID,
+def doc_tags(db: Session, workspace_id: uuid.UUID,
               docs: list[Document]) -> dict[uuid.UUID, dict[str, tuple[float, str, bool]]]:
     """Post -> {topic name: (weight, summary, merged)}: the topic table's (merged) topics and the post's own tags. The
     merge folds a post's specific tags into a few broad workspace topics ("Content Repurposing" into "Finance

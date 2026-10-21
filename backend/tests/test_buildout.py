@@ -263,6 +263,45 @@ def test_uploads_read_only_documents():
     assert entry_from_upload("page.html", "text/html", b"<title>Page</title><p>Hi</p>").title == "Page"
 
 
+
+SCANNED = [(None, "\n\n".join(["CamScanner"] * 14))]  # what a phone scan with no text layer gives
+ESSAY = ("Raising prices once a year keeps the paid tier honest: readers know when it changes and why, and the free "
+         "tier stays generous enough to bring new people in.")
+
+
+def test_a_scanned_pdf_with_no_text_is_refused(monkeypatch):
+    from app.pipeline import ingest
+
+    def pdf(sections):
+        monkeypatch.setattr(ingest, "pdf_to_sections", lambda data: sections)
+        return ingest.entry_from_upload("Bg Immune ch4.pdf", "application/pdf", b"%PDF-1.4")
+
+    with pytest.raises(ingest.UnreadableFile, match="scanned PDF with no text.*OCR"):
+        pdf(SCANNED)
+    with pytest.raises(ingest.UnreadableFile):
+        pdf([])  # no text at all
+    with pytest.raises(ingest.UnreadableFile):  # a running header on every page, and a line of text
+        pdf([(None, "\n\n".join(["Chapter 4 notes"] * 6 + ["Blood groups."]))])
+    # Real text with the scanner's stamp on every page is a readable post
+    page = f"{ESSAY}\n\nScanned with CamScanner"
+    assert pdf([(None, "\n\n".join([page] * 3))]).sections
+
+
+def test_a_scanned_pdf_upload_fails_the_import_and_makes_no_post(client, auth, run_jobs, monkeypatch):
+    from app.pipeline import ingest
+
+    monkeypatch.setattr(ingest, "pdf_to_sections", lambda data: SCANNED)
+    start = client.post("/api/storage/uploads", json={"filename": "scan.pdf", "content_type": "application/pdf",
+                                                      "size_bytes": 8}, headers=auth).json()
+    client.put(start["upload_url"].split("8000", 1)[1], content=b"%PDF-1.4")
+    client.post(f"/api/storage/uploads/{start['upload_id']}/complete", headers=auth)
+    client.post("/api/sources/upload", json={"upload_id": start["upload_id"]}, headers=auth)
+    job = run_jobs()[0]
+    assert job.status == "failed" and job.attempts == 1  # permanent: not retried
+    assert "scan.pdf looks like a scanned PDF with no text in it" in job.error
+    assert docs(client, auth) == []
+
+
 # Notebooks
 
 
@@ -880,6 +919,27 @@ def test_postable_lists_what_can_be_posted(client, auth, db_session):
     assert summary["prefill"]["linkedin"] == "Raise prices once a year." and summary["media"] == "text"
 
 
+def test_library_pages_the_postable_items(client, auth, db_session):
+    ws = db_session.query(Workspace).first()
+    for i in range(12):
+        _made(db_session, ws, "summary", summary=f"Point {i}.", title=f"Pricing note {i}")
+    _made(db_session, ws, "launch_kit", title="Kit")
+    _made(db_session, ws, "video", status="ready", provider="blog2video", b2v_status="generated", title="Demo video")
+    _made(db_session, ws, "video", status="processing", provider="blog2video")  # not made yet: never listed
+
+    def page(**params):
+        return client.get("/api/launchpad/library", params=params, headers=auth).json()
+
+    first, second = page(limit=10), page(limit=10, offset=10)
+    assert first["total"] == second["total"] == 14 and len(first["items"]) == 10 and len(second["items"]) == 4
+    assert not {a["id"] for a in first["items"]} & {a["id"] for a in second["items"]}  # no repeats across pages
+    assert page(kits="false")["total"] == 13  # the composer never offers launch kits
+    assert [a["title"] for a in page(kind="kits")["items"]] == ["Kit"]
+    videos = page(kind="video")
+    assert videos["total"] == 1 and videos["items"][0]["editable_video"] is True
+    assert page(q="PRICING NOTE 1")["total"] == 3  # 1, 10, 11: by title, any case
+
+
 def test_scheduling_refuses_what_cannot_go_out(client, auth, db_session):
     ws = db_session.query(Workspace).first()
     audio = _made(db_session, ws, "audio_overview", key="ws/a/audio.mp3")
@@ -1141,6 +1201,12 @@ def test_voice_library_preview_and_script(client, auth, monkeypatch, feed, run_j
                                                    "delivery": {"stability": 0.3, "similarity_boost": 0.8,
                                                                 "style": 0, "speed": 0.9}}, headers=auth).json()
     assert prev["seconds"] == 0.5 and client.get(prev["url"].split("8000", 1)[1]).status_code == 200
+    # Played again: served from the cache at once, no new speech and nothing metered
+    monkeypatch.setattr(tts, "synthesize", lambda *a, **k: pytest.fail("a cached preview was spoken again"))
+    again = client.post("/api/voice/preview", json={"voice_id": "added-lib-voice-1", "text": "Hello there",
+                                                    "delivery": {"stability": 0.3, "similarity_boost": 0.8,
+                                                                 "style": 0, "speed": 0.9}}, headers=auth).json()
+    assert again["url"].split("?")[0] == prev["url"].split("?")[0]
 
     connect(client, auth, run_jobs)
     script = client.get("/api/voice/reading-script", headers=auth).json()

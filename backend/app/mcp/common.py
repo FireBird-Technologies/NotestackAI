@@ -55,7 +55,7 @@ class ToolError(Exception):
 def error_payload(exc: ApiError) -> dict:
     detail = exc.detail
     if exc.status == 402 and isinstance(detail, dict):  # a plan limit
-        return {"error": "plan_limit", **detail, "upgrade_url": settings.frontend_url.rstrip("/") + "/pricing",
+        return {"error": "plan_limit", **detail, "upgrade_url": settings.frontend_url.rstrip("/") + "/#pricing",
                 "tell_the_writer": "Say plainly what they have run out of, name the plan to upgrade to, and give them the upgrade_url link. Do not retry."}
     if exc.status == 401:
         return {"error": "not_signed_in", "message": "Your Notestack sign-in is no longer valid. Connect again."}

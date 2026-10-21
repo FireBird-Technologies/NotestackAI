@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { artifactsApi, type GenerateBody } from "../api/endpoints";
 import type { Artifact, ChatPreset, ChatSummary } from "../api/types";
 import { SourceFocusFields, sourceSummary, type SourceSelection } from "./SourceFocusFields";
-import { ArtifactFeedback } from "./ArtifactFeedback";
+import { CardFeedback } from "./CardFeedback";
 import { ShareDialog } from "./ShareDialog";
-import { errorMessage, Modal } from "./ui";
-import { DownloadIcon, ShareIcon } from "./icons/Icons";
+import { errorMessage, Modal, useFullView } from "./ui";
+import { CollapseIcon, DownloadIcon, ExpandIcon, LandscapeIcon, PortraitIcon, ShareIcon } from "./icons/Icons";
 import { ViewButton } from "./cardActions";
 
 /** The looks: black and blue, and white with orbits. The AI composes the page itself in the look chosen
@@ -86,14 +86,13 @@ function DownloadMenu({ busy, onPick, inCard = false }: { busy: Which | null; on
       </button>
       {open && (
         <div className="ig-dl-menu" role="menu">
-          <button type="button" role="menuitem" onClick={() => pick("landscape")}>
-            Landscape <small className="muted">4520 x 3200</small>
+          {/* Each shape's icon where its pixel size used to be */}
+          <button type="button" role="menuitem" onClick={() => pick("landscape")} title="4520 x 3200 PNG">
+            Landscape <span className="ig-dl-shape" aria-hidden="true"><LandscapeIcon size={16} /></span>
           </button>
-          <button type="button" role="menuitem" onClick={() => pick("portrait")}>
-            Portrait <small className="muted">3200 x 4520</small>
-          </button>
-          <button type="button" role="menuitem" onClick={() => pick("both")}>Both</button>
-        </div>
+          <button type="button" role="menuitem" onClick={() => pick("portrait")} title="3200 x 4520 PNG">
+            Portrait <span className="ig-dl-shape" aria-hidden="true"><PortraitIcon size={16} /></span>
+          </button>        </div>
       )}
     </div>
   );
@@ -161,7 +160,7 @@ export function InfographicDialog({ notebookId, chats, currentChatId, busy, erro
 
   return (
     <Modal title={title} onClose={onClose} wide>
-      <div className="stack vw-in-modal">
+      <div className="stack vw-in-modal ig-dialog">
         <section className="stack vw qz-setup">
           <div className="field">
             <span className="vw-label">Layout</span>
@@ -204,7 +203,7 @@ export function InfographicDialog({ notebookId, chats, currentChatId, busy, erro
 }
 
 /** One infographic in a modal, fitted to the window so nothing scrolls: the whole page at once, with its prompt and
- * sources one click away and a share link. */
+ * sources one click away, its shape, and (a row below) its rating, download, share and full screen. */
 export function InfographicViewer({ artifact, onClose, onDownload }: { artifact: Artifact; onClose: () => void; onDownload: (which: Which) => void }) {
   const [info, setInfo] = useState(false);
   const [sharing, setSharing] = useState(false);
@@ -212,30 +211,50 @@ export function InfographicViewer({ artifact, onClose, onDownload }: { artifact:
   const c = artifact.content;
   const prompt = String(c.prompt ?? "").trim();
   const html = (layout === "landscape" ? c.html_landscape : c.html) as string | undefined;
+  const stage = useRef<HTMLDivElement>(null);
+  const { full, enter, leave } = useFullView(stage);
   return (
     <>
       <Modal title={artifact.title} onClose={onClose} wide>
         <div className={`ig-viewer ${layout}`}>
+          {/* Two rows: the prompt and the page's shape, then rating, download, share and full screen */}
           <div className="ig-bar">
-            <button type="button" className="btn btn-small ig-pill" aria-expanded={info} onClick={() => setInfo((o) => !o)}>
-              View prompt and {sourceSummary(c.source)}
-            </button>
-            <div className="ig-bar-right">
+            <div className="ig-bar-top">
+              {/* Opens the prompt and what it was made from */}
+              <button type="button" className="btn btn-small ig-pill" aria-expanded={info} onClick={() => setInfo((o) => !o)}>
+                <span>View prompt</span>
+              </button>
               <div className="ig-layout" role="radiogroup" aria-label="Page shape">
-                {(["landscape", "portrait"] as const).map((l) => (
-                  <button key={l} type="button" role="radio" aria-checked={layout === l} className={layout === l ? "on" : ""}
-                          onClick={() => setLayout(l)}>
-                    {l === "landscape" ? "Landscape" : "Portrait"}
-                  </button>
-                ))}
+                {(["landscape", "portrait"] as const).map((l) => {
+                  const name = l === "landscape" ? "Landscape" : "Portrait";
+                  return (
+                    <button key={l} type="button" role="radio" aria-checked={layout === l} className={layout === l ? "on" : ""}
+                            aria-label={name} title={name} onClick={() => setLayout(l)}>
+                      {l === "landscape" ? <LandscapeIcon size={16} /> : <PortraitIcon size={16} />}
+                    </button>
+                  );
+                })}
               </div>
-              <ArtifactFeedback artifact={artifact} compact />
-              {/* The viewer closes at once; the card in the panel shows the download going */}
-              <DownloadMenu busy={null} onPick={(which) => {
-                onClose();
-                onDownload(which);
-              }} />
-              <button type="button" className="btn btn-small" onClick={() => setSharing(true)}><ShareIcon size={16} /> Share</button>
+            </div>
+            {/* Rating and download on the left, share and full screen on the right */}
+            <div className="ig-bar-actions">
+              <div className="ig-bar-group">
+                {/* The thumbs open the review in a popup, as on every other card */}
+                <CardFeedback artifact={artifact} />
+                {/* The viewer closes at once; the card in the panel shows the download going */}
+                <DownloadMenu busy={null} onPick={(which) => {
+                  onClose();
+                  onDownload(which);
+                }} />
+              </div>
+              <div className="ig-bar-group">
+                <button type="button" className="btn btn-small btn-icon-only" onClick={() => setSharing(true)} aria-label="Share" title="Share">
+                  <ShareIcon size={16} />
+                </button>
+                <button type="button" className="btn btn-small btn-icon-only" onClick={() => void enter()} aria-label="Full screen" title="Full screen">
+                  <ExpandIcon size={16} />
+                </button>
+              </div>
             </div>
           </div>
           {info && (
@@ -246,7 +265,15 @@ export function InfographicViewer({ artifact, onClose, onDownload }: { artifact:
               <p>{sourceSummary(c.source)}</p>
             </div>
           )}
-          {html && <InfographicFrame key={layout} html={html} title={artifact.title} layout={layout} />}
+          {/* Full screen shows this: the page fitted to the screen, with a way out */}
+          <div ref={stage} className={`ig-stage ${layout}${full ? " ig-full" : ""}`}>
+            {html && <InfographicFrame key={layout} html={html} title={artifact.title} layout={layout} />}
+            {full && (
+              <button type="button" className="pv-full-btn" onClick={leave} aria-label="Exit full screen" title="Exit full screen">
+                <CollapseIcon size={18} />
+              </button>
+            )}
+          </div>
         </div>
       </Modal>
       {sharing && <ShareDialog artifactId={artifact.id} what="infographic" onClose={() => setSharing(false)} />}

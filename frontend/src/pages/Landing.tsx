@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import SkyCanvas from "../components/SkyCanvas";
 import FeatureShowcase from "../components/FeatureShowcase";
 import PricingTiers from "../components/PricingTiers";
@@ -132,6 +132,19 @@ function DemoVideo() {
   );
 }
 
+/** /#pricing, /#features: scroll to that section on arrival and whenever the hash changes (the router does not). */
+function useHashScroll() {
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (!hash) return;
+    const el = document.getElementById(hash.slice(1));
+    if (!el) return;
+    // After this frame's layout, so the section is where it will stay
+    const id = requestAnimationFrame(() => el.scrollIntoView({ behavior: "smooth", block: "start" }));
+    return () => cancelAnimationFrame(id);
+  }, [hash]);
+}
+
 /** Sections drift in out of the depth as they reach the viewport, like planets on approach. */
 function useArrivals() {
   useEffect(() => {
@@ -161,6 +174,7 @@ export default function Landing() {
   const navigate = useNavigate();
   const { user } = useAuth();
   useArrivals();
+  useHashScroll();
   const { check, modal } = useSourceUrlCheck();
 
   const onSubmit = async (e: FormEvent) => {

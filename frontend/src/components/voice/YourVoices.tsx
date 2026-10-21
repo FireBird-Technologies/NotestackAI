@@ -6,17 +6,43 @@ import { PlayButton, useAudio } from "../video/parts";
 
 const cap = (s?: string | null) => (s ? s[0].toUpperCase() + s.slice(1) : "");
 
-/** Play a voice: library voices have a sample link; the workspace's own (Notestack) voices have none, so the Voice
- * page speaks a line in them. */
+/* The workspace's own voices have no sample link: the server speaks a line in them (once, then serves it from its
+   cache). Each voice's link is kept here for the page's life (it lasts an hour), and its audio fetched ahead, so a
+   play starts at once. */
+const PREVIEW_FOR = 50 * 60 * 1000;
+const previews = new Map<string, { at: number; url: Promise<string>; audio?: HTMLAudioElement }>();
+
+export function voicePreviewUrl(voiceId: string): Promise<string> {
+  const hit = previews.get(voiceId);
+  if (hit && Date.now() - hit.at < PREVIEW_FOR) return hit.url;
+  const entry: { at: number; url: Promise<string>; audio?: HTMLAudioElement } = { at: Date.now(), url: Promise.resolve("") };
+  entry.url = voiceApi.preview(voiceId).then((r) => {
+    // Fetched ahead: the browser holds its audio, so playing it later needs no download.
+    entry.audio = new Audio();
+    entry.audio.preload = "auto";
+    entry.audio.src = r.url;
+    return r.url;
+  });
+  entry.url.catch(() => previews.delete(voiceId)); // a failure is asked again next time
+  previews.set(voiceId, entry);
+  return entry.url;
+}
+
+/** Ask for the workspace's voices' samples ahead of any play (the list just loaded). */
+export function prefetchVoicePreviews(saved: VideoSavedVoice[]) {
+  for (const v of saved) if (v.source === "notestack") voicePreviewUrl(v.voice_id).catch(() => undefined);
+}
+
+/** Play a voice: library voices have a sample link; the workspace's own (Notestack) voices use the kept one. */
 export function useVoicePlayer(onError: (msg: string) => void) {
   const { playing, play, stop } = useAudio();
   const playNotestack = async (voiceId: string) => {
     if (playing === voiceId) return stop();
-    const res = await voiceApi.preview(voiceId).catch((e) => {
+    const url = await voicePreviewUrl(voiceId).catch((e) => {
       onError(errorMessage(e));
       return null;
     });
-    if (res?.url) play(voiceId, res.url);
+    if (url) play(voiceId, url);
   };
   const playSaved = (v: VideoSavedVoice) =>
     v.source === "notestack" ? playNotestack(v.voice_id) : play(v.voice_id, v.preview_url);
@@ -36,7 +62,10 @@ export function YourVoices({ reloadKey = 0, onAdd }: {
   const [error, setError] = useState<string | null>(null);
   const { playing, play, playSaved } = useVoicePlayer(setError);
 
-  const load = useCallback(() => videoVoicesApi.list().then(setVoices).catch((e) => setError(errorMessage(e))), []);
+  const load = useCallback(() => videoVoicesApi.list().then((v) => {
+    setVoices(v);
+    prefetchVoicePreviews(v.saved);
+  }).catch((e) => setError(errorMessage(e))), []);
   useEffect(() => {
     load();
   }, [load, reloadKey]);

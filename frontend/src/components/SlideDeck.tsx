@@ -87,7 +87,8 @@ export function SlideDeckDialog({ notebookId, chats, currentChatId, initial, onC
           <div className="field">
             <span className="vw-label">Length</span>
             <Dropdown<DeckLength> label="Length" value={length} onChange={setLength}
-              options={LENGTHS.map((l) => ({ value: l.id, label: l.label, hint: l.range }))} />
+              options={LENGTHS.map((l) => ({ value: l.id, label: l.label }))} />
+            <small className="muted sd-length-range">{LENGTHS.find((l) => l.id === length)?.range}</small>
           </div>
           <div className="field">
             <span className="vw-label">Language</span>

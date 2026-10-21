@@ -5,7 +5,8 @@
 Only paths in RULES pass (anything else is 404). Before forwarding, the video must be this workspace's
 (b2v_access.video_or_404), every template / voice / style id in a JSON body must be this workspace's (check_refs),
 AI edits come out of the workspace's own counter (given back if
-blog2video refuses). A template switch also uses one video, as it does on blog2video.
+blog2video refuses). A template switch also uses one video, as it does on blog2video, and so does rendering a video
+again (force_render): a first render is free.
 
 JSON bodies, multipart uploads (images, voiceovers, portraits) and binary answers (downloads, stills) pass through.
 """
@@ -137,7 +138,12 @@ async def _read_body(request: Request) -> tuple[dict | None, dict | None, list |
         raise HTTPException(400, "Send JSON") from None
 
 
-def _charge(ctx: Ctx, rule: Rule, body: dict | None, form: dict | None) -> int:
+def _uses_video(rule: Rule, path: str, params: dict) -> bool:
+    """A template switch, or a render forced over an MP4 that already exists (a re-render)."""
+    return rule.uses_video or (path == "render" and params.get("force_render", "").lower() in {"true", "1"})
+
+
+def _charge(ctx: Ctx, rule: Rule, body: dict | None, form: dict | None, uses_video: bool) -> int:
     """References and counters, all before blog2video is called. Returns AI edits taken."""
     plan = effective_plan(ctx.db, ctx.workspace)
     refs = body if isinstance(body, dict) else (form or {})
@@ -146,10 +152,11 @@ def _charge(ctx: Ctx, rule: Rule, body: dict | None, form: dict | None) -> int:
     edits = rule.ai_edits
     if edits:
         video_limits.take(ctx.db, ctx.workspace, "ai_edits", edits, plan=plan)
-    if rule.uses_video and not video_quota.reserve(ctx.db, ctx.workspace.id):
+    if uses_video and not video_quota.reserve(ctx.db, ctx.workspace.id):
         if edits:
             video_limits.give_back(ctx.db, ctx.workspace.id, "ai_edits", edits)
-        raise plan_limit_error(plan, "videos", "Switching the template uses a video, and you have none left.")
+        what = "Switching the template" if rule.uses_video else "Rendering again"
+        raise plan_limit_error(plan, "videos", f"{what} uses a video, and you have none left.")
     return edits
 
 
@@ -162,8 +169,9 @@ async def project_proxy(artifact_id: uuid.UUID, path: str, request: Request, ctx
         raise HTTPException(404, "Not found")
     a, vid, _row = b2v_access.video_or_404(ctx, artifact_id)
     body, form, files = await _read_body(request)
-    edits = await run_in_threadpool(_charge, ctx, rule, body, form)
     params = dict(request.query_params)
+    uses_video = _uses_video(rule, path, params)
+    edits = await run_in_threadpool(_charge, ctx, rule, body, form, uses_video)
 
     def call():
         return b2v.project_call(request.method, vid, path, json=body, data=form, files=files or None,
@@ -175,7 +183,7 @@ async def project_proxy(artifact_id: uuid.UUID, path: str, request: Request, ctx
     except HTTPException:
         if edits:
             video_limits.give_back(ctx.db, ctx.workspace.id, "ai_edits", edits)
-        if rule.uses_video:
+        if uses_video:
             video_quota.unreserve(ctx.db, ctx.workspace.id)
         raise
     if rule.status:

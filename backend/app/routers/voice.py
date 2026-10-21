@@ -231,15 +231,21 @@ async def preview(body: PreviewIn, ctx: Ctx = Depends(get_ctx)):
         saved = (((_profile(ctx) or VoiceProfile()).host_voices or {}).get("settings") or {}).get(body.host or "")
         vs = tts.VoiceSettings.from_dict(saved)
     text = (body.text or PREVIEW_LINE).strip()[:400]
+    # Spoken once, then served straight from the TTS cache: a voice played again (or by anyone in the workspace)
+    # starts at once, with no copy made and nothing metered.
+    key = tts.clip_key(ctx.workspace.id, text, body.voice_id, vs)
+    if await run_in_threadpool(storage.exists, key):
+        return {"url": storage.presign_get(key), "seconds": None}
     try:
         clip = await run_in_threadpool(tts.synthesize, ctx.workspace.id, text, body.voice_id, vs)
     except tts.TTSError as exc:
         raise HTTPException(502, str(exc)) from exc
-    key = f"ws/{ctx.workspace.id}/voice-previews/{uuid.uuid4().hex}.mp3"
-    storage.put_bytes(key, clip, "audio/mpeg")
-    record_usage(ctx.db, workspace_id=ctx.workspace.id, kind="tts", provider="elevenlabs",
-                 quantity=round(tts.mp3_seconds(clip), 1), unit="seconds")
-    return {"url": storage.presign_get(key), "seconds": round(tts.mp3_seconds(clip), 1)}
+    if not await run_in_threadpool(storage.exists, key):  # synthesize keeps it there; made sure of for the link
+        await run_in_threadpool(storage.put_bytes, key, clip, "audio/mpeg")
+    seconds = round(tts.mp3_seconds(clip), 1)
+    record_usage(ctx.db, workspace_id=ctx.workspace.id, kind="tts", provider="elevenlabs", quantity=seconds,
+                 unit="seconds")
+    return {"url": storage.presign_get(key), "seconds": seconds}
 
 
 def _design_description(body: DesignIn) -> str:

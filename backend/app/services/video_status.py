@@ -14,7 +14,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
-from app.models import Artifact, B2VVideo
+from app.models import Artifact, B2VVideo, User, WorkspaceMember
 from app.services import blog2video as b2v
 from app.services import video_quota
 
@@ -76,6 +76,22 @@ def discard_failed(db: Session, a: Artifact | None, row: B2VVideo, raw: str = "f
     db.refresh(row)
 
 
+def notify_rendered(db: Session, a: Artifact, row: B2VVideo | None, video_url: str) -> None:
+    """A render finished: email the workspace's owners the MP4's own R2 link, which downloads it straight away (a
+    browser may have blocked the download the editor starts by itself). Never fails the status check that noticed it."""
+    from app.services.email import email_service
+
+    try:
+        title = (row.title if row else None) or (a.content_json or {}).get("title") or "Your video"
+        link = video_url  # each render writes its own file (output/video_<time>.mp4), so the link is that render's
+        owners = db.execute(select(User.email, User.name).join(WorkspaceMember, WorkspaceMember.user_id == User.id)
+                            .where(WorkspaceMember.workspace_id == a.workspace_id, WorkspaceMember.role == "owner")).all()
+        for email, name in owners:
+            email_service.send_video_rendered(email, name, title, link)
+    except Exception:
+        log.exception("render email for video %s was not sent", a.id)
+
+
 def apply_status(db: Session, a: Artifact, row: B2VVideo, s: dict) -> str | None:
     """Bring the artifact and row in line with one blog2video status answer. Returns the artifact's status, or None
     when the video failed and was discarded (its artifact is gone)."""
@@ -91,8 +107,12 @@ def apply_status(db: Session, a: Artifact, row: B2VVideo, s: dict) -> str | None
     if status == "ready" and row.quota_state == "refunded":
         video_quota.recharge(db, row)  # marked failed before (a stale error), but blog2video finished it
     video_quota.record_status(db, row, raw)
+    was = a.status
     store(db, a, row, status=status, b2v_status=raw or None, step=s.get("step"), video_url=video_url,
           error=s.get("error") if status == "failed" else None)
+    # A render just finished (it was rendering, now it is ready with its MP4): once per render, whoever noticed it
+    if was == "rendering" and status == "ready" and video_url:
+        notify_rendered(db, a, row, video_url)
     return status
 
 

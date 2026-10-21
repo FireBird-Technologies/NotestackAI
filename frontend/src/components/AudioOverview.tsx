@@ -23,9 +23,9 @@ const STYLES = [
 type Style = (typeof STYLES)[number]["id"];
 
 const LENGTHS = [
-  { value: "3", label: "Short", hint: "about 3 min" },
-  { value: "6", label: "Default", hint: "about 6 min" },
-  { value: "12", label: "Long", hint: "about 12 min" },
+  { value: "3", label: "Short", range: "about 3 min" },
+  { value: "6", label: "Default", range: "about 6 min" },
+  { value: "12", label: "Long", range: "about 12 min" },
 ];
 
 export type AudioOverviewRequest = Omit<GenerateBody, "type">;
@@ -141,7 +141,9 @@ export function AudioOverviewDialog({ notebookId, chats, currentChatId, initial,
           </div>
           <div className="field">
             <span className="vw-label">Length</span>
-            <Dropdown<string> label="Length" value={minutes} onChange={setMinutes} options={LENGTHS} />
+            <Dropdown<string> label="Length" value={minutes} onChange={setMinutes}
+              options={LENGTHS.map((l) => ({ value: l.value, label: l.label }))} />
+            <small className="muted sd-length-range">{LENGTHS.find((l) => l.value === minutes)?.range}</small>
           </div>
           <div className="field">
             <span className="vw-label">Language</span>
