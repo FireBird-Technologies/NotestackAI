@@ -833,7 +833,7 @@ export default function NotebookView() {
       {phone && (
         <div className="nbv-tabs" role="tablist" aria-label="Notebook"
              style={{ "--tab": drawer === "history" ? 0 : drawer === "tools" ? 2 : drawer === "library" ? 3 : 1 } as CSSProperties}>
-          {([["history", "Menu"], [null, "Chat"], ["tools", "Create"], ["library", "Library"]] as const).map(([tab, label]) => (
+          {([["history", "Sources"], [null, "Chat"], ["tools", "Create"], ["library", "Library"]] as const).map(([tab, label]) => (
             <button key={label} type="button" role="tab" className={`nbv-tab${drawer === tab ? " active" : ""}`}
                     aria-selected={drawer === tab} onClick={() => setDrawer(tab)}>
               {label}

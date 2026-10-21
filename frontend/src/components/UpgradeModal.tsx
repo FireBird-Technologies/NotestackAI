@@ -51,7 +51,7 @@ function resetDate(since: string | undefined, videosResetAt?: string | null): st
   return next.toLocaleDateString(undefined, { month: "long", day: "numeric" });
 }
 
-function Scene({ mode }: { mode: "explore" | "limit" | "welcome" }) {
+function Scene({ mode }: { mode: "explore" | "limit" | "welcome" | "plans" }) {
   return (
     <div className={`upg-scene upg-${mode}`} aria-hidden="true">
       <div className="upg-stars l1" />
@@ -99,7 +99,7 @@ function FuelMeter({ meter }: { meter: Meter }) {
 }
 
 export default function UpgradeModal() {
-  const { status, modal, close, checkout, busy, error } = useUpgrade();
+  const { status, modal, close, checkout, manageBilling, busy, error } = useUpgrade();
   const [cycle, setCycle] = useState<BillingCycle>("annual");
   const panel = useRef<HTMLDivElement>(null);
 
@@ -122,8 +122,14 @@ export default function UpgradeModal() {
   let offers = (status?.plans ?? []).filter((p) => ORDER.indexOf(p.id) > rank);
   if (!offers.length && status && !status.billing_enabled) offers = status.plans.filter((p) => p.price_monthly_usd > 0);
   const limit = modal.mode === "limit" ? modal.limit : null;
-  const recommended =
-    (modal.mode === "explore" && modal.highlight) || limit?.upgrade_to || status?.next_plan || offers[0]?.id;
+  // "View plans" lists every plan and highlights the current one (Studio on Free); the other modes only offer upgrades
+  // and recommend Studio unless the opener (a highlight, a limit's upgrade_to) names another.
+  const plansMode = modal.mode === "plans";
+  const shown = plansMode ? status?.plans ?? [] : offers;
+  const recommended = plansMode
+    ? current?.id === "free" ? "studio" : current?.id
+    : [modal.mode === "explore" ? modal.highlight : null, limit?.upgrade_to, "studio", status?.next_plan]
+        .find((id) => id && offers.some((p) => p.id === id)) ?? offers[0]?.id;
   // The popup's own counts when it carries them (a chat warning opens before the billing status refreshes).
   const counted = limit?.kind && limit.used !== undefined && limit.limit !== undefined && limit.limit > 0
     ? { used: limit.used, limit: limit.limit, pct: Math.min(1, limit.used / limit.limit) }
@@ -136,9 +142,14 @@ export default function UpgradeModal() {
   const chatLimit = limit?.kind === "chat_messages";
   const warning = !!limit?.left && limit.left > 0;
   const canBuy = modal.mode !== "welcome" && offers.length > 0 && (status?.can_upgrade || !status?.billing_enabled);
+  const showPlans = plansMode ? shown.length > 0 : canBuy;
+  const paid = !!current && current.price_monthly_usd > 0; // has a subscription to manage
+  const saving = shown.find((p) => p.annual_savings_pct > 0)?.annual_savings_pct ?? 0;
   const title =
     modal.mode === "welcome"
       ? `Welcome to ${current?.name ?? "your new plan"}`
+      : plansMode
+        ? `You're on ${current?.name ?? "Free"}`
       : limit
         ? chatLimit && warning
           ? `Only ${limit.left} free message${limit.left === 1 ? "" : "s"} left`
@@ -147,7 +158,7 @@ export default function UpgradeModal() {
 
   return (
     <div className="upg-backdrop" onMouseDown={(e) => e.target === e.currentTarget && close()}>
-      <div className={`upg card${canBuy ? " upg-wide" : ""}`} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} ref={panel}>
+      <div className={`upg card${showPlans ? " upg-wide" : ""}`} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} ref={panel}>
         <button className="icon-btn upg-close" onClick={close} aria-label="Close">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
             <path d="M6 6l12 12M18 6L6 18" />
@@ -157,12 +168,14 @@ export default function UpgradeModal() {
 
         <header className="upg-head">
           <p className="eyebrow">
-            {modal.mode === "welcome" ? "Orbit reached" : limit ? "Low fuel warning" : "Mission upgrade"}
+            {modal.mode === "welcome" ? "Orbit reached" : plansMode ? "Flight plans" : limit ? "Low fuel warning" : "Mission upgrade"}
           </p>
           <h2>{title}</h2>
           <p className="muted">
             {modal.mode === "welcome"
               ? "Your new limits are live. Every source, minute and Launch Kit below is ready to use."
+              : plansMode
+                ? "Every plan side by side. Move up whenever you need more room."
               : chatLimit
                 ? `${limit?.message} ${canBuy ? "Upgrade for unlimited research chat." : ""}`.trim()
                 : limit
@@ -190,45 +203,73 @@ export default function UpgradeModal() {
           </>
         )}
 
-        {canBuy && current && (
+        {showPlans && current && (
           <>
             <div className="upg-cycle">
               <div className="cycle-toggle" role="radiogroup" aria-label="Billing cycle">
                 {(["annual", "monthly"] as const).map((c) => (
                   <button key={c} type="button" role="radio" aria-checked={cycle === c} className={cycle === c ? "on" : ""} onClick={() => setCycle(c)}>
                     {c === "monthly" ? "Monthly" : "Annual"}
-                    {c === "annual" && offers[0]?.annual_savings_pct > 0 && <span className="save mono">Save {offers[0].annual_savings_pct}%</span>}
+                    {c === "annual" && saving > 0 && <span className="save mono">Save {saving}%</span>}
                   </button>
                 ))}
               </div>
             </div>
-            <div className="upg-plans">
-              {offers.map((plan) => {
+            <div className={`upg-plans${plansMode ? " upg-plans-all" : ""}`}>
+              {shown.map((plan) => {
                 const pick = plan.id === recommended;
-                const price = cycle === "annual" ? annualMonthly(plan) : plan.price_monthly_usd;
+                const isCurrent = plan.id === current.id;
+                const higher = ORDER.indexOf(plan.id) > rank;
+                const free = plan.price_monthly_usd === 0;
+                const annual = cycle === "annual" && !free;
+                const price = annual ? annualMonthly(plan) : plan.price_monthly_usd;
+                const flag = plansMode ? (isCurrent ? "Current plan" : pick ? "Recommended" : null)
+                  : pick ? (limit ? "Refuels you" : "Recommended") : null;
                 return (
                   <article key={plan.id} className={`upg-plan${pick ? " pick" : ""}`}>
-                    {pick && <span className="badge upg-flag">{limit ? "Refuels you" : "Recommended"}</span>}
+                    {flag && <span className="badge upg-flag">{flag}</span>}
                     <h3>{plan.name}</h3>
                     <p className="muted small">{plan.tagline}</p>
                     <p className="upg-price">
-                      {cycle === "annual" && <span className="tier-was muted">{money(plan.price_monthly_usd)}</span>}
-                      <span className="tier-amount">{money(price)}</span>
-                      <span className="muted">/month</span>
+                      {free ? <span className="tier-amount">Free</span> : (
+                        <>
+                          {annual && <span className="tier-was muted">{money(plan.price_monthly_usd)}</span>}
+                          <span className="tier-amount">{money(price)}</span>
+                          <span className="muted">/month</span>
+                        </>
+                      )}
                     </p>
                     <p className="mono muted small">
-                      {cycle === "annual" ? `${money(annualTotal(plan))} billed yearly` : "Billed monthly"}
+                      {free ? "Free forever" : annual ? `${money(annualTotal(plan))} billed yearly` : "Billed monthly"}
                     </p>
-                    <ul className="upg-boosts">
-                      {boosts(plan, current).map((b) => (
-                        <li key={b} className="mono">
-                          {b}
-                        </li>
-                      ))}
-                    </ul>
-                    <button className={`btn ${pick ? "btn-primary" : ""} upg-cta`} disabled={busy} onClick={() => checkout(plan.id, cycle)}>
-                      {busy ? "Opening checkout..." : `Launch with ${plan.name}`}
-                    </button>
+                    {plansMode ? (
+                      <ul className="upg-features upg-plan-features">
+                        {plan.features.map((f) => (
+                          <li key={f}>
+                            <CheckIcon size={14} />
+                            {f}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <ul className="upg-boosts">
+                        {boosts(plan, current).map((b) => (
+                          <li key={b} className="mono">
+                            {b}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {!isCurrent && (higher || !plansMode) ? (
+                      <button className={`btn ${pick ? "btn-primary" : ""} upg-cta`} disabled={busy} onClick={() => checkout(plan.id, cycle)}>
+                        {busy ? "Opening checkout..." : `Launch with ${plan.name}`}
+                      </button>
+                    ) : paid && (
+                      // The current plan and lower ones: changing or switching down goes through the billing portal
+                      <button className="btn upg-cta" disabled={busy} onClick={() => void manageBilling()}>
+                        {busy ? "Opening billing..." : "Manage billing"}
+                      </button>
+                    )}
                   </article>
                 );
               })}
@@ -242,11 +283,8 @@ export default function UpgradeModal() {
           <footer className="upg-foot mono small muted">
             <span>Cancel anytime. Keep everything you made.</span>
             <span className="row">
-              <Link to="/pricing" onClick={close}>
-                Compare plans
-              </Link>
               <button className="link-btn" onClick={close}>
-                {canBuy ? "Maybe later" : "Got it"}
+                {plansMode ? "Close" : canBuy ? "Maybe later" : "Got it"}
               </button>
             </span>
           </footer>

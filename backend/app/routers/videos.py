@@ -32,6 +32,9 @@ from app.llm.provider import focus_lm
 from app.llm.signatures import VideoFocusAngles
 from app.models import (Artifact, B2VVideo, Chat, Document, Message, Notebook, NotebookDocument, Upload, User, Workspace,
                         WorkspaceMember)
+from app.pipeline.passages import notebook_docs
+from app.pipeline.video_material import topic_material
+from app.routers.notebooks import ensure_archive_notebook
 from app.routers.sources import is_locked
 from app.services import b2v_access, video_focus, video_limits, video_quota
 from app.services import blog2video as b2v
@@ -147,16 +150,23 @@ class VideoOptions(BaseModel):
 
 
 class FocusIn(BaseModel):
-    # A source from the workspace: exactly one of these. document_ids are a notebook's ticked posts, combined into one
-    # video; chat_ids are notebook chats, sent as their transcripts (combined too).
+    # A source from the workspace: at most one of these. document_ids are a notebook's ticked posts, combined into one
+    # video; chat_ids are notebook chats, sent as their transcripts (combined too). None of them: the whole notebook.
     document_id: uuid.UUID | None = None
     document_ids: list[uuid.UUID] | None = Field(None, min_length=1, max_length=MAX_POSTS)
     chat_ids: list[uuid.UUID] | None = Field(None, min_length=1, max_length=MAX_CHATS)
-    notebook_id: uuid.UUID | None = None  # names a combined video after its notebook
+    notebook_id: uuid.UUID | None = None  # names a combined video after its notebook; alone, the whole notebook
+
+    @property
+    def whole_notebook(self) -> bool:
+        """Only a notebook named: all of its posts (or the archive's), searched for the topic."""
+        return self.notebook_id is not None and self.document_id is None and self.document_ids is None \
+            and self.chat_ids is None
 
     @model_validator(mode="after")
     def one_source(self):
-        if sum(x is not None for x in (self.document_id, self.document_ids, self.chat_ids)) != 1:
+        if sum(x is not None for x in (self.document_id, self.document_ids, self.chat_ids)) != 1 \
+                and not self.whole_notebook:
             raise ValueError("Pick one source: a notebook, a post or chats")
         return self
 
@@ -169,16 +179,22 @@ class VideoCreateIn(VideoOptions):
     url: str | None = Field(None, max_length=2000)
     content: str | None = Field(None, max_length=MAX_CONTENT)
     title: str | None = Field(None, max_length=300)
-    notebook_id: uuid.UUID | None = None  # names a combined video after its notebook
+    notebook_id: uuid.UUID | None = None  # names a combined video after its notebook; alone, the whole notebook
     # One of the suggested focus topics (/focus-topics): the video is mainly about it. None = the material as a whole.
     focus: str | None = Field(None, max_length=200)
     focus_detail: str | None = Field(None, max_length=400)  # the topic's description: what the video should cover
     # Or the user's own topic, in their words: followed as far as the material supports it (instead of `focus`).
     focus_prompt: str | None = Field(None, max_length=500)
 
+    @property
+    def whole_notebook(self) -> bool:
+        """As FocusIn's, with no link or pasted text either (a link's video can still be filed in a notebook)."""
+        return FocusIn.whole_notebook.fget(self) and self.url is None and self.content is None
+
     @model_validator(mode="after")
     def one_source(self):
-        if sum(x is not None for x in (self.document_id, self.document_ids, self.url, self.content, self.chat_ids)) != 1:
+        if sum(x is not None for x in (self.document_id, self.document_ids, self.url, self.content, self.chat_ids)) != 1 \
+                and not self.whole_notebook:
             raise ValueError("Pick one source: a notebook, a post, chats, a link or pasted text")
         if self.document_ids and len(self.document_ids) == 1:
             self.document_id, self.document_ids = self.document_ids[0], None
@@ -189,6 +205,9 @@ class VideoCreateIn(VideoOptions):
         self.focus_prompt = re.sub(r"\s+", " ", self.focus_prompt or "").strip() or None
         if self.focus_prompt and (self.focus or "").strip():
             raise ValueError("Pick a suggested topic or write your own, not both")
+        # A whole notebook is searched for the topic: there is no video without one.
+        if self.whole_notebook and not (self.focus_prompt or (self.focus or "").strip()):
+            raise ValueError("Pick a topic or write your own")
         return self
 
 
@@ -279,6 +298,57 @@ def _source_text(ctx: Ctx, body: FocusIn | VideoCreateIn, limit: int = MAX_CONTE
     return getattr(body, "title", None) or "", getattr(body, "content", None) or ""
 
 
+def _notebook_posts(ctx: Ctx, notebook_id: uuid.UUID) -> tuple[Notebook, list[Document]]:
+    """A notebook of this workspace (404 otherwise) and its indexed posts, newest first: what a whole-notebook video
+    reads. Locked posts have no text, so they are left out. The archive takes in posts synced since it was opened."""
+    nb = ctx.db.scalar(select(Notebook).where(Notebook.id == notebook_id, Notebook.workspace_id == ctx.workspace.id))
+    if not nb:
+        raise HTTPException(404, "Notebook not found")
+    if nb.is_archive:
+        ensure_archive_notebook(ctx)
+    docs = [d for d in notebook_docs(ctx.db, nb.id) if not is_locked(d)][:MAX_POSTS]
+    if not docs:
+        raise HTTPException(400, "This notebook has no posts yet")
+    return nb, docs
+
+
+def _themed(topic: str, angle: str, length: str | None) -> str:
+    """A topic no post is about but that belongs with the notebook: an overview of the notebook, framed around it."""
+    depth = {"short": " Keep it a brief overview.", "medium": " Make it a deep dive."}
+    link = f" How it connects: {angle.rstrip('.')}." if angle else ""
+    return (f'This video is an overview of the writer\'s whole notebook. Frame it around "{topic}" where the material '
+            f"allows.{link} Still cover the main ideas of the material below, and say nothing it does not say."
+            + depth.get(length or "", ""))
+
+
+def _notebook_source(ctx: Ctx, body: VideoCreateIn) -> tuple[dict, str]:
+    """A whole notebook on one topic: its posts are searched for it the way the chat searches them
+    (pipeline/video_material.py). What they say about it, or an overview of the notebook when no post is about it:
+    framed around the topic when it belongs with the notebook, a plain overview when it does not."""
+    nb, docs = _notebook_posts(ctx, body.notebook_id)
+    topic = body.focus_prompt or (body.focus or "").strip()
+    query = body.focus_prompt or " ".join(x for x in (body.focus, body.focus_detail) if x)
+    names = [] if body.focus else sorted({n for tags in video_focus.doc_tags(ctx.db, ctx.workspace.id, docs).values()
+                                          for n in tags})[:100]
+    found = topic_material(ctx.db, ctx.workspace.id, nb, docs, query, suggested=bool(body.focus), topic_names=names)
+    with upstream():  # the focus wording needs the house styles
+        if found.mode == "focused":
+            head = _instructions(body)
+        elif found.mode == "themed_overview":
+            head = _themed(topic.replace('"', "'"), found.angle, b2v_access.house_length(body.video_style))
+        else:
+            head = ""
+    text = found.text[:MAX_CONTENT - len(head) - 10].strip()
+    if len(text) < MIN_CONTENT:
+        raise HTTPException(400, f"Add at least {MIN_CONTENT} characters of text")
+    # The posts it was made from, for the metadata sent with the create
+    ids = {d.path: d.id for d in docs}
+    body.document_ids = [ids[p] for p in found.paths if p in ids][:MAX_POSTS] or None
+    title = visible_notebook_title(nb.title)
+    content = f"{head}\n\n---\n\n{text}" if head else text
+    return {"content": content[:MAX_CONTENT], "title": title[:255]}, title
+
+
 def _instructions(body: VideoCreateIn) -> str:
     """What blog2video's script writer is told ahead of the material: what a chat is, and the focus picked or written
     by the user (worded for the house style's depth). Empty when neither applies."""
@@ -312,6 +382,8 @@ def _source(ctx: Ctx, body: VideoCreateIn) -> tuple[dict, str]:
         if not re.match(r"https?://", body.url):
             raise HTTPException(400, "Enter a link that starts with http:// or https://")
         return {"url": body.url}, body.title or body.url
+    if body.whole_notebook:
+        return _notebook_source(ctx, body)
     if body.document_id and not (body.focus or body.focus_prompt):
         doc = _doc(ctx, body.document_id)
         if re.match(r"https?://", doc.url or ""):
@@ -472,13 +544,16 @@ def _focus_material(ctx: Ctx, body: FocusIn) -> tuple[dict[str, str], list[Docum
             if item := "\n".join(p for p in parts if p):
                 material[str(chat.id)] = item
         return material, []
-    ids = set(body.document_ids or [body.document_id])
-    docs = list(ctx.db.scalars(select(Document).where(Document.id.in_(ids),
-                                                      Document.workspace_id == ctx.workspace.id)))
-    if len(docs) != len(ids):
-        raise HTTPException(404, "Post not found")
-    if locked := sum(is_locked(d) for d in docs):
-        raise _not_indexed(locked)
+    if body.whole_notebook:
+        docs = _notebook_posts(ctx, body.notebook_id)[1]
+    else:
+        ids = set(body.document_ids or [body.document_id])
+        docs = list(ctx.db.scalars(select(Document).where(Document.id.in_(ids),
+                                                          Document.workspace_id == ctx.workspace.id)))
+        if len(docs) != len(ids):
+            raise HTTPException(404, "Post not found")
+        if locked := sum(is_locked(d) for d in docs):
+            raise _not_indexed(locked)
     docs.sort(key=lambda d: d.published_at or d.created_at, reverse=True)
     each = 800 if len(docs) == 1 else 400
     items = {str(d.id): "\n".join(p for p in (d.title or "", _excerpt(d.clean_text, each)) if p) for d in docs}

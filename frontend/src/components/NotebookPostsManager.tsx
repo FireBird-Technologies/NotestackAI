@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { docsApi, notebooksApi } from "../api/endpoints";
 import type { Doc } from "../api/types";
 import { errorMessage, formatDate, Loading, Modal } from "./ui";
 
-/** A notebook's posts in two lists: those in it (× removes one, after a warning) and the rest of the library (Add puts
+/** A notebook's posts in two tabbed lists: those in it (× removes one, after a warning) and the rest of the library (Add puts
  * one in). Each change saves right away, then `onChanged` reloads the notebook. `readOnly` (the archive) only lists its posts. */
 export function NotebookPostsManager({ notebookId, docs, readOnly = false, onChanged }: {
   notebookId: string;
@@ -13,6 +13,7 @@ export function NotebookPostsManager({ notebookId, docs, readOnly = false, onCha
 }) {
   const [all, setAll] = useState<Doc[] | null>(null);
   const [q, setQ] = useState("");
+  const [tab, setTab] = useState<"inside" | "outside">("inside");
   const [pending, setPending] = useState<string[]>([]); // posts being added or removed
   const [error, setError] = useState<string | null>(null);
   const [removing, setRemoving] = useState<Doc | null>(null); // the post awaiting confirmation
@@ -69,8 +70,20 @@ export function NotebookPostsManager({ notebookId, docs, readOnly = false, onCha
       <input className="input input-sm" type="search" placeholder="Search posts" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search posts" />
       {error && <p className="error-text">{error}</p>}
 
-      <p className="eyebrow muted">Already added posts ({docs.length})</p>
-      <ul className="picker-list">
+      {readOnly ? <p className="eyebrow muted">Already added posts ({docs.length})</p> : (
+        <div className="pm-tabs" role="tablist" aria-label="Posts" style={{ "--tab": tab === "inside" ? 0 : 1 } as CSSProperties}>
+          <button type="button" role="tab" className={`pm-tab${tab === "inside" ? " active" : ""}`}
+                  aria-selected={tab === "inside"} onClick={() => setTab("inside")}>
+            Added sources
+          </button>
+          <button type="button" role="tab" className={`pm-tab${tab === "outside" ? " active" : ""}`}
+                  aria-selected={tab === "outside"} onClick={() => setTab("outside")}>
+            Other sources
+          </button>
+        </div>
+      )}
+
+      {(readOnly || tab === "inside") && <ul className="picker-list pm-panel">
         {inside.map((d) => (
           <li key={d.id} className="pm-row">
             <span className="picker-title">{d.title}</span>
@@ -92,13 +105,12 @@ export function NotebookPostsManager({ notebookId, docs, readOnly = false, onCha
           </li>
         ))}
         {inside.length === 0 && <li className="muted pm-empty">{docs.length ? "No posts match." : "No posts yet."}</li>}
-      </ul>
+      </ul>}
 
-      {!readOnly && (
+      {!readOnly && tab === "outside" && (
         <>
-          <p className="eyebrow muted">Posts you may add ({all ? outside.length : "..."})</p>
           {!all ? <Loading label="Loading posts" /> : (
-            <ul className="picker-list">
+            <ul className="picker-list pm-panel">
               {outsideShown.map((d) => (
                 <li key={d.id} className={`pm-row${d.locked ? " locked" : ""}`}>
                   <span className="picker-title">{d.title}</span>

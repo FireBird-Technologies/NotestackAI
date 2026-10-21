@@ -52,7 +52,7 @@ function fuelLeft(m: { used: number; limit: number; unit: string }): string {
 }
 
 export function FuelGauge({ collapsed }: { collapsed: boolean }) {
-  const { status, openUpgrade } = useUpgrade();
+  const { status, openUpgrade, openPlans } = useUpgrade();
   if (!status) return null;
   const meters = status.meters.filter((m) => m.key !== "sources");
   const low = meters.some((m) => m.limit >= 0 && m.pct >= 0.8);
@@ -85,6 +85,7 @@ export function FuelGauge({ collapsed }: { collapsed: boolean }) {
           <RocketIcon size={16} /> Upgrade now
         </button>
       )}
+      <button className="link-btn mono small fuel-plans" onClick={openPlans}>View plans</button>
     </div>
   );
 }

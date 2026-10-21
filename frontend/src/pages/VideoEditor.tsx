@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ApiError } from "../api/client";
 import { videoEditApi, videosApi, type LayoutInfo, type LayoutSchema } from "../api/endpoints";
-import type { LegacyVideo, ScriptScene, VideoCatalog, VideoConfig, VideoJobState, VideoProject, VideoProjectData, VideoStatus } from "../api/types";
+import type { LegacyVideo, ScriptScene, VideoCatalog, VideoConfig, VideoJobState, VideoProject, VideoProjectData, VideoQuota, VideoStatus } from "../api/types";
 import { CheckIcon, DownloadIcon, SparkleIcon } from "../components/icons/Icons";
 import { ConfirmButton, ErrorText, errorMessage, Loading, Modal, PageHeader, StatusPill, Tabs, VIDEO_UPDATING } from "../components/ui";
 import { ImagesPanel, VoicePanel, type PanelProps } from "../components/video/EditorPanels";
@@ -146,7 +146,7 @@ function isReady(s: VideoStatus): boolean {
 export default function VideoEditor() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
-  const { openUpgrade } = useUpgrade();
+  const { openUpgrade, openLimit, refresh: refreshBilling } = useUpgrade();
   const [loaded, setProject] = useState<VideoProject | LegacyVideo | null>(null);
   const legacy = loaded?.legacy ? loaded : null;
   const project = loaded?.legacy ? null : loaded;
@@ -576,11 +576,15 @@ export default function VideoEditor() {
             {downloading && (
               <DownloadModal rendered={rendered} onClose={() => setDownloading(false)}
                              onDownloadNow={downloadNow}
-                             onRender={() => {
+                             onOutOfVideos={(q) => openLimit({ kind: "videos", plan: q.plan, used: q.used, limit: q.limit,
+                                                               message: "Your video limit is reached." })}
+                             onRender={async () => {
                                setAutoDownload(true);
-                               // A rendered video renders again only when forced (latest edits); a new one either way.
-                               return startJob("Rendering", () => videoEditApi.render(id, { force: rendered }),
-                                               () => videoEditApi.renderStatus(id));
+                               // A rendered video renders again only when forced (latest edits), which uses a video;
+                               // the billing meters then show the new count.
+                               await startJob("Rendering", () => videoEditApi.render(id, { force: rendered }),
+                                              () => videoEditApi.renderStatus(id));
+                               if (rendered) void refreshBilling();
                              }} />
             )}
             {formatTo && (
@@ -734,22 +738,60 @@ function CancelRenderModal({ onConfirm, onClose }: { onConfirm: () => Promise<bo
   );
 }
 
-/** Download: the rendered MP4 now, or render (again) and download it automatically when it is up. */
-function DownloadModal({ rendered, onDownloadNow, onRender, onClose }: {
-  rendered: boolean; onDownloadNow: () => Promise<void>; onRender: () => Promise<void>; onClose: () => void;
+/** Download: the rendered MP4 now, or render (again) and download it automatically when it is up. Rendering again
+ * uses a video: a warning first, then the allowance is checked (none left: the upgrade popup instead). */
+function DownloadModal({ rendered, onDownloadNow, onRender, onOutOfVideos, onClose }: {
+  rendered: boolean; onDownloadNow: () => Promise<void>; onRender: () => Promise<void>;
+  onOutOfVideos: (quota: VideoQuota) => void; onClose: () => void;
 }) {
   const [choice, setChoice] = useState<"now" | "render">(rendered ? "now" : "render");
+  const [confirming, setConfirming] = useState(false); // the "uses another video" warning
   const [busy, setBusy] = useState(false);
+  const [quota, setQuota] = useState<VideoQuota | null>(null);
+  useEffect(() => {
+    if (rendered) videosApi.quota().then(setQuota).catch(() => undefined);
+  }, [rendered]);
+  const left = quota ? Math.max(quota.limit - quota.used, 0) : null;
+  const leftNote = left === null ? "" : ` (${left} left)`;
   const options = rendered
     ? ([["now", "Download the rendered MP4", "The video as it was last rendered."],
-        ["render", "Render again, then download", "Picks up your latest edits. Takes a few minutes; it downloads by itself when done."]] as const)
+        ["render", "Render again, then download", `Picks up your latest edits. Uses 1 video${leftNote}. Takes a few minutes; it downloads by itself when done.`]] as const)
     : ([["render", "Render and download MP4", "Takes a few minutes. Keep this page open and it downloads by itself when done."]] as const);
 
   async function go() {
+    if (choice === "render" && rendered && !confirming) return setConfirming(true);
     setBusy(true);
+    if (choice === "render" && rendered) {
+      // The allowance as it is now (another tab may have used it), not as it was when the dialog opened
+      const now = await videosApi.quota().catch(() => null);
+      if (now && now.used >= now.limit) {
+        setBusy(false);
+        onClose();
+        return onOutOfVideos(now);
+      }
+    }
     await (choice === "now" ? onDownloadNow() : onRender());
     setBusy(false);
     onClose();
+  }
+
+  if (confirming) {
+    return (
+      <Modal title="Render again?" onClose={busy ? () => undefined : () => setConfirming(false)}>
+        <div className="stack">
+          <p>
+            Rendering again uses another video from your allowance
+            {quota ? <> ({left} of {quota.limit} left)</> : null}. Do you want to continue?
+          </p>
+          <div className="vw-nav">
+            <button className="btn" onClick={() => setConfirming(false)} disabled={busy}>Cancel</button>
+            <button className="btn btn-primary" onClick={go} disabled={busy} autoFocus>
+              {busy ? <><span className="vw-spin small" aria-hidden="true" /> Starting...</> : "Continue"}
+            </button>
+          </div>
+        </div>
+      </Modal>
+    );
   }
 
   return (
@@ -764,7 +806,7 @@ function DownloadModal({ rendered, onDownloadNow, onRender, onClose }: {
             </button>
           ))}
         </div>
-        <div className="vw-nav">
+        <div className="vw-nav vw-nav-dl">
           <button className="btn" onClick={onClose} disabled={busy}>Cancel</button>
           <button className="btn btn-primary" onClick={go} disabled={busy}>
             {busy ? <><span className="vw-spin small" aria-hidden="true" /> {choice === "now" ? "Preparing..." : "Starting..."}</>

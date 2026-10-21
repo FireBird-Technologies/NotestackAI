@@ -754,9 +754,69 @@ select.input option {
   height: 34px;
 }
 
-/* Four rows tall, then it scrolls (each row is 49px: 9px padding, two fixed-height lines and its border) */
+/* Eight rows tall, then it scrolls (each row is 49px: 9px padding, two fixed-height lines and its border) */
 .pm .picker-list {
-  max-height: 196px;
+  max-height: 392px;
+}
+
+/* The two lists' tabs: a blue outline slides around the selected one (--tab is its index) */
+.pm-tabs {
+  position: relative;
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+}
+
+.pm-tabs::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc((100% - 10px) / 2); /* 3px padding each side + one 4px gap */
+  border: 1px solid var(--blue);
+  border-radius: 999px;
+  box-sizing: border-box;
+  transform: translateX(calc(var(--tab, 0) * (100% + 4px)));
+  transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.pm-tab {
+  position: relative;
+  flex: 1;
+  min-height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-3);
+  font: 500 0.82rem var(--font-body);
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.pm-tab:hover {
+  color: var(--text-2);
+}
+
+.pm-tab.active {
+  color: var(--text);
+}
+
+/* The selected tab's list fades and rises in as the outline slides over */
+.pm-panel {
+  animation: nbv-tab-in 0.24s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pm-tabs::before,
+  .pm-panel {
+    transition: none;
+    animation: none;
+  }
 }
 
 .pm-row {

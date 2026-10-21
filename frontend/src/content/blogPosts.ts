@@ -20,7 +20,7 @@ export const blogPosts: BlogPost[] = [
       "You have written hundreds of thousands of words. Here is how to let listeners hear them, with every claim traced back to the post it came from.",
     primaryKeyword: "substack to podcast",
     keywordVariant: "turn blog posts into podcast",
-    relatedPaths: ["/blogs/grounded-ai-for-writers", "/pricing"],
+    relatedPaths: ["/blogs/grounded-ai-for-writers"],
     sections: [
       {
         heading: "Why most AI podcasts from blogs feel off",
@@ -121,7 +121,7 @@ export const blogPosts: BlogPost[] = [
       "A launch kit is the set of native posts that carry one piece of writing to every place your readers are.",
     primaryKeyword: "substack marketing",
     keywordVariant: "promote substack posts",
-    relatedPaths: ["/blogs/grounded-ai-for-writers", "/pricing"],
+    relatedPaths: ["/blogs/grounded-ai-for-writers"],
     sections: [
       {
         heading: "Why reposting the link is not enough",

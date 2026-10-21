@@ -9,7 +9,7 @@ import MenuSheet from "./MenuSheet";
 
 const NAV_LINKS = [
   { to: "/#features", label: "Features" },
-  { to: "/pricing", label: "Pricing" },
+  { to: "/#pricing", label: "Pricing" },
   { to: "/tools", label: "Free tools" },
   { to: "/blogs", label: "Blog" },
 ];
@@ -122,7 +122,7 @@ export function PublicFooter() {
             <p className="eyebrow">Product</p>
             <Link to="/#features">Features</Link>
             <Link to="/notebooklm-alternative">NotebookLM alternative</Link>
-            <Link to="/pricing">Pricing</Link>
+            <Link to="/#pricing">Pricing</Link>
             <Link to="/blogs">Blog</Link>
             <Link to="/auth">Sign in</Link>
           </div>

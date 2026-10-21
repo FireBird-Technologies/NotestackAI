@@ -10,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.config import settings
 from app.models import (
@@ -974,6 +974,21 @@ def test_template_switch_uses_a_video_and_checks_the_template(client, b2v, owner
     assert r.status_code == 200 and used(db_session, ws) == 2
 
 
+def test_a_first_render_is_free_and_rendering_again_uses_a_video(client, b2v, owner, db_session):
+    headers, ws = owner
+    art = make_video(client, headers)
+    r = client.post(f"/api/videos/{art['id']}/p/render?resolution=1080p", headers=headers)
+    assert r.status_code == 200 and used(db_session, ws) == 1
+    r = client.post(f"/api/videos/{art['id']}/p/render?resolution=1080p&force_render=true", headers=headers)
+    assert r.status_code == 200 and used(db_session, ws) == 2
+    db_session.execute(update(Subscription).where(Subscription.workspace_id == ws.id)
+                       .values(videos_used=Subscription.video_limit))
+    db_session.commit()
+    b2v.calls.clear()
+    r = client.post(f"/api/videos/{art['id']}/p/render?resolution=1080p&force_render=true", headers=headers)
+    assert r.status_code == 402 and r.json()["detail"]["kind"] == "videos" and b2v.calls == []
+
+
 # Edit jobs keep blog2video's own status on the artifact (not "generating"), so the list and editor can tell them apart
 
 
@@ -1612,3 +1627,178 @@ def test_a_first_generation_sends_no_render_email(client, b2v, owner, monkeypatc
     b2v.queue("GET", "/api/v1/videos/812/status", (200, {"status": "generated", "ready": True, "video_url": None}))
     client.get(f"/api/videos/{art['id']}/status", headers=headers)
     assert sent == []
+
+
+# A whole notebook on one topic: searched the way the chat searches it (pipeline/video_material.py)
+
+
+def notebook_with_posts(db, ws) -> Notebook:
+    """Two indexed posts, on pricing and on hiring, in the corpus and in a notebook."""
+    from app.corpus import Corpus, render_post
+
+    posts = {
+        "sources/x/pricing.md": ("On Pricing", datetime(2026, 5, 1, tzinfo=UTC),
+                                 "Raise prices once a year and tell readers why. A paid tier works best when the free "
+                                 "tier stays generous and the paid tier adds depth."),
+        "sources/x/hiring.md": ("Hiring", datetime(2026, 4, 1, tzinfo=UTC),
+                                "Hire slowly and write down what the role is for before you post the job. A good "
+                                "first hire frees your week for writing."),
+    }
+    Corpus(ws.id).write_files({path: render_post(title=title, url=f"https://ada.example.com/{path}", published_at=when,
+                                                 source="x", sections=[(None, text)])
+                               for path, (title, when, text) in posts.items()})
+    nb = Notebook(workspace_id=ws.id, title="Creator business")
+    db.add(nb)
+    db.flush()
+    for path, (title, when, text) in posts.items():
+        doc = Document(workspace_id=ws.id, title=title, url=f"https://ada.example.com/{path}", clean_text=text,
+                       path=path, published_at=when)
+        db.add(doc)
+        db.flush()
+        db.add(NotebookDocument(notebook_id=nb.id, document_id=doc.id))
+    db.commit()
+    return nb
+
+
+@pytest.fixture()
+def agent(monkeypatch):
+    """The chat's research agent, canned: records the questions; answers with `cites` (none = nothing found)."""
+    from app.pipeline import research as research_mod
+    from app.pipeline import video_material
+
+    calls: dict = {"questions": [], "cites": []}
+
+    def research(corpus, allowed, question, **kw):
+        calls["questions"].append(question)
+        cites = calls["cites"]
+        return research_mod.ResearchResult("answer", not cites, cites)
+
+    monkeypatch.setattr(video_material, "research", research)
+    return calls
+
+
+@pytest.fixture()
+def fits(monkeypatch):
+    """The relevance check, canned: `verdict` decides; records its inputs."""
+    from app.llm import run
+
+    calls: dict = {"verdict": "related", "inputs": []}
+
+    def predict(signature, *, db, workspace_id, job=None, lm=None, **inputs):
+        assert signature.__name__ == "TopicFitsNotebook"
+        calls["inputs"].append(inputs)
+        if calls["verdict"] == "raise":
+            raise RuntimeError("model down")
+        return {"verdict": calls["verdict"], "angle": "Both are about running the business." if calls["verdict"] ==
+                "related" else ""}
+
+    monkeypatch.setattr(run, "predict", predict)
+    return calls
+
+
+def test_a_whole_notebook_needs_a_topic(client, b2v, owner, db_session):
+    headers, ws = owner
+    nb = notebook_with_posts(db_session, ws)
+    r = client.post("/api/videos", json={"notebook_id": str(nb.id)}, headers=headers)
+    assert r.status_code == 422 and "topic" in r.text
+    assert not creates(b2v) and used(db_session, ws) == 0
+
+
+def test_a_covered_topic_is_made_from_the_matching_passages(client, b2v, owner, db_session, agent, fits):
+    headers, ws = owner
+    nb = notebook_with_posts(db_session, ws)
+    r = client.post("/api/videos", json={"notebook_id": str(nb.id), "focus_prompt": "raising prices on the paid tier"},
+                    headers=headers)
+    assert r.status_code == 201, r.text
+    sent = creates(b2v)[-1]["json"]
+    assert sent["title"] == "Creator business"
+    head, text = sent["content"].split("\n\n---\n\n", 1)
+    assert "raising prices on the paid tier" in head
+    assert "# On Pricing" in text and "Raise prices once a year" in text and "Hire slowly" not in text
+    assert "|" not in text and "lines" not in text  # no citing line numbers
+    assert not agent["questions"] and not fits["inputs"]  # the fast path: no model call
+    meta = sent["metadata"]
+    assert len(meta["document_ids"]) == 1
+
+
+def test_a_partly_covered_topic_goes_to_the_research_agent(client, b2v, owner, db_session, agent, fits):
+    from app.pipeline.research import VerifiedCitation
+
+    headers, ws = owner
+    nb = notebook_with_posts(db_session, ws)
+    agent["cites"] = [VerifiedCitation(1, "sources/x/hiring.md", 9, 9, "Hire slowly")]
+    r = client.post("/api/videos", json={"notebook_id": str(nb.id), "focus_prompt": "my first hire and team culture"},
+                    headers=headers)
+    assert r.status_code == 201, r.text
+    assert agent["questions"] and "my first hire and team culture" in agent["questions"][0]
+    head, text = creates(b2v)[-1]["json"]["content"].split("\n\n---\n\n", 1)
+    assert "my first hire and team culture" in head and "# Hiring" in text and "Hire slowly" in text
+    assert not fits["inputs"]
+
+
+def test_nothing_found_for_a_related_topic_frames_an_overview_around_it(client, b2v, owner, db_session, agent, fits):
+    headers, ws = owner
+    nb = notebook_with_posts(db_session, ws)
+    r = client.post("/api/videos", json={"notebook_id": str(nb.id), "focus_prompt": "my biggest lessons"},
+                    headers=headers)
+    assert r.status_code == 201, r.text
+    head, text = creates(b2v)[-1]["json"]["content"].split("\n\n---\n\n", 1)
+    assert "overview of the writer's whole notebook" in head and '"my biggest lessons"' in head
+    assert "running the business" in head
+    assert "# On Pricing" in text and "# Hiring" in text  # the openings of every post
+    assert fits["inputs"][0]["post_titles"] == ["On Pricing", "Hiring"]
+
+
+@pytest.mark.parametrize("verdict", ["unrelated", "raise"])
+def test_an_unrelated_topic_makes_a_plain_overview(client, b2v, owner, db_session, agent, fits, verdict):
+    headers, ws = owner
+    nb = notebook_with_posts(db_session, ws)
+    fits["verdict"] = verdict
+    r = client.post("/api/videos", json={"notebook_id": str(nb.id), "focus_prompt": "volcano geology"},
+                    headers=headers)
+    assert r.status_code == 201, r.text
+    content = creates(b2v)[-1]["json"]["content"]
+    assert "---" not in content.split("# On Pricing")[0] and "volcano" not in content  # no topic instruction at all
+    assert "# On Pricing" in content and "# Hiring" in content
+
+
+def test_a_suggested_topic_with_nothing_found_is_a_themed_overview_without_the_check(client, b2v, owner, db_session,
+                                                                                     agent, fits):
+    headers, ws = owner
+    nb = notebook_with_posts(db_session, ws)
+    r = client.post("/api/videos", json={"notebook_id": str(nb.id), "focus": "Creator Mindset",
+                                         "focus_detail": "Staying motivated"}, headers=headers)
+    assert r.status_code == 201, r.text
+    head = creates(b2v)[-1]["json"]["content"].split("\n\n---\n\n", 1)[0]
+    assert '"Creator Mindset"' in head and not fits["inputs"]
+
+
+def test_focus_topics_for_a_whole_notebook(client, owner, other, db_session, suggest):
+    headers, ws = owner
+    nb = notebook_with_posts(db_session, ws)
+    r = client.post("/api/videos/focus-topics", json={"notebook_id": str(nb.id)}, headers=headers)
+    assert r.status_code == 200 and len(r.json()["topics"]) == 3
+    assert {"On Pricing", "Hiring"} <= {item.split("\n")[0] for item in suggest[-1]["items"]}
+    r = client.post("/api/videos/focus-topics", json={"notebook_id": str(nb.id)}, headers=other[0])
+    assert r.status_code == 404
+
+
+def test_plain_drops_the_citing_line_numbers():
+    from app.pipeline.video_material import plain
+
+    rendered = "sources/x/a.md lines 9-10 (On Pricing › Tiers)\n9| Raise prices.\n10| 12| is not a prefix here"
+    assert plain(rendered) == "# On Pricing › Tiers\nRaise prices.\n12| is not a prefix here"
+
+
+def test_the_overview_covers_every_post_not_only_the_newest(tmp_path):
+    from app.corpus import Corpus
+    from app.pipeline.video_material import OVERVIEW_BUDGET_CHARS, overview
+
+    c = Corpus(uuid.uuid4(), cache_dir=str(tmp_path))
+    long_text = "A long paragraph about one idea that goes on and on. " * 60  # ~3,200 characters a post
+    posts = {f"sources/x/p{i}.md": f"Post {i}" for i in range(160)}  # newest first, like a notebook's posts
+    c.write_files({rel: f"---\ntitle: {t}\n---\n\n# {t}\n\n{long_text}\n" for rel, t in posts.items()})
+    text = overview(c, posts, "A notebook about ideas.")
+    assert text.startswith("# About this notebook\nA notebook about ideas.")
+    assert all(f"# {t}\n" in text for t in posts.values())  # the oldest too
+    assert len(text) < OVERVIEW_BUDGET_CHARS * 1.2 and "|" not in text

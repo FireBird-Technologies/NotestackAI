@@ -83,13 +83,14 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
     startNotebook ? { kind: "notebook", id: startNotebook } : startDoc ? { kind: "post", id: startDoc }
       : sourceCache.archiveId ? { kind: "notebook", id: sourceCache.archiveId } : null,
   );
-  const [postIds, setPostIds] = useState<string[]>([]);
-  // Step 1's "focus on": the AI's three suggestions for the source chosen (sourceKey), and the one picked (none =
-  // the whole material).
+  // A notebook's post count (null until known): an empty one has nothing to make a video from.
+  const [postCount, setPostCount] = useState<number | null>(null);
+  // Step 1's "focus on": the AI's three suggestions for the source chosen (sourceKey), and the one picked. A single
+  // post's is optional (none = the whole post); a notebook's is required: the server searches it for the topic.
   const [topics, setTopics] = useState<VideoFocusTopic[] | null>(null);
   const topicsFor = useRef(""); // the sourceKey of the suggestions shown or on their way
   const [focus, setFocus] = useState<VideoFocusTopic | null>(null);
-  // Or the user's own topic: one or the other (or neither, for a general video).
+  // Or the user's own topic: one or the other (or neither, for a single post's general video).
   const [custom, setCustom] = useState(initial?.focus ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -220,17 +221,17 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
     }));
   }
 
-  const sourceReady = source?.kind === "post" || (source?.kind === "notebook" && postIds.length > 0);
+  const wholeNotebook = source?.kind === "notebook";
+  const sourceReady = source?.kind === "post" || (wholeNotebook && postCount !== 0);
 
-  /** Step 1's choice as API fields: the same for the focus suggestions and the create. */
+  /** Step 1's choice as API fields: the same for the focus suggestions and the create. A notebook is sent whole: the
+   * server finds what its posts say about the topic (or makes an overview of it when none do). */
   const sourceFields = (): VideoFocusSource | null => !source ? null
     : source.kind === "post" ? { document_id: source.id }
-    : { document_ids: postIds, notebook_id: source.id };
+    : { notebook_id: source.id };
   // The focus suggestions belong to one source choice. They are asked for as soon as the choice is complete and show
-  // below it on step 1; a new source or other ticks asks again. The short wait lets a run of ticks settle into one
-  // request.
-  const sourceKey = !source ? ""
-    : `${source.kind}:${source.id}:${source.kind === "notebook" ? [...postIds].sort().join(",") : ""}`;
+  // on step 1; a new source asks again. The short wait lets quick changes of mind settle into one request.
+  const sourceKey = !source ? "" : `${source.kind}:${source.id}`;
 
   useEffect(() => {
     if (!sourceReady || sourceKey === topicsFor.current) return;
@@ -252,6 +253,7 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
   // Suggestions made for an earlier choice are never shown for this one: the cards wait for the new ones (and so
   // does Go to step 2). null = still loading; [] = none to show.
   const shownTopics = topicsFor.current === sourceKey ? topics : null;
+  const topicChosen = !!focus || !!custom.trim();
 
   /** The focus for the create: a suggested topic, the user's own, or none (a general video). */
   function focusFields(): Pick<VideoCreateBody, "focus" | "focus_detail" | "focus_prompt"> {
@@ -336,6 +338,28 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
 
   const currentVoice = saved.find((v) => v.voice_id === form.custom_voice_id);
 
+  // The user's own topic: under the suggestions for a single post, first (and the one to fill in) for a notebook.
+  const customTopic = (
+    <label className={`vw-focus-custom${custom.trim() ? " on" : ""}`}>
+      <span className="vw-focus-custom-head">{wholeNotebook ? "Your topic" : "Custom topic"}</span>
+      <textarea rows={2} maxLength={500} value={custom}
+                placeholder="Describe your own, e.g. how rebalancing protects a long-term portfolio"
+                onFocus={() => setFocus(null)} // choosing the custom topic unpicks a suggested one
+                onChange={(e) => {
+                  setCustom(e.target.value);
+                  setFocus(null);
+                }} />
+      <span className="vw-focus-custom-foot">
+        <small className="muted">
+          {wholeNotebook
+            ? "We find what your posts say about it. If none cover it, you get an overview of the whole notebook."
+            : "Keep it to what the selected posts cover; anything they don't cover is left out of the video."}
+        </small>
+        <small className="muted mono">{custom.length}/500</small>
+      </span>
+    </label>
+  );
+
   return (
     <div className={inModal ? "stack vw-in-modal" : "page-wrap"}>
       {serviceIssue && (
@@ -379,38 +403,19 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
 
         {/* Stays mounted on steps 2 and 3, so going Back keeps the loaded posts and the ticks */}
         <div style={{ display: step === 1 ? "contents" : "none" }}>
-          <SourcePicker source={source} onSource={setSource} postIds={postIds} onPostIds={setPostIds} />
+          <SourcePicker source={source} onSource={setSource} onPostCount={setPostCount} />
         </div>
 
         {step === 1 && (
           <>
 
-            {/* Landscape with stock footage, always: the form's defaults, no picker */}
-            <div className="vw-style-row">
-              <div className="field">
-                <span className="vw-label">Video style</span>
-                {catalog === null ? <Loading label="Loading styles" /> : (
-                  <div className="vw-chips vw-style-chips">
-                    {styles.map((s) => (
-                      <button key={s.id} type="button" className={`vw-chip${form.video_style === s.id ? " on" : ""}`}
-                              aria-pressed={form.video_style === s.id} title={s.description ?? undefined}
-                              onClick={() => set({ video_style: s.id })}>
-                        {s.name}{s.kind === "custom" ? " (yours)" : ""}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {houseStyles && picked?.description && (
-                  <small className="muted vw-style-note">{picked.description}</small>
-                )}
-              </div>
-            </div>
-
             {/* The suggestions are asked for as soon as the source is ready (hidden if there are none); the custom
-                topic is always there */}
+                topic is always there. A notebook's topic comes first and is required. */}
             {sourceReady && (
               <div className="field vw-focus">
-                <span className="vw-label">What should the video focus on?</span>
+                <span className="vw-label">{wholeNotebook ? "What should the video be about?" : "What should the video focus on?"}</span>
+                {wholeNotebook && customTopic}
+                {wholeNotebook && shownTopics?.length !== 0 && <span className="muted small vw-focus-or">Or pick a suggested topic</span>}
                 {shownTopics?.length !== 0 && (
                   <div className="vw-focus-grid" aria-busy={shownTopics === null}>
                     {shownTopics === null
@@ -442,30 +447,36 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
                       })}
                   </div>
                 )}
-                <label className={`vw-focus-custom${custom.trim() ? " on" : ""}`}>
-                  <span className="vw-focus-custom-head">Custom topic</span>
-                  <textarea rows={2} maxLength={500} value={custom}
-                            placeholder="Describe your own, e.g. how rebalancing protects a long-term portfolio"
-                            onFocus={() => setFocus(null)} // choosing the custom topic unpicks a suggested one
-                            onChange={(e) => {
-                              setCustom(e.target.value);
-                              setFocus(null);
-                            }} />
-                  <span className="vw-focus-custom-foot">
-                    <small className="muted">
-                      Keep it to what the selected posts cover; anything they don't cover is left out of the video.
-                    </small>
-                    <small className="muted mono">{custom.length}/500</small>
-                  </span>
-                </label>
-                
+                {!wholeNotebook && customTopic}
               </div>
             )}
+
+            {/* Landscape with stock footage, always: the form's defaults, no picker */}
+            <div className="vw-style-row">
+              <div className="field">
+                <span className="vw-label">Video style</span>
+                {catalog === null ? <Loading label="Loading styles" /> : (
+                  <div className="vw-chips vw-style-chips">
+                    {styles.map((s) => (
+                      <button key={s.id} type="button" className={`vw-chip${form.video_style === s.id ? " on" : ""}`}
+                              aria-pressed={form.video_style === s.id} title={s.description ?? undefined}
+                              onClick={() => set({ video_style: s.id })}>
+                        {s.name}{s.kind === "custom" ? " (yours)" : ""}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {houseStyles && picked?.description && (
+                  <small className="muted vw-style-note">{picked.description}</small>
+                )}
+              </div>
+            </div>
 
             {error && <ErrorText message={error} />}
             <div className="vw-nav">
               {/* Waits for the focus suggestions (shown, or none to show), so they are never skipped past */}
-              <button className="btn btn-primary vw-next" disabled={!sourceReady || shownTopics === null}
+              <button className="btn btn-primary vw-next"
+                      disabled={!sourceReady || shownTopics === null || (wholeNotebook && !topicChosen)}
                       onClick={() => setStep(2)}>
                 Go to step 2
               </button>
@@ -581,7 +592,7 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
             <div className="vw-nav">
               <button className="btn" onClick={() => setStep(2)} disabled={busy}>Back</button>
               <button className="btn btn-primary vw-next" onClick={submit} disabled={busy}>
-                {busy ? "Launching..." : "Generate Video"}
+                {busy ? "Initiating..." : "Generate Video"}
               </button>
             </div>
           </>

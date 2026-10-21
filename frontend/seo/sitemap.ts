@@ -12,7 +12,6 @@ import { tools } from "../src/content/tools";
 const STATIC_PAGES: { path: string; priority: string; changefreq: string }[] = [
   { path: "/", priority: "1.0", changefreq: "weekly" },
   { path: "/notebooklm-alternative", priority: "0.9", changefreq: "monthly" },
-  { path: "/pricing", priority: "0.8", changefreq: "monthly" },
   { path: "/blogs", priority: "0.9", changefreq: "weekly" },
   { path: "/tools", priority: "0.8", changefreq: "monthly" },
   { path: "/support", priority: "0.4", changefreq: "yearly" },
@@ -110,7 +109,7 @@ differs from NotebookLM.
 
 - [Home](${base}/): product overview, demo video and pricing
 - [Notestack vs NotebookLM](${base}/notebooklm-alternative): side by side comparison and FAQ
-- [Pricing](${base}/pricing): plans and limits
+- [Pricing](${base}/#pricing): plans and limits
 - [Blog](${base}/blogs): guides on NotebookLM alternatives, AI for research and AI tools for writers
 - [Free tools](${base}/tools): ${tools.map((t) => `[${t.heroTitle}](${base}/tools/${t.slug})`).join(", ")} (free with sign in)
 

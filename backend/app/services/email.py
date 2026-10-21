@@ -3,6 +3,7 @@
 Rule: no em dashes in any copy. Broadcast bodies are plain text and get HTML escaped.
 """
 
+import base64
 import hashlib
 import hmac
 import html
@@ -10,6 +11,7 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 
 from app.config import settings
 
@@ -25,6 +27,7 @@ class OutgoingEmail:
     headers: dict[str, str] | None = None
     reply_to: str | None = None
     scheduled_at: datetime | None = None  # sent later by the provider (Resend holds it until then)
+    inline_images: dict[str, tuple[str, bytes]] | None = None  # content id -> (filename, PNG), shown as cid:<id>
 
 
 class BaseEmailProvider(ABC):
@@ -54,6 +57,9 @@ class ResendEmailProvider(BaseEmailProvider):
             params["reply_to"] = email.reply_to
         if email.scheduled_at:
             params["scheduled_at"] = email.scheduled_at.isoformat()
+        if email.inline_images:
+            params["attachments"] = [{"filename": name, "content": base64.b64encode(data).decode(), "content_id": cid}
+                                     for cid, (name, data) in email.inline_images.items()]
         result = self._resend.Emails.send(params)
         return result.get("id") if isinstance(result, dict) else None
 
@@ -103,6 +109,16 @@ def _button(label: str, url: str) -> str:
     )
 
 
+# The logo travels inside the email (an inline attachment): a linked image would need a public URL and is often
+# blocked until the reader allows images.
+LOGO_CID = "notestack-logo"
+LOGO_PATH = Path(__file__).resolve().parent.parent / "assets" / "logo-email.png"
+
+
+def _logo_png() -> bytes:
+    return LOGO_PATH.read_bytes()
+
+
 def _video_ready_layout(first: str, title: str, url: str) -> str:
     """The "your video is ready to download" email: a header band with the wordmark, the news, one button, a footer.
     Inline styles only; Notestack's black, #217cff blue and white."""
@@ -114,7 +130,12 @@ font-family:Inter,Arial,sans-serif;color:#ffffff">
 border:1px solid rgba(33,124,255,0.35);border-radius:16px;overflow:hidden;background:#000000">
 <tr><td style="height:4px;background:#217cff;font-size:0;line-height:0">&nbsp;</td></tr>
 <tr><td align="center" style="padding:36px 24px;background:#0a1224;border-bottom:1px solid rgba(33,124,255,0.25)">
-<span style="font-size:30px;font-weight:700;letter-spacing:-0.02em;color:#ffffff">Note<span style="color:#217cff">stack</span></span>
+<table role="presentation" cellpadding="0" cellspacing="0"><tr>
+<td style="padding-right:12px;vertical-align:middle"><img src="cid:{LOGO_CID}" width="40"
+height="40" alt="" style="display:block;width:40px;height:40px;border-radius:10px;background:#ffffff;border:0"></td>
+<td style="vertical-align:middle;font-family:'Space Grotesk',Inter,Arial,sans-serif;font-size:26px;font-weight:600;
+letter-spacing:0.01em;color:#ffffff">Notestack</td>
+</tr></table>
 </td></tr>
 <tr><td style="padding:36px 40px 8px;font-size:22px;font-weight:600;line-height:1.35;color:#ffffff">
 Hi {html.escape(first)}, your video is ready to download!</td></tr>
@@ -210,6 +231,7 @@ class EmailService:
                 to=to,
                 subject=f'Your video "{title}" is ready to download',
                 html=_video_ready_layout(first, title, url),
+                inline_images={LOGO_CID: ("notestack.png", _logo_png())},
                 text=(f"Hi {first}, your video is ready to download!\n\n"
                       f'Your Notestack video "{title}" has finished rendering. Download it here:\n{url}'),
             )
