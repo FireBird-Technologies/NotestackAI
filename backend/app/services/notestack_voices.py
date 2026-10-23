@@ -32,7 +32,7 @@ def is_notestack_voice(db: Session, workspace_id: uuid.UUID, voice_id: str) -> b
 
 def save_notestack_voice(db: Session, workspace_id: uuid.UUID, voice_id: str, name: str) -> UserSavedVoice:
     """Put a Notestack voice in the workspace's voices (the one list for audio and video), once. Saving needs no plan; it speaks audio
-    overviews (a video uses the free built-in voices). No preview link: it is played through /api/voice/preview.
+    overviews and videos (blog2video shares the ElevenLabs account). No preview link: it is played through /api/voice/preview.
     The caller commits."""
     row = db.get(UserSavedVoice, {"workspace_id": workspace_id, "voice_id": voice_id})
     if row is None:

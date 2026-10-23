@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { voiceApi } from "../api/endpoints";
 import type { Job, VoiceDesignInput, VoiceDesignPreview, VoiceState } from "../api/types";
 import { YourVoices } from "../components/voice/YourVoices";
+import { Dropdown } from "../components/Dropdown";
 import { ConfirmButton, errorMessage, JobProgress, Loading, Modal, Tabs } from "../components/ui";
 import { useJob } from "../hooks/useJob";
 import { useUpgrade } from "../hooks/useUpgrade";
@@ -31,6 +32,9 @@ function fmtSeconds(s: number) {
 }
 
 type GenMode = "options" | "prompt" | "clone";
+
+/** "middle-aged" → "Middle-Aged", "South African" stays as it is. */
+const titleCase = (v: string) => v.replace(/(^|[\s-])\p{L}/gu, (m) => m.toUpperCase());
 
 const GEN_OPTIONS: { key: keyof Omit<VoiceDesignInput, "prompt">; label: string; values: string[] }[] = [
   { key: "gender", label: "Gender", values: ["female", "male", "neutral"] },
@@ -119,17 +123,13 @@ function GenerateVoicePanel({
         />
 
         {mode === "options" && (
-          <div className="gen-options">
+          // Each option a dropdown, two to a row
+          <div className="gen-options gen-dropdowns">
             {GEN_OPTIONS.map((g) => (
-              <div key={g.key} className="gen-row">
+              <div key={g.key} className="field">
                 <span className="gen-label">{g.label}</span>
-                <div className="gen-chips" role="group" aria-label={g.label}>
-                  {g.values.map((v) => (
-                    <button key={v} type="button" className={`chip${opts[g.key] === v ? " on" : ""}`} aria-pressed={opts[g.key] === v} onClick={() => setOpts({ ...opts, [g.key]: v })}>
-                      {v}
-                    </button>
-                  ))}
-                </div>
+                <Dropdown label={g.label} fitList value={String(opts[g.key] ?? g.values[0])} onChange={(v) => setOpts({ ...opts, [g.key]: v })}
+                          options={g.values.map((v) => ({ value: v, label: titleCase(v) }))} />
               </div>
             ))}
           </div>

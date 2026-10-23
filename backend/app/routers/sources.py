@@ -569,6 +569,32 @@ def serialize_document(d: Document, source: Source | None = None) -> dict:
     }
 
 
+def list_columns() -> tuple:
+    """What a post list row shows, and no more: a post's text and its metadata (stored ideas, datasets) are most of its
+    row, and loading them for every post made a large library take a minute to list. The word count and the locked flag
+    come out of the metadata in SQL. Select them from Document outer-joined to Source."""
+    return (Document.id, Document.title, Document.url, Document.path, Document.source_id, Document.created_at,
+            Document.published_at, Document.evergreen_score,
+            Document.metadata_json["words"].as_integer().label("words"),
+            Document.metadata_json["locked"].as_boolean().label("locked"), Source.title.label("source_title"))
+
+
+def serialize_list_rows(db, rows) -> list[dict]:
+    """Rows of list_columns() as serialize_document gives them."""
+    # Posts stored before the word count was kept: counted from their text, which only they load.
+    uncounted = [r.id for r in rows if r.words is None]
+    counted = dict(db.execute(select(Document.id, Document.clean_text).where(Document.id.in_(uncounted))).all()) \
+        if uncounted else {}
+    return [{
+        "id": str(r.id), "title": r.title, "url": r.url, "path": r.path,
+        "source_id": str(r.source_id) if r.source_id else None, "source_title": r.source_title,
+        "added_at": r.created_at.isoformat() if r.created_at else None,
+        "published_at": r.published_at.isoformat() if r.published_at else None,
+        "words": r.words or len((counted.get(r.id) or "").split()), "evergreen_score": r.evergreen_score,
+        "locked": not r.path and bool(r.locked),  # as is_locked
+    } for r in rows]
+
+
 @documents_router.get("")
 def list_documents(
     ctx: Ctx = Depends(get_ctx),
@@ -595,10 +621,11 @@ def list_documents(
     order = ((Document.created_at.desc(), Document.published_at.desc().nulls_last()) if sort == "added" else
              (Document.published_at.desc().nulls_last(), Document.created_at.desc()))
     rows = ctx.db.execute(
-        query.order_by(*order)
+        query.with_only_columns(*list_columns())
+        .order_by(*order)
         .offset(max(offset, 0)).limit(min(limit, 5000))
     ).all()
-    return {"total": total, "items": [serialize_document(d, s) for d, s in rows]}
+    return {"total": total, "items": serialize_list_rows(ctx.db, rows)}
 
 
 @documents_router.get("/{document_id}")

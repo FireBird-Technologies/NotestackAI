@@ -10,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.config import settings
 from app.models import (
@@ -514,6 +514,25 @@ def test_own_references_pass(client, b2v, owner, db_session):
     make_video(client, headers, template="custom_58", video_style="custom:7", custom_voice_id=SARAH)
 
 
+def test_the_workspaces_own_voice_narrates_a_video(client, b2v, owner, other, db_session):
+    """Its clone (or a designed or added voice) works for videos: blog2video shares the ElevenLabs account. Another
+    workspace's clone is still refused."""
+
+    headers, ws = owner
+    def consent(workspace, email, voice_id):
+        user = db_session.scalar(select(User).where(User.email == email))
+        db_session.add(VoiceConsent(workspace_id=workspace.id, user_id=user.id, sample_key="k", consent_text="ok",
+                                    elevenlabs_voice_id=voice_id))
+        db_session.commit()
+
+    consent(ws, "ada@example.com", "vc_mine")
+    consent(other[1], "grace@example.com", "vc_grace")
+    make_video(client, headers, custom_voice_id="vc_mine")
+    assert creates(b2v)[0]["json"]["custom_voice_id"] == "vc_mine"
+    r = client.post("/api/videos", json={"url": "https://ada.example.com/p/a", "custom_voice_id": "vc_grace"}, headers=headers)
+    assert r.status_code == 404 and len(creates(b2v)) == 1
+
+
 def test_template_still_generating_is_refused(client, b2v, owner, db_session):
     headers, ws = owner
     db_session.add(B2VTemplate(b2v_template_id=58, workspace_id=ws.id, name="Mine", ready=False))
@@ -955,6 +974,21 @@ def test_template_switch_uses_a_video_and_checks_the_template(client, b2v, owner
     assert r.status_code == 200 and used(db_session, ws) == 2
 
 
+def test_a_first_render_is_free_and_rendering_again_uses_a_video(client, b2v, owner, db_session):
+    headers, ws = owner
+    art = make_video(client, headers)
+    r = client.post(f"/api/videos/{art['id']}/p/render?resolution=1080p", headers=headers)
+    assert r.status_code == 200 and used(db_session, ws) == 1
+    r = client.post(f"/api/videos/{art['id']}/p/render?resolution=1080p&force_render=true", headers=headers)
+    assert r.status_code == 200 and used(db_session, ws) == 2
+    db_session.execute(update(Subscription).where(Subscription.workspace_id == ws.id)
+                       .values(videos_used=Subscription.video_limit))
+    db_session.commit()
+    b2v.calls.clear()
+    r = client.post(f"/api/videos/{art['id']}/p/render?resolution=1080p&force_render=true", headers=headers)
+    assert r.status_code == 402 and r.json()["detail"]["kind"] == "videos" and b2v.calls == []
+
+
 # Edit jobs keep blog2video's own status on the artifact (not "generating"), so the list and editor can tell them apart
 
 
@@ -987,7 +1021,7 @@ def test_the_list_rechecks_a_video_whose_job_ended_unwatched(client, b2v, owner,
               (200, {"status": "generated", "ready": True}))
     client.get(f"/api/videos/{art['id']}/status", headers=headers)
     assert artifact_status(db_session, art) == "regenerating"
-    listed = client.get("/api/videos", headers=headers).json()
+    listed = client.get("/api/videos", headers=headers).json()["items"]
     assert listed[0]["status"] == "ready" and listed[0]["b2v_status"] == "generated"
 
 
@@ -1057,7 +1091,7 @@ def test_a_failed_video_is_refunded_once_and_removed(client, b2v, owner, db_sess
     row = db_session.scalar(select(B2VVideo))
     assert row.status == "deleted" and row.quota_state == "refunded" and row.artifact_id is None
     assert client.get(f"/api/videos/{art['id']}/status", headers=headers).status_code == 404
-    assert client.get("/api/videos", headers=headers).json() == []  # not restored from its row
+    assert client.get("/api/videos", headers=headers).json() == {"items": [], "total": 0}  # not restored from its row
     video_status.reconcile_videos(session_factory)
     assert used(db_session, ws) == 0
     assert "/api/projects/812" not in b2v.paths("DELETE")  # blog2video removes a failed project itself
@@ -1239,7 +1273,7 @@ def test_any_number_of_voices_can_be_saved(client, b2v, owner, db_session):
     assert len(got["saved"]) == 9 and "max_saved" not in got
 
 
-def test_notestack_voices_are_saved_for_audio_but_not_used_in_videos(client, b2v, owner, other, db_session):
+def test_notestack_voices_are_saved_and_narrate_videos(client, b2v, owner, other, db_session):
     headers, ws = owner
     notestack_voice(db_session, ws)
     got = client.get("/api/video-voices", headers=headers).json()
@@ -1247,9 +1281,10 @@ def test_notestack_voices_are_saved_for_audio_but_not_used_in_videos(client, b2v
     r = client.post("/api/video-voices/saved", json={"voice_id": "nv_narrator"}, headers=headers)
     assert r.status_code == 201 and r.json()["source"] == "notestack"
     saved = client.get("/api/video-voices", headers=headers).json()["saved"]
-    assert [v["source"] for v in saved if v["voice_id"] == "nv_narrator"] == ["notestack"]  # kept, for audio overviews
-    r = client.post("/api/videos", json={"url": "https://a.test/x", "custom_voice_id": "nv_narrator"}, headers=headers)
-    assert r.status_code == 404 and not creates(b2v)  # a video uses the free built-in voices
+    assert [v["source"] for v in saved if v["voice_id"] == "nv_narrator"] == ["notestack"]
+    # It narrates a video too (blog2video shares the ElevenLabs account)
+    make_video(client, headers, custom_voice_id="nv_narrator")
+    assert creates(b2v)[0]["json"]["custom_voice_id"] == "nv_narrator"
 
 
 def test_revoking_the_clone_drops_it_from_video_voices(client, b2v, owner, db_session, monkeypatch):
@@ -1486,12 +1521,12 @@ def test_list_restores_a_video_whose_library_item_went_missing(client, b2v, owne
     row.artifact_id, row.status = None, "generated"
     db_session.delete(db_session.get(Artifact, uuid.UUID(art["id"])))
     db_session.commit()
-    listed = client.get("/api/videos", headers=headers).json()
+    listed = client.get("/api/videos", headers=headers).json()["items"]
     assert len(listed) == 1 and listed[0]["status"] == "ready"
     b2v.calls.clear()
     client.get(f"/api/videos/{listed[0]['id']}/status", headers=headers)
     assert "/api/v1/videos/812/status" in b2v.paths("GET")  # the same blog2video video
-    assert len(client.get("/api/videos", headers=headers).json()) == 1  # restored once
+    assert client.get("/api/videos", headers=headers).json()["total"] == 1  # restored once
 
 
 # The notebook a video is made in lists it
@@ -1555,3 +1590,215 @@ def test_a_custom_templates_stock_clip_shows_on_its_scene(client, b2v, owner):
     assert scene["images"] == [{"filename": "scene_1_clip.mp4", "asset_id": 5, "kind": "video",
                                 "url": "https://r2.test/c.mp4"}]
     assert scene["title_font_size"] == 60
+
+
+# A finished render emails a download link
+
+
+def _emails(monkeypatch) -> list[tuple]:
+    from app.services.email import email_service
+
+    sent: list[tuple] = []
+    monkeypatch.setattr(email_service, "send_video_rendered",
+                        lambda to, name, title, url: sent.append((to, name, title, url)) or True)
+    return sent
+
+
+def test_a_finished_render_emails_its_mp4_link_once(client, b2v, owner, db_session, monkeypatch):
+    headers, ws = owner
+    sent = _emails(monkeypatch)
+    art = make_video(client, headers)
+    a = db_session.get(Artifact, uuid.UUID(art["id"]))
+    a.status = "rendering"  # as POST .../render leaves it
+    db_session.commit()
+    mp4 = "https://pub-x.r2.dev/dev/users/1/projects/812/output/video_1792500442.mp4"
+    done = {"status": "done", "ready": True, "video_url": mp4}
+    b2v.queue("GET", "/api/v1/videos/812/status", (200, done), (200, done))
+    client.get(f"/api/videos/{art['id']}/status", headers=headers)
+    client.get(f"/api/videos/{art['id']}/status", headers=headers)  # checked again: no second email
+    assert [(to, name) for to, name, _, _ in sent] == [("ada@example.com", "Ada")]
+    assert sent[0][3] == mp4  # the R2 file itself: the email's button downloads it straight away
+
+
+def test_a_first_generation_sends_no_render_email(client, b2v, owner, monkeypatch):
+    headers, _ = owner
+    sent = _emails(monkeypatch)
+    art = make_video(client, headers)
+    b2v.queue("GET", "/api/v1/videos/812/status", (200, {"status": "generated", "ready": True, "video_url": None}))
+    client.get(f"/api/videos/{art['id']}/status", headers=headers)
+    assert sent == []
+
+
+# A whole notebook on one topic: searched the way the chat searches it (pipeline/video_material.py)
+
+
+def notebook_with_posts(db, ws) -> Notebook:
+    """Two indexed posts, on pricing and on hiring, in the corpus and in a notebook."""
+    from app.corpus import Corpus, render_post
+
+    posts = {
+        "sources/x/pricing.md": ("On Pricing", datetime(2026, 5, 1, tzinfo=UTC),
+                                 "Raise prices once a year and tell readers why. A paid tier works best when the free "
+                                 "tier stays generous and the paid tier adds depth."),
+        "sources/x/hiring.md": ("Hiring", datetime(2026, 4, 1, tzinfo=UTC),
+                                "Hire slowly and write down what the role is for before you post the job. A good "
+                                "first hire frees your week for writing."),
+    }
+    Corpus(ws.id).write_files({path: render_post(title=title, url=f"https://ada.example.com/{path}", published_at=when,
+                                                 source="x", sections=[(None, text)])
+                               for path, (title, when, text) in posts.items()})
+    nb = Notebook(workspace_id=ws.id, title="Creator business")
+    db.add(nb)
+    db.flush()
+    for path, (title, when, text) in posts.items():
+        doc = Document(workspace_id=ws.id, title=title, url=f"https://ada.example.com/{path}", clean_text=text,
+                       path=path, published_at=when)
+        db.add(doc)
+        db.flush()
+        db.add(NotebookDocument(notebook_id=nb.id, document_id=doc.id))
+    db.commit()
+    return nb
+
+
+@pytest.fixture()
+def agent(monkeypatch):
+    """The chat's research agent, canned: records the questions; answers with `cites` (none = nothing found)."""
+    from app.pipeline import research as research_mod
+    from app.pipeline import video_material
+
+    calls: dict = {"questions": [], "cites": []}
+
+    def research(corpus, allowed, question, **kw):
+        calls["questions"].append(question)
+        cites = calls["cites"]
+        return research_mod.ResearchResult("answer", not cites, cites)
+
+    monkeypatch.setattr(video_material, "research", research)
+    return calls
+
+
+@pytest.fixture()
+def fits(monkeypatch):
+    """The relevance check, canned: `verdict` decides; records its inputs."""
+    from app.llm import run
+
+    calls: dict = {"verdict": "related", "inputs": []}
+
+    def predict(signature, *, db, workspace_id, job=None, lm=None, **inputs):
+        assert signature.__name__ == "TopicFitsNotebook"
+        calls["inputs"].append(inputs)
+        if calls["verdict"] == "raise":
+            raise RuntimeError("model down")
+        return {"verdict": calls["verdict"], "angle": "Both are about running the business." if calls["verdict"] ==
+                "related" else ""}
+
+    monkeypatch.setattr(run, "predict", predict)
+    return calls
+
+
+def test_a_whole_notebook_needs_a_topic(client, b2v, owner, db_session):
+    headers, ws = owner
+    nb = notebook_with_posts(db_session, ws)
+    r = client.post("/api/videos", json={"notebook_id": str(nb.id)}, headers=headers)
+    assert r.status_code == 422 and "topic" in r.text
+    assert not creates(b2v) and used(db_session, ws) == 0
+
+
+def test_a_covered_topic_is_made_from_the_matching_passages(client, b2v, owner, db_session, agent, fits):
+    headers, ws = owner
+    nb = notebook_with_posts(db_session, ws)
+    r = client.post("/api/videos", json={"notebook_id": str(nb.id), "focus_prompt": "raising prices on the paid tier"},
+                    headers=headers)
+    assert r.status_code == 201, r.text
+    sent = creates(b2v)[-1]["json"]
+    assert sent["title"] == "Creator business"
+    head, text = sent["content"].split("\n\n---\n\n", 1)
+    assert "raising prices on the paid tier" in head
+    assert "# On Pricing" in text and "Raise prices once a year" in text and "Hire slowly" not in text
+    assert "|" not in text and "lines" not in text  # no citing line numbers
+    assert not agent["questions"] and not fits["inputs"]  # the fast path: no model call
+    meta = sent["metadata"]
+    assert len(meta["document_ids"]) == 1
+
+
+def test_a_partly_covered_topic_goes_to_the_research_agent(client, b2v, owner, db_session, agent, fits):
+    from app.pipeline.research import VerifiedCitation
+
+    headers, ws = owner
+    nb = notebook_with_posts(db_session, ws)
+    agent["cites"] = [VerifiedCitation(1, "sources/x/hiring.md", 9, 9, "Hire slowly")]
+    r = client.post("/api/videos", json={"notebook_id": str(nb.id), "focus_prompt": "my first hire and team culture"},
+                    headers=headers)
+    assert r.status_code == 201, r.text
+    assert agent["questions"] and "my first hire and team culture" in agent["questions"][0]
+    head, text = creates(b2v)[-1]["json"]["content"].split("\n\n---\n\n", 1)
+    assert "my first hire and team culture" in head and "# Hiring" in text and "Hire slowly" in text
+    assert not fits["inputs"]
+
+
+def test_nothing_found_for_a_related_topic_frames_an_overview_around_it(client, b2v, owner, db_session, agent, fits):
+    headers, ws = owner
+    nb = notebook_with_posts(db_session, ws)
+    r = client.post("/api/videos", json={"notebook_id": str(nb.id), "focus_prompt": "my biggest lessons"},
+                    headers=headers)
+    assert r.status_code == 201, r.text
+    head, text = creates(b2v)[-1]["json"]["content"].split("\n\n---\n\n", 1)
+    assert "overview of the writer's whole notebook" in head and '"my biggest lessons"' in head
+    assert "running the business" in head
+    assert "# On Pricing" in text and "# Hiring" in text  # the openings of every post
+    assert fits["inputs"][0]["post_titles"] == ["On Pricing", "Hiring"]
+
+
+@pytest.mark.parametrize("verdict", ["unrelated", "raise"])
+def test_an_unrelated_topic_makes_a_plain_overview(client, b2v, owner, db_session, agent, fits, verdict):
+    headers, ws = owner
+    nb = notebook_with_posts(db_session, ws)
+    fits["verdict"] = verdict
+    r = client.post("/api/videos", json={"notebook_id": str(nb.id), "focus_prompt": "volcano geology"},
+                    headers=headers)
+    assert r.status_code == 201, r.text
+    content = creates(b2v)[-1]["json"]["content"]
+    assert "---" not in content.split("# On Pricing")[0] and "volcano" not in content  # no topic instruction at all
+    assert "# On Pricing" in content and "# Hiring" in content
+
+
+def test_a_suggested_topic_with_nothing_found_is_a_themed_overview_without_the_check(client, b2v, owner, db_session,
+                                                                                     agent, fits):
+    headers, ws = owner
+    nb = notebook_with_posts(db_session, ws)
+    r = client.post("/api/videos", json={"notebook_id": str(nb.id), "focus": "Creator Mindset",
+                                         "focus_detail": "Staying motivated"}, headers=headers)
+    assert r.status_code == 201, r.text
+    head = creates(b2v)[-1]["json"]["content"].split("\n\n---\n\n", 1)[0]
+    assert '"Creator Mindset"' in head and not fits["inputs"]
+
+
+def test_focus_topics_for_a_whole_notebook(client, owner, other, db_session, suggest):
+    headers, ws = owner
+    nb = notebook_with_posts(db_session, ws)
+    r = client.post("/api/videos/focus-topics", json={"notebook_id": str(nb.id)}, headers=headers)
+    assert r.status_code == 200 and len(r.json()["topics"]) == 3
+    assert {"On Pricing", "Hiring"} <= {item.split("\n")[0] for item in suggest[-1]["items"]}
+    r = client.post("/api/videos/focus-topics", json={"notebook_id": str(nb.id)}, headers=other[0])
+    assert r.status_code == 404
+
+
+def test_plain_drops_the_citing_line_numbers():
+    from app.pipeline.video_material import plain
+
+    rendered = "sources/x/a.md lines 9-10 (On Pricing › Tiers)\n9| Raise prices.\n10| 12| is not a prefix here"
+    assert plain(rendered) == "# On Pricing › Tiers\nRaise prices.\n12| is not a prefix here"
+
+
+def test_the_overview_covers_every_post_not_only_the_newest(tmp_path):
+    from app.corpus import Corpus
+    from app.pipeline.video_material import OVERVIEW_BUDGET_CHARS, overview
+
+    c = Corpus(uuid.uuid4(), cache_dir=str(tmp_path))
+    long_text = "A long paragraph about one idea that goes on and on. " * 60  # ~3,200 characters a post
+    posts = {f"sources/x/p{i}.md": f"Post {i}" for i in range(160)}  # newest first, like a notebook's posts
+    c.write_files({rel: f"---\ntitle: {t}\n---\n\n# {t}\n\n{long_text}\n" for rel, t in posts.items()})
+    text = overview(c, posts, "A notebook about ideas.")
+    assert text.startswith("# About this notebook\nA notebook about ideas.")
+    assert all(f"# {t}\n" in text for t in posts.values())  # the oldest too
+    assert len(text) < OVERVIEW_BUDGET_CHARS * 1.2 and "|" not in text

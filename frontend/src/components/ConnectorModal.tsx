@@ -10,8 +10,9 @@ const Step = ({ n, children }: { n: number; children: React.ReactNode }) => (
   </li>
 );
 
-/** Shared setup instructions: a full page from the sidebar, or a modal when launched inside a notebook. */
-export function ConnectorSetup({ showOAuthNote = true }: { showOAuthNote?: boolean }) {
+/** Shared setup instructions: a full page from the sidebar, or a modal when launched inside a notebook. `compact` (the
+ * modal) says the same in fewer words: the URL and its copy button on one line, two short steps per app. */
+export function ConnectorSetup({ showOAuthNote = true, compact = false }: { showOAuthNote?: boolean; compact?: boolean }) {
   const [copied, setCopied] = useState(false);
 
   const copy = async () => {
@@ -23,6 +24,43 @@ export function ConnectorSetup({ showOAuthNote = true }: { showOAuthNote?: boole
       /* Clipboard permissions are browser controlled; the URL stays selectable below. */
     }
   };
+
+  if (compact) return (
+    <div className="connector-compact">
+      <p className="muted connector-intro">Paste this URL into Claude or ChatGPT, then sign in to approve access.</p>
+
+      <section className="connector-url-card" aria-label="MCP server URL">
+        <code>{MCP_SERVER_URL}</code>
+        <button type="button" className="btn btn-primary btn-small" onClick={copy}>
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </section>
+
+      <div className="connector-clients">
+        <section className="connector-client">
+          <header>
+            <span className="connector-client-logo claude"><img src="/anthropic.svg" alt="" /></span>
+            <h3>Claude</h3>
+          </header>
+          <ol>
+            <Step n={1}>Go to <strong>Settings → Connectors → Add custom connector</strong>.</Step>
+            <Step n={2}>Paste the URL, leave Client ID and Secret empty, and connect.</Step>
+          </ol>
+        </section>
+
+        <section className="connector-client">
+          <header>
+            <span className="connector-client-logo openai"><img src="/openai.png" alt="" /></span>
+            <h3>ChatGPT</h3>
+          </header>
+          <ol>
+            <Step n={1}>In <strong>Settings → Apps → Advanced settings</strong>, turn on <strong>Developer mode</strong>.</Step>
+            <Step n={2}>Back in Apps, choose <strong>Add app</strong>, paste the URL and connect.</Step>
+          </ol>
+        </section>
+      </div>
+    </div>
+  );
 
   return (
     <>
@@ -87,7 +125,7 @@ export function ConnectorSetup({ showOAuthNote = true }: { showOAuthNote?: boole
 export default function ConnectorModal({ onClose }: { onClose: () => void }) {
   return (
     <Modal title="Connect to Notestack" onClose={onClose} wide>
-      <ConnectorSetup />
+      <ConnectorSetup compact />
     </Modal>
   );
 }

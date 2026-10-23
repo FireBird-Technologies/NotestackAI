@@ -56,3 +56,92 @@ def test_plans_endpoint(client):
     assert body["billing_enabled"] is False
     assert [p["id"] for p in body["plans"]] == ["free", "writer", "studio"]
     assert "—" not in str(body)
+
+
+def test_update_email_failures_get_one_retry(session_factory, monkeypatch):
+    from datetime import UTC, datetime, timedelta
+
+    from app import worker
+    from app.models import UpdateEmail, UpdateEmailSend, User
+
+    monkeypatch.setattr(worker, "UPDATE_EMAIL_PACE", 0)
+    with session_factory() as db:
+        users = [User(email=f"u{i}@example.com", auth_provider="email") for i in range(3)]
+        db.add_all(users)
+        campaign = UpdateEmail(subject="News", body="We shipped it.", send_hour=datetime.now(UTC).hour, batch_size=10)
+        db.add(campaign)
+        db.commit()
+        campaign_id = campaign.id
+
+    down = {"u1@example.com"}  # this one fails on its first try, then goes through
+
+    def send(uid, to, *rest):
+        if to in down:
+            down.remove(to)
+            return False
+        return True
+
+    monkeypatch.setattr(worker.email_service, "send_blast_email", send)
+    worker.update_email_batch(session_factory)
+    with session_factory() as db:
+        campaign = db.get(UpdateEmail, campaign_id)
+        assert (campaign.sent_count, campaign.failed_count, campaign.status) == (2, 1, "completed")
+        campaign.last_batch_at = datetime.now(UTC) - timedelta(days=1)
+        db.commit()
+
+    worker.update_email_batch(session_factory)  # the completed campaign reopens for its one failure
+    with session_factory() as db:
+        campaign = db.get(UpdateEmail, campaign_id)
+        assert (campaign.sent_count, campaign.failed_count, campaign.status) == (3, 0, "completed")
+        assert {s.status for s in db.query(UpdateEmailSend)} == {"sent"}
+
+
+def test_resend_rate_limit_waits_and_retries(monkeypatch):
+    import resend
+
+    from app.services import email as email_module
+
+    calls = []
+
+    def send(params):
+        calls.append(params)
+        if len(calls) < 3:
+            raise resend.exceptions.RateLimitError(message="slow down", error_type="rate_limit_exceeded", code=429)
+        return {"id": "em_1"}
+
+    monkeypatch.setattr(email_module.time, "sleep", lambda s: None)
+    provider = email_module.ResendEmailProvider("re_test")
+    monkeypatch.setattr(provider._resend.Emails, "send", send)
+    assert provider.send(email_module.OutgoingEmail(to="a@example.com", subject="s", html="", text="t")) == "em_1"
+    assert len(calls) == 3
+
+
+def test_a_server_error_emails_a_plain_text_alert(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+    from app.services import error_alerts
+
+    # sent at once (not on a thread), so the test can see it
+    monkeypatch.setattr(error_alerts, "_send_later", error_alerts.email_service.send_error_alert)
+    monkeypatch.setattr(error_alerts, "_last_sent", {})
+    monkeypatch.setattr(error_alerts, "_held_back", {})
+
+    def broken():
+        raise KeyError("missing_thing")
+
+    app.add_api_route("/api/_test/broken", broken)
+    client = TestClient(app, raise_server_exceptions=False)
+    before = len(ConsoleEmailProvider.sent)
+    assert client.get("/api/_test/broken?token=secret").status_code == 500
+    assert client.get("/api/_test/broken").status_code == 500  # the same error again: held back
+
+    sent = ConsoleEmailProvider.sent[before:]
+    assert len(sent) == 1
+    alert = sent[0]
+    assert alert.to == settings.alerts_email and alert.html == ""
+    assert alert.subject == "Failure on Notestack backend: KeyError in GET /api/_test/broken"
+    assert "GET /api/_test/broken crashed with KeyError: 'missing_thing', at tests/test_misc.py:" in alert.text
+    assert "Where: tests/test_misc.py:" in alert.text and " in broken" in alert.text
+    assert "Traceback" in alert.text and "Query keys: token" in alert.text
+    assert "secret" not in alert.text

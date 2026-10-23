@@ -100,12 +100,12 @@ def _plans_doc() -> Doc:
     ]
     body = "\n".join(lines)
     return Doc(
-        id="plans-and-billing", title="Plans, pricing and billing", route="/pricing",
+        id="plans-and-billing", title="Plans, pricing and billing", route="/app/settings",
         keywords=("price", "pricing", "plan", "plans", "free", "writer", "studio", "cost", "billing", "upgrade",
                   "limits", "annual", "monthly", "subscription", "refund", "cancel", "usage", "reports", "infographics"),
         questions=("How much does Notestack cost?", "What is in the free plan?", "What are the plan limits?",
                    "How do I upgrade?", "Is there annual billing?"),
-        related_paths=("/app/settings",), headings=tuple(re.findall(r"^#{1,3}\s+(.+)$", body, re.M)), body=body,
+        related_paths=(), headings=tuple(re.findall(r"^#{1,3}\s+(.+)$", body, re.M)), body=body,
     )
 
 

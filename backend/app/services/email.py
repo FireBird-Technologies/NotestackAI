@@ -3,10 +3,13 @@
 Rule: no em dashes in any copy. Broadcast bodies are plain text and get HTML escaped.
 """
 
+import base64
 import hashlib
 import hmac
 import html
 import logging
+import re
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
@@ -25,11 +28,15 @@ class OutgoingEmail:
     headers: dict[str, str] | None = None
     reply_to: str | None = None
     scheduled_at: datetime | None = None  # sent later by the provider (Resend holds it until then)
+    inline_images: dict[str, tuple[str, bytes]] | None = None  # content id -> (filename, PNG), shown as cid:<id>
 
 
 class BaseEmailProvider(ABC):
     @abstractmethod
     def send(self, email: OutgoingEmail) -> str | None: ...
+
+
+RATE_LIMIT_RETRIES = 3
 
 
 class ResendEmailProvider(BaseEmailProvider):
@@ -54,8 +61,19 @@ class ResendEmailProvider(BaseEmailProvider):
             params["reply_to"] = email.reply_to
         if email.scheduled_at:
             params["scheduled_at"] = email.scheduled_at.isoformat()
-        result = self._resend.Emails.send(params)
-        return result.get("id") if isinstance(result, dict) else None
+        if email.inline_images:
+            params["attachments"] = [{"filename": name, "content": base64.b64encode(data).decode(), "content_id": cid}
+                                     for cid, (name, data) in email.inline_images.items()]
+        # Resend allows a couple of requests a second; a 429 waits and tries again instead of failing the email.
+        for attempt in range(RATE_LIMIT_RETRIES + 1):
+            try:
+                result = self._resend.Emails.send(params)
+                return result.get("id") if isinstance(result, dict) else None
+            except self._resend.exceptions.RateLimitError:
+                if attempt == RATE_LIMIT_RETRIES:
+                    raise
+                time.sleep(2**attempt)
+        return None
 
 
 class ConsoleEmailProvider(BaseEmailProvider):
@@ -101,6 +119,65 @@ def _button(label: str, url: str) -> str:
         f"background:#217cff;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:999px;"
         f'font-weight:600">{html.escape(label)}</a></p>'
     )
+
+
+def _logo_url() -> str:
+    """The logo as the site serves it (a PNG): Gmail and Outlook show a linked image, but neither shows an SVG, and an
+    inline (cid:) attachment came through as a broken image."""
+    return f"{settings.frontend_url.rstrip('/')}/icon-192.png"
+
+
+def _video_ready_layout(first: str, title: str, url: str) -> str:
+    """The "your video is ready to download" email: a header band with the wordmark, the news, one button, a footer.
+    Inline styles only; Notestack's black, #217cff blue and white."""
+    year = datetime.now().year
+    return f"""<!doctype html><html><body style="margin:0;background:#05070d;padding:40px 16px;
+font-family:Inter,Arial,sans-serif;color:#ffffff">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
+<table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;
+border:1px solid rgba(33,124,255,0.35);border-radius:16px;overflow:hidden;background:#000000">
+<tr><td style="height:4px;background:#217cff;font-size:0;line-height:0">&nbsp;</td></tr>
+<tr><td align="center" style="padding:36px 24px;background:#0a1224;border-bottom:1px solid rgba(33,124,255,0.25)">
+<table role="presentation" cellpadding="0" cellspacing="0"><tr>
+<td style="padding-right:12px;vertical-align:middle"><img src="{_logo_url()}" width="40"
+height="40" alt="" style="display:block;width:40px;height:40px;border-radius:10px;background:#ffffff;border:0"></td>
+<td style="vertical-align:middle;font-family:'Space Grotesk',Inter,Arial,sans-serif;font-size:26px;font-weight:600;
+letter-spacing:0.01em;color:#ffffff">Notestack</td>
+</tr></table>
+</td></tr>
+<tr><td style="padding:36px 40px 8px;font-size:22px;font-weight:600;line-height:1.35;color:#ffffff">
+Hi {html.escape(first)}, your video is ready to download!</td></tr>
+<tr><td style="padding:12px 40px 0;font-size:16px;line-height:1.6;color:rgba(255,255,255,0.8)">
+Your Notestack video <strong style="color:#ffffff">&ldquo;{html.escape(title)}&rdquo;</strong> has finished rendering and is
+ready for download.</td></tr>
+<tr><td style="padding:16px 40px 36px">{_button("Download video", url)}</td></tr>
+<tr><td align="center" style="padding:22px 24px;border-top:1px solid rgba(255,255,255,0.08);background:#05070d;
+font-size:13px;line-height:1.6;color:rgba(255,255,255,0.5)">
+You received this because you rendered a video on Notestack.<br>
+&copy; {year} Notestack &middot; All rights reserved.</td></tr>
+</table></td></tr></table></body></html>"""
+
+
+def _plain_layout(body_html: str, footer_html: str) -> str:
+    """A plain note: dark text on white, no card or logo, a thin rule, then a small grey footer. Reads like a person
+    wrote it, not a product email."""
+    return f"""<!doctype html><html><body style="margin:0;background:#ffffff;padding:24px 16px;
+font-family:Arial,Helvetica,sans-serif;color:#222222">
+<div style="max-width:640px;font-size:15px;line-height:1.6;color:#222222">{body_html}</div>
+<div style="max-width:640px;margin-top:40px;padding-top:24px;border-top:1px solid #e5e5e5;font-size:13px;
+line-height:1.8;color:#9ca3af">{footer_html}</div>
+</body></html>"""
+
+
+def _plain_paragraphs(text: str) -> str:
+    """Blank lines split paragraphs, single newlines become <br>, and bare links are clickable."""
+    link = re.compile(r"(https?://[^\s<]+[^\s<.,;:!?)\]'\"])")
+    out = []
+    for para in re.split(r"\n\s*\n", text.strip()):
+        escaped = html.escape(para).replace("\n", "<br>")
+        escaped = link.sub(r'<a href="\1" style="color:#1d4ed8">\1</a>', escaped)
+        out.append(f'<p style="margin:0 0 18px">{escaped}</p>')
+    return "".join(out)
 
 
 def _code_block(code: str) -> str:
@@ -176,6 +253,19 @@ class EmailService:
             )
         )
 
+    def send_video_rendered(self, to: str, name: str | None, title: str, url: str) -> bool:
+        """A render finished: the MP4's own R2 link, which downloads it (for when the browser blocked the download)."""
+        first = (name or "").strip().split(" ")[0] or "there"
+        return self._send(
+            OutgoingEmail(
+                to=to,
+                subject=f'Your video "{title}" is ready to download',
+                html=_video_ready_layout(first, title, url),
+                text=(f"Hi {first}, your video is ready to download!\n\n"
+                      f'Your Notestack video "{title}" has finished rendering. Download it here:\n{url}'),
+            )
+        )
+
     def send_post_reminder(self, to: str, platform: str, content: str, url: str) -> bool:
         body = (
             f"Your {html.escape(platform)} post is scheduled for now. Copy it below and post it."
@@ -226,6 +316,12 @@ class EmailService:
             )
         )
 
+    def send_error_alert(self, subject: str, text: str) -> bool:
+        """A server error (see services/error_alerts): plain text only, so the traceback reads as it was printed."""
+        return self._send(
+            OutgoingEmail(to=settings.alerts_email, subject=subject, html="", text=text)
+        )
+
     def send_support_escalation(self, *, from_email: str, name: str | None, plan: str | None, reason: str,
                                 concern: str, page: str | None, transcript: list[tuple[str, str]]) -> bool:
         lines = [f"From: {name or 'unknown'} <{from_email}>", f"Plan: {plan or 'unknown'}", f"Reason: {reason}",
@@ -246,14 +342,21 @@ class EmailService:
     # Broadcast
 
     def send_blast_email(self, user_id: str, user_email: str, user_name: str | None, subject: str, body: str) -> bool:
-        first = (user_name or "there").split(" ")[0]
-        body_html = f"Hi {html.escape(first)},<br><br>" + html.escape(body).replace("\n", "<br>")
+        """An update to everyone: a plain note (no card or logo), then a footer with the site and an unsubscribe link."""
+        first = (user_name or "").strip().split(" ")[0] or "there"
+        site = settings.frontend_url.rstrip("/")
+        site_label = site.split("://", 1)[-1]
+        unsubscribe = self._unsubscribe_url(user_id)
+        footer = (
+            f'Visit us at <a href="{html.escape(site)}" style="color:#9ca3af">{html.escape(site_label)}</a><br>'
+            f'To unsubscribe from these emails, <a href="{html.escape(unsubscribe)}" style="color:#9ca3af">click here</a>.'
+        )
         return self._send(
             OutgoingEmail(
                 to=user_email,
                 subject=subject,
-                html=_layout(subject, body_html, self._unsubscribe_footer(user_id)),
-                text=f"Hi {first},\n\n{body}\n\nUnsubscribe: {self._unsubscribe_url(user_id)}",
+                html=_plain_layout(_plain_paragraphs(f"Hi {first},\n\n{body}"), footer),
+                text=f"Hi {first},\n\n{body}\n\nVisit us at {site_label}\nUnsubscribe: {unsubscribe}",
                 headers=self._list_unsubscribe(user_id),
                 reply_to=settings.alerts_email,
             )
@@ -261,9 +364,6 @@ class EmailService:
 
     def _unsubscribe_url(self, user_id: str) -> str:
         return f"{settings.api_url}/api/unsubscribe?token={make_unsubscribe_token(user_id)}"
-
-    def _unsubscribe_footer(self, user_id: str) -> str:
-        return f'<a href="{self._unsubscribe_url(user_id)}" style="color:rgba(255,255,255,0.5)">Unsubscribe</a>'
 
     def _list_unsubscribe(self, user_id: str) -> dict[str, str]:
         return {

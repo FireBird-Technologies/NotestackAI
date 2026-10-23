@@ -39,7 +39,7 @@ from app.models import (
 from app.pipeline.generate import ideas_fresh
 from app.pipeline.research import LastAnswer, ResearchResult, Turn, VerifiedCitation, refers_back, research
 from app.pipeline.trace import ChatTrace, use_trace
-from app.routers.sources import serialize_document
+from app.routers.sources import list_columns, serialize_list_rows
 from app.services import report_suggestions
 from app.services.artifacts import latest_jobs, serialize_artifact
 from app.services.jobs import create_job, record_usage
@@ -241,9 +241,11 @@ def get_notebook(notebook_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
     nb = _get(ctx, notebook_id)
     if nb.is_archive:  # posts synced since it was made join on open
         ensure_archive_notebook(ctx)
-    docs = ctx.db.scalars(
-        select(Document)
+    # The list's own columns only (not the posts' text and metadata), as the library does.
+    rows = ctx.db.execute(
+        select(*list_columns())
         .join(NotebookDocument, NotebookDocument.document_id == Document.id)
+        .outerjoin(Source, Source.id == Document.source_id)
         .where(NotebookDocument.notebook_id == nb.id)
         # The notebook rail is an inbox: posts uploaded/imported most recently come first, regardless of the date
         # originally printed on the article.
@@ -255,7 +257,7 @@ def get_notebook(notebook_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
         "description": nb.description,
         "summary": nb.summary,
         "is_archive": nb.is_archive,
-        "documents": [serialize_document(d) for d in docs],
+        "documents": serialize_list_rows(ctx.db, rows),
     }
 
 

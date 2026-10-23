@@ -13,17 +13,27 @@ export type DropdownOption<T extends string> = {
 };
 
 /** A themed select: a button showing the choice, and a list that opens under it. Arrow keys, Enter and Escape work
- * as in a native select. `onChange` may decline a choice (e.g. a premium option on a free plan) by not applying it. */
+ * as in a native select. `onChange` may decline a choice (e.g. a premium option on a free plan) by not applying it.
+ * With `multiple`, each option toggles (`isOn` says which are ticked), the list stays open, and `display` is the
+ * button's text. `fitList` lets the list grow past a narrow button to fit its labels. */
 export function Dropdown<T extends string>({
   value,
   options,
   onChange,
   label,
+  multiple = false,
+  isOn,
+  display,
+  fitList = false,
 }: {
   value: T;
   options: DropdownOption<T>[];
   onChange: (value: T) => void;
   label: string;
+  multiple?: boolean;
+  isOn?: (value: T) => boolean;
+  display?: string;
+  fitList?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
@@ -32,6 +42,8 @@ export function Dropdown<T extends string>({
   const list = useRef<HTMLUListElement>(null);
   const listId = useId();
   const current = options.find((o) => o.value === value) ?? options[0];
+  const on = (v: T) => (isOn ? isOn(v) : v === value);
+  const shown = display ?? current.label;
 
   useEffect(() => {
     if (!open) return;
@@ -51,7 +63,12 @@ export function Dropdown<T extends string>({
       const r = root.current?.getBoundingClientRect();
       if (!r) return;
       const up = window.innerHeight - r.bottom < 240 && r.top > window.innerHeight - r.bottom;
-      setPlace({ left: r.left, width: r.width, ...(up ? { bottom: window.innerHeight - r.top + 6 } : { top: r.bottom + 6 }) });
+      // A list wider than its button lines up with the button's nearer screen edge, so it never runs off screen.
+      const across = fitList
+        ? { minWidth: r.width, width: "max-content", maxWidth: "calc(100vw - 32px)",
+            ...(r.left + r.width / 2 > window.innerWidth / 2 ? { right: window.innerWidth - r.right } : { left: r.left }) }
+        : { left: r.left, width: r.width };
+      setPlace({ ...across, ...(up ? { bottom: window.innerHeight - r.top + 6 } : { top: r.bottom + 6 }) });
     };
     measure();
     window.addEventListener("scroll", measure, true);
@@ -60,18 +77,18 @@ export function Dropdown<T extends string>({
       window.removeEventListener("scroll", measure, true);
       window.removeEventListener("resize", measure);
     };
-  }, [open]);
+  }, [open, fitList]);
 
   useEffect(() => {
     if (open) list.current?.querySelector(`[data-index="${active}"]`)?.scrollIntoView({ block: "nearest" });
   }, [open, active]);
 
   const show = () => {
-    setActive(Math.max(options.findIndex((o) => o.value === value), 0));
+    setActive(Math.max(options.findIndex((o) => on(o.value)), 0));
     setOpen(true);
   };
   const choose = (o: DropdownOption<T>) => {
-    setOpen(false);
+    if (!multiple) setOpen(false);
     onChange(o.value);
   };
 
@@ -95,10 +112,10 @@ export function Dropdown<T extends string>({
   return (
     <div className={`dropdown${open ? " open" : ""}`} ref={root}>
       <button type="button" className="dropdown-btn" aria-haspopup="listbox" aria-expanded={open} aria-controls={listId}
-              aria-label={`${label}: ${current.label}`} onClick={() => (open ? setOpen(false) : show())} onKeyDown={onKey}>
+              aria-label={`${label}: ${shown}`} onClick={() => (open ? setOpen(false) : show())} onKeyDown={onKey}>
         <span className="dropdown-value">
-          <strong>{current.label}</strong>
-          {current.hint && <span className="muted">{current.hint}</span>}
+          <strong>{shown}</strong>
+          {!display && current.hint && <span className="muted">{current.hint}</span>}
         </span>
         <svg className="dropdown-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
              strokeWidth="2" aria-hidden="true">
@@ -106,22 +123,23 @@ export function Dropdown<T extends string>({
         </svg>
       </button>
       {open && createPortal(
-        <ul className="dropdown-list" role="listbox" id={listId} aria-label={label} ref={list} style={place}>
+        <ul className="dropdown-list" role="listbox" id={listId} aria-label={label} aria-multiselectable={multiple || undefined}
+            ref={list} style={place}>
           {options.map((o, i) => [
             o.group && o.group !== options[i - 1]?.group && (
               <li key={`group-${o.group}`} role="presentation" className={`dropdown-group${i > 0 ? " divider" : ""}`}>
                 {o.group}
               </li>
             ),
-            <li key={o.value} role="option" aria-selected={o.value === value} data-index={i}
-                className={`dropdown-option${i === active ? " active" : ""}${o.value === value ? " on" : ""}${o.divider ? " divider" : ""}`}
+            <li key={o.value} role="option" aria-selected={on(o.value)} data-index={i}
+                className={`dropdown-option${i === active ? " active" : ""}${on(o.value) ? " on" : ""}${o.divider ? " divider" : ""}`}
                 onMouseEnter={() => setActive(i)} onMouseDown={(e) => e.preventDefault()} onClick={() => choose(o)}>
               <span className="dropdown-value">
                 <strong>{o.label}</strong>
                 {o.hint && <span className="muted">{o.hint}</span>}
               </span>
               {o.badge}
-              {o.value === value && (
+              {on(o.value) && (
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"
                      aria-hidden="true" className="dropdown-check">
                   <path d="m5 12 5 5 9-10" />

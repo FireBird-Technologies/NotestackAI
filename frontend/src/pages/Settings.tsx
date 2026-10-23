@@ -4,7 +4,6 @@ import { tokens } from "../api/client";
 import { settingsApi, type SettingsPatch } from "../api/endpoints";
 import type { Settings as SettingsData } from "../api/types";
 import { ConnectedApps } from "../components/ConnectedApps";
-import { MemoryNotes } from "../components/MemoryNotes";
 import { ConfirmButton, errorMessage, formatDate, Loading, PageHeader } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import { useUpgrade } from "../hooks/useUpgrade";
@@ -96,10 +95,6 @@ export default function Settings() {
               <span>Workspace name</span>
               <input className="input input-sm" value={workspace} onChange={(e) => setWorkspace(e.target.value)} onBlur={saveProfile} />
             </label>
-          </Section>
-
-          <Section title="What the assistant should know">
-            <MemoryNotes />
           </Section>
 
           <Section title="Connected apps">

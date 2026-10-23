@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { docsApi, jobsApi, notebooksApi, settingsApi, sourcesApi, type NotebookLmImportResult } from "../api/endpoints";
 import type { Job, Source } from "../api/types";
+import { CloseIcon, UploadIcon } from "../components/icons/Icons";
 import Logo from "../components/Logo";
 import SkyCanvas from "../components/SkyCanvas";
 import { SourceUrlHint, useSourceUrlCheck } from "../components/SourceUrlCheck";
@@ -571,7 +572,8 @@ export default function Welcome() {
                         }}
                         aria-label="Files to upload"
                       />
-                      <strong>Drop files here or click to choose</strong>
+                      <UploadIcon size={28} />
+                  <strong>Drop files here or click to choose</strong>
                       <span className="mono muted small">.md · .txt · .html · .pdf</span>
                     </label>
                   ) : (
@@ -590,7 +592,7 @@ export default function Welcome() {
                       {files.map((f) => (
                         <li key={`${f.name}-${f.size}`}>
                           <span>{f.name}</span>
-                          <button type="button" className="link-btn small" onClick={() => setFiles(files.filter((x) => x !== f))} aria-label={`Remove ${f.name}`}>Remove</button>
+                          <button type="button" className="icon-btn" onClick={() => setFiles(files.filter((x) => x !== f))} aria-label={`Remove ${f.name}`} title="Remove"><CloseIcon size={14} /></button>
                         </li>
                       ))}
                     </ul>

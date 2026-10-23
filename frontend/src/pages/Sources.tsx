@@ -5,7 +5,7 @@ import type { Doc, Job, Source } from "../api/types";
 import { Reader } from "../components/Reader";
 import { TrashIcon } from "../components/icons/Icons";
 import { SourceUrlHint, useSourceUrlCheck } from "../components/SourceUrlCheck";
-import { DeleteButton, EmptyState, errorMessage, formatDate, JobProgress, Loading, PageHeader, StatusPill, Tabs } from "../components/ui";
+import { DeleteButton, EmptyState, errorMessage, formatDate, JobProgress, Loading, PageHeader, Pager, StatusPill, Tabs } from "../components/ui";
 import { useJobMap } from "../hooks/useJob";
 import { useUpgrade } from "../hooks/useUpgrade";
 import { useAuth } from "../hooks/useAuth";
@@ -21,7 +21,7 @@ import {
   reportNotebookLmTransferStatus,
 } from "../lib/notebooklm";
 
-const PAGE = 50;
+const PAGE = 10; // posts on one page of the list
 const PENDING_IMPORTS_ID = "pending-imports";
 
 function pendingImports(count: number): Source {
@@ -561,15 +561,15 @@ export default function Sources() {
     if (!imports) return setSources([...next, pendingImports(expected)]);
     setSources(next.map((s) => (s.id === imports.id ? { ...s, document_count: Math.max(s.document_count, expected) } : s)));
   }), []);
+  /** One page of posts, from `start` (default: the page shown, so a refresh keeps it). A page past the end (posts were
+   * deleted) gives way to the last one. */
   const loadDocs = useCallback(
-    (reset = true) => {
-      const start = reset ? 0 : offset + PAGE;
-      return docsApi.list({ q, indexed_only: true, sort: "added", limit: PAGE, offset: start }).then((p) => {
-        setTotal(p.total);
-        setOffset(start);
-        setDocs((d) => (reset ? p.items : [...d, ...p.items]));
-      });
-    },
+    (start = offset): Promise<void> => docsApi.list({ q, indexed_only: true, sort: "added", limit: PAGE, offset: start }).then((p) => {
+      if (!p.items.length && start > 0 && p.total > 0) return loadDocs(Math.floor((p.total - 1) / PAGE) * PAGE);
+      setTotal(p.total);
+      setOffset(start);
+      setDocs(p.items);
+    }),
     [q, offset],
   );
 
@@ -580,17 +580,17 @@ export default function Sources() {
   });
 
   // The post counts on the cards come from the server, so refresh them, and the posts list under them, while a sync is running:
-  // posts show up as they arrive. (Not while a search is being typed or a "Load more" page is open: that would reset them.)
+  // posts show up as they arrive. (Only on the first page: a later page would shift under the reader.)
   const syncing = Object.values(jobs).some((j) => j.status === "queued" || j.status === "running");
   const loadDocsRef = useRef(loadDocs);
   loadDocsRef.current = loadDocs;
   const paged = useRef(false);
-  paged.current = docs.length > PAGE;
+  paged.current = offset > 0;
   useEffect(() => {
     if (!syncing) return;
     const t = setInterval(() => {
       loadSources().catch(() => {});
-      if (!paged.current) loadDocsRef.current(true).catch(() => {});
+      if (!paged.current) loadDocsRef.current(0).catch(() => {});
     }, 3000);
     return () => clearInterval(t);
   }, [syncing, loadSources]);
@@ -600,7 +600,7 @@ export default function Sources() {
     if (!returningFromNotebookLm) return;
     const t = setInterval(() => {
       loadSources().catch(() => {});
-      if (!paged.current) loadDocsRef.current(true).catch(() => {});
+      if (!paged.current) loadDocsRef.current(0).catch(() => {});
     }, 2000);
     return () => clearInterval(t);
   }, [returningFromNotebookLm, loadSources]);
@@ -610,7 +610,7 @@ export default function Sources() {
   }, [loadSources]);
 
   useEffect(() => {
-    const t = setTimeout(() => loadDocs(true), 200);
+    const t = setTimeout(() => loadDocs(0), 200); // a new search starts on its first page
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
@@ -682,7 +682,7 @@ export default function Sources() {
       <PageHeader eyebrow="Sources" title="Your knowledge, in orbit" />
       {returningFromNotebookLm ? (
         <NotebookLmImportSteps
-          onImported={async () => { await Promise.all([loadSources(), loadDocs(true)]); }}
+          onImported={async () => { await Promise.all([loadSources(), loadDocs(0)]); }}
           onBack={() => setSearchParams({}, { replace: true })}
         />
       ) : (
@@ -812,8 +812,11 @@ export default function Sources() {
                     // A failure shows in the warning, which stays open to try again
                     await docsApi.remove(d.id);
                     if (reading === d.id) setReading(null);
-                    setDocs((list) => list.filter((post) => post.id !== d.id));
-                    setTotal((n) => Math.max(0, n - 1));
+                    // The page refills from the next one; its last post gone, the page before it
+                    void loadDocs(docs.length === 1 && offset > 0 ? offset - PAGE : offset).catch(() => {
+                      setDocs((list) => list.filter((post) => post.id !== d.id));
+                      setTotal((n) => Math.max(0, n - 1));
+                    });
                     setSources((list) => list?.map((source) => source.id === d.source_id
                       ? { ...source, document_count: Math.max(0, source.document_count - 1) }
                       : source) ?? null);
@@ -825,11 +828,8 @@ export default function Sources() {
             ))}
             {docs.length === 0 && <li className="muted">No posts match.</li>}
           </ul>
-          {docs.length < total && (
-            <button className="btn btn-small" onClick={() => loadDocs(false)}>
-              Load more
-            </button>
-          )}
+          <Pager page={Math.floor(offset / PAGE)} pages={Math.ceil(total / PAGE)}
+                 onChange={(page) => void loadDocs(page * PAGE).catch(() => setError("Could not load that page. Try again."))} />
         </section>
       )}
       {reading && <Reader documentId={reading} onClose={() => setReading(null)} />}

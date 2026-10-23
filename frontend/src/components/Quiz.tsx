@@ -4,17 +4,18 @@ import type { Artifact, ChatPreset, ChatSummary, QuizQuestion, QuizQuestionType 
 import { ArtifactFeedback, FeedbackActions } from "./ArtifactFeedback";
 import { CheckIcon, ChevronIcon } from "./icons/Icons";
 import { ViewButton } from "./cardActions";
-import { Pills, SourceFocusFields, sourceSummary, type SourceSelection } from "./SourceFocusFields";
+import { Dropdown } from "./Dropdown";
+import { SourceFocusFields, sourceSummary, type SourceSelection } from "./SourceFocusFields";
 import { StudyOverlay } from "./StudyOverlay";
 import { Modal } from "./ui";
 
 const LEVELS = [
   { id: "easy", label: "Easy" },
-  { id: "medium", label: "Medium (Default)" },
+  { id: "medium", label: "Medium" },
   { id: "hard", label: "Hard" },
 ] as const;
 const TYPES: { id: QuizQuestionType; label: string }[] = [
-  { id: "multiple_choice", label: "Multiple Choice" },
+  { id: "multiple_choice", label: "MCQs" },
   { id: "fill_blank", label: "Fill in the Blank" },
   { id: "short_answer", label: "Short Answer" },
 ];
@@ -61,19 +62,19 @@ export function QuizDialog({ notebookId, chats, currentChatId, busy, error, init
     <Modal title="Quiz" onClose={onClose} wide>
       <div className="stack vw-in-modal">
         <section className="stack vw qz-setup">
-          <div className="field">
-            <span className="vw-label">Level of difficulty</span>
-            <Pills label="Level of difficulty" value={level} options={LEVELS} onChange={setLevel} />
-          </div>
-          <div className="field">
-            <span className="vw-label">Question types</span>
-            <div className="vw-chips">
-              {TYPES.map((t) => (
-                <button key={t.id} type="button" className={`vw-chip${types.has(t.id) ? " on" : ""}`}
-                        aria-pressed={types.has(t.id)} onClick={() => toggleType(t.id)}>
-                  {types.has(t.id) && <CheckIcon size={14} />} {t.label}
-                </button>
-              ))}
+          {/* Difficulty and question types side by side, each a dropdown (the types one ticks several) */}
+          <div className="qz-opts">
+            <div className="field">
+              <span className="vw-label">Difficulty</span>
+              <Dropdown label="Level of difficulty" value={level} onChange={setLevel} fitList
+                        options={LEVELS.map((l) => ({ value: l.id, label: l.label }))} />
+            </div>
+            <div className="field">
+              <span className="vw-label">Question types</span>
+              <Dropdown<QuizQuestionType> label="Question types" multiple fitList value={TYPES.find((t) => types.has(t.id))!.id}
+                        isOn={(t) => types.has(t)} onChange={toggleType}
+                        display={types.size === 1 ? TYPES.find((t) => types.has(t.id))!.label : `${types.size} types`}
+                        options={TYPES.map((t) => ({ value: t.id, label: t.label }))} />
             </div>
           </div>
           <SourceFocusFields notebookId={notebookId} chats={chats} currentChatId={currentChatId}
@@ -98,8 +99,9 @@ export function QuizDialog({ notebookId, chats, currentChatId, busy, error, init
 
 const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, "").replace(/\s+/g, " ").trim();
 
-type Answer = { choice: number[]; text: string; checked: boolean; correct: boolean | null };
-const blank = (): Answer => ({ choice: [], text: "", checked: false, correct: null });
+/** checked: answered and locked (graded). revealed: the reader asked to see the answer (View answer). */
+type Answer = { choice: number[]; text: string; checked: boolean; revealed: boolean; correct: boolean | null };
+const blank = (): Answer => ({ choice: [], text: "", checked: false, revealed: false, correct: null });
 
 /** Whether a choice or fill-in answer is right. A short answer has no automatic grade: the reader marks it. */
 function grade(q: QuizQuestion, a: Answer): boolean | null {
@@ -192,25 +194,28 @@ export function ResultScene({ score, total, tone }: { score: number; total: numb
   );
 }
 
-/** The quiz itself, without a frame: in a modal (QuizPlayer) or inside a report. `onExit` adds a Close button. */
+/** The quiz itself, without a frame: in a modal (QuizPlayer) or inside a report. `onExit` adds a Close button.
+ * After answering, the reader goes on (Next) or looks at the answer first (View answer); the results list every
+ * question with the reader's and the right answers (View details). */
 export function QuizRunner({ questions, onExit, feedback }: { questions: QuizQuestion[]; onExit?: () => void; feedback?: ReactNode }) {
   const [slot, setSlot] = useState<HTMLElement | null>(null); // where the review puts its Save button
   const [i, setI] = useState(0);
   const [answers, setAnswers] = useState<Answer[]>(() => questions.map(blank));
   const [done, setDone] = useState(false);
-  const [finished, setFinished] = useState(false); // the results have been reached: a question opened from them leads back to them
-  const [detail, setDetail] = useState(false); // the per-question results, under the score
+  const [detail, setDetail] = useState(false); // every question and its answers, under the score
 
   const q = questions[i];
   const a = answers[i];
   const patch = (p: Partial<Answer>) => setAnswers((all) => all.map((x, k) => (k === i ? { ...x, ...p } : x)));
   const score = answers.filter((x) => x.correct).length;
+  // While answering, only answers the reader looked at count: going on with Next never gives one away.
+  const shownScore = answers.filter((x) => x.revealed && x.correct).length;
 
   const restart = () => {
     setAnswers(questions.map(blank));
     setI(0);
     setDone(false);
-    setFinished(false);
+    setDetail(false);
   };
 
   if (!q) return <p className="muted">This quiz has no questions.</p>;
@@ -235,24 +240,48 @@ export function QuizRunner({ questions, onExit, feedback }: { questions: QuizQue
           </div>
 
           <button type="button" className={`quiz-detail-toggle${detail ? " open" : ""}`} aria-expanded={detail} onClick={() => setDetail(!detail)}>
-            View results in depth
+            View details
             <ChevronIcon size={16} className={`chevron${detail ? " open" : ""}`} />
           </button>
           {detail && (
-            <ol className="quiz-review">
-              {questions.map((x, k) => (
-                <li key={k} className={answers[k].correct ? "right" : "wrong"}>
-                  <button type="button" onClick={() => { setI(k); setDone(false); }} title={x.question}>
-                    <span className="quiz-review-mark" aria-hidden="true">
-                      {answers[k].correct ? <CheckIcon size={14} /> : (
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
-                      )}
-                    </span>
-                    <span className="quiz-review-n mono">{k + 1}</span>
-                    <span className="quiz-review-q">{x.question}</span>
-                  </button>
-                </li>
-              ))}
+            <ol className="quiz-details">
+              {questions.map((x, k) => {
+                const ans = answers[k];
+                const choice = x.type === "multiple_choice" || x.type === "multiple_select";
+                return (
+                  <li key={k} className={`quiz-detail${ans.correct ? " right" : " wrong"}`}>
+                    <p className="quiz-detail-q">
+                      <span className="quiz-review-mark" aria-hidden="true">
+                        {ans.correct ? <CheckIcon size={14} /> : (
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+                        )}
+                      </span>
+                      <span className="quiz-review-n mono">{k + 1}</span>
+                      <span>{x.question}</span>
+                    </p>
+                    {choice ? (
+                      <ul className="quiz-options">
+                        {(x.options ?? []).map((opt, n) => {
+                          const picked = ans.choice.includes(n);
+                          const right = (x.correct ?? []).includes(n);
+                          return (
+                            <li key={n} className={`quiz-opt${right ? " right" : picked ? " wrong" : ""}`}>
+                              <span className={`quiz-mark${x.type === "multiple_select" ? " square" : ""}`} aria-hidden="true">{right && <CheckIcon size={14} />}</span>
+                              <span>{opt}{picked && <span className="muted"> · your answer</span>}</span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    ) : (
+                      <div className="quiz-detail-text">
+                        <p><span className="muted">Your answer: </span>{ans.text.trim() || <span className="muted">no answer</span>}</p>
+                        <p><span className="muted">{x.type === "fill_blank" ? "Answer: " : "Model answer: "}</span>{x.answer}</p>
+                      </div>
+                    )}
+                    {x.explanation && <p className="muted quiz-detail-why">{x.explanation}</p>}
+                  </li>
+                );
+              })}
             </ol>
           )}
 
@@ -272,12 +301,14 @@ export function QuizRunner({ questions, onExit, feedback }: { questions: QuizQue
   const choiceDone = q.type === "multiple_choice" || q.type === "multiple_select";
   const canCheck = choiceDone ? a.choice.length > 0 : a.text.trim().length > 0;
 
-  const check = () => patch({ checked: true, correct: grade(q, a) });
+  // View answer: graded and shown. Next: graded without showing it (once answered, Next just moves on).
+  const reveal = () => patch({ checked: true, revealed: true, correct: grade(q, a) });
   const next = () => {
+    if (!a.checked) patch({ checked: true, correct: grade(q, a) });
     if (!last) return setI(i + 1);
-    setFinished(true);
     setDone(true);
   };
+  const shown = a.revealed;
   const pick = (k: number) => {
     if (a.checked) return;
     if (q.type === "multiple_choice") patch({ choice: [k] });
@@ -292,8 +323,8 @@ export function QuizRunner({ questions, onExit, feedback }: { questions: QuizQue
         </div>
         <div className="quiz-meta">
           <p className="mono muted small">Question {i + 1} of {questions.length} · {TYPE_LABEL[q.type]}</p>
-          <p className="quiz-count" aria-label={`${score} correct out of ${questions.length}`} title="Correct so far">
-            <CheckIcon size={16} /> <strong>{score}</strong> / {questions.length}
+          <p className="quiz-count" aria-label={`${shownScore} correct out of ${questions.length}`} title="Correct so far, of the answers you viewed">
+            <CheckIcon size={16} /> <strong>{shownScore}</strong> / {questions.length}
           </p>
         </div>
         <h3 className="quiz-q">{q.question}</h3>
@@ -303,11 +334,11 @@ export function QuizRunner({ questions, onExit, feedback }: { questions: QuizQue
             {(q.options ?? []).map((opt, k) => {
               const on = a.choice.includes(k);
               const right = (q.correct ?? []).includes(k);
-              const cls = a.checked ? (right ? " right" : on ? " wrong" : "") : on ? " on" : "";
+              const cls = shown ? (right ? " right" : on ? " wrong" : "") : on ? " on" : "";
               return (
                 <li key={k}>
                   <button type="button" className={`quiz-opt${cls}`} aria-pressed={on} disabled={a.checked} onClick={() => pick(k)}>
-                    <span className={`quiz-mark${q.type === "multiple_select" ? " square" : ""}`} aria-hidden="true">{(a.checked ? right : on) && <CheckIcon size={14} />}</span>
+                    <span className={`quiz-mark${q.type === "multiple_select" ? " square" : ""}`} aria-hidden="true">{(shown ? right : on) && <CheckIcon size={14} />}</span>
                     <span>{opt}</span>
                   </button>
                 </li>
@@ -319,14 +350,14 @@ export function QuizRunner({ questions, onExit, feedback }: { questions: QuizQue
         {q.type === "fill_blank" && (
           <input className="input" value={a.text} disabled={a.checked} placeholder="Your answer" aria-label="Your answer"
                  onChange={(e) => patch({ text: e.target.value })}
-                 onKeyDown={(e) => e.key === "Enter" && canCheck && !a.checked && check()} />
+                 onKeyDown={(e) => e.key === "Enter" && (canCheck || a.checked) && next()} />
         )}
         {q.type === "short_answer" && (
           <textarea className="input quiz-short" rows={4} value={a.text} disabled={a.checked} placeholder="Write your answer"
                     aria-label="Your answer" onChange={(e) => patch({ text: e.target.value })} />
         )}
 
-        {a.checked && (
+        {shown && (
           <div className={`quiz-feedback${a.correct ? " right" : a.correct === false ? " wrong" : ""}`}>
             {q.type !== "short_answer" && <strong>{a.correct ? "Correct" : "Not quite"}</strong>}
             {(q.type === "fill_blank" || q.type === "short_answer") && (
@@ -348,21 +379,16 @@ export function QuizRunner({ questions, onExit, feedback }: { questions: QuizQue
           </div>
         )}
 
-        <div className="row end">
+        <div className="row end quiz-nav">
           {i > 0 && <button type="button" className="btn" onClick={() => setI(i - 1)}>Back</button>}
-          {!a.checked ? (
-            <button type="button" className="btn btn-primary" disabled={!canCheck} onClick={check}>
-              {q.type === "short_answer" ? "Show answer" : "Check answer"}
-            </button>
-          ) : finished ? (
-            <button type="button" className="btn btn-primary" disabled={q.type === "short_answer" && a.correct === null} onClick={() => setDone(true)}>
-              Go to results
-            </button>
-          ) : (
-            <button type="button" className="btn btn-primary" disabled={q.type === "short_answer" && a.correct === null} onClick={next}>
-              {last ? "See results" : "Next"}
-            </button>
+          {/* Not looked at yet: View answer first, or straight on. Once looked at, only on. */}
+          {!shown && (
+            <button type="button" className="btn" disabled={!canCheck && !a.checked} onClick={reveal}>View answer</button>
           )}
+          <button type="button" className="btn btn-primary" onClick={next}
+                  disabled={(!canCheck && !a.checked) || (shown && q.type === "short_answer" && a.correct === null)}>
+            {last ? "See results" : "Next"}
+          </button>
         </div>
       </div>
     </>

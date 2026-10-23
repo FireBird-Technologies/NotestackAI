@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ApiError } from "../api/client";
 import type { Job } from "../api/types";
+import { ChevronLeftIcon, ChevronRightIcon } from "./icons/Icons";
 
 export function errorMessage(e: unknown, fallback = "Something went wrong. Try again."): string {
   return e instanceof ApiError ? e.message : e instanceof Error && e.message ? e.message : fallback;
@@ -285,6 +286,66 @@ export function ConfirmButton({
     >
       {busy ? <><span className="nbv-send-spinner" aria-hidden="true" /> {busyLabel}</> : armed ? confirmLabel : children}
     </button>
+  );
+}
+
+/** Full screen for one element: the browser's own when it allows it, else (an iPhone, which only lets a <video> go
+ * full screen) the element fills the window. Escape, the browser's own exit, or `leave` ends it. While it is open the
+ * body gets `pv-full-open`, so a modal around the element can't hold it in, and the page behind stays put. */
+export function useFullView<T extends HTMLElement>(ref: { current: T | null }) {
+  const [full, setFull] = useState(false);
+  const enter = async () => {
+    const el = ref.current as (T & { webkitRequestFullscreen?: () => Promise<void> }) | null;
+    try {
+      if (el?.requestFullscreen) await el.requestFullscreen();
+      else if (el?.webkitRequestFullscreen) await el.webkitRequestFullscreen();
+    } catch {
+      /* refused: it fills the window instead */
+    }
+    setFull(true);
+  };
+  const leave = () => {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    setFull(false);
+  };
+  // Leaving the browser's full screen by its own means (Back, a swipe) leaves ours too.
+  useEffect(() => {
+    const onChange = () => !document.fullscreenElement && setFull(false);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+  useEffect(() => {
+    if (!full) return;
+    document.body.classList.add("pv-full-open");
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation(); // the modal underneath stays open
+      setFull(false);
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => {
+      document.body.classList.remove("pv-full-open");
+      document.removeEventListener("keydown", onKey, true);
+    };
+  }, [full]);
+  return { full, enter, leave };
+}
+
+/** Previous and next page (‹ Page 2 of 7 ›). Nothing when everything fits on one page. `page` counts from 0. */
+export function Pager({ page, pages, onChange }: { page: number; pages: number; onChange: (page: number) => void }) {
+  if (pages <= 1) return null;
+  return (
+    <nav className="pager" aria-label="Pages">
+      <button type="button" className="btn btn-small btn-icon-only" aria-label="Previous page" title="Previous page"
+              disabled={page <= 0} onClick={() => onChange(page - 1)}>
+        <ChevronLeftIcon size={16} />
+      </button>
+      <span className="mono muted small">Page {page + 1} of {pages}</span>
+      <button type="button" className="btn btn-small btn-icon-only" aria-label="Next page" title="Next page"
+              disabled={page >= pages - 1} onClick={() => onChange(page + 1)}>
+        <ChevronRightIcon size={16} />
+      </button>
+    </nav>
   );
 }
 

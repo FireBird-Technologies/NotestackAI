@@ -749,6 +749,127 @@ select.input option {
   font-size: 0.9rem;
 }
 
+/* The notebook's Add & modify dialog: a post's title and meta, its remove (×) or Add button on the right */
+.pm .input-sm {
+  height: 34px;
+}
+
+/* Eight rows tall, then it scrolls (each row is 49px: 9px padding, two fixed-height lines and its border) */
+.pm .picker-list {
+  max-height: 392px;
+}
+
+/* The two lists' tabs: a blue outline slides around the selected one (--tab is its index) */
+.pm-tabs {
+  position: relative;
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+}
+
+.pm-tabs::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc((100% - 10px) / 2); /* 3px padding each side + one 4px gap */
+  border: 1px solid var(--blue);
+  border-radius: 999px;
+  box-sizing: border-box;
+  transform: translateX(calc(var(--tab, 0) * (100% + 4px)));
+  transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.pm-tab {
+  position: relative;
+  flex: 1;
+  min-height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-3);
+  font: 500 0.82rem var(--font-body);
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.pm-tab:hover {
+  color: var(--text-2);
+}
+
+.pm-tab.active {
+  color: var(--text);
+}
+
+/* The selected tab's list fades and rises in as the outline slides over */
+.pm-panel {
+  animation: nbv-tab-in 0.24s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pm-tabs::before,
+  .pm-panel {
+    transition: none;
+    animation: none;
+  }
+}
+
+.pm-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 12px;
+  height: 49px;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--line);
+  box-sizing: border-box;
+}
+
+.pm-row .picker-title {
+  font-size: 0.85rem;
+  line-height: 17px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pm-row .picker-meta {
+  font-size: 0.68rem;
+  line-height: 13px;
+}
+
+.pm-row .pm-action {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+.pm-row .btn.btn-small.pm-action {
+  height: 26px;
+  min-height: 26px;
+  padding: 0 10px;
+  font-size: 0.78rem;
+}
+
+.pm-row .icon-btn.pm-action {
+  width: 26px;
+  height: 26px;
+}
+
+.pm-row.locked .picker-title,
+.pm-row.locked .picker-meta {
+  opacity: 0.5;
+}
+
+.pm-empty {
+  padding: 8px 14px;
+  font-size: 0.8rem;
+}
+
 .picker-meta {
   font-size: 0.7rem;
 }
@@ -1962,6 +2083,31 @@ select.input option {
   line-height: 1.1;
 }
 
+/* Connect modes: three equal pills in one row, the chosen one outlined in blue */
+.welcome-card > .tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+}
+
+.welcome-card > .tabs .tab {
+  justify-content: center;
+  padding: 8px 6px;
+  border: 1px solid var(--line-strong);
+  text-align: center;
+  line-height: 1.25;
+}
+
+.welcome-card > .tabs .tab.active {
+  background: transparent;
+  border-color: var(--blue);
+  color: var(--white);
+  box-shadow: var(--glow-sm);
+}
+
 @keyframes welcome-in {
   from {
     opacity: 0;
@@ -1982,8 +2128,8 @@ select.input option {
 }
 
 .welcome-form .btn {
-  height: 54px;
-  padding: 0 28px;
+  height: 42px;
+  padding: 0 24px;
 }
 
 .welcome-drop {
@@ -2006,6 +2152,11 @@ select.input option {
   background: var(--blue-05);
 }
 
+.welcome-drop svg {
+  margin-bottom: 6px;
+  color: var(--blue);
+}
+
 .welcome-drop input {
   position: absolute;
   width: 1px;
@@ -2024,12 +2175,19 @@ select.input option {
 
 .welcome-files li {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding: 6px 10px;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   overflow-wrap: anywhere;
+}
+
+.welcome-files .icon-btn {
+  flex: none;
+  width: 26px;
+  height: 26px;
 }
 
 .welcome-cap {
@@ -2803,6 +2961,68 @@ select.input option {
   align-items: start; /* the label lines up with the first line of chips, also when they wrap */
   gap: 8px 16px;
   padding: 18px 0;
+}
+
+/* Build from options: each option a dropdown, two to a row */
+.gen-options.gen-dropdowns {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 14px;
+  padding: 18px;
+}
+
+.gen-dropdowns .field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.gen-dropdowns .gen-label {
+  line-height: 1.4;
+}
+
+.gen-dropdowns .dropdown,
+.gen-dropdowns .dropdown-btn {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.gen-dropdowns .dropdown-btn {
+  height: 40px;
+  font-size: 0.88rem;
+}
+
+.gen-dropdowns .dropdown-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Phones: a size smaller, so "Middle-Aged" and "South African" fit their half of the row */
+@media (max-width: 599px) {
+  .gen-options.gen-dropdowns {
+    gap: 14px 10px;
+    padding: 14px;
+  }
+
+  .gen-dropdowns .dropdown-btn {
+    height: 38px;
+    padding: 0 10px 0 12px;
+    font-size: 0.82rem;
+  }
+}
+
+/* The narrowest phones: tighter still */
+@media (max-width: 360px) {
+  .gen-options.gen-dropdowns {
+    gap: 12px 8px;
+    padding: 12px;
+  }
+
+  .gen-dropdowns .dropdown-btn {
+    gap: 4px;
+    padding: 0 8px 0 10px;
+    font-size: 0.76rem;
+  }
 }
 
 .gen-row + .gen-row {
@@ -4977,6 +5197,33 @@ details.map-legend[open] summary {
   font-size: 0.85rem;
 }
 
+/* Compact (a notebook's Add & modify dialog): a short link box and buttons, a tighter card */
+.add-source-compact.card {
+  padding: 12px 14px;
+  gap: 8px;
+}
+
+.add-source-compact .add-smart {
+  gap: 8px;
+}
+
+.add-source-compact > p.small {
+  font-size: 0.75rem;
+}
+
+.add-source-compact .add-smart .input {
+  height: 42px;
+  font-size: 0.9rem;
+  padding: 0 14px;
+}
+
+.add-source-compact .add-smart .btn.btn-small {
+  height: 38px;
+  min-height: 38px;
+  padding: 0 14px;
+  font-size: 0.82rem;
+}
+
 .add-source--compact .add-smart .input,
 .add-source--compact .add-smart .btn.btn-small {
   height: 44px;
@@ -5390,11 +5637,17 @@ details.map-legend[open] summary {
 .mm-focus.input {
   width: 100%;
   height: auto;
-  min-height: 150px;
-  padding: 14px 16px;
+  min-height: 200px;
+  padding: 12px 14px;
   border-radius: var(--radius-sm);
   resize: vertical;
-  line-height: 1.6;
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+/* The ideas to try: a size smaller, so they all show without scrolling */
+.mm-focus.input::placeholder {
+  font-size: 0.8rem;
 }
 
 /* Explorer */
@@ -5729,6 +5982,41 @@ details.map-legend[open] summary {
 
   .mm-hint {
     display: none;
+  }
+
+  /* The details sheet: its level and the chevron on one line, the title under them */
+  .mm-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .mm-chev-up {
+    transform: rotate(180deg);
+  }
+
+  /* Shut (as it opens): only the level, the title and the chevron, so the map has the screen */
+  .mm-panel.is-sheet-closed {
+    max-height: none;
+    overflow: hidden;
+    padding: 10px 16px 12px;
+  }
+
+  .mm-panel.is-sheet-closed > :not(.mm-panel-head):not(h3) {
+    display: none;
+  }
+
+  .mm-panel.is-sheet-closed h3 {
+    margin: 2px 0 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .mm-sheet-min .mm-controls {
+    bottom: 96px;
   }
 }
 
@@ -7249,7 +7537,8 @@ details.map-legend[open] summary {
   min-height: 140px;
   padding: 16px 18px;
   border-radius: var(--radius);
-  line-height: 1.65;
+  font-size: 0.9rem;
+  line-height: 1.6;
   resize: none;
 }
 
@@ -7788,7 +8077,7 @@ details.map-legend[open] summary {
 
   /* With no fixed height to fill, the instructions box keeps a usable size of its own */
   .rp-edit-main .rp-instructions.input {
-    min-height: 280px;
+    min-height: 320px;
   }
 }
 
@@ -7892,9 +8181,9 @@ details.map-legend[open] summary {
   }
 
   .rp-edit-main .rp-instructions.input {
-    min-height: 240px;
+    min-height: 300px;
     padding: 12px 14px;
-    font-size: 0.88rem;
+    font-size: 0.8rem;
     line-height: 1.55;
   }
 
@@ -8326,9 +8615,16 @@ a.rp-src-main:hover .rp-src-out {
   font-size: 0.9rem;
 }
 
+/* The picked look and layout: the same blue outline and tint as the other create dialogs (slide deck, audio) */
 .ig-theme.on {
-  border-color: var(--accent, #7aa2ff);
-  box-shadow: 0 0 0 2px var(--accent, #7aa2ff);
+  border-color: var(--blue);
+  box-shadow: 0 0 0 1px var(--blue), var(--glow-sm);
+}
+
+.ig-dialog .vw-chip.on {
+  border-color: var(--blue);
+  background: var(--blue-20);
+  color: var(--text);
 }
 
 .ig-theme:disabled {
@@ -8381,17 +8677,81 @@ a.rp-src-main:hover .rp-src-out {
   width: 100%;
 }
 
+/* Two rows: the prompt and the page's shape, then rating, download, share and full screen */
 .ig-bar {
+  display: grid;
+  gap: 8px;
+}
+
+.ig-bar-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
+}
+
+.ig-bar-top .ig-pill {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.ig-bar-top .ig-pill span {
+  min-width: 0;
+}
+
+.ig-viewer > *,
+.ig-bar > * {
+  min-width: 0;
+}
+
+.ig-bar-top .ig-pill span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ig-bar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ig-bar-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Wide screens: one row. View prompt, rating and download on the left; the page shape, share and full screen on
+   the right (the two rows dissolve into it) */
+@media (min-width: 761px) {
+  .ig-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .ig-bar-top,
+  .ig-bar-actions {
+    display: contents;
+  }
+
+  .ig-bar-top .ig-pill { order: 1; }
+  .ig-bar-actions > .ig-bar-group:first-child { order: 2; }
+  .ig-bar-top .ig-layout { order: 3; margin-left: auto; }
+  .ig-bar-actions > .ig-bar-group:last-child { order: 4; }
+
+  .ig-info {
+    top: 44px; /* under the one row */
+  }
 }
 
 /* Over the picture, so opening it never changes the layout */
 .ig-info {
   position: absolute;
-  top: 44px;
+  top: 86px; /* under both rows of the bar */
   left: 0;
   right: 0;
   z-index: 5;
@@ -8537,6 +8897,66 @@ a.rp-src-main:hover .rp-src-out {
 
 .pub-slides-nav {
   align-items: center;
+}
+
+/* The preview's own full screen button (touch screens: an iPhone hides the player's), top right over the frame */
+.pv-full-btn {
+  display: none;
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: var(--white);
+  cursor: pointer;
+}
+
+@media (pointer: coarse) {
+  .pv-full-btn {
+    display: grid;
+  }
+}
+
+.pub-video-wrap.pv-full .pv-full-btn {
+  display: grid;
+}
+
+/* Full screen, or filling the window where the browser has none for it: the frame takes the whole screen */
+.pub-video-wrap.pv-full,
+.pub-video-wrap:fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  aspect-ratio: auto;
+  width: 100vw;
+  height: 100dvh;
+  border-radius: 0;
+}
+
+.pub-video-wrap.pv-full .pub-video,
+.pub-video-wrap:fullscreen .pub-video {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  border-radius: 0;
+}
+
+/* The modal around it would otherwise hold the fixed frame inside itself (its blur and transform), and the page
+   behind would scroll */
+body.pv-full-open {
+  overflow: hidden;
+}
+
+body.pv-full-open .modal,
+body.pv-full-open .modal-backdrop {
+  backdrop-filter: none;
+  transform: none;
+  animation: none;
 }
 
 /* A video player in a frame, covered by a loader until it is ready */
@@ -8936,6 +9356,38 @@ a.rp-src-main:hover .rp-src-out {
 /* Quiz settings: one clean column, the way it is read (difficulty, types, sources, topic), the button in a footer */
 .qz-setup {
   gap: 24px;
+}
+
+/* Difficulty and question types: two dropdowns in one row */
+.qz-opts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.qz-opts .field {
+  min-width: 0;
+  gap: 8px;
+}
+
+.qz-opts .dropdown,
+.qz-opts .dropdown-btn {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.qz-opts .dropdown-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A size smaller, so the picked difficulty and types fit their half of the row */
+.qz-opts .dropdown-btn {
+  height: 40px;
+  min-height: 40px;
+  padding: 0 12px 0 14px;
+  font-size: 0.85rem;
 }
 
 .qz-setup .vw-chip {
@@ -9788,12 +10240,6 @@ a.rp-src-main:hover .rp-src-out {
   width: min(calc((100vh - 170px) * 2260 / 1600 + 36px), 100%);
 }
 
-.ig-bar-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
 .ig-layout {
   display: inline-flex;
   padding: 2px;
@@ -9801,13 +10247,20 @@ a.rp-src-main:hover .rp-src-out {
   border-radius: 999px;
 }
 
+.ig-layout {
+  flex: none;
+}
+
 .ig-layout button {
-  padding: 5px 12px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 26px;
+  padding: 0;
   border: 0;
   border-radius: 999px;
   background: transparent;
   color: var(--text-2);
-  font: 500 0.8rem var(--font-body);
   cursor: pointer;
 }
 
@@ -9858,6 +10311,23 @@ a.rp-src-main:hover .rp-src-out {
 
 .ig-dl-menu small {
   font-size: 0.72rem;
+}
+
+.ig-dl-menu button {
+  align-items: center;
+  white-space: nowrap;
+}
+
+.ig-dl-shape {
+  display: inline-flex;
+  gap: 2px;
+  color: var(--text-3);
+}
+
+/* In the viewer the download sits at the row's left end: its menu opens to the right, into the dialog */
+.ig-bar-actions .ig-dl-menu {
+  right: auto;
+  left: 0;
 }
 
 .ig-thumb:has(.ig-frame) {
@@ -9977,6 +10447,13 @@ a.rp-src-main:hover .rp-src-out {
 .sd-opts .field {
   gap: 8px;
   min-width: 0;
+}
+
+/* The picked length's slide count, small and tucked under its dropdown */
+.sd-opts .sd-length-range {
+  margin-top: -4px;
+  padding-left: 14px;
+  font-size: 0.72rem;
 }
 
 /* The dropdowns stay inside their column: a long value shortens with an ellipsis */
@@ -10469,17 +10946,14 @@ a.rp-src-main:hover .rp-src-out {
   transition: opacity 0.15s;
 }
 
-/* Presenting: the slide fills the screen, letterboxed in its own sky colour; the controls fade when the mouse rests. */
+/* Presenting: the slide fills the screen, letterboxed in black whatever its theme (a white deck too, so the slide's
+   edges show); the controls fade when the mouse rests. */
 .sd-present {
   position: fixed;
   inset: 0;
   z-index: 1000;
   background: #000;
   cursor: pointer;
-}
-
-.sd-present.light {
-  background: #ffffff;
 }
 
 .sd-present-stage {
@@ -10536,9 +11010,30 @@ a.rp-src-main:hover .rp-src-out {
   padding: 0 12px 0 14px;
 }
 
+/* The picked format: outlined and tinted like the picked visual style, not filled */
+.sd-dialog .sd-opts .vw-chip.on {
+  border-color: var(--blue);
+  background: var(--blue-20);
+  color: var(--text);
+}
+
+.sd-dialog .sd-prompt {
+  min-height: 130px;
+}
+
 @media (max-width: 760px) {
   .sd-opts {
     grid-template-columns: 1fr;
+  }
+
+  /* Phones: the format on its own row, then length and language side by side */
+  .sd-dialog .sd-opts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 12px;
+  }
+
+  .sd-dialog .sd-opts > .field:first-child {
+    grid-column: 1 / -1;
   }
 
   .sd-opts .vw-chips {
@@ -10828,6 +11323,13 @@ body.nbv-resizing iframe {
   padding: 0 14px;
 }
 
+/* The picked host count: outlined and tinted like the picked style card, not filled */
+.ao-dialog .ao-opts .vw-chip.on {
+  border-color: var(--blue);
+  background: var(--blue-20);
+  color: var(--text);
+}
+
 .ao-opts .dropdown-btn {
   padding: 0 12px 0 14px;
 }
@@ -10870,6 +11372,44 @@ body.nbv-resizing iframe {
 
   .ao-opts > .field {
     flex-basis: 40%;
+  }
+
+  /* Phones: compact style cards (the blurb kept to two lines) and short pills and dropdowns */
+  .ao-dialog .ao-style {
+    gap: 2px;
+    padding: 8px 10px 9px;
+    border-radius: 12px;
+  }
+
+  .ao-dialog .ao-style-head strong {
+    font-size: 0.82rem;
+  }
+
+  .ao-dialog .ao-radio {
+    width: 16px;
+    height: 16px;
+  }
+
+  .ao-dialog .ao-style-blurb {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    font-size: 0.7rem;
+    line-height: 1.35;
+  }
+
+  .ao-dialog .ao-opts .vw-chip,
+  .ao-dialog .ao-opts .dropdown-btn,
+  .ao-dialog .ao-opts .sp-trigger {
+    height: 32px;
+    min-height: 32px;
+    font-size: 0.8rem;
+  }
+
+  .ao-dialog .ao-opts .vw-chip {
+    padding: 0 12px;
   }
 }
 
@@ -11197,7 +11737,12 @@ body.nbv-resizing iframe {
   align-items: center;
 }
 
-/* The report page's rating: its question, then the thumbs (each opens the review popup) */
+/* The report page's actions: icon-only, always one row */
+.rp-actions {
+  flex-wrap: nowrap;
+}
+
+/* The report page's rating: the thumbs (each opens the review popup) */
 .rp-rate {
   display: inline-flex;
   align-items: center;
@@ -11494,11 +12039,8 @@ body.nbv-resizing iframe {
   .nbv.nbv-tools-closed,
   .nbv.nbv-history-closed {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
-    grid-template-areas:
-      "tabs"
-      "pane";
-    row-gap: 12px;
+    grid-template-rows: minmax(0, 1fr);
+    grid-template-areas: "pane";
     height: calc(100dvh - var(--main-pad-top) - var(--main-pad-bottom));
     min-height: 420px;
   }
@@ -11540,15 +12082,15 @@ body.nbv-resizing iframe {
     height: auto;
   }
 
-  /* The tabs sit close under the app's top bar */
-  .shell.notebook-focus {
-    --main-pad-top: 8px;
+  /* The tabs sit in the app's top bar, right of the menu button */
+  .app-topbar-slot {
+    flex: 1;
+    min-width: 0;
   }
 
   .nbv-tabs {
     position: relative;
     display: flex;
-    grid-area: tabs;
     gap: 4px;
     padding: 3px;
     border: 1px solid var(--line);
@@ -11563,7 +12105,7 @@ body.nbv-resizing iframe {
     top: 3px;
     bottom: 3px;
     left: 3px;
-    width: calc((100% - 14px) / 3); /* 3px padding each side + two 4px gaps */
+    width: calc((100% - 18px) / 4); /* 3px padding each side + three 4px gaps */
     border-radius: 999px;
     background: var(--blue);
     transform: translateX(calc(var(--tab, 1) * (100% + 4px)));
@@ -11574,7 +12116,7 @@ body.nbv-resizing iframe {
     position: relative;
     flex: 1;
     min-height: 28px;
-    padding: 0 12px;
+    padding: 0 6px;
     border: 0;
     border-radius: 999px;
     background: transparent;
@@ -11617,6 +12159,11 @@ body.nbv-resizing iframe {
   .nbv-history.nbv-tab-panel:not(.is-active) {
     display: none;
   }
+
+  /* The Create tab: one tile per row */
+  .nbv-studio-create .nbv-make {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* Phones: the app's top bar (logo, the tab menu, the account button) stays above a notebook too, and the chat takes
@@ -11635,13 +12182,39 @@ body.nbv-resizing iframe {
 
   .shell.notebook-focus > .app-topbar {
     flex: none;
+    gap: 8px;
+    min-height: 52px;
+    padding: 6px 12px 6px 8px;
   }
 
+  /* The chat fills the screen under the bar, inside a thin card edge and a slim margin */
   .shell.notebook-focus > .shell-main {
     display: flex;
     flex: 1;
     flex-direction: column;
     min-height: 0;
+    padding: 0;
+  }
+
+  .shell.notebook-focus .nbv-chat.nbv-tab-panel {
+    margin: 8px;
+    border-radius: 14px;
+    padding: 12px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: transparent;
+    backdrop-filter: none;
+    box-shadow: none;
+  }
+
+  /* Smaller chat text, questions and answers alike */
+  .shell.notebook-focus .nbv-turns .md.turn-md,
+  .shell.notebook-focus .nbv-turns .turn-text {
+    font-size: 0.875rem;
+    line-height: 1.6;
+  }
+
+  .shell.notebook-focus .nbv-turns .turn-user {
+    padding: 8px 12px;
   }
 
   .shell.notebook-focus .nbv {
@@ -11940,6 +12513,18 @@ body.nbv-resizing iframe {
   scrollbar-width: thin;
 }
 
+/* Flashcards: the deck (and its rating under it) sits in the middle of the popup, the card a little taller */
+.so-content:has(> .fc-deck) {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 14px;
+}
+
+.so-content > .fc-deck .fc-card {
+  min-height: 320px;
+}
+
 /* Results: the score card, feedback and buttons stay put; only the per-question list scrolls */
 .so-content > .quiz-result {
   display: flex;
@@ -12175,6 +12760,82 @@ body.nbv-resizing iframe {
     align-items: stretch;
     flex-direction: column;
   }
+}
+
+/* The notebook's Connect modal: the same setup, smaller (the URL and Copy stay on one line) */
+.connector-compact {
+  display: grid;
+  gap: 12px;
+}
+
+.connector-compact .connector-intro {
+  font-size: 0.85rem;
+}
+
+.connector-compact .connector-url-card {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 8px 8px 14px;
+}
+
+.connector-compact .connector-url-card code {
+  min-width: 0;
+  font-size: 0.8rem;
+}
+
+.connector-compact .connector-url-card .btn {
+  flex: none;
+}
+
+.connector-compact .connector-clients {
+  gap: 10px;
+}
+
+.connector-compact .connector-client {
+  padding: 12px;
+}
+
+.connector-compact .connector-client header {
+  gap: 10px;
+}
+
+.connector-compact .connector-client h3 {
+  font-size: 0.95rem;
+}
+
+.connector-compact .connector-client-logo {
+  width: 28px;
+  height: 28px;
+  flex-basis: 28px;
+  border-radius: 8px;
+}
+
+.connector-compact .connector-client-logo img {
+  width: 16px;
+  height: 16px;
+}
+
+.connector-compact .connector-client-logo.openai img {
+  width: 24px;
+  height: 24px;
+}
+
+.connector-compact .connector-client ol {
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.connector-compact .connector-client li {
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 8px;
+  font-size: 0.78rem;
+}
+
+.connector-compact .connector-step-num {
+  width: 18px;
+  height: 18px;
+  font-size: 0.62rem;
 }
 
 /* "Show transcript" reads as a plain text link: no underline, blue when pointed at */
@@ -12668,12 +13329,23 @@ body.nbv-resizing iframe {
     overflow: hidden;
   }
 
+  /* Bigger day numbers */
   .cal-date {
-    font-size: 0.66rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+  }
+
+  .cal-day {
+    padding: 5px;
   }
 
   .cal-day.schedulable::after {
     display: none;
+  }
+
+  /* Days gone: shown, but dimmed and not tappable */
+  .cal-day.past {
+    opacity: 0.4;
   }
 
   .cal-item {
@@ -12707,4 +13379,271 @@ body.nbv-resizing iframe {
 
 .voice-modes > .tabs .tab.active {
   border-color: var(--blue);
+}
+
+/* A list's pages: ‹ Page 2 of 7 › under it */
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+/* Taking a quiz on a phone: a size smaller throughout, so a question and its options fit on one screen */
+@media (max-width: 760px) {
+  .quiz-play .quiz-meta p {
+    font-size: 0.74rem;
+  }
+
+  .quiz-play .quiz-count {
+    font-size: 0.85rem;
+  }
+
+  .quiz-play .quiz-count strong {
+    font-size: 0.95rem;
+  }
+
+  .quiz-play .quiz-q {
+    font-size: 1rem;
+    line-height: 1.4;
+  }
+
+  .quiz-play .quiz-options {
+    gap: 6px;
+  }
+
+  .quiz-play .quiz-opt {
+    gap: 10px;
+    padding: 10px 12px;
+    font-size: 0.88rem;
+    line-height: 1.4;
+  }
+
+  .quiz-play .quiz-mark {
+    width: 18px;
+    height: 18px;
+  }
+
+  .quiz-play .quiz-feedback,
+  .quiz-play .input {
+    font-size: 0.85rem;
+  }
+
+  /* Back, View answer and Next / See results: smaller, and always on one line */
+  .quiz-play .quiz-nav {
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+
+  .quiz-play .quiz-nav .btn {
+    flex: 0 1 auto;
+    min-width: 0;
+    height: 36px;
+    min-height: 36px;
+    padding: 0 14px;
+    font-size: 0.82rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+/* The narrowest phones: tighter still, so the three buttons keep to one line inside the dialog */
+@media (max-width: 360px) {
+  .quiz-play .quiz-nav .btn {
+    padding: 0 10px;
+    font-size: 0.76rem;
+  }
+}
+
+/* The results' View details: every question, its options (right ones green, a wrong pick red) or the typed answers,
+   and why */
+.quiz-details {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.quiz-detail {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.quiz-detail-q {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  font-weight: 500;
+}
+
+.quiz-detail .quiz-opt {
+  cursor: default;
+}
+
+.quiz-detail-text,
+.quiz-detail-why {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+.quiz-detail-text p {
+  margin: 0;
+}
+
+@media (max-width: 760px) {
+  .quiz-detail {
+    padding: 10px;
+  }
+
+  .quiz-detail-q {
+    font-size: 0.9rem;
+  }
+
+  .quiz-detail .quiz-opt {
+    gap: 10px;
+    padding: 8px 10px;
+    font-size: 0.82rem;
+  }
+
+  .quiz-detail-text,
+  .quiz-detail-why {
+    font-size: 0.8rem;
+  }
+}
+
+/* The infographic in full screen (or filling the window, on an iPhone): the whole page fitted to the screen */
+.ig-stage {
+  position: relative;
+}
+
+.ig-stage.ig-full,
+.ig-stage:fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  background: #000;
+}
+
+.ig-stage.ig-full.landscape .ig-frame,
+.ig-stage.landscape:fullscreen .ig-frame {
+  width: min(100vw, calc(100dvh * 2260 / 1600));
+}
+
+.ig-stage.ig-full.portrait .ig-frame,
+.ig-stage.portrait:fullscreen .ig-frame {
+  width: min(100vw, calc(100dvh * 1600 / 2260));
+}
+
+.ig-stage.ig-full .ig-frame,
+.ig-stage:fullscreen .ig-frame {
+  border-radius: 0;
+}
+
+.ig-stage.ig-full .pv-full-btn,
+.ig-stage:fullscreen .pv-full-btn {
+  display: grid;
+}
+
+/* 320px phones: the smallest size that still fits "Middle-Aged" in half the row */
+@media (max-width: 340px) {
+  .gen-dropdowns .dropdown-btn {
+    padding: 0 6px 0 9px;
+    font-size: 0.72rem;
+  }
+}
+
+/* After a render: "Video rendered, we've emailed you a download link" for 3 seconds, at the bottom of the screen */
+.render-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(560px, calc(100vw - 32px));
+  padding: 12px 12px 12px 14px;
+  border: 1px solid var(--blue-60);
+  border-radius: var(--radius);
+  background: rgba(5, 9, 20, 0.96);
+  box-shadow: var(--glow-lg);
+  transform: translateX(-50%);
+  animation: render-toast-in 0.25s ease-out;
+}
+
+.render-toast-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--blue);
+  color: var(--white);
+  font-weight: 700;
+}
+
+.render-toast-text {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  font-size: 0.85rem;
+  color: var(--text-2);
+}
+
+.render-toast-text strong {
+  color: var(--white);
+}
+
+.render-toast .btn {
+  flex: none;
+}
+
+.render-toast-close {
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-3);
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+@keyframes render-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+  }
+}
+
+@media (max-width: 599px) {
+  .render-toast {
+    flex-wrap: wrap;
+    bottom: 16px;
+  }
+
+  .render-toast-text {
+    flex-basis: calc(100% - 70px);
+  }
+
+  .render-toast .btn {
+    margin-left: 40px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .render-toast {
+    animation: none;
+  }
 }

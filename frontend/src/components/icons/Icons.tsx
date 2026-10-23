@@ -250,6 +250,19 @@ export const ChevronIcon = (p: P) => (
   </Icon>
 );
 
+/** Left and right: a pager's previous and next. */
+export const ChevronLeftIcon = (p: P) => (
+  <Icon strokeWidth={2} strokeLinecap="square" strokeLinejoin="miter" {...p}>
+    <path d="M15 6l-6 6 6 6" />
+  </Icon>
+);
+
+export const ChevronRightIcon = (p: P) => (
+  <Icon strokeWidth={2} strokeLinecap="square" strokeLinejoin="miter" {...p}>
+    <path d="M9 6l6 6-6 6" />
+  </Icon>
+);
+
 export const TrashIcon = (p: P) => (
   <Icon {...p}>
     <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6" />
@@ -301,6 +314,19 @@ export const SlidesIcon = (p: P) => (
 export const PlayIcon = (p: P) => (
   <Icon {...p}>
     <path d="M7.5 5.2v13.6a.8.8 0 0 0 1.2.7l10.6-6.8a.8.8 0 0 0 0-1.4L8.7 4.5a.8.8 0 0 0-1.2.7z" />
+  </Icon>
+);
+
+/** A page lying wide, and one standing tall: an infographic's two shapes. */
+export const LandscapeIcon = (p: P) => (
+  <Icon {...p}>
+    <rect x="3" y="6" width="18" height="12" rx="2" />
+  </Icon>
+);
+
+export const PortraitIcon = (p: P) => (
+  <Icon {...p}>
+    <rect x="6" y="3" width="12" height="18" rx="2" />
   </Icon>
 );
 

@@ -5,7 +5,7 @@ import type { Artifact } from "../api/types";
 import { ArtifactRow } from "../components/ArtifactRow";
 import { Reader } from "../components/Reader";
 import { Dropdown } from "../components/Dropdown";
-import { EmptyState, Loading, PageHeader, Tabs } from "../components/ui";
+import { EmptyState, Loading, PageHeader, Pager, Tabs } from "../components/ui";
 import Videos from "./Videos";
 import { canPost, PostButton } from "../components/launchpad/PostButton";
 
@@ -25,7 +25,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "audio_overview", label: "Audio overviews" },
   { id: "videos", label: "Videos" },
 ];
-const PAGE = 30;
+const PAGE = 10;
 
 export default function Archive() {
   const [params, setParams] = useSearchParams();
@@ -49,31 +49,35 @@ export default function Archive() {
   );
 }
 
-/** What was made, of one kind (or all), searchable. */
+/** What was made, of one kind (or all), searchable, a page of 10 at a time. */
 function MadeList({ filter }: { filter: Filter }) {
   const [q, setQ] = useState("");
   const [items, setItems] = useState<Artifact[] | null>(null);
   const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
+  const top = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
   const [reading, setReading] = useState<{ id: string; start: number; end: number } | null>(null);
 
-  // The tab and search the list is showing: an answer for any other (a tab just left) is dropped when it arrives late.
+  // The tab, search and page the list is showing: an answer for any other (a tab just left) is dropped when it arrives late.
   const showing = useRef("");
-  showing.current = `${filter}|${q}`;
+  showing.current = `${filter}|${q}|${page}`;
   const load = useCallback(
-    (offset = 0) => {
-      const asked = `${filter}|${q}`;
+    () => {
+      const asked = `${filter}|${q}|${page}`;
       return artifactsApi
-        .list({ type: filter === "all" ? undefined : filter, q, limit: PAGE, offset })
+        .list({ type: filter === "all" ? undefined : filter, q, limit: PAGE, offset: page * PAGE })
         .then((p) => {
           if (showing.current !== asked) return;
           setFailed(false);
           setTotal(p.total);
-          setItems((cur) => (offset ? [...(cur ?? []), ...p.items] : p.items));
+          // A page emptied by deletes (the last one): the one before it.
+          if (!p.items.length && page > 0) setPage(page - 1);
+          else setItems(p.items);
         })
         .catch(() => showing.current === asked && setFailed(true));
     },
-    [filter, q],
+    [filter, q, page],
   );
 
   // Another tab: the loader until its items are fetched, never the last tab's items meanwhile.
@@ -82,20 +86,31 @@ function MadeList({ filter }: { filter: Filter }) {
     setFailed(false);
   }, [filter]);
 
+  // Another tab or search starts again on the first page.
+  useEffect(() => setPage(0), [filter, q]);
+
   useEffect(() => {
-    const t = setTimeout(() => load(0), 200);
+    const t = setTimeout(() => load(), 200);
     return () => clearTimeout(t);
   }, [load]);
 
+  // Another page: the loader until its items arrive, never the last page's items meanwhile.
+  const goTo = (p: number) => {
+    setItems(null);
+    setFailed(false);
+    setPage(p);
+    top.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  };
+
   return (
-    <div className="stack">
+    <div className="stack" ref={top}>
       <div className="row end wrap">
         <input className="input input-sm search" placeholder={`Search ${total} items by post or notebook`} value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search" />
       </div>
       {!items && !failed && <div className="loading-center"><Loading label="Loading your Library" /></div>}
       {!items && failed && (
         <EmptyState title="Could not load your library" body="Something went wrong reaching the server."
-                    action={<button className="btn btn-primary" onClick={() => load(0)}>Try again</button>} />
+                    action={<button className="btn btn-primary" onClick={() => load()}>Try again</button>} />
       )}
       {items?.length === 0 && <EmptyState title="Nothing here yet" body="Reports, summaries, quizzes, flashcards, Mind Constellations, slide decks, audio and more that you create show up here."
           action={
@@ -114,15 +129,12 @@ function MadeList({ filter }: { filter: Filter }) {
             onRemoved={(id) => {
               setItems((list) => (list ?? []).filter((x) => x.id !== id));
               setTotal((t) => t - 1);
+              void load(); // the next item moves up, so the page stays full
             }}
           />
         ))}
       </ul>
-      {items && items.length < total && (
-        <button className="btn" onClick={() => load(items.length)}>
-          Load more
-        </button>
-      )}
+      <Pager page={page} pages={Math.ceil(total / PAGE)} onChange={goTo} />
       {reading && <Reader documentId={reading.id} highlight={{ start: reading.start, end: reading.end }} onClose={() => setReading(null)} />}
     </div>
   );

@@ -29,7 +29,7 @@ const NAV: { to: string; label: string; icon: typeof PlanetIcon; end?: boolean; 
 
 const COLLAPSED_KEY = "ns_sidebar_collapsed";
 
-type ShellContext = { setCrumb: (name: string | null) => void };
+type ShellContext = { setCrumb: (name: string | null) => void; topbarSlot: HTMLElement | null };
 
 /** Phones: a page names what is open after the tab in the top bar ("Notebooks / Resume"), until it unmounts. */
 export function useTopbarCrumb(name: string | null | undefined) {
@@ -38,6 +38,11 @@ export function useTopbarCrumb(name: string | null | undefined) {
     setCrumb(name ?? null);
     return () => setCrumb(null);
   }, [name, setCrumb]);
+}
+
+/** Phones: the top bar's free space, where a page can portal its own controls (a notebook puts its tabs there). */
+export function useTopbarSlot() {
+  return useOutletContext<ShellContext>().topbarSlot;
 }
 
 function readCollapsed(): boolean {
@@ -58,6 +63,7 @@ export default function AppShell() {
   const collapsed = collapsedPref && !phone; // the drawer always shows everything
   const [menuOpen, setMenuOpen] = useState(false);
   const [crumb, setCrumb] = useState<string | null>(null);
+  const [topbarSlot, setTopbarSlot] = useState<HTMLElement | null>(null);
   // Navigating anywhere (including the browser back button) closes the drawer; so does growing past phone size.
   useEffect(() => setMenuOpen(false), [location.pathname, phone]);
   useEffect(() => {
@@ -100,13 +106,19 @@ export default function AppShell() {
                   aria-expanded={menuOpen} aria-controls="app-sidebar">
             <PanelMenuIcon size={22} strokeWidth={1.8} />
           </button>
-          <Link to="/app/notebooks" className="app-topbar-logo" aria-label="Notestack home">
-            <Logo size={26} withWordmark={false} />
-          </Link>
-          <span className="app-topbar-title">
-            {crumb && current ? <Link to={current.to}>{current.label}</Link> : current?.label ?? "Notestack"}
-            {crumb && <span className="app-topbar-crumb"> / {crumb}</span>}
-          </span>
+          {/* A notebook fills the bar with its own tabs instead */}
+          {!notebookFocus && (
+            <>
+              <Link to="/app/notebooks" className="app-topbar-logo" aria-label="Notestack home">
+                <Logo size={26} withWordmark={false} />
+              </Link>
+              <span className="app-topbar-title">
+                {crumb && current ? <Link to={current.to}>{current.label}</Link> : current?.label ?? "Notestack"}
+                {crumb && <span className="app-topbar-crumb"> / {crumb}</span>}
+              </span>
+            </>
+          )}
+          <div ref={setTopbarSlot} className="app-topbar-slot" />
         </header>
         {menuOpen && <div className="app-drawer-backdrop" onClick={() => setMenuOpen(false)} aria-hidden="true" />}
         <aside id="app-sidebar" className={`sidebar${menuOpen ? " open" : ""}`}>
@@ -182,7 +194,7 @@ export default function AppShell() {
           </div>
         </aside>
         <main className="shell-main">
-          <Outlet context={{ setCrumb } satisfies ShellContext} />
+          <Outlet context={{ setCrumb, topbarSlot } satisfies ShellContext} />
         </main>
       </div>
       {/* Outside .shell: its children get position: relative, and these are fixed overlays. */}

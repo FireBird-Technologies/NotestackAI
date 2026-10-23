@@ -25,7 +25,10 @@ export function ReportDialog({ notebookId, chats, currentChatId, busy, error, in
   onCreate: (body: ReportRequest) => void;
 }) {
   const [step, setStep] = useState<1 | 2>(1);
-  const [format, setFormat] = useState<Format>(initial?.format === "interactive" ? "interactive" : "document");
+  // Interactive by default; a document when the chat asked for one, or for one of the document templates.
+  const [format, setFormat] = useState<Format>(
+    initial?.format === "document" || (!initial?.format && initial?.template) ? "document" : "interactive",
+  );
   const [catalog, setCatalog] = useState<{ templates: ReportTemplate[]; interactive: ReportTemplate } | null>(null);
   const [templateId, setTemplateId] = useState(initial?.template ?? "briefing");
   const [sel, setSel] = useState<SourceSelection | null>(null);

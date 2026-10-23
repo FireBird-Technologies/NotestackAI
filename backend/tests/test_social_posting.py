@@ -119,11 +119,11 @@ def test_disconnecting_pauses_its_posts_and_nothing_is_sent(client, auth, ws, db
     later, due = item(db_session, ws, acct), item(db_session, ws, acct, minutes=-1)
     assert client.delete(f"/api/social/accounts/{acct.id}", headers=auth).status_code == 200
     db_session.expire_all()
-    assert db_session.get(SocialAccount, acct.id).status == "revoked"
+    assert db_session.get(SocialAccount, acct.id).status == "disconnected"
     assert statuses(db_session, later, due) == ["paused", "paused"]
     assert launchpad.publish_due(session_factory) == 0  # paused posts are never claimed
-    got = client.get("/api/social/accounts", headers=auth).json()["accounts"][0]
-    assert got["needs_reconnect"] is True
+    # Gone from the list: the platform offers a plain Connect, not a Reconnect to the old account.
+    assert client.get("/api/social/accounts", headers=auth).json()["accounts"] == []
 
 
 def test_a_refused_connection_at_publish_pauses_all_its_posts(client, auth, ws, db_session, session_factory,
@@ -165,6 +165,26 @@ def test_reconnecting_resumes_future_posts_and_flags_missed_ones(client, auth, w
     assert r.status_code == 200 and r.json()["status"] == "scheduled"
     r = client.patch(f"/api/calendar/{ahead.id}", json={"status": "paused"}, headers=auth)  # held by hand
     assert r.json()["status"] == "paused"
+
+
+def test_connecting_another_account_after_a_disconnect_takes_over_its_posts(client, auth, ws, db_session):
+    import json
+
+    from app.auth import encode_signed
+
+    old = account(db_session, ws, "x")
+    ahead = item(db_session, ws, old, minutes=60)
+    client.delete(f"/api/social/accounts/{old.id}", headers=auth)
+    info = {"access_token": "new", "refresh_token": "r", "expires_in": 7200, "external_id": "someone-else",
+            "handle": "grace", "scope": X_SCOPES}
+    ticket = encode_signed({"typ": "social_link", "ws": str(ws.id), "platform": "x",
+                            "data": encrypt(json.dumps(info))}, timedelta(minutes=5))
+    assert client.post("/api/social/complete", json={"ticket": ticket}, headers=auth).status_code == 200
+    db_session.expire_all()
+    listed = client.get("/api/social/accounts", headers=auth).json()["accounts"]
+    assert [a["handle"] for a in listed] == ["grace"]  # only the new account
+    moved = db_session.get(CalendarItem, ahead.id)
+    assert str(moved.social_account_id) == listed[0]["id"] and moved.status == "scheduled"
 
 
 # Keeping connections fresh

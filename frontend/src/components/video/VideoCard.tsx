@@ -1,12 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { videosApi } from "../../api/endpoints";
 import type { Artifact } from "../../api/types";
 import { ShareButton } from "../ShareDialog";
-import { DeleteButton, errorMessage, formatDate, Loading, Modal, StatusPill } from "../ui";
+import { DeleteButton, errorMessage, formatDate, Loading, Modal, StatusPill, useFullView } from "../ui";
 import { canPost, PostButton } from "../launchpad/PostButton";
 import { CardFeedback } from "../CardFeedback";
-import { TrashIcon } from "../icons/Icons";
+import { CollapseIcon, ExpandIcon, TrashIcon } from "../icons/Icons";
 import { cardClick, ViewButton } from "../cardActions";
 
 /** The player without its speed and captions controls (blog2video's `hide` option, as the video editor uses it). */
@@ -21,11 +21,15 @@ function playerUrl(src: string): string {
 }
 
 /** blog2video's live player in a frame, with a loader over it until it has loaded. The player says nothing when it is
- * ready, so the loader also stays a moment after the page loads, while the player draws its first frame. */
+ * ready, so the loader also stays a moment after the page loads, while the player draws its first frame.
+ * Touch screens get a full screen button of our own: an iPhone never lets a page inside a frame go full screen, so
+ * the player hides its own button there. It asks the browser for full screen, else fills the window. */
 export function PreviewFrame({ src, title }: { src: string; title: string }) {
   const url = playerUrl(src);
   const [loaded, setLoaded] = useState(false);
   const [ready, setReady] = useState(false);
+  const wrap = useRef<HTMLDivElement>(null);
+  const { full, enter, leave } = useFullView(wrap);
   useEffect(() => {
     setLoaded(false);
     setReady(false);
@@ -36,9 +40,16 @@ export function PreviewFrame({ src, title }: { src: string; title: string }) {
     return () => clearTimeout(t);
   }, [loaded]);
   return (
-    <div className={`pub-video-wrap${ready ? " ready" : ""}`}>
-      <iframe className="pub-video" src={url} title={title} allow="fullscreen; autoplay" onLoad={() => setLoaded(true)} />
+    <div ref={wrap} className={`pub-video-wrap${ready ? " ready" : ""}${full ? " pv-full" : ""}`}>
+      <iframe className="pub-video" src={url} title={title} allow="fullscreen; autoplay" allowFullScreen
+              onLoad={() => setLoaded(true)} />
       {!ready && <div className="pub-video-wait" role="status"><Loading label="Loading the video" /></div>}
+      {ready && (
+        <button type="button" className="pv-full-btn" onClick={() => (full ? leave() : void enter())}
+                aria-label={full ? "Exit full screen" : "Full screen"} title={full ? "Exit full screen" : "Full screen"}>
+          {full ? <CollapseIcon size={18} /> : <ExpandIcon size={18} />}
+        </button>
+      )}
     </div>
   );
 }

@@ -9,7 +9,7 @@ import { Reader } from "../components/Reader";
 import { reportMarkdown, ReportView } from "../components/ReportView";
 import { ConfirmDeleteModal, errorMessage, JobProgress, Loading } from "../components/ui";
 import { useJob } from "../hooks/useJob";
-import { ArrowLeftIcon, DownloadIcon, MarkdownIcon, PdfIcon, ShareIcon } from "../components/icons/Icons";
+import { ArrowLeftIcon, DownloadIcon, MarkdownIcon, PdfIcon, ShareIcon, TrashIcon } from "../components/icons/Icons";
 import { FloatingMenu, useMenu } from "../components/SlideDeck";
 
 /** One report, full page: /app/reports/:id. */
@@ -143,13 +143,16 @@ export default function ReportPage() {
         <p className="eyebrow">{artifact.content.format === "interactive" ? "Interactive report" : "Report"}</p>
         <h1>{artifact.title}</h1>
         {artifact.status === "ready" && (
-          <div className="row">
-            <button type="button" className="btn btn-small" onClick={() => setSharing(true)}><ShareIcon size={16} /> Share</button>
+          <div className="row rp-actions">
+            {/* A thumb opens the review in a popup (the same as on the notebook's cards) */}
+            <span className="rp-rate">
+              <CardFeedback artifact={artifact} />
+            </span>
             <div className="sd-menu-wrap" ref={downloads.ref}>
-              <button type="button" className="btn btn-small" aria-haspopup="menu" aria-expanded={downloads.open}
+              <button type="button" className="btn btn-small btn-icon-only" aria-haspopup="menu" aria-expanded={downloads.open}
+                      aria-label={savingPdf ? "Preparing the PDF..." : "Download"} title={savingPdf ? "Preparing the PDF..." : "Download"}
                       disabled={savingPdf} onClick={() => downloads.setOpen((o) => !o)}>
                 {savingPdf ? <span className="nbv-send-spinner" aria-hidden="true" /> : <DownloadIcon size={16} />}
-                {savingPdf ? " Preparing the PDF..." : " Download"}
               </button>
               {downloads.open && (
                 <FloatingMenu menu={downloads}>
@@ -159,12 +162,10 @@ export default function ReportPage() {
               )}
               {pdfError && <span className="sd-menu-error error-text small" role="alert">{pdfError}</span>}
             </div>
-            {/* A thumb opens the review in a popup (the same as on the notebook's cards) */}
-            <span className="rp-rate">
-              <span className="muted small">How is this report?</span>
-              <CardFeedback artifact={artifact} />
-            </span>
-            <button type="button" className="btn btn-small btn-danger" onClick={() => setDeleting(true)}>Delete</button>
+            <button type="button" className="btn btn-small btn-icon-only" aria-label="Share" title="Share"
+                    onClick={() => setSharing(true)}><ShareIcon size={16} /></button>
+            <button type="button" className="btn btn-small btn-icon-only btn-danger" aria-label="Delete report" title="Delete report"
+                    onClick={() => setDeleting(true)}><TrashIcon size={16} /></button>
             {deleting && (
               <ConfirmDeleteModal heading="Delete report?" name={artifact.title} onCancel={() => setDeleting(false)}
                                   onConfirm={async () => {
