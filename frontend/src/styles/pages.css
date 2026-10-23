@@ -11731,11 +11731,8 @@ body.nbv-resizing iframe {
   .nbv.nbv-tools-closed,
   .nbv.nbv-history-closed {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
-    grid-template-areas:
-      "tabs"
-      "pane";
-    row-gap: 12px;
+    grid-template-rows: minmax(0, 1fr);
+    grid-template-areas: "pane";
     height: calc(100dvh - var(--main-pad-top) - var(--main-pad-bottom));
     min-height: 420px;
   }
@@ -11777,15 +11774,15 @@ body.nbv-resizing iframe {
     height: auto;
   }
 
-  /* The tabs sit close under the app's top bar */
-  .shell.notebook-focus {
-    --main-pad-top: 8px;
+  /* The tabs sit in the app's top bar, right of the menu button */
+  .app-topbar-slot {
+    flex: 1;
+    min-width: 0;
   }
 
   .nbv-tabs {
     position: relative;
     display: flex;
-    grid-area: tabs;
     gap: 4px;
     padding: 3px;
     border: 1px solid var(--line);
@@ -11877,13 +11874,39 @@ body.nbv-resizing iframe {
 
   .shell.notebook-focus > .app-topbar {
     flex: none;
+    gap: 8px;
+    min-height: 52px;
+    padding: 6px 12px 6px 8px;
   }
 
+  /* The chat fills the screen under the bar, inside a thin card edge and a slim margin */
   .shell.notebook-focus > .shell-main {
     display: flex;
     flex: 1;
     flex-direction: column;
     min-height: 0;
+    padding: 0;
+  }
+
+  .shell.notebook-focus .nbv-chat.nbv-tab-panel {
+    margin: 8px;
+    border-radius: 14px;
+    padding: 12px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: transparent;
+    backdrop-filter: none;
+    box-shadow: none;
+  }
+
+  /* Smaller chat text, questions and answers alike */
+  .shell.notebook-focus .nbv-turns .md.turn-md,
+  .shell.notebook-focus .nbv-turns .turn-text {
+    font-size: 0.875rem;
+    line-height: 1.6;
+  }
+
+  .shell.notebook-focus .nbv-turns .turn-user {
+    padding: 8px 12px;
   }
 
   .shell.notebook-focus .nbv {
