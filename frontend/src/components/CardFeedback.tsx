@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { artifactsApi } from "../api/endpoints";
-import type { Artifact } from "../api/types";
+import { artifactsApi } from "@notestack/shared/endpoints";
+import type { Artifact } from "@notestack/shared/types";
 import { Thumb } from "./AnswerFeedback";
 import { put, RATEABLE, useRating } from "./ArtifactFeedback";
 import { errorMessage, Modal } from "./ui";

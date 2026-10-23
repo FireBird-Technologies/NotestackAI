@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { docsApi } from "../api/endpoints";
-import type { DocDetail } from "../api/types";
+import { docsApi } from "@notestack/shared/endpoints";
+import type { DocDetail } from "@notestack/shared/types";
 import { useUpgrade } from "../hooks/useUpgrade";
 import { Drawer, formatDate, Loading } from "./ui";
 

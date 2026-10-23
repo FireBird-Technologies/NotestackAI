@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
-import { artifactsApi } from "../api/endpoints";
-import type { Artifact, MindNode } from "../api/types";
+import { artifactsApi } from "@notestack/shared/endpoints";
+import type { Artifact, MindNode } from "@notestack/shared/types";
 import { useJob } from "../hooks/useJob";
 import { DeleteButton, errorMessage, formatDate, JobProgress, Modal, StatusPill } from "./ui";
 import { Reader } from "./Reader";

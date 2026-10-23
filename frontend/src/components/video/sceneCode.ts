@@ -1,4 +1,4 @@
-import type { VideoScene } from "../../api/types";
+import type { VideoScene } from "@notestack/shared/types";
 
 /** A scene's layout and its props live in remotion_code: {"layout": ..., "layoutProps": {...}} on built-in
  *  templates, "layoutConfig" on custom ones. Font sizes and the assigned image are props there. */

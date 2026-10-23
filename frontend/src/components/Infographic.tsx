@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { artifactsApi, type GenerateBody } from "../api/endpoints";
-import type { Artifact, ChatPreset, ChatSummary } from "../api/types";
+import { artifactsApi, type GenerateBody } from "@notestack/shared/endpoints";
+import type { Artifact, ChatPreset, ChatSummary } from "@notestack/shared/types";
 import { SourceFocusFields, sourceSummary, type SourceSelection } from "./SourceFocusFields";
 import { CardFeedback } from "./CardFeedback";
 import { ShareDialog } from "./ShareDialog";

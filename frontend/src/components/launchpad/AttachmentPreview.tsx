@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { artifactsApi, videosApi } from "../../api/endpoints";
-import type { Artifact, PostableArtifact } from "../../api/types";
+import { artifactsApi, videosApi } from "@notestack/shared/endpoints";
+import type { Artifact, PostableArtifact } from "@notestack/shared/types";
 import { InfographicFrame } from "../Infographic";
 import { ReportView } from "../ReportView";
 import { SlideFrame } from "../SlideDeck";

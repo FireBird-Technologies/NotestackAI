@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { Artifact, ReportSuggestion } from "../api/types";
+import type { Artifact, ReportSuggestion } from "@notestack/shared/types";
 import { Dropdown } from "./Dropdown";
 import { ThemePicker } from "./Infographic";
 import { Modal } from "./ui";

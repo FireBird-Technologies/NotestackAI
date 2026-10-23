@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { videosApi, type GenerateBody } from "../api/endpoints";
-import type { ChatSummary, VideoFocusSource, VideoFocusTopic } from "../api/types";
+import { videosApi, type GenerateBody } from "@notestack/shared/endpoints";
+import type { ChatSummary, VideoFocusSource, VideoFocusTopic } from "@notestack/shared/types";
 import { CheckIcon, SparkleIcon } from "./icons/Icons";
 import { useArtifactLimits } from "../hooks/useArtifactLimits";
 import { SourcePicker, type VideoSource } from "./video/SourcePicker";

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { reportsApi, type GenerateBody } from "../api/endpoints";
-import type { ChatPreset, ChatSummary, ReportTemplate } from "../api/types";
+import { reportsApi, type GenerateBody } from "@notestack/shared/endpoints";
+import type { ChatPreset, ChatSummary, ReportTemplate } from "@notestack/shared/types";
 import { CheckIcon, SparkleIcon } from "./icons/Icons";
 import { suggestTemplates } from "../hooks/reportSuggestions";
 import { SourceFocusFields, type SourceSelection } from "./SourceFocusFields";

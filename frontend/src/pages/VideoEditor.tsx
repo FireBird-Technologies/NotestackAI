@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ApiError } from "../api/client";
-import { videoEditApi, videosApi, type LayoutInfo, type LayoutSchema } from "../api/endpoints";
-import type { LegacyVideo, ScriptScene, VideoCatalog, VideoConfig, VideoJobState, VideoProject, VideoProjectData, VideoQuota, VideoStatus } from "../api/types";
+import { ApiError } from "@notestack/shared/client";
+import { videoEditApi, videosApi, type LayoutInfo, type LayoutSchema } from "@notestack/shared/endpoints";
+import type { LegacyVideo, ScriptScene, VideoCatalog, VideoConfig, VideoJobState, VideoProject, VideoProjectData, VideoQuota, VideoStatus } from "@notestack/shared/types";
 import { CheckIcon, DownloadIcon, SparkleIcon } from "../components/icons/Icons";
 import { ConfirmButton, ErrorText, errorMessage, Loading, Modal, PageHeader, StatusPill, Tabs, VIDEO_UPDATING } from "../components/ui";
 import { ImagesPanel, VoicePanel, type PanelProps } from "../components/video/EditorPanels";

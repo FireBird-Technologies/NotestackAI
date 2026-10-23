@@ -83,3 +83,18 @@ export function classifyUrl(s: string): UrlClassification {
   if (WARN_DOMAINS.some((d) => matches(host, d))) return { kind: "warn", message: MAYBE_UNSCRAPABLE_WARNING };
   return { kind: "ok" };
 }
+
+/** A bare domain, a Substack or a feed URL is a whole archive; a deep link is one article. */
+export function looksLikeArticle(raw: string): boolean {
+  const v = raw.trim();
+  if (!v) return false;
+  try {
+    const u = new URL(v.includes("://") ? v : `https://${v}`);
+    const path = u.pathname.replace(/\/+$/, "");
+    if (!path || /(feed|rss|atom)(\.xml)?$/i.test(path) || /^\/@[^/]+$/.test(path)) return false;
+    const parts = path.split("/").filter(Boolean);
+    return /\/p\/|\/posts?\/|\/\d{4}\/|\.html?$/i.test(path) || parts.length >= 2 || path.length > 24;
+  } catch {
+    return false;
+  }
+}

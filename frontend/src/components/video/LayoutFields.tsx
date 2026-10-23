@@ -1,4 +1,4 @@
-import type { LayoutSchema } from "../../api/endpoints";
+import type { LayoutSchema } from "@notestack/shared/endpoints";
 import { Dropdown } from "../Dropdown";
 import { baseLayout } from "./sceneCode";
 

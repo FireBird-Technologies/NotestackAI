@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { launchpadApi } from "../api/endpoints";
-import type { CalendarItem, PostableArtifact, SocialAccounts } from "../api/types";
+import { launchpadApi } from "@notestack/shared/endpoints";
+import type { CalendarItem, PostableArtifact, SocialAccounts } from "@notestack/shared/types";
 import { ArrowLeftIcon, ArrowRightIcon, FilmIcon } from "../components/icons/Icons";
 import { AttachmentChip, AttachPicker, LibraryPicker } from "../components/launchpad/Attachment";
 import { PLATFORMS, ScheduleModal } from "../components/ScheduleModal";

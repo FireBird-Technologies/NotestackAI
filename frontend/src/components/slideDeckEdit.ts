@@ -1,7 +1,7 @@
 /** The slide deck editor's rules: what a slide can gain or lose, how it changes to another layout, and what must not be
  * left empty. They mirror the server (backend/app/slides/content.py: LIMITS and clamp_slide), which coerces whatever
  * comes back anyway; these only keep the editor from offering what the server would undo. */
-import type { EditSlide } from "../api/endpoints";
+import type { EditSlide } from "@notestack/shared/endpoints";
 
 export type DeckFmt = "detailed" | "presenter";
 

@@ -1,6 +1,6 @@
 import { useState, type CSSProperties } from "react";
-import { videoEditApi, type LayoutInfo } from "../../api/endpoints";
-import type { VideoScene } from "../../api/types";
+import { videoEditApi, type LayoutInfo } from "@notestack/shared/endpoints";
+import type { VideoScene } from "@notestack/shared/types";
 import { Dropdown } from "../Dropdown";
 import { errorMessage, Modal } from "../ui";
 import { ChevronIcon } from "../icons/Icons";

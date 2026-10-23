@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { NavLink } from "react-router-dom";
-import { docsApi, jobsApi, sourcesApi } from "../api/endpoints";
-import type { Doc, Job, Source } from "../api/types";
+import { docsApi, jobsApi, sourcesApi } from "@notestack/shared/endpoints";
+import { looksLikeArticle } from "@notestack/shared/urlScrapability";
+import type { Doc, Job, Source } from "@notestack/shared/types";
 import { Reader } from "../components/Reader";
 import { TrashIcon } from "../components/icons/Icons";
 import { SourceUrlHint, useSourceUrlCheck } from "../components/SourceUrlCheck";
@@ -66,21 +67,6 @@ function SyncStats({ job }: { job: Job }) {
 }
 
 export const FILE_ACCEPT = ".md,.markdown,.txt,.vtt,.html,.htm,.pdf,text/vtt,text/markdown,text/plain,text/html,application/pdf";
-
-/** A bare domain, a Substack or a feed URL is a whole archive; a deep link is one article. */
-export function looksLikeArticle(raw: string): boolean {
-  const v = raw.trim();
-  if (!v) return false;
-  try {
-    const u = new URL(v.includes("://") ? v : `https://${v}`);
-    const path = u.pathname.replace(/\/+$/, "");
-    if (!path || /(feed|rss|atom)(\.xml)?$/i.test(path) || /^\/@[^/]+$/.test(path)) return false;
-    const parts = path.split("/").filter(Boolean);
-    return /\/p\/|\/posts?\/|\/\d{4}\/|\.html?$/i.test(path) || parts.length >= 2 || path.length > 24;
-  } catch {
-    return false;
-  }
-}
 
 /** Imports each file as its own post. Returns how many failed. */
 /** A file the import can read. Dropped files skip the picker's FILE_ACCEPT, so they are checked here: an image would

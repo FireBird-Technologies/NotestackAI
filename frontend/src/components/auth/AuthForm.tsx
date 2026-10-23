@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { authApi, type LoginResult, type Providers } from "../../api/auth";
-import { ApiError } from "../../api/client";
+import { authApi, type LoginResult, type Providers } from "@notestack/shared/auth";
+import { ApiError } from "@notestack/shared/client";
 import { useAuth } from "../../hooks/useAuth";
 
 /** Mirrors validate_password on the backend. */

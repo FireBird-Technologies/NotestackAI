@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import type { Citation } from "../api/types";
+import type { Citation } from "@notestack/shared/types";
 import { highlight, languageLabel } from "../lib/highlight";
 
 /** Small, safe Markdown renderer for generated text. Builds React elements (never raw HTML), and turns

@@ -1,8 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { authApi } from "../api/auth";
-import { tokens } from "../api/client";
-import { settingsApi, type SettingsPatch } from "../api/endpoints";
-import type { Settings as SettingsData } from "../api/types";
+import { authApi } from "@notestack/shared/auth";
+import { tokens } from "@notestack/shared/client";
+import { settingsApi, type SettingsPatch } from "@notestack/shared/endpoints";
+import type { Settings as SettingsData } from "@notestack/shared/types";
 import { ConnectedApps } from "../components/ConnectedApps";
 import { ConfirmButton, errorMessage, formatDate, Loading, PageHeader } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";

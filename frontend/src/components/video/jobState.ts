@@ -1,4 +1,4 @@
-import type { VideoJobState } from "../../api/types";
+import type { VideoJobState } from "@notestack/shared/types";
 
 /** blog2video job endpoints report progress in slightly different shapes; any of these means it stopped. */
 export function finished(s: VideoJobState | null): boolean {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import type { GenerateBody } from "../api/endpoints";
-import type { Artifact, ChatPreset, ChatSummary, FlashcardData } from "../api/types";
+import type { GenerateBody } from "@notestack/shared/endpoints";
+import type { Artifact, ChatPreset, ChatSummary, FlashcardData } from "@notestack/shared/types";
 import { Pills, SourceFocusFields, sourceSummary, type SourceSelection } from "./SourceFocusFields";
 import { ArtifactFeedback } from "./ArtifactFeedback";
 import { StudyOverlay } from "./StudyOverlay";

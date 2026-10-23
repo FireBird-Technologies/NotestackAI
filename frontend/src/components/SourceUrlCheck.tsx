@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from "react";
-import { classifyUrl, type UrlClassification } from "../lib/urlScrapability";
+import { classifyUrl, type UrlClassification } from "@notestack/shared/urlScrapability";
 import { Modal } from "./ui";
 
 /** Check a source link before it is added: a blocked one opens a modal and stops there; a warned one asks first and goes

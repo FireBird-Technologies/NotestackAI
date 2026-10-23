@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { artifactsApi, type EditSlide, type GenerateBody } from "../api/endpoints";
+import { artifactsApi, type EditSlide, type GenerateBody } from "@notestack/shared/endpoints";
 import { addActions, convert, type DeckFmt, LAYOUTS, MAX_SLIDES, newSlide, problem, removable, removeField, setText } from "./slideDeckEdit";
-import type { Artifact, ChatPreset, ChatSummary } from "../api/types";
+import type { Artifact, ChatPreset, ChatSummary } from "@notestack/shared/types";
 import { Dropdown } from "./Dropdown";
 import { useJob } from "../hooks/useJob";
 import { CheckIcon, CollapseIcon, DownloadIcon, ExpandIcon, MoreIcon, PdfIcon, PlayIcon, PptxIcon, DesktopIcon, RetryIcon, ShareIcon, TrashIcon } from "./icons/Icons";

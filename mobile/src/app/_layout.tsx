@@ -1,0 +1,68 @@
+import { JetBrainsMono_400Regular } from "@expo-google-fonts/jetbrains-mono";
+import { SpaceGrotesk_500Medium, SpaceGrotesk_700Bold, useFonts } from "@expo-google-fonts/space-grotesk";
+import { configurePlatform } from "@notestack/shared/platform";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Stack, ThemeProvider } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
+import { StatusBar } from "expo-status-bar";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { useEffect } from "react";
+
+import { AuthProvider, useAuth } from "@/auth";
+import { mobilePlatform } from "@/platform";
+import { navTheme } from "@/theme";
+import { Body, Button, Centered } from "@/ui";
+
+configurePlatform(mobilePlatform);
+SplashScreen.preventAutoHideAsync();
+
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 30_000 } } });
+
+export default function RootLayout() {
+  return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider onSignOut={() => queryClient.clear()}>
+          <ThemeProvider value={navTheme}>
+            <StatusBar style="light" />
+            <RootNavigator />
+          </ThemeProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </GestureHandlerRootView>
+  );
+}
+
+function RootNavigator() {
+  const { user, loading, restoreError, retryRestore } = useAuth();
+  // A font that fails to load falls back to the system font rather than holding the app on the splash.
+  const [fontsLoaded, fontError] = useFonts({ SpaceGrotesk_500Medium, SpaceGrotesk_700Bold, JetBrainsMono_400Regular });
+  const ready = !loading && (fontsLoaded || Boolean(fontError));
+
+  // Keep the splash up until the saved session has been checked, so nobody sees sign-in flash past.
+  useEffect(() => {
+    if (ready) SplashScreen.hide();
+  }, [ready]);
+
+  if (!ready) return null;
+  if (restoreError) {
+    return (
+      <Centered>
+        <Body muted>{restoreError}</Body>
+        <Button title="Try again" onPress={retryRestore} />
+      </Centered>
+    );
+  }
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="index" />
+      <Stack.Screen name="(public)" />
+      <Stack.Protected guard={Boolean(user)}>
+        <Stack.Screen name="(app)" />
+      </Stack.Protected>
+      <Stack.Protected guard={!user}>
+        <Stack.Screen name="(auth)" />
+      </Stack.Protected>
+    </Stack>
+  );
+}

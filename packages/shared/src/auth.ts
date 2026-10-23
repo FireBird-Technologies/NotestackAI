@@ -1,4 +1,5 @@
-import { api, BASE, post } from "./client";
+import { api, post } from "./client";
+import { platform } from "./platform";
 
 export type User = {
   id: string;
@@ -30,7 +31,7 @@ export const authApi = {
   providers: () => api<Providers>("/api/auth/providers"),
   google: (credential: string) => post<LoginResult>("/api/auth/google", { credential }),
   /** Full page navigation target for the redirect flow (server side code exchange). */
-  googleStartUrl: (next: string) => `${BASE}/api/auth/google/start?${new URLSearchParams({ next })}`,
+  googleStartUrl: (next: string) => `${platform().baseUrl}/api/auth/google/start?${new URLSearchParams({ next })}`,
   redeemTicket: (ticket: string) => post<LoginResult>("/api/auth/ticket", { ticket }),
   registerStart: (email: string, password: string, name?: string) =>
     post<{ ok: true }>("/api/auth/email/register/start", { email, password, name }),

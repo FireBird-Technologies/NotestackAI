@@ -1,4 +1,7 @@
-export const BASE = import.meta.env.VITE_API_URL ?? "";
+import { platform } from "./platform";
+
+export { configurePlatform, type Platform } from "./platform";
+
 export const ACCESS_KEY = "ns_access";
 const REFRESH = "ns_refresh";
 
@@ -31,36 +34,20 @@ export type PlanLimitDetail = {
   limit?: number;
 };
 
-function read(key: string): string | null {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
 export const tokens = {
   get access() {
-    return read(ACCESS_KEY);
+    return platform().storage.get(ACCESS_KEY);
   },
   get refresh() {
-    return read(REFRESH);
+    return platform().storage.get(REFRESH);
   },
   set(access: string, refresh?: string) {
-    try {
-      localStorage.setItem(ACCESS_KEY, access);
-      if (refresh) localStorage.setItem(REFRESH, refresh);
-    } catch {
-      /* private mode: session only */
-    }
+    platform().storage.set(ACCESS_KEY, access);
+    if (refresh) platform().storage.set(REFRESH, refresh);
   },
   clear() {
-    try {
-      localStorage.removeItem(ACCESS_KEY);
-      localStorage.removeItem(REFRESH);
-    } catch {
-      /* ignore */
-    }
+    platform().storage.remove(ACCESS_KEY);
+    platform().storage.remove(REFRESH);
   },
 };
 
@@ -86,7 +73,7 @@ export async function parseError(res: Response): Promise<ApiError> {
     /* non JSON */
   }
   if (res.status === 402 && code === "plan_limit") {
-    window.dispatchEvent(new CustomEvent<PlanLimitDetail>(PLAN_LIMIT_EVENT, { detail: { ...extra, message } }));
+    platform().emit(PLAN_LIMIT_EVENT, { ...extra, message } satisfies PlanLimitDetail);
   }
   return new ApiError(res.status, message, code, extra);
 }
@@ -94,7 +81,7 @@ export async function parseError(res: Response): Promise<ApiError> {
 async function tryRefresh(): Promise<boolean> {
   const refresh = tokens.refresh;
   if (!refresh) return false;
-  const res = await fetch(`${BASE}/api/auth/refresh`, {
+  const res = await platform().fetch(`${platform().baseUrl}/api/auth/refresh`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ refresh_token: refresh }),
@@ -112,11 +99,11 @@ async function request(path: string, init: RequestInit, retry: boolean): Promise
   }
   const signedIn = Boolean(tokens.access);
   if (signedIn) headers.set("Authorization", `Bearer ${tokens.access}`);
-  const res = await fetch(`${BASE}${path}`, { ...init, headers });
+  const res = await platform().fetch(`${platform().baseUrl}${path}`, { ...init, headers });
   if (res.status === 401 && retry && (await tryRefresh())) return request(path, init, false);
   // Auth endpoints answer 401 for a wrong password and similar; only a dead session elsewhere signs out.
   if (res.status === 401 && signedIn && retry && !path.startsWith("/api/auth/")) {
-    window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+    platform().emit(SESSION_EXPIRED_EVENT);
   }
   if (!res.ok) throw await parseError(res);
   return res;
@@ -151,7 +138,7 @@ export function qs(params: Record<string, string | number | boolean | null | und
   return out ? `?${out}` : "";
 }
 
-/** Direct browser upload to storage (R2, or the API's local disk store) through a presigned PUT. */
+/** Direct upload to storage (R2, or the API's local disk store) through a presigned PUT. */
 const TYPES_BY_EXT: Record<string, string> = {
   md: "text/markdown",
   markdown: "text/markdown",
@@ -174,8 +161,11 @@ const TYPES_BY_EXT: Record<string, string> = {
   mp4: "video/mp4",
 };
 
+/** A file to upload: a browser File, or anything else with a name, type and size that fetch can send. */
+export type UploadSource = Blob & { name: string };
+
 /** Browsers leave File.type empty for some extensions (.md on Windows) and use vendor names for others. */
-function contentType(file: File): string {
+function contentType(file: UploadSource): string {
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
   const base = file.type.split(";")[0];
   if (base === "audio/x-m4a") return "audio/mp4";
@@ -183,12 +173,12 @@ function contentType(file: File): string {
   return base || TYPES_BY_EXT[ext] || "application/octet-stream";
 }
 
-export async function uploadFile(file: File): Promise<{ upload_id: string; key: string }> {
+export async function uploadFile(file: UploadSource): Promise<{ upload_id: string; key: string }> {
   const start = await post<{ upload_id: string; upload_url: string; headers: Record<string, string> }>(
     "/api/storage/uploads",
     { filename: file.name, content_type: contentType(file), size_bytes: file.size },
   );
-  const put = await fetch(start.upload_url, { method: "PUT", headers: start.headers, body: file });
+  const put = await platform().fetch(start.upload_url, { method: "PUT", headers: start.headers, body: file });
   if (!put.ok) throw new ApiError(put.status, "Upload to storage failed");
   return post(`/api/storage/uploads/${start.upload_id}/complete`);
 }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { docsApi, notebooksApi } from "../api/endpoints";
-import type { Doc, NotebookSummary } from "../api/types";
+import { docsApi, notebooksApi } from "@notestack/shared/endpoints";
+import type { Doc, NotebookSummary } from "@notestack/shared/types";
 import { DocPicker } from "../components/DocPicker";
 import { PlanetIcon } from "../components/icons/Icons";
 import { ConfirmButton, errorMessage, formatDate, Loading, Modal, PageHeader } from "../components/ui";

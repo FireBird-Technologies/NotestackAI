@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Navigate, useSearchParams } from "react-router-dom";
-import { artifactsApi } from "../api/endpoints";
-import type { Artifact } from "../api/types";
+import { artifactsApi } from "@notestack/shared/endpoints";
+import type { Artifact } from "@notestack/shared/types";
 import { ArtifactRow } from "../components/ArtifactRow";
 import { Reader } from "../components/Reader";
 import { Dropdown } from "../components/Dropdown";

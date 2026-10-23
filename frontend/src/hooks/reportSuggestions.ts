@@ -1,5 +1,5 @@
-import { reportsApi } from "../api/endpoints";
-import type { ReportTemplate } from "../api/types";
+import { reportsApi } from "@notestack/shared/endpoints";
+import type { ReportTemplate } from "@notestack/shared/types";
 
 /** The suggested report templates for some sources. The server keeps them (prepared as soon as ideas are extracted), so a repeat is
  * instant; this also shares one request between the notebook page asking early and the dialog asking when it opens. */

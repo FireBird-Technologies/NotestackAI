@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import type { BillingCycle } from "../api/endpoints";
-import type { Meter, PlanInfo } from "../api/types";
+import type { BillingCycle } from "@notestack/shared/endpoints";
+import type { Meter, PlanInfo } from "@notestack/shared/types";
 import { useUpgrade } from "../hooks/useUpgrade";
 import { CheckIcon } from "./icons/Icons";
-import { annualMonthly, annualTotal, money } from "./PricingTiers";
+import { annualMonthly, annualTotal, money } from "@notestack/shared/content/marketing";
 
 const ORDER = ["free", "writer", "studio"];
 

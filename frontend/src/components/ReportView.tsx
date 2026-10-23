@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Artifact, Citation, FlashcardData, MindNode, ReportBlock, ReportSuggestion } from "../api/types";
+import type { Artifact, Citation, FlashcardData, MindNode, ReportBlock, ReportSuggestion } from "@notestack/shared/types";
 import { FlashcardDeck } from "./Flashcards";
 import { InfographicFrame } from "./Infographic";
 import { Markdown } from "./Markdown";

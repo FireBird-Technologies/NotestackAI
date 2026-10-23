@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { ReportBlock } from "../api/types";
+import type { ReportBlock } from "@notestack/shared/types";
 
 type PlotBlock = Extract<ReportBlock, { type: "plot" }>;
 

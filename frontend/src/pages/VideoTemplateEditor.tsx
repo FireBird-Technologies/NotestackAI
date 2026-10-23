@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ApiError } from "../api/client";
-import { videoTemplatesApi } from "../api/endpoints";
-import type { TemplateGeneration } from "../api/types";
+import { ApiError } from "@notestack/shared/client";
+import { videoTemplatesApi } from "@notestack/shared/endpoints";
+import type { TemplateGeneration } from "@notestack/shared/types";
 import { ConfirmButton, errorMessage, Loading, PageHeader, StatusPill } from "../components/ui";
 import { usePoll } from "../hooks/usePoll";
 

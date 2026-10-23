@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { videosApi } from "../../api/endpoints";
-import type { Artifact } from "../../api/types";
+import { videosApi } from "@notestack/shared/endpoints";
+import type { Artifact } from "@notestack/shared/types";
 import { ShareButton } from "../ShareDialog";
 import { DeleteButton, errorMessage, formatDate, Loading, Modal, StatusPill, useFullView } from "../ui";
 import { canPost, PostButton } from "../launchpad/PostButton";

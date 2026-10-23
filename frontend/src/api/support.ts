@@ -1,5 +1,5 @@
-import { api, post } from "./client";
-import { streamSSE } from "./stream";
+import { api, post } from "@notestack/shared/client";
+import { streamSSE } from "@notestack/shared/stream";
 
 export type Navigation = { target_route: string; needs_notebook: boolean; description: string };
 export type EscalateReason = "human" | "refund" | "feature";

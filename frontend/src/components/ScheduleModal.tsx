@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { launchpadApi } from "../api/endpoints";
-import type { CalendarItem, Platform, PostableArtifact, SocialAccounts } from "../api/types";
+import { launchpadApi } from "@notestack/shared/endpoints";
+import type { CalendarItem, Platform, PostableArtifact, SocialAccounts } from "@notestack/shared/types";
 import { AttachmentChip, AttachPicker } from "./launchpad/Attachment";
 import { nextSlot, SlotPicker, toWall, userTimeZone, wallToDate } from "./launchpad/SlotPicker";
 import { errorMessage, Modal } from "./ui";

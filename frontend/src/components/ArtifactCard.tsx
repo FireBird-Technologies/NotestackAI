@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { artifactsApi, videosApi } from "../api/endpoints";
-import type { Artifact, Citation, Segment } from "../api/types";
+import { artifactsApi, videosApi } from "@notestack/shared/endpoints";
+import type { Artifact, Citation, Segment } from "@notestack/shared/types";
 import { useJob } from "../hooks/useJob";
 import { Markdown } from "./Markdown";
 import { MindMapExplorer } from "./MindMap";

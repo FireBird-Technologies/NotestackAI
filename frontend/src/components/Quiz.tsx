@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
-import type { GenerateBody } from "../api/endpoints";
-import type { Artifact, ChatPreset, ChatSummary, QuizQuestion, QuizQuestionType } from "../api/types";
+import type { GenerateBody } from "@notestack/shared/endpoints";
+import type { Artifact, ChatPreset, ChatSummary, QuizQuestion, QuizQuestionType } from "@notestack/shared/types";
 import { ArtifactFeedback, FeedbackActions } from "./ArtifactFeedback";
 import { CheckIcon, ChevronIcon } from "./icons/Icons";
 import { ViewButton } from "./cardActions";

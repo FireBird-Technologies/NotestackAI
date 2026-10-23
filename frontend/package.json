@@ -11,6 +11,7 @@
     "check:copy": "node scripts/check-no-em-dash.mjs"
   },
   "dependencies": {
+    "@notestack/shared": "file:../packages/shared",
     "pdfjs-dist": "^4.10.38",
     "plotly.js-basic-dist-min": "^2.35.3",
     "react": "^18.3.1",

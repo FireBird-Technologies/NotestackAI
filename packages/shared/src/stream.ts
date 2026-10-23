@@ -1,6 +1,5 @@
 import { parseError, tokens } from "./client";
-
-const BASE = import.meta.env.VITE_API_URL ?? "";
+import { platform } from "./platform";
 
 /** SSE over fetch so we can send the Authorization header (EventSource cannot). */
 export async function streamSSE(
@@ -12,7 +11,7 @@ export async function streamSSE(
   const headers = new Headers(init.headers);
   if (tokens.access) headers.set("Authorization", `Bearer ${tokens.access}`);
   if (init.body) headers.set("Content-Type", "application/json");
-  const res = await fetch(`${BASE}${path}`, { ...init, headers, signal });
+  const res = await platform().fetch(`${platform().baseUrl}${path}`, { ...init, headers, signal });
   // A refused request (a 402 plan_limit opens the upgrade popup) throws the same ApiError as any other call.
   if (!res.ok) throw await parseError(res);
   if (!res.body) throw new Error(`Stream failed (${res.status})`);

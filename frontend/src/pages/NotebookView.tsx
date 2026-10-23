@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { artifactsApi, notebooksApi } from "../api/endpoints";
-import { ApiError } from "../api/client";
-import { streamSSE } from "../api/stream";
+import { artifactsApi, notebooksApi } from "@notestack/shared/endpoints";
+import { ApiError } from "@notestack/shared/client";
+import { streamSSE } from "@notestack/shared/stream";
 import { createTypewriter } from "../lib/typewriter";
-import type { AnswerFeedback as Feedback, Artifact, ChatAction, ChatArtifact, ChatPreset, ChatSummary, Citation, Job, MemoryChange, Notebook } from "../api/types";
+import type { AnswerFeedback as Feedback, Artifact, ChatAction, ChatArtifact, ChatPreset, ChatSummary, Citation, Job, MemoryChange, Notebook } from "@notestack/shared/types";
 import { AnswerFeedback } from "../components/AnswerFeedback";
 import { ArtifactCard, CitationList } from "../components/ArtifactCard";
 import ConnectorModal from "../components/ConnectorModal";

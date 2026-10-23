@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { videosApi } from "../api/endpoints";
-import type { VideoListItem, VideoQuota } from "../api/types";
+import { videosApi } from "@notestack/shared/endpoints";
+import type { VideoListItem, VideoQuota } from "@notestack/shared/types";
 import { TrashIcon } from "../components/icons/Icons";
 import { EmptyState, errorMessage, formatDate, Loading, Modal, Pager } from "../components/ui";
 import { useUpgrade } from "../hooks/useUpgrade";

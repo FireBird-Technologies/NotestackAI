@@ -1,5 +1,5 @@
 import { missionPosts } from "./missionPosts";
-import type { BlogPost } from "./seoTypes";
+import type { BlogPost, Mission } from "./seoTypes";
 
 // Newest first. Cover images live in public/blog/blog-cover-<slug>.png.
 // House rule: no em dashes anywhere in post copy (npm run check:copy enforces it).
@@ -154,3 +154,17 @@ export const blogPosts: BlogPost[] = [
 ];
 
 export const getPost = (slug: string) => blogPosts.find((p) => p.slug === slug);
+
+/** A post's date as readers see it ("September 22, 2026"). */
+export const formatPostDate = (d: string) =>
+  new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
+
+/** Posts are numbered as missions in publishing order: the oldest post is Mission 01. */
+export const missionNumber = (post: BlogPost) => {
+  const ordered = [...blogPosts].sort((a, b) => a.publishedAt.localeCompare(b.publishedAt));
+  return String(ordered.findIndex((p) => p.slug === post.slug) + 1).padStart(2, "0");
+};
+
+/** The question a post answers, derived from its title when the post does not set one. */
+export const missionOf = (post: BlogPost): Mission =>
+  post.mission ?? { question: post.title.endsWith("?") ? post.title : `${post.heroTitle}?`, answer: post.description };

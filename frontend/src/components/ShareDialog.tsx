@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { shareApi } from "../api/endpoints";
-import type { Artifact, ShareInfo } from "../api/types";
+import { shareApi } from "@notestack/shared/endpoints";
+import type { Artifact, ShareInfo } from "@notestack/shared/types";
 import { errorMessage, Loading, Modal } from "./ui";
 import { ShareIcon } from "./icons/Icons";
 

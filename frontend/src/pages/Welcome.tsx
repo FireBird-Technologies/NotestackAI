@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
-import { docsApi, jobsApi, notebooksApi, sourcesApi } from "../api/endpoints";
-import type { Job, Source } from "../api/types";
+import { docsApi, jobsApi, notebooksApi, sourcesApi } from "@notestack/shared/endpoints";
+import type { Job, Source } from "@notestack/shared/types";
 import { CloseIcon, UploadIcon } from "../components/icons/Icons";
 import Logo from "../components/Logo";
 import SkyCanvas from "../components/SkyCanvas";
@@ -9,7 +9,7 @@ import { SourceUrlHint, useSourceUrlCheck } from "../components/SourceUrlCheck";
 import { errorMessage, JobProgress, Tabs } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import { useJob } from "../hooks/useJob";
-import { classifyUrl } from "../lib/urlScrapability";
+import { classifyUrl } from "@notestack/shared/urlScrapability";
 import { PENDING_SOURCE_KEY } from "./Landing";
 
 type Step = "connect" | "indexing" | "goal" | "ready";

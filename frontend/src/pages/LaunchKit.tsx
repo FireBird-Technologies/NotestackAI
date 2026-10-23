@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { artifactsApi, docsApi } from "../api/endpoints";
-import type { Artifact, Doc, LaunchKitContent, Platform } from "../api/types";
+import { artifactsApi, docsApi } from "@notestack/shared/endpoints";
+import type { Artifact, Doc, LaunchKitContent, Platform } from "@notestack/shared/types";
 import { ScheduleModal } from "../components/ScheduleModal";
 import { BackArrow, ConfirmButton, CopyButton, errorMessage, formatDate, JobProgress, Loading, PageHeader, StatusPill } from "../components/ui";
 import { useJob } from "../hooks/useJob";

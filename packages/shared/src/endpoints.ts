@@ -1,4 +1,4 @@
-import { api, apiBlob, del, patch, post, postForm, put, qs, uploadFile } from "./client";
+import { api, apiBlob, del, patch, post, postForm, put, qs, uploadFile, type UploadSource } from "./client";
 import type {
   AnswerFeedback,
   Artifact,
@@ -71,7 +71,7 @@ export const sourcesApi = {
   // notebookId: added from inside a notebook, so the posts join it.
   connect: (url: string, notebookId?: string) => post<SourceJob>("/api/sources", { url, notebook_id: notebookId }),
   importUrl: (url: string, notebookId?: string) => post<SourceJob>("/api/sources/url", { url, notebook_id: notebookId }),
-  importFile: async (file: File, notebookId?: string) => {
+  importFile: async (file: UploadSource, notebookId?: string) => {
     const { upload_id } = await uploadFile(file);
     return post<SourceJob>("/api/sources/upload", { upload_id, notebook_id: notebookId });
   },
@@ -218,7 +218,7 @@ export const voiceApi = {
   }) => put<VoiceState>("/api/voice", body),
   build: (document_ids: string[]) => post<Job>("/api/voice/build", { document_ids }),
   voices: () => api<Voice[]>("/api/voice/voices"),
-  consent: async (files: File[], consent_text: string, remove_background_noise: boolean) => {
+  consent: async (files: UploadSource[], consent_text: string, remove_background_noise: boolean) => {
     const upload_ids = [];
     for (const f of files) upload_ids.push((await uploadFile(f)).upload_id);
     return post<VoiceState & { job: Job }>("/api/voice/consent", { upload_ids, agreed: true, consent_text, remove_background_noise });
@@ -284,7 +284,7 @@ export const launchpadApi = {
   library: (p: { q?: string; kind?: string; kits?: boolean; limit?: number; offset?: number } = {}) =>
     api<Page<PostableArtifact>>(`/api/launchpad/library${qs(p)}`),
   /** A file from the user's computer, sent to storage: make it postable (an `upload` in the picker). */
-  uploadToPost: async (file: File, duration_s?: number) => {
+  uploadToPost: async (file: UploadSource, duration_s?: number) => {
     const { upload_id } = await uploadFile(file);
     return post<PostableArtifact>("/api/launchpad/uploads", { upload_id, duration_s });
   },

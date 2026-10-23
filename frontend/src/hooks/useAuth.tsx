@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { authApi, type LoginResult, type User } from "../api/auth";
-import { ACCESS_KEY, ApiError, SESSION_EXPIRED_EVENT, tokens } from "../api/client";
+import { authApi, type LoginResult, type User } from "@notestack/shared/auth";
+import { ACCESS_KEY, ApiError, SESSION_EXPIRED_EVENT, tokens } from "@notestack/shared/client";
 import { clearSourceCache } from "../components/video/sourceCache";
 
 type AuthState = {

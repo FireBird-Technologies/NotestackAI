@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { videosApi, videoVoicesApi } from "../api/endpoints";
+import { videosApi, videoVoicesApi } from "@notestack/shared/endpoints";
 import { prefetchVoicePreviews, voicePreviewUrl } from "../components/voice/YourVoices";
-import { ApiError } from "../api/client";
+import { ApiError } from "@notestack/shared/client";
 import type {
   ChatPreset,
   VideoCatalog,
@@ -16,7 +16,7 @@ import type {
   VideoStyleItem,
   VideoTemplate,
   VideoVoicesResponse,
-} from "../api/types";
+} from "@notestack/shared/types";
 import { Dropdown } from "../components/Dropdown";
 import { CheckIcon, SparkleIcon, ArrowLeftIcon } from "../components/icons/Icons";
 import { ErrorText, errorMessage, Loading, Modal, PageHeader } from "../components/ui";

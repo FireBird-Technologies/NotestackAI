@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { artifactsApi, videoVoicesApi, type GenerateBody } from "../api/endpoints";
-import type { Artifact, ChatPreset, ChatSummary, Segment, VideoSavedVoice } from "../api/types";
+import { artifactsApi, videoVoicesApi, type GenerateBody } from "@notestack/shared/endpoints";
+import type { Artifact, ChatPreset, ChatSummary, Segment, VideoSavedVoice } from "@notestack/shared/types";
 import { useJob } from "../hooks/useJob";
 import { Transcript } from "./ArtifactCard";
 import { Dropdown } from "./Dropdown";
