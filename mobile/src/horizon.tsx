@@ -28,7 +28,7 @@ const GLINTS = [
   { at: 0.38, delay: "5.2s", lift: 10 },
   { at: 0.5, delay: "8.8s", lift: 12 },
   { at: 0.62, delay: "12.4s", lift: 10 },
-];
+] as const;
 
 /** The glowing edge of a planet along the bottom of the screen, with a flare riding along it. */
 export function Horizon({ rise }: { rise: number }) {
