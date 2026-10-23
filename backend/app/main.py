@@ -34,6 +34,7 @@ from app.routers import (
     voice,
 )
 from app.routers import settings as settings_router
+from app.services.error_alerts import report_server_error
 from app.services.storage import storage as store
 
 log = logging.getLogger("notestack")
@@ -88,7 +89,23 @@ app.add_middleware(
 async def request_id(request: Request, call_next):
     rid = request.headers.get("x-request-id") or uuid.uuid4().hex[:12]
     start = time.perf_counter()
-    response = await call_next(request)
+
+    def alert(status: int, exc: BaseException | None = None) -> None:
+        route = request.scope.get("route")
+        report_server_error(
+            method=request.method, path=request.url.path, route=getattr(route, "path", None), status=status,
+            request_id=rid, query_keys=list(request.query_params.keys()),  # keys only: values can be tokens
+            client=request.client.host if request.client else None, user_agent=request.headers.get("user-agent"),
+            duration_ms=(time.perf_counter() - start) * 1000, exc=exc,
+        )
+
+    try:
+        response = await call_next(request)
+    except Exception as exc:  # unhandled: the server answers 500
+        alert(500, exc)
+        raise
+    if response.status_code >= 500:
+        alert(response.status_code)
     response.headers["x-request-id"] = rid
     log.info("%s %s %s %.0fms rid=%s", request.method, request.url.path, response.status_code,
              (time.perf_counter() - start) * 1000, rid)

@@ -8,6 +8,8 @@ import hashlib
 import hmac
 import html
 import logging
+import re
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
@@ -32,6 +34,9 @@ class OutgoingEmail:
 class BaseEmailProvider(ABC):
     @abstractmethod
     def send(self, email: OutgoingEmail) -> str | None: ...
+
+
+RATE_LIMIT_RETRIES = 3
 
 
 class ResendEmailProvider(BaseEmailProvider):
@@ -59,8 +64,16 @@ class ResendEmailProvider(BaseEmailProvider):
         if email.inline_images:
             params["attachments"] = [{"filename": name, "content": base64.b64encode(data).decode(), "content_id": cid}
                                      for cid, (name, data) in email.inline_images.items()]
-        result = self._resend.Emails.send(params)
-        return result.get("id") if isinstance(result, dict) else None
+        # Resend allows a couple of requests a second; a 429 waits and tries again instead of failing the email.
+        for attempt in range(RATE_LIMIT_RETRIES + 1):
+            try:
+                result = self._resend.Emails.send(params)
+                return result.get("id") if isinstance(result, dict) else None
+            except self._resend.exceptions.RateLimitError:
+                if attempt == RATE_LIMIT_RETRIES:
+                    raise
+                time.sleep(2**attempt)
+        return None
 
 
 class ConsoleEmailProvider(BaseEmailProvider):
@@ -143,6 +156,28 @@ font-size:13px;line-height:1.6;color:rgba(255,255,255,0.5)">
 You received this because you rendered a video on Notestack.<br>
 &copy; {year} Notestack &middot; All rights reserved.</td></tr>
 </table></td></tr></table></body></html>"""
+
+
+def _plain_layout(body_html: str, footer_html: str) -> str:
+    """A plain note: dark text on white, no card or logo, a thin rule, then a small grey footer. Reads like a person
+    wrote it, not a product email."""
+    return f"""<!doctype html><html><body style="margin:0;background:#ffffff;padding:24px 16px;
+font-family:Arial,Helvetica,sans-serif;color:#222222">
+<div style="max-width:640px;font-size:15px;line-height:1.6;color:#222222">{body_html}</div>
+<div style="max-width:640px;margin-top:40px;padding-top:24px;border-top:1px solid #e5e5e5;font-size:13px;
+line-height:1.8;color:#9ca3af">{footer_html}</div>
+</body></html>"""
+
+
+def _plain_paragraphs(text: str) -> str:
+    """Blank lines split paragraphs, single newlines become <br>, and bare links are clickable."""
+    link = re.compile(r"(https?://[^\s<]+[^\s<.,;:!?)\]'\"])")
+    out = []
+    for para in re.split(r"\n\s*\n", text.strip()):
+        escaped = html.escape(para).replace("\n", "<br>")
+        escaped = link.sub(r'<a href="\1" style="color:#1d4ed8">\1</a>', escaped)
+        out.append(f'<p style="margin:0 0 18px">{escaped}</p>')
+    return "".join(out)
 
 
 def _code_block(code: str) -> str:
@@ -281,6 +316,12 @@ class EmailService:
             )
         )
 
+    def send_error_alert(self, subject: str, text: str) -> bool:
+        """A server error (see services/error_alerts): plain text only, so the traceback reads as it was printed."""
+        return self._send(
+            OutgoingEmail(to=settings.alerts_email, subject=subject, html="", text=text)
+        )
+
     def send_support_escalation(self, *, from_email: str, name: str | None, plan: str | None, reason: str,
                                 concern: str, page: str | None, transcript: list[tuple[str, str]]) -> bool:
         lines = [f"From: {name or 'unknown'} <{from_email}>", f"Plan: {plan or 'unknown'}", f"Reason: {reason}",
@@ -301,14 +342,21 @@ class EmailService:
     # Broadcast
 
     def send_blast_email(self, user_id: str, user_email: str, user_name: str | None, subject: str, body: str) -> bool:
-        first = (user_name or "there").split(" ")[0]
-        body_html = f"Hi {html.escape(first)},<br><br>" + html.escape(body).replace("\n", "<br>")
+        """An update to everyone: a plain note (no card or logo), then a footer with the site and an unsubscribe link."""
+        first = (user_name or "").strip().split(" ")[0] or "there"
+        site = settings.frontend_url.rstrip("/")
+        site_label = site.split("://", 1)[-1]
+        unsubscribe = self._unsubscribe_url(user_id)
+        footer = (
+            f'Visit us at <a href="{html.escape(site)}" style="color:#9ca3af">{html.escape(site_label)}</a><br>'
+            f'To unsubscribe from these emails, <a href="{html.escape(unsubscribe)}" style="color:#9ca3af">click here</a>.'
+        )
         return self._send(
             OutgoingEmail(
                 to=user_email,
                 subject=subject,
-                html=_layout(subject, body_html, self._unsubscribe_footer(user_id)),
-                text=f"Hi {first},\n\n{body}\n\nUnsubscribe: {self._unsubscribe_url(user_id)}",
+                html=_plain_layout(_plain_paragraphs(f"Hi {first},\n\n{body}"), footer),
+                text=f"Hi {first},\n\n{body}\n\nVisit us at {site_label}\nUnsubscribe: {unsubscribe}",
                 headers=self._list_unsubscribe(user_id),
                 reply_to=settings.alerts_email,
             )
@@ -316,9 +364,6 @@ class EmailService:
 
     def _unsubscribe_url(self, user_id: str) -> str:
         return f"{settings.api_url}/api/unsubscribe?token={make_unsubscribe_token(user_id)}"
-
-    def _unsubscribe_footer(self, user_id: str) -> str:
-        return f'<a href="{self._unsubscribe_url(user_id)}" style="color:rgba(255,255,255,0.5)">Unsubscribe</a>'
 
     def _list_unsubscribe(self, user_id: str) -> dict[str, str]:
         return {

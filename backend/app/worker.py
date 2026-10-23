@@ -446,11 +446,18 @@ def topics_backfill(session_factory: Callable[[], Session] = SessionLocal) -> No
                 create_job(db, workspace_id, "topics", {}, max_attempts=2)
 
 
+UPDATE_EMAIL_PACE = 1.0  # seconds between update emails: half of Resend's 2 a second, leaving room for sign up codes and the rest
+
+
 def update_email_batch(session_factory: Callable[[], Session] = SessionLocal) -> None:
-    """Sends one daily batch per scheduled campaign at its send hour (UTC)."""
+    """Sends one daily batch per scheduled campaign at its send hour (UTC). A recipient whose email failed gets one
+    more try in the next batch (a completed campaign with failures reopens for it); a second failure gives up."""
     now = datetime.now(UTC)
     with session_factory() as db:
-        campaigns = db.scalars(select(UpdateEmail).where(UpdateEmail.status.in_(["scheduled", "running"]))).all()
+        retrying = select(UpdateEmailSend.update_email_id).where(UpdateEmailSend.status == "failed")
+        campaigns = db.scalars(
+            select(UpdateEmail).where(UpdateEmail.status.in_(["scheduled", "running"]) | UpdateEmail.id.in_(retrying))
+        ).all()
         for campaign in campaigns:
             hour = campaign.send_hour if campaign.send_hour >= 0 else settings.update_email_send_hour
             if now.hour != hour:
@@ -468,9 +475,31 @@ def update_email_batch(session_factory: Callable[[], Session] = SessionLocal) ->
                     .join(Subscription, Subscription.workspace_id == WorkspaceMember.workspace_id)
                     .where(Subscription.plan.in_(plans))
                 )
-            users = db.scalars(q.limit(campaign.batch_size)).unique().all()
+            retries = db.scalars(
+                select(UpdateEmailSend).where(
+                    UpdateEmailSend.update_email_id == campaign.id, UpdateEmailSend.status == "failed"
+                ).limit(campaign.batch_size)
+            ).all()
+            room = campaign.batch_size - len(retries)
+            users = db.scalars(q.limit(room)).unique().all() if room > 0 else []
             campaign.status = "running"
+            first = True
+            for send in retries:
+                user = db.get(User, send.user_id)
+                if not first:
+                    time.sleep(UPDATE_EMAIL_PACE)
+                first = False
+                still_wanted = bool(user and user.is_active and not user.email_unsubscribed)
+                ok = still_wanted and email_service.send_blast_email(
+                    str(user.id), user.email, user.name, campaign.subject, campaign.body
+                )
+                send.status = "sent" if ok else "gave_up"
+                campaign.sent_count += int(ok)
+                campaign.failed_count -= int(ok)
             for user in users:
+                if not first:
+                    time.sleep(UPDATE_EMAIL_PACE)
+                first = False
                 ok = email_service.send_blast_email(
                     str(user.id), user.email, user.name, campaign.subject, campaign.body
                 )
@@ -479,7 +508,8 @@ def update_email_batch(session_factory: Callable[[], Session] = SessionLocal) ->
                 campaign.failed_count += int(not ok)
             campaign.total_users = campaign.sent_count + campaign.failed_count
             campaign.last_batch_at = now
-            if len(users) < campaign.batch_size:
+            if len(retries) + len(users) < campaign.batch_size:
+                # done with new recipients; a failure from this batch reopens it for one retry tomorrow
                 campaign.status = "completed"
             db.commit()
 

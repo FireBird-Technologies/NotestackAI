@@ -55,4 +55,4 @@ class UpdateEmailSend(IdMixin, TimestampMixin, Base):
         Uuid, ForeignKey("update_emails.id", ondelete="CASCADE")
     )
     user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"))
-    status: Mapped[str] = mapped_column(String(10))  # sent | failed
+    status: Mapped[str] = mapped_column(String(10))  # sent | failed (tried again next batch) | gave_up (failed twice)
