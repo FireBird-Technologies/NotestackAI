@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
+import { createPortal } from "react-dom";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { artifactsApi, notebooksApi } from "../api/endpoints";
 import { ApiError } from "../api/client";
@@ -28,7 +29,7 @@ import { PaneResizer, useMedia, usePaneWidths } from "../components/PaneResizer"
 import { Reader } from "../components/Reader";
 import { seedDocs } from "../components/video/sourceCache";
 import { errorMessage, formatDate, JobProgress, Loading, Modal } from "../components/ui";
-import { useTopbarCrumb } from "../components/AppShell";
+import { useTopbarCrumb, useTopbarSlot } from "../components/AppShell";
 import { useJob } from "../hooks/useJob";
 import { AddSource } from "./Sources";
 import { VideoCreateForm } from "./VideoCreate";
@@ -462,6 +463,7 @@ export default function NotebookView() {
   const closeDrawer = () => setDrawer(null); // back to the Chat tab
   const tabClass = (tab: typeof drawer) => (phone ? ` nbv-tab-panel${drawer === tab ? " is-active" : ""}` : "");
   useTopbarCrumb(nb?.title);
+  const topbarSlot = useTopbarSlot();
 
   // Growing past phone size goes back to the Chat tab.
   useEffect(() => {
@@ -830,7 +832,7 @@ export default function NotebookView() {
     <div ref={layout} className={`nbv${historyOpen ? "" : " nbv-history-closed"}${toolsOpen ? "" : " nbv-tools-closed"}`} style={panes.style}>
       <PaneResizer side="left" panes={panes} container={layout} label="Resize the chats panel" />
       <PaneResizer side="right" panes={panes} container={layout} label="Resize the create panel" />
-      {phone && (
+      {phone && topbarSlot && createPortal(
         <div className="nbv-tabs" role="tablist" aria-label="Notebook"
              style={{ "--tab": drawer === "history" ? 0 : drawer === "tools" ? 2 : drawer === "library" ? 3 : 1 } as CSSProperties}>
           {([["history", "Sources"], [null, "Chat"], ["tools", "Create"], ["library", "Library"]] as const).map(([tab, label]) => (
@@ -839,7 +841,8 @@ export default function NotebookView() {
               {label}
             </button>
           ))}
-        </div>
+        </div>,
+        topbarSlot,
       )}
       {railShown && <aside className={`nbv-pane nbv-history nbv-menu${tabClass("history")}`} aria-label="Notebook chats">
         {/* The top line: back to all notebooks, and the button that closes this column (phones: the tabs do both) */}
