@@ -31,3 +31,6 @@ deploy/env.prod.example
 
 # Chat evaluation results (backend/scripts/chat_eval.py)
 backend/chat_eval_results/
+
+# NotebookLM transfer extension: published via the Chrome Web Store, not this repo
+browser-extension/

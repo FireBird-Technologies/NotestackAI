@@ -5,6 +5,7 @@ import { artifactsApi, notebooksApi } from "../api/endpoints";
 import { ApiError } from "../api/client";
 import { streamSSE } from "../api/stream";
 import { createTypewriter } from "../lib/typewriter";
+import { NOTEBOOKLM_PANEL_OPENED_AT_MARKER, NOTEBOOKLM_PANEL_OPENED_EVENT } from "../lib/notebooklm";
 import type { AnswerFeedback as Feedback, Artifact, ChatAction, ChatArtifact, ChatPreset, ChatSummary, Citation, Job, MemoryChange, Notebook } from "../api/types";
 import { AnswerFeedback } from "../components/AnswerFeedback";
 import { ArtifactCard, CitationList } from "../components/ArtifactCard";
@@ -31,7 +32,7 @@ import { seedDocs } from "../components/video/sourceCache";
 import { errorMessage, formatDate, JobProgress, Loading, Modal } from "../components/ui";
 import { useTopbarCrumb, useTopbarSlot } from "../components/AppShell";
 import { useJob } from "../hooks/useJob";
-import { AddSource } from "./Sources";
+import { AddSource, NotebookLmImportSteps } from "./Sources";
 import { VideoCreateForm } from "./VideoCreate";
 import { canPost, PostButton } from "../components/launchpad/PostButton";
 import { VideoCard } from "../components/video/VideoCard";
@@ -400,6 +401,8 @@ export default function NotebookView() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [q, setQ] = useState("");
+  const [removing, setRemoving] = useState<{ id: string; title: string } | null>(null); // the post awaiting confirmation
+  const [removeError, setRemoveError] = useState<string | null>(null);
   const [deletingChat, setDeletingChat] = useState<{ id: string; title: string } | null>(null); // the chat awaiting confirmation
   const [deleteChatBusy, setDeleteChatBusy] = useState(false);
   const [deleteChatError, setDeleteChatError] = useState<string | null>(null);
@@ -446,6 +449,7 @@ export default function NotebookView() {
   const [historyOpen, setHistoryOpen] = useState(readChatRailOpen);
   const [toolsOpen, setToolsOpen] = useState(readToolsRailOpen);
   const [params, setParams] = useSearchParams();
+  const returningFromNotebookLm = params.get("notebooklm") === "import";
   // The open chat lives in the URL (?chat=<id>), not only in React state: a state reset, a reload or a hot reload can no
   // longer turn the next message into a new chat. `shown` is the chat whose messages are on screen right now.
   const chatId = params.get("chat");
@@ -470,6 +474,24 @@ export default function NotebookView() {
     if (!phone) setDrawer(null);
   }, [phone]);
 
+  // A NotebookLM transfer launched here returns to this notebook and reopens the same Add source dialog.
+  useEffect(() => {
+    if (returningFromNotebookLm) setAdding(true);
+  }, [returningFromNotebookLm]);
+
+  const closeAdding = () => {
+    setAdding(false);
+    if (!returningFromNotebookLm) return;
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        next.delete("notebooklm");
+        return next;
+      },
+      { replace: true },
+    );
+  };
+
   // Auto-save the title shortly after the user stops typing.
   useEffect(() => {
     if (!editingTitle || !nb) return;
@@ -481,15 +503,24 @@ export default function NotebookView() {
     return () => clearTimeout(t);
   }, [title, editingTitle, nb]);
 
+  // Notebook loads can take seconds, so an older one may land after a newer one (or after a post was removed). Only the
+  // latest response is used, and posts removed here stay out of it.
+  const loadSeq = useRef(0);
+  const removedDocs = useRef(new Set<string>());
   const load = useCallback(
-    () =>
-      notebooksApi.get(id).then(
+    () => {
+      const seq = ++loadSeq.current;
+      return notebooksApi.get(id).then(
         (n) => {
-          setNb(n);
+          if (seq !== loadSeq.current) return;
+          setNb({ ...n, documents: n.documents.filter((d) => !removedDocs.current.has(d.id)) });
+          const present = new Set(n.documents.map((d) => d.id));
+          for (const gone of [...removedDocs.current]) if (!present.has(gone)) removedDocs.current.delete(gone); // the server agrees now
           setTitle(n.title);
         },
         () => setLoadError("Notebook not found."),
-      ),
+      );
+    },
     [id],
   );
   const loadChats = useCallback(() => notebooksApi.chats(id).then(setChats), [id]);
@@ -592,6 +623,21 @@ export default function NotebookView() {
       /* Private browsing can prevent persistence; the control still works for this visit. */
     }
   };
+
+  // Chrome's NotebookLM transfer panel consumes a large slice of the viewport. Close this notebook's own Create rail
+  // first so the chat and its artifacts keep their position instead of the rail falling into a row underneath them.
+  useEffect(() => {
+    const closeForNotebookLmPanel = () => {
+      setToolsRail(false);
+      setDrawer((current) => current === "tools" ? null : current);
+    };
+    window.addEventListener(NOTEBOOKLM_PANEL_OPENED_EVENT, closeForNotebookLmPanel);
+    const openedAt = Number(document.documentElement.dataset[NOTEBOOKLM_PANEL_OPENED_AT_MARKER]);
+    if (Number.isFinite(openedAt) && Date.now() - openedAt < 5000) closeForNotebookLmPanel();
+    return () => window.removeEventListener(NOTEBOOKLM_PANEL_OPENED_EVENT, closeForNotebookLmPanel);
+    // The listener is installed once; React state setters and the local-storage key are stable for this page.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const ask = async (text: string) => {
     const question = text.trim();
@@ -737,7 +783,7 @@ export default function NotebookView() {
   }, [nb]);
 
   if (loadError) return <p className="error-text">{loadError}</p>;
-  if (!nb) return <Loading label="Opening notebook" center="full" />;
+  if (!nb) return <Loading center="full" />;
 
   const openReport = (preset?: ChatPreset) => {
     seedDocs(nb.id, nb.documents);
@@ -1170,17 +1216,31 @@ export default function NotebookView() {
         </Modal>
       )}
       {adding && (
-        <Modal title={nb.is_archive ? "Connect a source" : `Add to ${nb.title}`} onClose={() => setAdding(false)} wide>
-          {nb.is_archive ? (
-            <p className="muted small">This archive already contains all your posts. Posts from a new source join it automatically.</p>
+        <Modal title={nb.is_archive ? "Connect a source" : `Add to ${nb.title}`} onClose={closeAdding} wide>
+          {returningFromNotebookLm ? (
+            <NotebookLmImportSteps
+              notebookId={nb.id}
+              backLabel="Back to notebook"
+              onImported={load}
+              onBack={closeAdding}
+            />
           ) : (
-            <p className="muted small">Every post it imports joins this notebook.</p>
+            <>
+              {nb.is_archive ? (
+                <p className="muted small">This archive already contains all your posts. Posts from a new source join it automatically.</p>
+              ) : (
+                <>
+                  <p className="eyebrow muted">Connect a source</p>
+                  <p className="muted small">Every post it imports joins this notebook.</p>
+                </>
+              )}
+              <AddSource compact notebookId={nb.is_archive ? undefined : nb.id} returnToNotebookId={nb.id} onAdded={(_, job) => {
+                setImports((cur) => [...cur, job]);
+                closeAdding();
+              }} />
+              <NotebookPostsManager notebookId={nb.id} docs={nb.documents} readOnly={nb.is_archive} onChanged={load} />
+            </>
           )}
-          <AddSource compact notebookId={nb.is_archive ? undefined : nb.id} onAdded={(_, job) => {
-            setImports((cur) => [...cur, job]);
-            setAdding(false);
-          }} />
-          <NotebookPostsManager notebookId={nb.id} docs={nb.documents} readOnly={nb.is_archive} onChanged={load} />
         </Modal>
       )}
       {reading && <Reader documentId={reading.id} highlight={reading.start ? { start: reading.start, end: reading.end ?? reading.start } : undefined} onClose={() => setReading(null)} />}
@@ -1208,6 +1268,44 @@ export default function NotebookView() {
                 }}
               >
                 {deleteChatBusy ? "Deleting..." : "Delete chat"}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+      {removing && (
+        // While the removal runs, Escape, the backdrop and the close button do nothing.
+        <Modal title="Remove this post?" onClose={() => setRemoving(null)}>
+          <div className="stack">
+            <p>
+              "<strong>{removing.title}</strong>" will be removed from this notebook. The post itself is kept in your
+              library, and you can add it back later.
+            </p>
+            {removeError && <p className="error-text">{removeError}</p>}
+            <div className="vw-nav">
+              <button className="btn" onClick={() => setRemoving(null)}>Cancel</button>
+              <button
+                className="btn btn-danger vw-delete-confirm"
+                onClick={() => {
+                  // Gone from the list and the dialog closed at once; the server catches up in the background.
+                  const gone = removing;
+                  const notebookId = nb.id;
+                  removedDocs.current.add(gone.id);
+                  setNb((cur) => (cur ? { ...cur, documents: cur.documents.filter((d) => d.id !== gone.id) } : cur));
+                  setRemoving(null);
+                  setRemoveError(null);
+                  notebooksApi.removeDoc(notebookId, gone.id).then(
+                    () => void load(),
+                    (e) => {
+                      removedDocs.current.delete(gone.id);
+                      void load(); // it is still there: bring it back and say why
+                      setRemoving(gone);
+                      setRemoveError(`Could not remove "${gone.title}": ${errorMessage(e)}`);
+                    },
+                  );
+                }}
+              >
+                Remove post
               </button>
             </div>
           </div>

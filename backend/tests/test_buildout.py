@@ -238,6 +238,207 @@ def test_import_url_and_markdown_upload(client, auth, run_jobs, monkeypatch):
     assert len(sources) == 1 and sources[0]["is_imports"]
 
 
+def test_notebooklm_transfer_imports_only_the_posts_left_on_the_plan(client, auth, monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "billing_enabled", True)
+    posts = [
+        {
+            "title": f"Notebook source {i}",
+            "content": f"# Notebook source {i}\n\nUseful exported text {i}.",
+            "source_id": f"source-{i}",
+            "notebook_id": "notebook-one",
+            "notebook_title": "Research",
+            "kind": "source",
+            "added_at": f"2026-01-{i + 1:02d}T12:00:00Z",
+        }
+        for i in range(7)
+    ]
+    notebook_id = client.post("/api/notebooks", json={"title": "Imported research"}, headers=auth).json()["id"]
+    r = client.post(
+        "/api/sources/notebooklm",
+        json={"transfer_id": "transfer-123", "target_notebook_id": notebook_id, "posts": posts},
+        headers=auth,
+    )
+    assert r.status_code == 200, r.text
+    result = r.json()
+    assert result["plan"] == "free"
+    assert result["plan_limit"] == 5
+    assert result["imported"] == 5
+    assert result["skipped_plan"] == 2
+    assert {item["title"] for item in client.get("/api/documents", headers=auth).json()["items"]} == {
+        f"Notebook source {i}" for i in range(2, 7)
+    }
+    assert len(client.get(f"/api/notebooks/{notebook_id}", headers=auth).json()["documents"]) == 5
+
+    # Replaying the browser handoff is idempotent even when the plan has no room left.
+    again = client.post(
+        "/api/sources/notebooklm",
+        json={"transfer_id": "transfer-123", "target_notebook_id": notebook_id, "posts": posts},
+        headers=auth,
+    ).json()
+    assert again["imported"] == 0
+    assert again["unchanged"] == 5
+    assert again["skipped_plan"] == 2
+    assert client.get("/api/documents", headers=auth).json()["total"] == 5
+
+
+def test_notebooklm_chat_is_a_post_sourced_to_its_notebook(client, auth, monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "billing_enabled", True)
+    posts = [
+        {
+            "title": f"Supporting source {i}",
+            "content": f"# Supporting source {i}\n\nSource text {i}.",
+            "source_id": f"source-{i}",
+            "notebook_id": "research-id",
+            "notebook_title": "Research notebook",
+            "kind": "source",
+            "added_at": f"2026-01-{i + 1:02d}T12:00:00Z",
+        }
+        for i in range(5)
+    ]
+    # The extension used to append chat.md after every source, which could drop the transcript at the plan boundary.
+    posts.append({
+        "title": "Research notebook - NotebookLM chat",
+        "content": "# Research notebook - NotebookLM chat\n\n## User\n\nWhat did I learn?",
+        "source_url": "https://notebooklm.google.com/notebook/research-id",
+        "source_id": "chat",
+        "notebook_id": "research-id",
+        "notebook_title": "Research notebook",
+        "kind": "chat",
+        "added_at": "2026-02-01T12:00:00Z",
+    })
+
+    result = client.post(
+        "/api/sources/notebooklm",
+        json={"transfer_id": "transfer-chat", "posts": posts},
+        headers=auth,
+    )
+    assert result.status_code == 200, result.text
+    assert result.json()["imported"] == 5
+    assert result.json()["skipped_plan"] == 1
+
+    imported = docs(client, auth)
+    chat = next(item for item in imported if item["title"] == "Research notebook - NotebookLM chat")
+    assert chat["source_title"] == "Research notebook"
+    assert chat["transferred_from_notebooklm"] is True
+    assert all(item["transferred_from_notebooklm"] for item in imported)
+    assert all(item["source_title"] == "Research notebook" for item in imported)
+
+
+def test_notebooklm_report_markdown_is_imported_as_its_own_document(client, auth):
+    report = {
+        "title": "Research briefing",
+        "content": (
+            '---\ntype: notebooklm-report\nnotebook: "Research notebook"\n'
+            'artifact_id: "report-1"\n---\n\n# Research briefing\n\nExact report body.\n'
+        ),
+        "source_url": "https://notebooklm.google.com/notebook/research-id",
+        "source_id": "report-1",
+        "notebook_id": "research-id",
+        "notebook_title": "Research notebook",
+        "kind": "report",
+        "added_at": "2026-02-02T12:00:00Z",
+    }
+    response = client.post(
+        "/api/sources/notebooklm",
+        json={"transfer_id": "transfer-report", "posts": [report]},
+        headers=auth,
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["imported"] == 1
+    imported = docs(client, auth)
+    assert len(imported) == 1
+    assert imported[0]["title"] == "Research briefing"
+    assert imported[0]["source_title"] == "Research notebook"
+    assert imported[0]["transferred_from_notebooklm"] is True
+
+
+def test_notebooklm_study_artifacts_are_mapped_into_library_without_a_notebook(client, auth):
+    target_notebook_id = client.post("/api/notebooks", json={"title": "Import target"}, headers=auth).json()["id"]
+    artifacts = [
+        {
+            "external_id": "nl-quiz-1", "type": "quiz", "title": "Research quiz",
+            "notebook_id": "research-id", "notebook_title": "Research notebook",
+            "source_url": "https://notebooklm.google.com/notebook/research-id",
+            "created_at": "2026-02-03T12:00:00Z",
+            "content": {"questions": [{
+                "question": "Which answer is correct?", "rationale": "Because it is.",
+                "answerOptions": [{"text": "Wrong", "isCorrect": False}, {"text": "Right", "isCorrect": True}],
+            }]},
+        },
+        {
+            "external_id": "nl-cards-1", "type": "flashcards", "title": "Research cards",
+            "notebook_id": "research-id", "notebook_title": "Research notebook",
+            "content": {"cards": [{"front": "Question", "back": "Answer"}]},
+        },
+        {
+            "external_id": "nl-map-1", "type": "mind_map", "title": "Research map",
+            "notebook_id": "research-id", "notebook_title": "Research notebook",
+            "content": {"tree": {"name": "Research", "children": [{"name": "Finding"}]}},
+        },
+    ]
+    response = client.post(
+        "/api/sources/notebooklm",
+        json={"transfer_id": "transfer-artifacts", "target_notebook_id": target_notebook_id,
+              "posts": [], "artifacts": artifacts},
+        headers=auth,
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["artifacts_imported"] == 3
+    assert response.json()["artifacts_updated"] == 0
+
+    library = client.get("/api/artifacts", headers=auth).json()
+    assert library["total"] == 3
+    assert {item["type"] for item in library["items"]} == {"quiz", "flashcards", "mind_map"}
+    assert all(item["notebook_id"] is None for item in library["items"])
+    assert all(item["transferred_from_notebooklm"] is True for item in library["items"])
+    assert all(item["provider"] == "notebooklm" for item in library["items"])
+    quiz = next(item for item in library["items"] if item["type"] == "quiz")
+    assert quiz["content"]["questions"][0]["correct"] == [1]
+    mind_map = next(item for item in library["items"] if item["type"] == "mind_map")
+    assert mind_map["content"]["root"]["children"][0]["label"] == "Finding"
+
+    artifacts[1]["content"]["cards"][0]["back"] = "Updated answer"
+    again = client.post(
+        "/api/sources/notebooklm",
+        json={"transfer_id": "transfer-artifacts-again", "posts": [], "artifacts": artifacts},
+        headers=auth,
+    )
+    assert again.status_code == 200, again.text
+    assert again.json()["artifacts_imported"] == 0
+    assert again.json()["artifacts_updated"] == 3
+    assert client.get("/api/artifacts", headers=auth).json()["total"] == 3
+
+
+def test_each_uploaded_notebooklm_chat_md_becomes_its_own_post(client, auth, run_jobs):
+    def upload_chat(notebook_id: str, title: str):
+        content = (f'---\ntype: notebooklm-chat-transcript\nnotebook: "{title}"\n'
+                   f'notebook_id: "{notebook_id}"\n'
+                   f'source_url: "https://notebooklm.google.com/notebook/{notebook_id}"\n'
+                   f'---\n\n# {title} - NotebookLM chat\n\n## 1. User\n\nHello from {title}.\n').encode()
+        start = client.post(
+            "/api/storage/uploads",
+            json={"filename": "chat.md", "content_type": "text/markdown", "size_bytes": len(content)},
+            headers=auth,
+        ).json()
+        client.put(start["upload_url"].split("8000", 1)[1], content=content)
+        client.post(f"/api/storage/uploads/{start['upload_id']}/complete", headers=auth)
+        response = client.post("/api/sources/upload", json={"upload_id": start["upload_id"]}, headers=auth)
+        assert response.status_code == 200, response.text
+        assert run_jobs()[0].status == "done"
+
+    upload_chat("alpha-id", "Alpha notebook")
+    upload_chat("beta-id", "Beta notebook")
+
+    imported = docs(client, auth)
+    assert len(imported) == 2  # identical chat.md filenames do not overwrite each other
+    assert {item["source_title"] for item in imported} == {"Alpha notebook", "Beta notebook"}
+    assert all(item["transferred_from_notebooklm"] for item in imported)
+
+
 def test_an_image_is_never_imported_as_a_post(client, auth, run_jobs):
     """A dropped screenshot skipped the file picker's filter and was stored as a "post" of its raw bytes."""
     start = client.post("/api/storage/uploads", json={"filename": "screenshot.jpg", "content_type": "image/jpeg",
