@@ -130,16 +130,21 @@ export function Tabs<T extends string>({
   tabs,
   value,
   onChange,
+  className = "",
+  label,
 }: {
   tabs: { id: T; label: string; count?: number }[];
   value: T;
   onChange: (id: T) => void;
+  className?: string;
+  label?: string;
 }) {
   return (
-    <div className="tabs" role="tablist">
+    <div className={`tabs${className ? ` ${className}` : ""}`} role="tablist" aria-label={label}>
       {tabs.map((t) => (
         <button
           key={t.id}
+          type="button"
           role="tab"
           aria-selected={value === t.id}
           className={`tab${value === t.id ? " active" : ""}`}
