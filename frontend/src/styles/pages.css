@@ -2226,6 +2226,150 @@ select.input option {
   border-color: var(--blue);
 }
 
+.welcome-transfer {
+  display: grid;
+  gap: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.welcome-transfer-flow {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--blue-35);
+  border-radius: var(--radius);
+  background: var(--black);
+  box-shadow: var(--glow-sm);
+}
+
+.welcome-transfer-flow-step {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.welcome-transfer-flow-step.current {
+  background: var(--blue-05);
+}
+
+.welcome-transfer-flow-step.disabled {
+  opacity: 0.58;
+}
+
+.welcome-transfer-flow-step > div {
+  display: grid;
+  gap: 3px;
+}
+
+.welcome-transfer-flow-step strong {
+  color: var(--white);
+  line-height: 1.3;
+}
+
+.welcome-transfer-flow-step p {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.welcome-transfer-flow-number,
+.welcome-notebooklm-index-steps li > span {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid var(--blue-35);
+  border-radius: 50%;
+  background: var(--blue-05);
+  color: var(--blue);
+  font: 600 0.75rem var(--font-mono);
+}
+
+.welcome-transfer-flow-step.done .welcome-transfer-flow-number {
+  border-color: var(--blue);
+  background: var(--blue);
+  color: var(--white);
+}
+
+.welcome-transfer-installed {
+  color: var(--blue);
+  font-size: 0.75rem;
+}
+
+.welcome-transfer-view-back {
+  width: fit-content;
+  justify-self: start;
+}
+
+.welcome-notebooklm-index-steps {
+  display: grid;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--black);
+  list-style: none;
+}
+
+.welcome-notebooklm-index-steps li {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.welcome-notebooklm-index-steps li:last-child {
+  border-bottom: 0;
+}
+
+.welcome-notebooklm-index-steps li.current {
+  background: var(--blue-05);
+}
+
+.welcome-notebooklm-index-steps li.done > span {
+  border-color: var(--blue);
+  background: var(--blue);
+  color: var(--white);
+}
+
+.welcome-notebooklm-index-steps li.error > span {
+  border-color: var(--white);
+  color: var(--white);
+}
+
+.welcome-notebooklm-index-steps li > div {
+  display: grid;
+  gap: 3px;
+}
+
+.welcome-notebooklm-index-steps strong {
+  color: var(--white);
+}
+
+.welcome-notebooklm-index-steps small {
+  color: var(--text-3);
+  line-height: 1.45;
+}
+
+@media (max-width: 520px) {
+  .welcome-transfer-flow-step,
+  .welcome-notebooklm-index-steps li {
+    grid-template-columns: 30px minmax(0, 1fr);
+  }
+
+  .welcome-transfer-flow-step > .btn,
+  .welcome-transfer-flow-step > .welcome-transfer-installed,
+  .welcome-notebooklm-index-steps li > .orbit-loader {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
 .goal-grid {
   display: grid;
   gap: 10px;
@@ -5002,11 +5146,35 @@ details.map-legend[open] summary {
 }
 
 /* Sources: one smart input, files drop anywhere */
+.source-method-panel {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding-top: 2px;
+}
+
+.source-method-panel--notebooklm {
+  gap: 16px;
+}
+
+.source-method-heading {
+  display: grid;
+  gap: 4px;
+}
+
+.source-method-heading > * {
+  margin: 0;
+}
+
+.source-method-help {
+  margin: 0;
+  line-height: 1.5;
+}
+
 .add-smart {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  justify-content: center; /* when the buttons wrap under the link box, they sit centred */
   gap: 10px;
 }
 
@@ -5056,12 +5224,126 @@ details.map-legend[open] summary {
   font-size: 0.82rem;
 }
 
+.add-source--compact .add-smart .input,
+.add-source--compact .add-smart .btn.btn-small {
+  height: 44px;
+  min-height: 44px;
+}
+
+.source-upload-drop {
+  position: relative;
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  min-height: 150px;
+  padding: 30px 18px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.015);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
+}
+
+.add-source--compact .source-upload-drop {
+  min-height: 122px;
+  padding: 22px 16px;
+}
+
+.source-upload-drop:hover,
+.source-upload-drop:focus-within,
+.source-upload-drop.over {
+  border-color: var(--blue);
+  background: var(--blue-05);
+  box-shadow: inset 0 0 0 1px var(--blue-10);
+}
+
+.source-upload-drop.disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.source-upload-drop input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.source-upload-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid var(--blue-35);
+  border-radius: 50%;
+  background: var(--blue-05);
+  color: var(--blue);
+}
+
+.source-upload-icon svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 @media (max-width: 640px) {
   .add-smart .btn {
     height: 36px;
     min-height: 36px;
     padding: 0 14px;
     font-size: 0.85rem;
+  }
+
+  .add-smart {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .add-smart .input,
+  .add-source--compact .add-smart .input,
+  .add-source--compact .add-smart .btn.btn-small {
+    width: 100%;
+    height: 44px;
+    min-height: 44px;
+    flex-basis: auto;
+  }
+}
+
+/* One NotebookLM transfer CTA everywhere: onboarding's pill, with the external-link mark. */
+.btn.notebooklm-transfer-button {
+  width: fit-content;
+  height: 44px;
+  min-height: 44px;
+  padding: 0 20px;
+  border-color: var(--blue-35);
+  background: var(--blue-05);
+  font-size: 0.9375rem;
+}
+
+.btn.notebooklm-transfer-button:hover {
+  border-color: var(--blue);
+  background: var(--blue-10);
+}
+
+.notebooklm-transfer-button svg {
+  width: 17px;
+  height: 17px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@media (max-width: 520px) {
+  .btn.notebooklm-transfer-button {
+    width: 100%;
   }
 }
 
@@ -11711,6 +11993,32 @@ body.nbv-resizing iframe {
   min-height: 28px;
   padding: 4px 10px;
   font-size: 0.75rem;
+}
+
+.nbv-history.nbv-menu .nbv-notebooklm-transfer {
+  display: flex;
+  width: 100%;
+  min-height: 32px;
+  justify-content: center;
+  gap: 7px;
+  border-color: var(--blue-35);
+  background: var(--blue-05);
+  color: var(--text-1);
+}
+
+.nbv-history.nbv-menu .nbv-notebooklm-transfer:hover {
+  border-color: var(--blue);
+  background: var(--blue-10);
+}
+
+.nbv-notebooklm-transfer svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .nbv-history.nbv-menu .nbv-posts > p {

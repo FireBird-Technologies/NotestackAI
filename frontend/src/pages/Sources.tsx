@@ -1,13 +1,25 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { NavLink } from "react-router-dom";
-import { docsApi, jobsApi, sourcesApi } from "../api/endpoints";
+import { NavLink, useSearchParams } from "react-router-dom";
+import { docsApi, jobsApi, settingsApi, sourcesApi, type NotebookLmImportResult } from "../api/endpoints";
 import type { Doc, Job, Source } from "../api/types";
 import { Reader } from "../components/Reader";
 import { TrashIcon } from "../components/icons/Icons";
 import { SourceUrlHint, useSourceUrlCheck } from "../components/SourceUrlCheck";
-import { DeleteButton, EmptyState, errorMessage, formatDate, JobProgress, Loading, PageHeader, Pager, StatusPill } from "../components/ui";
+import { DeleteButton, EmptyState, errorMessage, formatDate, JobProgress, Loading, PageHeader, Pager, StatusPill, Tabs } from "../components/ui";
 import { useJobMap } from "../hooks/useJob";
 import { useUpgrade } from "../hooks/useUpgrade";
+import { useAuth } from "../hooks/useAuth";
+import {
+  isNotebookLmExtensionInstalled,
+  completeNotebookLmTransfer,
+  NOTEBOOKLM_PLAN_LIMIT_REACHED,
+  openNotebookLmExtensionStore,
+  openNotebookLmTransfer,
+  notebookLmPlanLimitMessage,
+  notebookLmPlanLimitPreviewMessage,
+  pendingNotebookLmTransfer,
+  reportNotebookLmTransferStatus,
+} from "../lib/notebooklm";
 
 const PAGE = 10; // posts on one page of the list
 const PENDING_IMPORTS_ID = "pending-imports";
@@ -66,6 +78,13 @@ function SyncStats({ job }: { job: Job }) {
 }
 
 export const FILE_ACCEPT = ".md,.markdown,.txt,.vtt,.html,.htm,.pdf,text/vtt,text/markdown,text/plain,text/html,application/pdf";
+type AddSourceMethod = "link" | "upload" | "notebooklm";
+
+const ADD_SOURCE_METHODS: { id: AddSourceMethod; label: string }[] = [
+  { id: "link", label: "Link" },
+  // Hidden for now: { id: "notebooklm", label: "Transfer from NotebookLM" },
+  { id: "upload", label: "Upload" },
+];
 
 /** A bare domain, a Substack or a feed URL is a whole archive; a deep link is one article. */
 export function looksLikeArticle(raw: string): boolean {
@@ -120,6 +139,7 @@ export async function importFiles(files: File[], onAdded: (source: Source, job: 
 export function AddSource({
   onAdded,
   notebookId,
+  returnToNotebookId,
   onUploadStart,
   onUploadSettled,
   compact = false,
@@ -129,16 +149,80 @@ export function AddSource({
   compact?: boolean;
   /** Added from inside a notebook: the posts join it. */
   notebookId?: string;
+  /** The notebook page that opened this control, including the archive notebook. */
+  returnToNotebookId?: string;
   onUploadStart?: (count: number) => void;
   onUploadSettled?: (failed: number, total: number) => void;
 }) {
+  const { user } = useAuth();
   const [value, setValue] = useState("");
   const [override, setOverride] = useState<"feed" | "url" | null>(null);
+  const [method, setMethod] = useState<AddSourceMethod>("link");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [extensionInstalled, setExtensionInstalled] = useState(isNotebookLmExtensionInstalled);
+  const [waitingForStoreReturn, setWaitingForStoreReturn] = useState(false);
+  const [notebookLmLaunchMessage, setNotebookLmLaunchMessage] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const mode = override ?? (looksLikeArticle(value) ? "url" : "feed");
   const { check, modal } = useSourceUrlCheck();
+
+  useEffect(() => {
+    const detect = () => setExtensionInstalled(isNotebookLmExtensionInstalled());
+    detect();
+    window.addEventListener("notestack:notebooklm-exporter-ready", detect);
+    const timer = window.setInterval(detect, 750);
+    return () => {
+      window.removeEventListener("notestack:notebooklm-exporter-ready", detect);
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  // A newly installed extension is not injected into tabs that were already open. Refresh this page once when the
+  // person comes back from the Web Store so Step 2 unlocks without a separate check button.
+  useEffect(() => {
+    if (!waitingForStoreReturn) return;
+    let leftForStore = false;
+    let timer: number | undefined;
+    const onBlur = () => { leftForStore = true; };
+    const onFocus = () => {
+      if (!leftForStore) return;
+      setWaitingForStoreReturn(false);
+      timer = window.setTimeout(() => {
+        if (isNotebookLmExtensionInstalled()) setExtensionInstalled(true);
+        else window.location.reload();
+      }, 350);
+    };
+    window.addEventListener("blur", onBlur);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      window.removeEventListener("blur", onBlur);
+      window.removeEventListener("focus", onFocus);
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [waitingForStoreReturn]);
+
+  const installNotebookLmExtension = () => {
+    setWaitingForStoreReturn(true);
+    openNotebookLmExtensionStore();
+  };
+
+  const beginNotebookLmExport = async () => {
+    if (!extensionInstalled) return;
+    setNotebookLmLaunchMessage(null);
+    const returnTo = returnToNotebookId
+      ? `/app/notebooks/${encodeURIComponent(returnToNotebookId)}?notebooklm=import`
+      : "/app/sources?notebooklm=import";
+    const result = await openNotebookLmTransfer(returnTo, user);
+    setNotebookLmLaunchMessage(
+      result.alreadyOpen
+        ? result.message || "A NotebookLM transfer is already open and still running."
+        : result.ok
+          ? "Transfer side panel opened. Keep it open to watch progress."
+          : result.error || "NotebookLM could not be opened.",
+    );
+  };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -171,60 +255,288 @@ export function AddSource({
   };
 
   return (
-    <div className={`card add-source${compact ? " add-source-compact" : ""}`}>
-      <form onSubmit={submit} className="add-smart">
-        <input
-          className="input"
-          placeholder="Paste a blog, newsletter or article link"
-          value={value}
-          onChange={(e) => {
-            setValue(e.target.value);
-            setOverride(null);
-          }}
-          aria-label="Blog, newsletter or article link"
-        />
-        <button className={`btn btn-primary${compact ? " btn-small" : ""}`} type="submit" disabled={busy || !value.trim()}>
-          {busy ? (mode === "feed" ? "Finding posts..." : "Working...") : mode === "feed" ? "Connect" : "Import article"}
-        </button>
-        <span className="muted small">or</span>
-        <button type="button" className={`btn${compact ? " btn-small" : ""}`} disabled={busy} onClick={() => fileRef.current?.click()}>
-          Upload files
-        </button>
-        <input ref={fileRef} type="file" multiple accept={FILE_ACCEPT} hidden onChange={(e) => upload(e.target.files)} aria-label="Files to upload" />
-      </form>
-      <p className="muted small">
-        {!value.trim() && (compact
-          ? "Any blog or newsletter link, or Markdown, text, HTML and PDF files."
-          : "Substack, Ghost, WordPress, Medium or any site with a feed. Markdown, text, VTT transcripts, HTML and PDF files work too; drop them anywhere on this page.")}
-        {value.trim() && mode === "feed" && (
+    <div className={`card add-source${compact ? " add-source--compact" : ""}`}>
+      <Tabs<AddSourceMethod>
+        tabs={ADD_SOURCE_METHODS}
+        value={method}
+        label="Choose an import method"
+        onChange={(next) => {
+          setMethod(next);
+          setError(null);
+          if (next !== "notebooklm") setNotebookLmLaunchMessage(null);
+        }}
+      />
+      <div className={`source-method-panel source-method-panel--${method}`} role="tabpanel">
+        {method === "link" && (
           <>
-            We will pull in the whole archive and keep it in sync.{" "}
-            <button type="button" className="link-btn small" onClick={() => setOverride("url")}>
-              Just this one page instead
-            </button>
+            <form onSubmit={submit} className="add-smart">
+              <input
+                className="input"
+                placeholder="Paste a blog, newsletter or article link"
+                value={value}
+                onChange={(e) => {
+                  setValue(e.target.value);
+                  setOverride(null);
+                }}
+                aria-label="Blog, newsletter or article link"
+              />
+              <button className={`btn btn-primary${compact ? " btn-small" : ""}`} type="submit" disabled={busy || !value.trim()}>
+                {busy ? (mode === "feed" ? "Finding posts..." : "Working...") : mode === "feed" ? "Connect" : "Import article"}
+              </button>
+            </form>
+            <p className="muted small source-method-help">
+              {!value.trim() && (compact
+                ? "Paste a blog, newsletter, feed, or one article."
+                : "Substack, Ghost, WordPress, Medium, any site with a feed, or one article link.")}
+              {value.trim() && mode === "feed" && (
+                <>
+                  We will pull in the whole archive and keep it in sync.{" "}
+                  <button type="button" className="link-btn small" onClick={() => setOverride("url")}>Just this one page instead</button>
+                </>
+              )}
+              {value.trim() && mode === "url" && (
+                <>
+                  Looks like a single article, so we will import just this page.{" "}
+                  <button type="button" className="link-btn small" onClick={() => setOverride("feed")}>Connect the whole site instead</button>
+                </>
+              )}
+            </p>
+            <SourceUrlHint url={value} />
           </>
         )}
-        {value.trim() && mode === "url" && (
+        {method === "upload" && (
+          <label
+            className={`source-upload-drop${dragging ? " over" : ""}${busy ? " disabled" : ""}`}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (!busy) setDragging(true);
+            }}
+            onDragLeave={(e) => {
+              e.stopPropagation();
+              setDragging(false);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setDragging(false);
+              if (!busy) void upload(e.dataTransfer.files);
+            }}
+          >
+            <input ref={fileRef} type="file" multiple accept={FILE_ACCEPT} disabled={busy} onChange={(e) => void upload(e.target.files)} aria-label="Files to upload" />
+            <span className="source-upload-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4" /></svg>
+            </span>
+            <strong>{busy ? "Uploading files..." : "Drop files here or choose files"}</strong>
+            <span className="mono muted small">Markdown · text · VTT · HTML · PDF</span>
+          </label>
+        )}
+        {method === "notebooklm" && (
           <>
-            Looks like a single article, so we will import just this page.{" "}
-            <button type="button" className="link-btn small" onClick={() => setOverride("feed")}>
-              Connect the whole site instead
-            </button>
+            <div className="source-method-heading">
+              <p className="eyebrow">NotebookLM transfer</p>
+              <h2>Move your notebooks into Notestack</h2>
+              <p className="muted small">Install the extension once, choose what to transfer, then return here to index everything.</p>
+            </div>
+            <div className="welcome-transfer-flow" id="notebooklm-transfer-guide">
+              <div className={`welcome-transfer-flow-step${extensionInstalled ? " done" : " current"}`}>
+                <span className="welcome-transfer-flow-number">1</span>
+                <div>
+                  <strong>Install the extension</strong>
+                  <p className="muted small">Get NotebookLM Transfer to Notestack from the Chrome Web Store.</p>
+                </div>
+                {extensionInstalled ? (
+                  <span className="welcome-transfer-installed mono">Installed</span>
+                ) : (
+                  <button type="button" className="btn btn-small" onClick={installNotebookLmExtension}>Open Chrome Web Store</button>
+                )}
+              </div>
+              <div className={`welcome-transfer-flow-step${extensionInstalled ? " current" : " disabled"}`}>
+                <span className="welcome-transfer-flow-number">2</span>
+                <div>
+                  <strong>Transfer to Notestack</strong>
+                  <p className="muted small">
+                    {extensionInstalled
+                      ? "Choose what to transfer to Notestack in the extension."
+                      : "This unlocks automatically after the extension is installed."}
+                  </p>
+                  {notebookLmLaunchMessage && <p className="muted small" role="status">{notebookLmLaunchMessage}</p>}
+                </div>
+                <button type="button" className="btn btn-small btn-primary" disabled={!extensionInstalled} onClick={beginNotebookLmExport}>Open NotebookLM</button>
+              </div>
+              <div className="welcome-transfer-flow-step disabled">
+                <span className="welcome-transfer-flow-number">3</span>
+                <div>
+                  <strong>Return and index</strong>
+                  <p className="muted small">After the transfer, you return automatically and we add everything to your library.</p>
+                </div>
+              </div>
+            </div>
           </>
         )}
-      </p>
-      <SourceUrlHint url={value} />
+      </div>
       {error && (
         <p className="error-text" role="alert">
           {error}
         </p>
       )}
-      {modal}
+      {method === "link" && modal}
     </div>
   );
 }
 
+type NotebookLmImportState = "reading" | "importing" | "done" | "limit" | "error";
+
+export function NotebookLmImportSteps({
+  onImported,
+  onBack,
+  notebookId,
+  backLabel = "Back to Sources",
+}: {
+  onImported: () => Promise<void>;
+  onBack: () => void;
+  notebookId?: string;
+  backLabel?: string;
+}) {
+  const { user } = useAuth();
+  const onImportedRef = useRef(onImported);
+  onImportedRef.current = onImported;
+  const onBackRef = useRef(onBack);
+  onBackRef.current = onBack;
+  const [state, setState] = useState<NotebookLmImportState>("reading");
+  const [result, setResult] = useState<NotebookLmImportResult | null>(null);
+  const [message, setMessage] = useState("Reading the transfer from your extension…");
+  const [limitWarning, setLimitWarning] = useState<string | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    const run = async () => {
+      let transferId = "";
+      try {
+        const transfer = await pendingNotebookLmTransfer();
+        if (!transfer) {
+          // A completed transfer is removed from extension storage. If this page is later
+          // restored with the old query string, return to Sources instead of reporting a
+          // false failure for work that already finished.
+          onBackRef.current();
+          return;
+        }
+        transferId = transfer.transferId;
+        if (!live) return;
+        const usage = await settingsApi.usage().catch(() => null);
+        const limit = usage?.limits.indexed_posts ?? -1;
+        const used = usage?.used.indexed_posts ?? 0;
+        const room = limit < 0 ? transfer.posts.length : Math.max(0, limit - used);
+        const artifactCount = transfer.artifacts.length;
+        const selectedCount = transfer.posts.length + artifactCount;
+        const overPlan = transfer.posts.length > room;
+        const preflightMessage = overPlan
+          ? notebookLmPlanLimitPreviewMessage(transfer.posts.length, room)
+          : `Transferring ${selectedCount} ${selectedCount === 1 ? "item" : "items"} to Notestack…`;
+        setMessage(preflightMessage);
+        setLimitWarning(null);
+        if (limit >= 0 && room === 0 && artifactCount === 0) {
+          const summary = {
+            selectedCount,
+            acceptedCount: 0,
+            skippedPlan: transfer.posts.length,
+            plan: usage?.plan ?? "",
+            planLimit: limit,
+          };
+          setMessage(NOTEBOOKLM_PLAN_LIMIT_REACHED);
+          setLimitWarning(NOTEBOOKLM_PLAN_LIMIT_REACHED);
+          setState("limit");
+          await completeNotebookLmTransfer(transferId, NOTEBOOKLM_PLAN_LIMIT_REACHED, summary, user);
+          return;
+        }
+        setState("importing");
+        reportNotebookLmTransferStatus(transferId, "importing", preflightMessage, 0.68, {
+          selectedCount,
+          acceptedCount: Math.min(transfer.posts.length, room) + artifactCount,
+          skippedPlan: Math.max(0, transfer.posts.length - room),
+          plan: usage?.plan ?? "",
+          planLimit: Math.max(0, limit),
+        }, user);
+        const imported = await sourcesApi.importNotebookLm(transferId, transfer.posts, transfer.artifacts, notebookId);
+        const accepted = imported.eligible - imported.skipped_plan;
+        const importedArtifacts = imported.artifacts_imported + imported.artifacts_updated;
+        const totalReady = accepted + importedArtifacts;
+        const planLimitReached = accepted === 0 && imported.skipped_plan > 0 && importedArtifacts === 0;
+        const completionMessage = planLimitReached
+          ? NOTEBOOKLM_PLAN_LIMIT_REACHED
+          : imported.skipped_plan > 0
+          ? importedArtifacts
+            ? `Transfer complete. ${totalReady} ${totalReady === 1 ? "item is" : "items are"} ready; ${imported.skipped_plan} ${imported.skipped_plan === 1 ? "post exceeds" : "posts exceed"} your plan limit.`
+            : notebookLmPlanLimitMessage(imported.eligible, accepted, imported.skipped_plan)
+          : `Transfer complete. ${totalReady} ${totalReady === 1 ? "item is" : "items are"} ready in Notestack.`;
+        const completionSummary = {
+          selectedCount: imported.eligible + imported.artifacts_received,
+          acceptedCount: totalReady,
+          skippedPlan: imported.skipped_plan,
+          plan: imported.plan,
+          planLimit: imported.plan_limit,
+        };
+        if (planLimitReached) {
+          if (live) {
+            setResult(imported);
+            setMessage(completionMessage);
+            setLimitWarning(completionMessage);
+            setState("limit");
+          }
+          await completeNotebookLmTransfer(transferId, completionMessage, completionSummary, user);
+          return;
+        }
+        // The import API has already committed the content. Mark the extension complete before
+        // refreshing this page; navigation or a failed refresh must not strand the side panel at 90%.
+        await completeNotebookLmTransfer(transferId, completionMessage, completionSummary, user);
+        if (!live) return;
+        setResult(imported);
+        setMessage(completionMessage);
+        setLimitWarning(imported.skipped_plan > 0 ? completionMessage : null);
+        setState("done");
+        await onImportedRef.current().catch(() => undefined);
+      } catch (error) {
+        if (!live) return;
+        const failure = errorMessage(error, "The NotebookLM transfer could not be completed.");
+        setMessage(failure);
+        setState("error");
+        if (transferId) reportNotebookLmTransferStatus(transferId, "error", failure, 0);
+      }
+    };
+    // Defer one tick so React StrictMode can finish its setup/cleanup probe without cancelling
+    // the only transfer attempt and leaving this screen on "Reading the transfer…" forever.
+    const timer = window.setTimeout(() => void run(), 0);
+    return () => {
+      live = false;
+      window.clearTimeout(timer);
+    };
+  }, []);
+
+  return (
+    <section className="card add-source add-source-notebooklm-guide" aria-live="polite">
+      <p className="eyebrow">NotebookLM transfer</p>
+      <h2>{state === "limit" ? "Plan limit reached" : state === "done" ? "Your notebooks are indexed" : state === "error" ? "We could not finish the transfer" : "Bringing your notebooks into Notestack"}</h2>
+      {limitWarning && <div className="welcome-cap" role="alert"><div><strong>Plan limit</strong><p className="muted small">{limitWarning.replace(/^Plan limit warning:\s*/i, "")}</p></div></div>}
+      <ol className="welcome-notebooklm-index-steps" aria-label="NotebookLM transfer progress">
+        <li className="done"><span>1</span><div><strong>Extension connected</strong><small>Notestack can receive your transfer.</small></div></li>
+        <li className="done"><span>2</span><div><strong>Notebooks collected</strong><small>Your selected NotebookLM content is ready.</small></div></li>
+        <li className={state === "done" ? "done" : state === "limit" || state === "error" ? "error" : "current"}>
+          <span>3</span>
+          <div><strong>{state === "limit" ? "Plan limit reached" : state === "done" ? "Index complete" : "Index in Notestack"}</strong><small>{message}</small></div>
+          {(state === "reading" || state === "importing") && <div className="orbit-loader orbit-loader--inline" aria-hidden="true"><span /></div>}
+        </li>
+      </ol>
+      {state === "done" && result && <p className="muted small">{result.imported + result.unchanged} items are now available in your Sources library.</p>}
+      <button type="button" className={`btn welcome-transfer-view-back${state === "done" || state === "limit" ? " btn-primary" : ""}`} onClick={onBack}>
+        {state === "done" || state === "limit" ? backLabel : "Back"}
+      </button>
+    </section>
+  );
+}
+
 export default function Sources() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const returningFromNotebookLm = searchParams.get("notebooklm") === "import";
   const [sources, setSources] = useState<Source[] | null>(null);
   const { openUpgrade } = useUpgrade();
   const [docs, setDocs] = useState<Doc[]>([]);
@@ -282,6 +594,16 @@ export default function Sources() {
     }, 3000);
     return () => clearInterval(t);
   }, [syncing, loadSources]);
+
+  // A NotebookLM transfer runs outside the job system, so refresh the cards and posts while its screen is open.
+  useEffect(() => {
+    if (!returningFromNotebookLm) return;
+    const t = setInterval(() => {
+      loadSources().catch(() => {});
+      if (!paged.current) loadDocsRef.current(0).catch(() => {});
+    }, 2000);
+    return () => clearInterval(t);
+  }, [returningFromNotebookLm, loadSources]);
 
   useEffect(() => {
     loadSources().catch(() => setError("Could not load your sources. Refresh to try again."));
@@ -358,7 +680,14 @@ export default function Sources() {
     >
       <SourcesNav />
       <PageHeader eyebrow="Sources" title="Your knowledge, in orbit" />
-      <AddSource onAdded={added} onUploadStart={importsStarted} onUploadSettled={importsSettled} />
+      {returningFromNotebookLm ? (
+        <NotebookLmImportSteps
+          onImported={async () => { await Promise.all([loadSources(), loadDocs(0)]); }}
+          onBack={() => setSearchParams({}, { replace: true })}
+        />
+      ) : (
+        <AddSource onAdded={added} onUploadStart={importsStarted} onUploadSettled={importsSettled} />
+      )}
       {error && <p className="error-text">{error}</p>}
 
       {/* Outside the card grid, so the loader is centered across the page rather than in the first column */}
@@ -446,12 +775,12 @@ export default function Sources() {
           );
         })}
       </section>
-      {sources?.length === 0 && (
+      {sources?.length === 0 && total === 0 && !returningFromNotebookLm && (
         <EmptyState title="No sources yet" body="A lone satellite, waiting for signal. Connect a blog or site above, or upload your markdown files." />
       )}
 
       {/* One automatic feed across every source, with the most recently added posts first. */}
-      {sources && sources.length > 0 && (
+      {((sources && sources.length > 0) || total > 0) && (
         <section className="card posts-table">
           <div className="row between">
             <h2>
@@ -471,7 +800,8 @@ export default function Sources() {
                   </span>
                 )}
                 <span className="mono muted">
-                  {d.source_title ?? ""} · {formatDate(d.published_at)} · {d.words} words
+                  {d.source_title ?? ""}
+                  {d.transferred_from_notebooklm && " · Transferred from NotebookLM"} · {formatDate(d.published_at)} · {d.words} words
                 </span>
                 <DeleteButton
                   className="icon-btn doc-delete"

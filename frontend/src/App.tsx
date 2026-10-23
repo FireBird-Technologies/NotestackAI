@@ -10,6 +10,8 @@ import Launchpad, { ScheduleLaunch } from "./pages/Launchpad";
 import LaunchKitRedirect, { LaunchKitPage, LaunchKits } from "./pages/LaunchKit";
 import Notebooks from "./pages/Notebooks";
 import NotebookLMAlternative from "./pages/NotebookLMAlternative";
+import NotebookLmImport from "./pages/NotebookLmImport";
+import NotebookLmConnect from "./pages/NotebookLmConnect";
 import NotebookView from "./pages/NotebookView";
 import PublicReport from "./pages/PublicReport";
 import ArtifactPage from "./pages/ArtifactPage";
@@ -36,6 +38,8 @@ export default function App() {
       {/* The pricing page is gone: old links land on the homepage's pricing section */}
       <Route path="/pricing" element={<Navigate to={{ pathname: "/", hash: "#pricing" }} replace />} />
       <Route path="/notebooklm-alternative" element={<NotebookLMAlternative />} />
+      <Route path="/notebooklm-import" element={<NotebookLmImport />} />
+      <Route path="/notebooklm-connect" element={<NotebookLmConnect />} />
       <Route path="/tools" element={<ToolsHub />} />
       <Route path="/tools/:slug" element={<ToolPage />} />
       <Route path="/blogs" element={<Blog />} />
