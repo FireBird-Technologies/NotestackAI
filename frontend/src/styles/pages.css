@@ -3971,6 +3971,28 @@ select.input,
   }
 }
 
+/* Too narrow for three columns: the Create panel floats over the chat when opened, never stacks under it */
+@media (min-width: 900px) and (max-width: 1349px) {
+  .nbv .nbv-side {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    bottom: 16px;
+    z-index: 40;
+    width: min(24rem, calc(100vw - 32px));
+    margin: 0;
+    overflow-y: auto;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  }
+
+  /* With the panel out of the flow the chat keeps covering the screen, as it does beside the panel */
+  .shell.notebook-focus .nbv {
+    height: 100vh;
+    min-height: 100vh;
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+}
+
 .nbv-titlebar {
   display: flex;
   align-items: baseline;

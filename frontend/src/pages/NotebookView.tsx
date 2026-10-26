@@ -448,7 +448,10 @@ export default function NotebookView() {
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState("");
   const [historyOpen, setHistoryOpen] = useState(readChatRailOpen);
-  const [toolsOpen, setToolsOpen] = useState(readToolsRailOpen);
+  // The Create column only sits beside the chat on wide screens. Narrower, it starts closed and opens over the chat.
+  const roomy = useMedia("(min-width: 1350px)");
+  const [toolsOpen, setToolsOpen] = useState(() => readToolsRailOpen() && roomy);
+  useEffect(() => setToolsOpen(roomy && readToolsRailOpen()), [roomy]);
   const [params, setParams] = useSearchParams();
   const returningFromNotebookLm = params.get("notebooklm") === "import";
   // The open chat lives in the URL (?chat=<id>), not only in React state: a state reset, a reload or a hot reload can no
