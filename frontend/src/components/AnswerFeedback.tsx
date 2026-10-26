@@ -28,14 +28,23 @@ const CopyGlyph = ({ done }: { done?: boolean }) => (
   </svg>
 );
 
+const RetryGlyph = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M20 11a8 8 0 1 0-2.3 5.7" />
+    <path d="M20 4v7h-7" />
+  </svg>
+);
+
 /** The answer as plain text for pasting: the [1] citation markers are left out. */
 const forCopy = (text: string) => text.replace(/\s*\[\d+\](?:\[\d+\])*/g, "").trim();
 
-/** Copy, thumbs up and thumbs down under an answer. A thumbs down opens a few reasons and an optional note. Saved as soon as it is chosen. */
-export function AnswerFeedback({ messageId, initial, text, extra }: {
+/** Copy, retry, thumbs up and thumbs down under an answer. A thumbs down opens a few reasons and an optional note. Saved as soon as it is chosen. */
+export function AnswerFeedback({ messageId, initial, text, onRetry, extra }: {
   messageId: string;
   initial?: Feedback | null;
   text?: string;
+  /** Given only for the chat's last answer: asks the question again, replacing this answer. */
+  onRetry?: () => void;
   /** Shown at the end of the row, after the thumbs (the last answer's next step suggestion). */
   extra?: ReactNode;
 }) {
@@ -91,6 +100,11 @@ export function AnswerFeedback({ messageId, initial, text, extra }: {
         {text && (
           <button type="button" className="fb-btn" aria-label={copied ? "Copied" : "Copy answer"} title={copied ? "Copied" : "Copy answer"} onClick={copy}>
             <CopyGlyph done={copied} />
+          </button>
+        )}
+        {onRetry && (
+          <button type="button" className="fb-btn" aria-label="Retry answer" title="Retry: answer again from scratch" onClick={onRetry}>
+            <RetryGlyph />
           </button>
         )}
         <button type="button" className={`fb-btn${fb?.rating === "up" ? " is-on" : ""}`} aria-pressed={fb?.rating === "up"} aria-label="Good answer" title="Good answer" onClick={() => choose("up")}>
