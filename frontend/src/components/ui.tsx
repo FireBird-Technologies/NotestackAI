@@ -113,7 +113,8 @@ export function Drawer({ onClose, children, label, className = "" }: { onClose: 
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
-  return (
+  // Rendered into <body>, like Modal, so a drawer opened from a dialog stacks above it instead of inside the page's stacking context.
+  return createPortal(
     <div className={`drawer-backdrop${className ? ` ${className}` : ""}`} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <aside className="drawer" role="dialog" aria-modal="true" aria-label={label}>
         <button className="icon-btn drawer-close" onClick={onClose} aria-label="Close">
@@ -123,7 +124,8 @@ export function Drawer({ onClose, children, label, className = "" }: { onClose: 
         </button>
         {children}
       </aside>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

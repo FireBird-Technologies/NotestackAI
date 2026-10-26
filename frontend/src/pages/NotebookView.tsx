@@ -1116,7 +1116,6 @@ export default function NotebookView() {
                   messageId={t.id}
                   initial={t.feedback}
                   text={t.text}
-                  onRetry={i === turns.length - 1 && i > 0 && turns[i - 1].role === "user" && !busy && !t.action ? () => void ask(turns[i - 1].text, t.id) : undefined}
                   extra={i === lastAnswerAt && !busy && !t.action && nb.documents.length > 0 ? <NextStepHint actions={nextSteps(t.topic)} /> : undefined}
                 />
               )}
