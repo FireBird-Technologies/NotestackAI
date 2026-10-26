@@ -6,12 +6,9 @@ import { AttachmentChip, AttachPicker } from "./launchpad/Attachment";
 import { nextSlot, SlotPicker, toWall, userTimeZone, wallToDate } from "./launchpad/SlotPicker";
 import { errorMessage, Modal } from "./ui";
 
-export const PLATFORMS: { id: Platform; label: string; limit: number; auto: boolean }[] = [
-  { id: "x", label: "X", limit: 280, auto: true },
-  { id: "linkedin", label: "LinkedIn", limit: 3000, auto: true },
-  { id: "bluesky", label: "Bluesky", limit: 300, auto: true },
-  { id: "substack_notes", label: "Substack Notes", limit: 2000, auto: false },
-];
+import { PLATFORMS } from "@notestack/shared/schedule";
+
+export { PLATFORMS };
 
 /** Only X and LinkedIn take images and videos; the others get the text. */
 const MEDIA_PLATFORMS: Platform[] = ["x", "linkedin"];

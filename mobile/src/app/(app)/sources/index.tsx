@@ -1,15 +1,13 @@
-import { ApiError, type UploadSource } from "@notestack/shared/client";
 import { docsApi, jobsApi, sourcesApi } from "@notestack/shared/endpoints";
 import type { Doc, Job, Source } from "@notestack/shared/types";
-import { classifyUrl, looksLikeArticle } from "@notestack/shared/urlScrapability";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { File } from "expo-file-system";
 import { router } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import * as WebBrowser from "expo-web-browser";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
+import { AddSource } from "@/add-source";
 import { SourcesNav } from "@/sources-nav";
 import { Starfield } from "@/starfield";
 import { colors, fonts, gutter } from "@/theme";
@@ -17,7 +15,6 @@ import { Body, Centered, ErrorText, Loading, formatDate } from "@/ui";
 import { CARD_RADIUS, JobProgress, Pager, StatusPill } from "@/widgets";
 
 const PAGE = 10; // posts on one page of the list, as on the web
-const FILE_TYPES = /\.(md|markdown|txt|vtt|html?|pdf)$/i;
 
 /** Sources, as the web page: add a link or files, the connected sources, then every post with search and pages. */
 export default function Sources() {
@@ -151,143 +148,6 @@ export default function Sources() {
           </View>
         ) : null}
       </ScrollView>
-    </View>
-  );
-}
-
-/** One box for everything: paste a link (feed or article is worked out for you) or add files. */
-function AddSource({ onAdded }: { onAdded: (source: Source, job: Job) => void }) {
-  const [value, setValue] = useState("");
-  const [override, setOverride] = useState<"feed" | "url" | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
-  const link = value.trim();
-  const mode = override ?? (looksLikeArticle(value) ? "url" : "feed");
-  const verdict = classifyUrl(value);
-
-  /** The web's link check: a blocked link stops here, a warned one asks first. */
-  const confirmLink = () =>
-    new Promise<boolean>((resolve) => {
-      if (verdict.kind === "ok") return resolve(true);
-      if (verdict.kind === "blocked") {
-        Alert.alert("This link can't be added", verdict.message, [{ text: "Use a different link", onPress: () => resolve(false) }]);
-        return;
-      }
-      Alert.alert("Before you add this link", verdict.message, [
-        { text: "Use a different link", style: "cancel", onPress: () => resolve(false) },
-        { text: "Continue anyway", onPress: () => resolve(true) },
-      ]);
-    });
-
-  const connect = async () => {
-    if (!link || !(await confirmLink())) return;
-    setError("");
-    setNotice("");
-    setBusy(true);
-    try {
-      const res = mode === "feed" ? await sourcesApi.connect(link) : await sourcesApi.importUrl(link);
-      onAdded(res.source, res.job);
-      setValue("");
-      setOverride(null);
-    } catch (e) {
-      const fallback = mode === "feed" ? "We could not find a feed there." : "We could not import that page.";
-      setError(e instanceof ApiError ? e.message : fallback);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const upload = async () => {
-    setError("");
-    setNotice("");
-    const picked = await File.pickFileAsync({
-      multipleFiles: true,
-      mimeTypes: ["text/*", "application/pdf"],
-    }).catch(() => null);
-    if (!picked || picked.canceled) return;
-    const files = picked.result;
-    setBusy(true);
-    let failed = 0;
-    for (const f of files) {
-      if (!FILE_TYPES.test(f.name)) {
-        failed += 1;
-        continue;
-      }
-      try {
-        // expo-file-system's File is a Blob with a name, which is all the shared upload needs.
-        const res = await sourcesApi.importFile(f as unknown as UploadSource);
-        onAdded(res.source, res.job);
-      } catch {
-        failed += 1;
-      }
-    }
-    setBusy(false);
-    if (failed) {
-      setError(`${failed} of ${files.length} files could not be uploaded. Markdown, text, VTT, HTML or PDF files work.`);
-    } else {
-      setNotice(`${files.length} ${files.length === 1 ? "file" : "files"} uploading. They appear under Imported posts and files.`);
-    }
-  };
-
-  return (
-    <View style={styles.card}>
-      <TextInput
-        style={styles.linkInput}
-        value={value}
-        onChangeText={(t) => {
-          setValue(t);
-          setOverride(null);
-        }}
-        placeholder="Paste a blog, newsletter or article link"
-        placeholderTextColor={colors.text3}
-        autoCapitalize="none"
-        autoCorrect={false}
-        keyboardType="url"
-        returnKeyType="go"
-        onSubmitEditing={connect}
-        accessibilityLabel="Blog, newsletter or article link"
-      />
-      <View style={styles.addRow}>
-        <Pressable
-          onPress={connect}
-          disabled={busy || !link}
-          accessibilityRole="button"
-          style={[styles.connect, (busy || !link) && styles.connectOff]}>
-          <Text style={[styles.connectText, (busy || !link) && styles.connectTextOff]}>
-            {busy ? (mode === "feed" ? "Finding posts..." : "Working...") : mode === "feed" ? "Connect" : "Import article"}
-          </Text>
-        </Pressable>
-        <Text style={styles.or}>or</Text>
-        <Pressable onPress={upload} disabled={busy} accessibilityRole="button" style={[styles.outline, busy && styles.off]}>
-          <Text style={styles.outlineText}>Upload files</Text>
-        </Pressable>
-      </View>
-      {!link ? (
-        <Text style={styles.body}>
-          Substack, Ghost, WordPress, Medium or any site with a feed. Markdown, text, VTT transcripts, HTML and PDF files
-          work too.
-        </Text>
-      ) : mode === "feed" ? (
-        <Text style={styles.body}>
-          We will pull in the whole archive and keep it in sync.{" "}
-          <Text style={styles.link} onPress={() => setOverride("url")}>
-            Just this one page instead
-          </Text>
-        </Text>
-      ) : (
-        <Text style={styles.body}>
-          Looks like a single article, so we will import just this page.{" "}
-          <Text style={styles.link} onPress={() => setOverride("feed")}>
-            Connect the whole site instead
-          </Text>
-        </Text>
-      )}
-      {verdict.kind !== "ok" ? (
-        <Text style={verdict.kind === "blocked" ? styles.blocked : styles.warn}>{verdict.message}</Text>
-      ) : null}
-      <ErrorText>{error}</ErrorText>
-      {notice ? <Text style={styles.body}>{notice}</Text> : null}
     </View>
   );
 }

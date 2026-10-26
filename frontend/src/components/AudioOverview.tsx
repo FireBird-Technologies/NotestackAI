@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { artifactsApi, videoVoicesApi, type GenerateBody } from "@notestack/shared/endpoints";
 import type { Artifact, ChatPreset, ChatSummary, Segment, VideoSavedVoice } from "@notestack/shared/types";
+import { AUDIO_LENGTHS as LENGTHS, AUDIO_STYLES as STYLES } from "@notestack/shared/create-options";
 import { useJob } from "../hooks/useJob";
+
+type Style = (typeof STYLES)[number]["id"];
 import { Transcript } from "./ArtifactCard";
 import { Dropdown } from "./Dropdown";
 import { CheckIcon, ChevronIcon, DownloadIcon } from "./icons/Icons";
@@ -14,19 +17,6 @@ import { RetryIcon, TrashIcon } from "./icons/Icons";
 import { cardClick, ViewButton } from "./cardActions";
 
 /** The audio styles. The server describes each to the script writer (backend/app/pipeline/media.py STYLES). */
-const STYLES = [
-  { id: "deep_dive", name: "Deep Dive", blurb: "A lively conversation that unpacks the ideas in your sources and connects them." },
-  { id: "brief", name: "Brief", blurb: "A bite sized overview to help you grasp the core ideas from your sources quickly." },
-  { id: "critique", name: "Critique", blurb: "An expert review of your sources, with constructive feedback to help you improve your material." },
-  { id: "debate", name: "Debate", blurb: "A thoughtful debate between two hosts, bringing out different perspectives on your sources." },
-] as const;
-type Style = (typeof STYLES)[number]["id"];
-
-const LENGTHS = [
-  { value: "3", label: "Short", range: "about 3 min" },
-  { value: "6", label: "Default", range: "about 6 min" },
-  { value: "12", label: "Long", range: "about 12 min" },
-];
 
 export type AudioOverviewRequest = Omit<GenerateBody, "type">;
 

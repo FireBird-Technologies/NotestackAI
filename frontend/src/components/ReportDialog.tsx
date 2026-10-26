@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { fillReportPrompt as fill } from "@notestack/shared/create-options";
 import { reportsApi, type GenerateBody } from "@notestack/shared/endpoints";
 import type { ChatPreset, ChatSummary, ReportTemplate } from "@notestack/shared/types";
 import { CheckIcon, SparkleIcon } from "./icons/Icons";
@@ -9,7 +10,6 @@ import { Modal } from "./ui";
 export type ReportRequest = Omit<GenerateBody, "type">;
 type Format = "document" | "interactive";
 
-const fill = (prompt: string, about: string) => prompt.replaceAll("{about}", about || "the selected sources");
 
 /** Create report: step 1 picks the format (and, for a document, a template); step 2 shows the instructions the writer
  * will get, already filled in from the topic and the sources, for the user to edit. */

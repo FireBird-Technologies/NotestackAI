@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { videosApi, videoVoicesApi } from "@notestack/shared/endpoints";
+import { FALLBACK_COLORS, VIDEO_DEFAULTS } from "@notestack/shared/notebook";
 import { prefetchVoicePreviews, voicePreviewUrl } from "../components/voice/YourVoices";
 import { ApiError } from "@notestack/shared/client";
 import type {
@@ -26,7 +27,6 @@ import { loadArchiveId, sourceCache } from "../components/video/sourceCache";
 import { PlayButton, TemplateThumb, useAudio } from "../components/video/parts";
 import { useUpgrade } from "../hooks/useUpgrade";
 
-const FALLBACK_COLORS = { accent_color: "#7c3aed", bg_color: "#ffffff", text_color: "#000000" };
 
 /** A template and the colours it was designed with. */
 const templateFields = (t: VideoTemplate) => ({
@@ -112,18 +112,11 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
   }
 
   const [form, setForm] = useState<VideoOptions>({
-    stock_footage_enabled: true,
+    ...VIDEO_DEFAULTS,
     aspect_ratio: initial?.aspect_ratio === "portrait" ? "portrait" : "landscape",
-    video_length: "medium", // no length picker: the server sets it from a house style
-    logo_position: "bottom_right",
-    logo_opacity: 0.9,
-    template: "default",
-    video_style: "auto",
-    ...FALLBACK_COLORS,
     content_language: initial?.content_language ?? null,
     voice_gender: initial?.voice_gender === "male" ? "male" : initial?.voice_gender === "none" ? "none" : "female",
     voice_accent: initial?.voice_accent === "british" ? "british" : "american",
-    bgm_volume: 0.1,
   });
   const set = (patch: Partial<VideoOptions>) => setForm((f) => ({ ...f, ...patch }));
   const gridBox = useRef<HTMLDivElement>(null);

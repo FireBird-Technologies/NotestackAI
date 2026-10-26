@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { artifactsApi, notebooksApi } from "@notestack/shared/endpoints";
 import { ApiError } from "@notestack/shared/client";
+import { groupChats, STARTERS } from "@notestack/shared/notebook";
 import { streamSSE } from "@notestack/shared/stream";
 import { createTypewriter } from "../lib/typewriter";
 import type { AnswerFeedback as Feedback, Artifact, ChatAction, ChatArtifact, ChatPreset, ChatSummary, Citation, Job, MemoryChange, Notebook } from "@notestack/shared/types";
@@ -61,30 +62,11 @@ const ARTIFACT_ICONS: Record<ChatArtifact, typeof VideoIcon> = {
 };
 
 
-/** Chats under date headings: Today, Yesterday, the last week, the last month, then by month. Newest first. */
-function groupChats(chats: ChatSummary[]): { label: string; items: ChatSummary[] }[] {
-  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-  const today = startOfDay(new Date());
-  const groups: { label: string; items: ChatSummary[] }[] = [];
-  const stamp = (c: ChatSummary) => (c.updated_at ? new Date(c.updated_at) : new Date()); // a chat with no time yet is brand new
-  [...chats].sort((a, b) => +stamp(b) - +stamp(a)).forEach((c) => {
-    const when = stamp(c);
-    const days = Math.round((today - startOfDay(when)) / 86400000);
-    const label = days <= 0 ? "Today" : days === 1 ? "Yesterday" : days <= 7 ? "Previous 7 days" : days <= 30 ? "Previous 30 days"
-      : when.toLocaleDateString(undefined, { month: "long", year: "numeric" });
-    const last = groups[groups.length - 1];
-    if (last && last.label === label) last.items.push(c);
-    else groups.push({ label, items: [c] });
-  });
-  return groups;
-}
-
 /** A streaming draft as shown: [n] markers (and a half-written "[12" at the end) are hidden until they are verified. */
 function streamingText(draft: string): string {
   return draft.replace(/ ?\[\d+\]/g, "").replace(/ ?\[\d*$/, "");
 }
 
-const STARTERS = ["What are the strongest ideas across these posts?", "Where do I contradict myself?", "Which post is most worth updating, and why?"];
 const CHAT_RAIL_KEY = "ns_notebook_chat_rail";
 
 function readChatRailOpen(): boolean {
@@ -329,7 +311,7 @@ function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, presets
       {error && <p className="error-text">{error}</p>}
       {showMade && (!others || others.length > 0 || starting.length > 0) && <span className="vw-label nbv-made-label">Made from this notebook</span>}
       {section === "library" && others?.length === 0 && starting.length === 0 && (
-        <p className="muted small">Nothing made yet. Use the Create tab to make audio, slides, videos and more.</p>
+        <p className="muted small nbv-library-empty">Nothing made yet. Use the Create tab to make audio, slides, videos and more.</p>
       )}
       {showMade && (!others || others.length > 0 || starting.length > 0) && <div className="studio-list nbv-made">
         {!artifacts && <Loading />}

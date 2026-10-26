@@ -1,4 +1,4 @@
-import { artifactsApi, videosApi } from "@notestack/shared/endpoints";
+import { artifactsApi } from "@notestack/shared/endpoints";
 import type { Artifact, Page } from "@notestack/shared/types";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
@@ -8,6 +8,7 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, Vie
 
 import { ArtifactCard, isMaking } from "@/artifact-card";
 import { Starfield } from "@/starfield";
+import { VideosList } from "@/video/list";
 import { colors, fonts, gutter, radius } from "@/theme";
 import { Body, Button, Loading } from "@/ui";
 import { CARD_RADIUS, Pager } from "@/widgets";
@@ -50,10 +51,9 @@ export default function Library() {
 
   const list = useQuery<Page<Artifact>>({
     queryKey: ["library", kind, search, page],
-    queryFn: () =>
-      kind === "videos"
-        ? videosApi.list({ limit: PAGE, offset: page * PAGE })
-        : artifactsApi.list({ type: kind === "all" ? undefined : kind, q: search, limit: PAGE, offset: page * PAGE }),
+    queryFn: () => artifactsApi.list({ type: kind === "all" ? undefined : kind, q: search, limit: PAGE, offset: page * PAGE }),
+    // Videos have their own list, as on the web.
+    enabled: kind !== "videos",
     placeholderData: keepPreviousData,
     // While something is still being made, ask again now and then so its status and progress move.
     refetchInterval: (query) => (query.state.data?.items.some(isMaking) ? 4000 : false),
@@ -136,7 +136,8 @@ export default function Library() {
           />
         ) : null}
 
-        {list.isPending ? <Loading /> : null}
+        {kind === "videos" ? <VideosList /> : null}
+        {kind !== "videos" && list.isPending ? <Loading /> : null}
         {list.error && !list.data ? (
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>Could not load your library</Text>
@@ -144,7 +145,7 @@ export default function Library() {
             <Button title="Try again" onPress={reload} />
           </View>
         ) : null}
-        {list.data && items.length === 0 ? (
+        {kind !== "videos" && list.data && items.length === 0 ? (
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>Nothing here yet</Text>
             <Body muted>
@@ -155,10 +156,14 @@ export default function Library() {
           </View>
         ) : null}
 
-        {items.map((a) => (
-          <ArtifactCard key={a.id} artifact={a} onRemoved={reload} onChanged={reload} />
-        ))}
-        <Pager page={page} pages={Math.ceil(total / PAGE)} onChange={goTo} />
+        {kind !== "videos" ? (
+          <>
+            {items.map((a) => (
+              <ArtifactCard key={a.id} artifact={a} onRemoved={reload} onChanged={reload} />
+            ))}
+            <Pager page={page} pages={Math.ceil(total / PAGE)} onChange={goTo} />
+          </>
+        ) : null}
       </ScrollView>
     </View>
   );

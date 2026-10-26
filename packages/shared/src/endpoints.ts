@@ -272,7 +272,9 @@ export const launchpadApi = {
   accounts: () => api<SocialAccounts>("/api/social/accounts"),
   connectBluesky: (handle: string, app_password: string) =>
     post<SocialAccounts>("/api/social/bluesky", { handle, app_password }),
-  startOAuth: (platform: "x" | "linkedin") => post<{ url: string }>(`/api/social/${platform}/start`),
+  /** The provider's sign-in page. The mobile app passes client "app" so the sign-in returns to the app. */
+  startOAuth: (platform: "x" | "linkedin", client: "web" | "app" = "web") =>
+    post<{ url: string }>(`/api/social/${platform}/start${qs({ client: client === "app" ? "app" : undefined })}`),
   completeOAuth: (ticket: string) => post<SocialAccounts>("/api/social/complete", { ticket }),
   disconnect: (id: string) => del(`/api/social/accounts/${id}`),
   /** What can be attached to a post (finished videos, quote cards, carousels, summaries, launch kits; not audio). */
@@ -336,11 +338,15 @@ export const billingApi = {
   confirm: (sessionId: string) => post<BillingStatus>("/api/billing/confirm", { session_id: sessionId }),
 };
 
-function form(fields: Record<string, string | number | boolean | Blob | null | undefined>): FormData {
+/** A file in the mobile app: a local file by its address. React Native's FormData uploads it as the file itself. */
+export type NativeFile = { uri: string; name: string; type: string };
+const isNativeFile = (v: unknown): v is NativeFile => !!v && typeof v === "object" && typeof (v as NativeFile).uri === "string";
+
+function form(fields: Record<string, string | number | boolean | Blob | NativeFile | null | undefined>): FormData {
   const f = new FormData();
   for (const [k, v] of Object.entries(fields)) {
     if (v === undefined || v === null) continue;
-    f.append(k, v instanceof Blob ? v : String(v));
+    f.append(k, v instanceof Blob ? v : isNativeFile(v) ? (v as unknown as Blob) : String(v));
   }
   return f;
 }
@@ -433,7 +439,7 @@ export const videoEditApi = {
   addScene: (id: string, prompt: string, position?: number) => post<VideoJobState>(P(id, "scenes/add"), { prompt, position }),
   addSceneStatus: (id: string) => api<VideoJobState | null>(P(id, "scenes/add-status")),
   // Images
-  uploadImage: (id: string, sceneId: number, image: File) => postForm<VideoScene>(P(id, `scenes/${sceneId}/image`), form({ image })),
+  uploadImage: (id: string, sceneId: number, image: File | NativeFile) => postForm<VideoScene>(P(id, `scenes/${sceneId}/image`), form({ image })),
   generateImage: (id: string, sceneId: number, image_description: string) =>
     // Not saved on the scene: the image comes back for the user to keep (uploadImage) or discard.
     post<{ image_base64: string; refined_prompt: string }>(P(id, `scenes/${sceneId}/generate-image`), { image_description }),

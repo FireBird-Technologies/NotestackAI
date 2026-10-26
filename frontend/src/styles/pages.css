@@ -8486,6 +8486,17 @@ a.rp-src-main:hover .rp-src-out {
   margin: 0;
 }
 
+/* Its close button, in the top right corner; the text keeps clear of it */
+.ig-info {
+  padding-right: 48px;
+}
+
+.ig-info-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
 .ig-viewer .ig-frame {
   border-radius: 6px;
 }
@@ -11855,6 +11866,22 @@ body.nbv-resizing iframe {
   /* The Create tab: one tile per row */
   .nbv-studio-create .nbv-make {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* The Library tab with nothing in it: its note in the middle of the card */
+  .nbv-side.nbv-tab-panel.is-active:has(.nbv-library-empty) {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .nbv-side.nbv-tab-panel.is-active:has(.nbv-library-empty) > .stack {
+    flex: 1;
+  }
+
+  .nbv-library-empty {
+    margin: auto;
+    max-width: 30ch;
+    text-align: center;
   }
 }
 

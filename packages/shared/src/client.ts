@@ -118,6 +118,11 @@ export async function apiBlob(path: string, init: RequestInit = {}): Promise<Blo
   return (await request(path, init, true)).blob();
 }
 
+/** A binary answer as raw bytes: what a native app writes to a file (it has no object URLs to download a Blob by). */
+export async function apiBytes(path: string, init: RequestInit = {}): Promise<ArrayBuffer> {
+  return (await request(path, init, true)).arrayBuffer();
+}
+
 /** Multipart upload to our API (files plus form fields). */
 export const postForm = <T>(path: string, form: FormData) => api<T>(path, { method: "POST", body: form });
 

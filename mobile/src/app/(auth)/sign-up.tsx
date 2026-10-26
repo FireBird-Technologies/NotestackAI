@@ -125,6 +125,7 @@ export default function SignUp() {
         busy={busy}
         disabled={!email.trim() || password.length < MIN_PASSWORD}
       />
+      <Button title="Already have an account? Sign in" variant="link" onPress={() => router.navigate("/sign-in")} />
     </FormScreen>
   );
 }

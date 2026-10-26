@@ -4,21 +4,12 @@ import type { Artifact, ChatPreset, ChatSummary, QuizQuestion, QuizQuestionType 
 import { ArtifactFeedback, FeedbackActions } from "./ArtifactFeedback";
 import { CheckIcon, ChevronIcon } from "./icons/Icons";
 import { ViewButton } from "./cardActions";
+import { QUIZ_LEVELS as LEVELS, QUIZ_TYPES as TYPES } from "@notestack/shared/create-options";
 import { Dropdown } from "./Dropdown";
 import { SourceFocusFields, sourceSummary, type SourceSelection } from "./SourceFocusFields";
 import { StudyOverlay } from "./StudyOverlay";
 import { Modal } from "./ui";
 
-const LEVELS = [
-  { id: "easy", label: "Easy" },
-  { id: "medium", label: "Medium" },
-  { id: "hard", label: "Hard" },
-] as const;
-const TYPES: { id: QuizQuestionType; label: string }[] = [
-  { id: "multiple_choice", label: "MCQs" },
-  { id: "fill_blank", label: "Fill in the Blank" },
-  { id: "short_answer", label: "Short Answer" },
-];
 
 export type QuizRequest = Omit<GenerateBody, "type">;
 

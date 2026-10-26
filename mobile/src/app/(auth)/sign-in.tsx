@@ -51,7 +51,7 @@ export default function SignIn() {
       <ErrorText>{error}</ErrorText>
       <Button title="Sign in" onPress={submit} busy={busy} disabled={!email.trim() || !password} />
       <Button title="Forgot password?" variant="link" onPress={() => router.push("/forgot")} />
-      <Button title="New here? Create an account" variant="link" onPress={() => router.push("/sign-up")} />
+      <Button title="New here? Create an account" variant="link" onPress={() => router.navigate("/sign-up")} />
     </FormScreen>
   );
 }

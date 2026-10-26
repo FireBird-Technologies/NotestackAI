@@ -4,6 +4,9 @@ import { FlashcardDeck } from "./Flashcards";
 import { InfographicFrame } from "./Infographic";
 import { Markdown } from "./Markdown";
 import { MindMapExplorer } from "./MindMap";
+
+export { reportMarkdown } from "@notestack/shared/report";
+import { contents, KIND_LABEL, timelineKey } from "@notestack/shared/report";
 import { QuizRunner } from "./Quiz";
 import { ReportPlot } from "./ReportPlot";
 
@@ -18,10 +21,6 @@ export type ReportEditor = {
   removing?: string | null;
 };
 
-const KIND_LABEL = {
-  mind_map: "Mind Constellation", flashcards: "Flashcards", quiz: "Quiz", plot: "Plot", table: "Data table", timeline: "Timeline",
-  key_terms: "Key terms", infographic: "Infographic",
-} as const;
 
 type Props = {
   content: Record<string, any>;
@@ -45,7 +44,6 @@ function MindMapBlock({ block, artifactId }: { block: Extract<ReportBlock, { typ
   );
 }
 
-const timelineKey = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "");
 
 function TimelineBlock({ block }: { block: Extract<ReportBlock, { type: "timeline" }> }) {
   const suppliedTitle = block.title?.trim();
@@ -167,14 +165,6 @@ function Block({ block, content, artifactId, onCite }: { block: ReportBlock } & 
   }
 }
 
-/** The sections of a report, for its contents list: each prose block that opens with a heading. */
-function contents(blocks: ReportBlock[], withSources: boolean): { id: string; title: string }[] {
-  const list = blocks.flatMap((b) => {
-    const title = b.type === "prose" ? b.text.match(/^#{1,3}\s+(.+)/)?.[1]?.trim() : undefined;
-    return title ? [{ id: b.id, title }] : [];
-  });
-  return withSources && list.length ? [...list, { id: "sources", title: "Sources" }] : list;
-}
 
 type SourceRow = { title: string; url?: string | null; document_id?: string };
 
@@ -395,28 +385,4 @@ export function ReportView({ content, artifactId, onCite, editor }: Props & { ed
       </article>
     </div>
   );
-}
-
-/** A report as Markdown text, for downloading. Visual blocks are written out as plain lists. */
-export function reportMarkdown(content: Record<string, any>): string {
-  const lines = [`# ${content.title ?? "Report"}`, ""];
-  for (const b of (content.blocks ?? []) as ReportBlock[]) {
-    if (b.type === "prose") lines.push(b.text, "");
-    else if (b.type === "callout") lines.push(`> ${b.title ? `**${b.title}** ` : ""}${b.text}`, "");
-    else if (b.type === "key_terms") lines.push(`## ${b.title || "Key terms"}`, ...b.terms.map((t) => `- **${t.term}**: ${t.definition}`), "");
-    else if (b.type === "table") {
-      lines.push(...(b.title ? [`## ${b.title}`, ""] : []), `| ${b.headers.join(" | ")} |`, `| ${b.headers.map(() => "---").join(" | ")} |`,
-        ...b.rows.map((r) => `| ${r.join(" | ")} |`), "");
-    } else if (b.type === "timeline") lines.push(`## ${b.title || "Timeline"}`, ...b.events.map((e) => `- **${e.when}** ${e.title}${e.detail ? `: ${e.detail}` : ""}`), "");
-    else if (b.type === "plot") {
-      lines.push(`## ${b.title || "Plot"}`, `| ${b.x_label || "Label"} | ${b.y_label || "Value"}${b.unit ? ` (${b.unit})` : ""} |`, "| --- | --- |",
-        ...b.points.map((p) => `| ${p.label} | ${p.display_value || p.value} |`), "");
-    }
-    else if (b.type === "flashcards") lines.push(`## ${b.title || "Flashcards"}`, ...b.cards.map((c) => `- **${c.front}**: ${c.back}`), "");
-    else if (b.type === "infographic") lines.push(`## ${b.title || "Infographic"}`, "");
-    else if (b.type === "quiz") lines.push(`## ${b.title || "Quiz"}`, ...b.questions.map((q, i) => `${i + 1}. ${q.question}`), "");
-  }
-  const cites = (content.citations ?? []) as Citation[];
-  if (cites.length) lines.push("## Sources", ...cites.map((c) => `[${c.marker}] ${c.title}, lines ${c.line_start} to ${c.line_end}`), "");
-  return lines.join("\n");
 }

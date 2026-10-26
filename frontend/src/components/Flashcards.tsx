@@ -1,17 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import type { GenerateBody } from "@notestack/shared/endpoints";
 import type { Artifact, ChatPreset, ChatSummary, FlashcardData } from "@notestack/shared/types";
+import { CARD_LEVELS as LEVELS } from "@notestack/shared/create-options";
 import { Pills, SourceFocusFields, sourceSummary, type SourceSelection } from "./SourceFocusFields";
 import { ArtifactFeedback } from "./ArtifactFeedback";
 import { StudyOverlay } from "./StudyOverlay";
 import { ViewButton } from "./cardActions";
 import { Modal } from "./ui";
 
-const LEVELS = [
-  { id: "easy", label: "Easy" },
-  { id: "medium", label: "Medium (Default)" },
-  { id: "hard", label: "Hard" },
-] as const;
 
 export type FlashcardsRequest = Omit<GenerateBody, "type">;
 

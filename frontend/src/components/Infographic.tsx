@@ -1,29 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { artifactsApi, type GenerateBody } from "@notestack/shared/endpoints";
 import type { Artifact, ChatPreset, ChatSummary } from "@notestack/shared/types";
+import { INFOGRAPHIC_STYLES, INFOGRAPHIC_THEMES } from "@notestack/shared/create-options";
 import { SourceFocusFields, sourceSummary, type SourceSelection } from "./SourceFocusFields";
 import { CardFeedback } from "./CardFeedback";
 import { ShareDialog } from "./ShareDialog";
 import { errorMessage, Modal, useFullView } from "./ui";
-import { CollapseIcon, DownloadIcon, ExpandIcon, LandscapeIcon, PortraitIcon, ShareIcon } from "./icons/Icons";
+import { CloseIcon, CollapseIcon, DownloadIcon, ExpandIcon, LandscapeIcon, PortraitIcon, ShareIcon } from "./icons/Icons";
 import { ViewButton } from "./cardActions";
+
+export { INFOGRAPHIC_STYLES, INFOGRAPHIC_THEMES };
 
 /** The looks: black and blue, and white with orbits. The AI composes the page itself in the look chosen
  * (backend/app/infographics/design.py); the thumbnails are rendered from a sample (backend/scripts/render_theme_thumbnails.py). */
-export const INFOGRAPHIC_THEMES = [
-  { id: "midnight", name: "Midnight", blurb: "Black and blue, white type" },
-  { id: "paper", name: "Orbit", blurb: "White, black type, blue orbits and stars" },
-] as const;
-
-/** The kind of layout to lean towards; "auto" lets the AI choose from the content. */
-export const INFOGRAPHIC_STYLES = [
-  { id: "auto", name: "Auto", blurb: "Let the AI choose" },
-  { id: "flowchart", name: "Flow chart", blurb: "Steps joined by arrows" },
-  { id: "timeline", name: "Timeline", blurb: "What happens, in order" },
-  { id: "compare", name: "Comparison", blurb: "Two sides side by side" },
-  { id: "hierarchy", name: "Hierarchy", blurb: "A whole and its parts" },
-  { id: "overview", name: "Overview", blurb: "Key ideas and numbers" },
-] as const;
 
 export type InfographicRequest = Omit<GenerateBody, "type">;
 
@@ -259,6 +248,9 @@ export function InfographicViewer({ artifact, onClose, onDownload }: { artifact:
           </div>
           {info && (
             <div className="ig-info" role="dialog" aria-label="Prompt and sources">
+              <button type="button" className="icon-btn ig-info-close" onClick={() => setInfo(false)} aria-label="Close" title="Close">
+                <CloseIcon size={16} />
+              </button>
               <p className="eyebrow">Prompt</p>
               <p>{prompt || "None. It was made from the sources as a whole."}</p>
               <p className="eyebrow">Made from</p>

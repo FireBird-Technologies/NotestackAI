@@ -1,15 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { MAX_CHATS } from "@notestack/shared/create-options";
 import { videosApi, type GenerateBody } from "@notestack/shared/endpoints";
 import type { ChatSummary, VideoFocusSource, VideoFocusTopic } from "@notestack/shared/types";
 import { CheckIcon, SparkleIcon } from "./icons/Icons";
 import { useArtifactLimits } from "../hooks/useArtifactLimits";
 import { SourcePicker, type VideoSource } from "./video/SourcePicker";
 
-/** Most chats one generated thing reads (the video wizard's cap too). Posts are capped at MAX_VIDEO_POSTS, as for a video. */
-export const MAX_CHATS = 5;
+export { LANGUAGES, MAX_CHATS, sourceSummary } from "@notestack/shared/create-options";
 
-export const LANGUAGES = ["English", "Spanish", "French", "German", "Italian", "Portuguese", "Dutch", "Polish", "Hindi",
-  "Arabic", "Japanese", "Korean", "Chinese", "Turkish", "Russian", "Indonesian"];
+
 
 /** Suggestions already fetched, by source choice: reopening a dialog or ticking back to an earlier choice is instant. */
 const topicCache = new Map<string, VideoFocusTopic[]>();
@@ -58,13 +57,6 @@ export type SourceSelection = {
   label: string;
 };
 
-/** "4 posts", "1 chat" or "4 posts + 1 chat": what a quiz, a card set or a report was made from. */
-export function sourceSummary(source: { document_ids?: string[]; chat_ids?: string[]; count?: number } | undefined): string {
-  const posts = source?.document_ids?.length ?? 0;
-  const chats = source?.chat_ids?.length ?? 0;
-  const parts = [posts ? `${posts} post${posts === 1 ? "" : "s"}` : "", chats ? `${chats} chat${chats === 1 ? "" : "s"}` : ""];
-  return parts.filter(Boolean).join(" + ") || `${source?.count ?? 0} posts`;
-}
 
 /** One-of-several pills, the video wizard's "Video style" look. */
 export function Pills<T extends string>({ label, value, options, onChange }: {
