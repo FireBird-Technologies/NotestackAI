@@ -171,9 +171,11 @@ class Triage:
 
 JEV_INTENT = {
     "archive": {
-        "what": "Needs facts, ideas, quotes, opinions or history from the writer's own posts, including follow "
-                "ups to the conversation like 'say more', 'why?', 'what about last year?'",
-        "examples": ["What have I written about pricing?", "Summarize my take on AI", "Tell me more about that"],
+        "what": "Needs facts, ideas, quotes, opinions or history from the writer's own posts, including follow ups "
+                "to the conversation. Also any question, however general or how-to it sounds, whose subject is the "
+                "same as, or next to, the subject of ANY post title in the notebook line",
+        "examples": ["What have I written about pricing?", "Summarize my take on AI", "Tell me more about that",
+                     "A best-practice question on a subject one of the listed post titles covers"],
     },
     "chitchat": {
         "what": "Greetings, thanks, reactions or small talk with no question about the posts",
@@ -190,8 +192,11 @@ JEV_INTENT = {
                      "Quiz me on this, hard questions", "Turn that into an infographic"],
     },
     "off_topic": {
-        "what": "General knowledge, coding, math, news, homework or tasks unrelated to the writer's posts",
-        "not_for": "Questions about what the writer wrote, even if the subject is general",
+        "what": "General knowledge, coding, math, news, homework or tasks whose subject matches NONE of the post "
+                "titles in the notebook line",
+        "not_for": "Anything that shares a subject with a post title, even loosely or in different words (spelling "
+                   "variants, synonyms, a broader or narrower angle). When unsure, it is archive: a wasted search "
+                   "costs less than a wrong brush off",
         "examples": ["What is the capital of France?", "Write me a Python script", "Who won the game last night?"],
     },
 }
@@ -305,7 +310,8 @@ def triage_with_jev(message: str, history: list[Turn], notebook: str, mem: ChatM
     state = {"notebook": notebook, "conversation": conversation_text(history, limit=4), "message": message}
     questions = {
         "intent": {"instructions": "What does the latest message need from a research assistant that only "
-                                   "knows this writer's posts?", "criteria": JEV_INTENT},
+                                   "knows this writer's posts? First compare its subject with the post titles in "
+                                   "the notebook line", "criteria": JEV_INTENT},
         "depth": {"instructions": "If it is about the posts, how much research does it need?",
                   "criteria": JEV_DEPTH},
     }

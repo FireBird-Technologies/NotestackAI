@@ -5,11 +5,13 @@ import { errorMessage, formatDate, Loading, Modal } from "./ui";
 
 /** A notebook's posts in two tabbed lists: those in it (× removes one, after a warning) and the rest of the library (Add puts
  * one in). Each change saves right away, then `onChanged` reloads the notebook. `readOnly` (the archive) only lists its posts. */
-export function NotebookPostsManager({ notebookId, docs, readOnly = false, onChanged }: {
+export function NotebookPostsManager({ notebookId, docs, readOnly = false, onChanged, onRead }: {
   notebookId: string;
   docs: Doc[];
   readOnly?: boolean;
   onChanged: () => Promise<unknown> | void;
+  /** Opens a post in the reader. The parent renders it, so it stacks above the dialog this list sits in. */
+  onRead: (documentId: string) => void;
 }) {
   const [all, setAll] = useState<Doc[] | null>(null);
   const [q, setQ] = useState("");
@@ -54,7 +56,8 @@ export function NotebookPostsManager({ notebookId, docs, readOnly = false, onCha
     setRemoveBusy(true);
     setRemoveError(null);
     try {
-      await notebooksApi.removeDoc(notebookId, removing.id);
+      // The archive holds every post, so there × deletes the post from the library; elsewhere it only leaves the notebook.
+      await (readOnly ? docsApi.remove(removing.id) : notebooksApi.removeDoc(notebookId, removing.id));
       await onChanged();
       setRemoving(null);
     } catch (e) {
@@ -63,6 +66,10 @@ export function NotebookPostsManager({ notebookId, docs, readOnly = false, onCha
       setRemoveBusy(false);
     }
   };
+
+  const title = (d: Doc) => (
+    <button type="button" className="picker-title pm-open" onClick={() => onRead(d.id)} title="Read this post">{d.title}</button>
+  );
 
   const spinner = <span className="nbv-send-spinner" aria-hidden="true" />;
 
@@ -87,11 +94,12 @@ export function NotebookPostsManager({ notebookId, docs, readOnly = false, onCha
       {(readOnly || tab === "inside") && <ul className="picker-list pm-panel">
         {inside.map((d) => (
           <li key={d.id} className="pm-row">
-            <span className="picker-title">{d.title}</span>
+            {title(d)}
             <span className="mono muted picker-meta">{formatDate(d.published_at)}</span>
-            {!readOnly && (
+            {(
               <button type="button" className="icon-btn pm-action" disabled={pending.includes(d.id)}
-                      aria-label={`Remove ${d.title} from this notebook`} title="Remove from this notebook (the post itself is kept)"
+                      aria-label={readOnly ? `Delete ${d.title}` : `Remove ${d.title} from this notebook`}
+                      title={readOnly ? "Delete this post from your library" : "Remove from this notebook (the post itself is kept)"}
                       onClick={() => {
                         setRemoveError(null);
                         setRemoving(d);
@@ -114,7 +122,7 @@ export function NotebookPostsManager({ notebookId, docs, readOnly = false, onCha
             <ul className="picker-list pm-panel">
               {outsideShown.map((d) => (
                 <li key={d.id} className={`pm-row${d.locked ? " locked" : ""}`}>
-                  <span className="picker-title">{d.title}</span>
+                  {title(d)}
                   <span className="mono muted picker-meta">
                     {formatDate(d.published_at)} · {d.locked ? "Not indexed on your plan" : `${d.words} words`}
                   </span>
@@ -135,17 +143,21 @@ export function NotebookPostsManager({ notebookId, docs, readOnly = false, onCha
 
       {removing && (
         // While the removal runs, Escape, the backdrop and the close button do nothing.
-        <Modal title="Remove this post?" onClose={removeBusy ? () => undefined : () => setRemoving(null)}>
+        <Modal title={readOnly ? "Delete this post?" : "Remove this post?"} onClose={removeBusy ? () => undefined : () => setRemoving(null)}>
           <div className="stack">
             <p>
-              "<strong>{removing.title}</strong>" will be removed from this notebook. The post itself is kept in your
-              library, and you can add it back later.
+              {readOnly ? (
+                <>"<strong>{removing.title}</strong>" will be deleted from your library and from every notebook. This cannot be undone.</>
+              ) : (
+                <>"<strong>{removing.title}</strong>" will be removed from this notebook. The post itself is kept in your
+                library, and you can add it back later.</>
+              )}
             </p>
             {removeError && <p className="error-text">{removeError}</p>}
             <div className="vw-nav">
               <button type="button" className="btn" onClick={() => setRemoving(null)} disabled={removeBusy}>Cancel</button>
               <button type="button" className="btn btn-danger vw-delete-confirm" onClick={() => void remove()} disabled={removeBusy} autoFocus>
-                {removeBusy ? "Removing..." : "Remove post"}
+                {removeBusy ? (readOnly ? "Deleting..." : "Removing...") : (readOnly ? "Delete post" : "Remove post")}
               </button>
             </div>
           </div>

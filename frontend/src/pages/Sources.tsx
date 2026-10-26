@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { NavLink, useSearchParams } from "react-router-dom";
 import { docsApi, jobsApi, settingsApi, sourcesApi, type NotebookLmImportResult } from "../api/endpoints";
 import type { Doc, Job, Source } from "../api/types";
+import { NotebookLmTransferButton } from "../components/NotebookLmTransferButton";
 import { Reader } from "../components/Reader";
 import { TrashIcon } from "../components/icons/Icons";
 import { SourceUrlHint, useSourceUrlCheck } from "../components/SourceUrlCheck";
@@ -82,7 +83,7 @@ type AddSourceMethod = "link" | "upload" | "notebooklm";
 
 const ADD_SOURCE_METHODS: { id: AddSourceMethod; label: string }[] = [
   { id: "link", label: "Link" },
-  // Hidden for now: { id: "notebooklm", label: "Transfer from NotebookLM" },
+  { id: "notebooklm", label: "Transfer from NotebookLM" },
   { id: "upload", label: "Upload" },
 ];
 
@@ -362,7 +363,7 @@ export function AddSource({
                   </p>
                   {notebookLmLaunchMessage && <p className="muted small" role="status">{notebookLmLaunchMessage}</p>}
                 </div>
-                <button type="button" className="btn btn-small btn-primary" disabled={!extensionInstalled} onClick={beginNotebookLmExport}>Open NotebookLM</button>
+                <NotebookLmTransferButton disabled={!extensionInstalled} onClick={beginNotebookLmExport} />
               </div>
               <div className="welcome-transfer-flow-step disabled">
                 <span className="welcome-transfer-flow-number">3</span>

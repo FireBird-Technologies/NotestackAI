@@ -2083,31 +2083,6 @@ select.input option {
   line-height: 1.1;
 }
 
-/* Connect modes: three equal pills in one row, the chosen one outlined in blue */
-.welcome-card > .tabs {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  width: 100%;
-  padding: 0;
-  border: 0;
-}
-
-.welcome-card > .tabs .tab {
-  justify-content: center;
-  padding: 8px 6px;
-  border: 1px solid var(--line-strong);
-  text-align: center;
-  line-height: 1.25;
-}
-
-.welcome-card > .tabs .tab.active {
-  background: transparent;
-  border-color: var(--blue);
-  color: var(--white);
-  box-shadow: var(--glow-sm);
-}
-
 @keyframes welcome-in {
   from {
     opacity: 0;
@@ -13646,4 +13621,47 @@ body.nbv-resizing iframe {
   .render-toast {
     animation: none;
   }
+}
+
+/* A post title in the notebook's post lists: a plain-looking button that opens the post in the reader */
+.pm-open {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* The whole row is the click target: the title's overlay covers it, the action button sits above */
+.pm-row {
+  position: relative;
+}
+
+.pm-open::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.pm-row .pm-action {
+  position: relative;
+  z-index: 1;
+}
+
+.pm-open:hover {
+  color: var(--blue);
+  text-decoration: underline;
+}
+
+/* The post reader: a narrower panel on the right, above any dialog it was opened from, which stays visible beside it */
+.drawer-backdrop.drawer-side {
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: none;
+}
+
+.drawer-backdrop.drawer-side .drawer {
+  width: min(520px, 100%);
 }

@@ -112,12 +112,14 @@ const VIDEO_BUSY = new Set(["generating", "pending", "rendering", "regenerating"
   "language_regenerating", "script_regenerating"]);
 
 /** Create: one click per format with sensible defaults, options folded away; then what was made from this notebook. */
-function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, presets, presetKey, quizOpen, onQuizClose, onCreateQuiz, cardsOpen, onCardsClose, onCreateCards, infographicOpen, onInfographicClose, onCreateInfographic, audioOpen, onAudioClose, onCreateAudio, slidesOpen, onSlidesClose, onCreateSlides, reportOpen, onReportClose, onCreateReport, mapOpen, onMapClose, onCreateMap, onCreateVideo, onClose, section, onStarted }: {
+function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, onNeedPosts, presets, presetKey, quizOpen, onQuizClose, onCreateQuiz, cardsOpen, onCardsClose, onCreateCards, infographicOpen, onInfographicClose, onCreateInfographic, audioOpen, onAudioClose, onCreateAudio, slidesOpen, onSlidesClose, onCreateSlides, reportOpen, onReportClose, onCreateReport, mapOpen, onMapClose, onCreateMap, onCreateVideo, onClose, section, onStarted }: {
   notebookId: string;
   docs: { id: string; title: string; locked?: boolean }[];
   chats: ChatSummary[];
   currentChatId: string | null;
+  /** The notebook has no posts yet: the Create buttons stay clickable but open the add-posts dialog instead. */
   disabled: boolean;
+  onNeedPosts: () => void;
   /** Settings asked for in the chat, per artifact: its dialog opens with them. */
   presets: Partial<Record<ChatArtifact, ChatPreset>>;
   /** Changes each time the chat opens a dialog, so one that is already open starts again from the new settings. */
@@ -236,7 +238,7 @@ function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, presets
   const others = artifacts;
 
   const cite = (c: Citation) => c.document_id && setReading({ id: c.document_id, start: c.line_start, end: c.line_end });
-  const off = disabled;
+  const gate = (open: () => void) => (disabled ? onNeedPosts : open);
   const [launching, setLaunching] = useState(false); // the Launch composer is open
   const showCreate = section !== "library";
   const showMade = section !== "create";
@@ -256,7 +258,7 @@ function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, presets
         )}
       </div>
       <div className="nbv-make">
-        <button className="nbv-make-stars" disabled={off} onClick={onCreateMap}>
+        <button className="nbv-make-stars" onClick={gate(onCreateMap)}>
           <span className="nbv-stars-text">
             <strong>Mind Constellation</strong>
             <small>Explore your posts as stars</small>
@@ -270,25 +272,25 @@ function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, presets
             <circle cx="58" cy="18" r="2" fill="currentColor" />
           </svg>
         </button>
-        <button className="nbv-make-audio" disabled={off} onClick={onCreateAudio}>
+        <button className="nbv-make-audio" onClick={gate(onCreateAudio)}>
           <HeadphonesIcon size={18} /> <span className="nbv-make-text">Audio overview</span>
         </button>
-        <button className="nbv-make-slides" disabled={off} onClick={onCreateSlides}>
+        <button className="nbv-make-slides" onClick={gate(onCreateSlides)}>
           <SlidesIcon size={18} /> <span className="nbv-make-text">Slide deck</span>
         </button>
-        <button disabled={off} onClick={onCreateVideo}>
+        <button onClick={gate(onCreateVideo)}>
           <VideoIcon size={18} /> <span className="nbv-make-text">Video</span>
         </button>
-        <button disabled={off} onClick={onCreateReport}>
+        <button onClick={gate(onCreateReport)}>
           <ReportIcon size={18} /> <span className="nbv-make-text">Report</span>
         </button>
-        <button disabled={off} onClick={onCreateInfographic}>
+        <button onClick={gate(onCreateInfographic)}>
           <InfographicIcon size={18} /> <span className="nbv-make-text">Infographic</span>
         </button>
-        <button disabled={off} onClick={onCreateQuiz}>
+        <button onClick={gate(onCreateQuiz)}>
           <QuizIcon size={18} /> <span className="nbv-make-text">Quiz</span>
         </button>
-        <button disabled={off} onClick={onCreateCards}>
+        <button onClick={gate(onCreateCards)}>
           <FlashcardsIcon size={18} /> <span className="nbv-make-text">Flashcards</span>
         </button>
         {/* Launch: the composer, to post something from the Library (or just words) to LinkedIn */}
@@ -326,7 +328,6 @@ function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, presets
       </div>
       </>}
       {launching && <ScheduleModal platform="linkedin" posts={[]} onClose={() => setLaunching(false)} />}
-      {showCreate && disabled && <p className="muted small">Add posts to this notebook to start creating.</p>}
       {error && <p className="error-text">{error}</p>}
       {showMade && (!others || others.length > 0 || starting.length > 0) && <span className="vw-label nbv-made-label">Made from this notebook</span>}
       {section === "library" && others?.length === 0 && starting.length === 0 && (
@@ -639,10 +640,11 @@ export default function NotebookView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const ask = async (text: string) => {
+  // retryId: the last answer to run again. It and its question leave the screen (and the chat) and the question is asked afresh.
+  const ask = async (text: string, retryId?: string) => {
     const question = text.trim();
-    if (!question || busy || loadingChatId || outOfChat) return;
-    setQ("");
+    if (!question || busy || loadingChatId || (outOfChat && !retryId)) return;
+    if (!retryId) setQ("");
     setBusy(true);
     // Every update from this question's stream finds its own answer by this key, never by position. When the chat on
     // screen changes (New chat, another chat) while an earlier answer is still streaming or typing, its updates find
@@ -651,9 +653,10 @@ export default function NotebookView() {
     const askKey = `ask-${seq}`;
     const latest = () => askSeq.current === seq;
     const sentIn = chatLoad.current; // the chat on screen when it was sent: opening or starting another one changes it
-    setTurns((t) => [...t, { role: "user", text: question }, { role: "assistant", text: "", status: "Scanning", askKey }]);
+    setTurns((t) => [...(retryId ? t.slice(0, -2) : t), { role: "user", text: question }, { role: "assistant", text: "", status: "Scanning", askKey }]);
     // Count the question as soon as it is sent (the server counts it then too); the answer brings the exact number.
-    if (quota) setChatQuota({ used: Math.min(quota.used + 1, quota.limit), limit: quota.limit, left: Math.max(quota.left - 1, 0) });
+    // A retry replaces a counted message, so it adds nothing.
+    if (quota && !retryId) setChatQuota({ used: Math.min(quota.used + 1, quota.limit), limit: quota.limit, left: Math.max(quota.left - 1, 0) });
     const patchAnswer = (p: Partial<Turn> | ((x: Turn) => Partial<Turn>)) =>
       setTurns((t) => t.map((x) => (x.askKey === askKey ? { ...x, ...(typeof p === "function" ? p(x) : p) } : x)));
     let answered = "";
@@ -714,7 +717,7 @@ export default function NotebookView() {
           }
         },
         // Read at send time from the URL, the one place a stale closure or a state reset cannot change.
-        { method: "POST", body: JSON.stringify({ question, chat_id: new URLSearchParams(window.location.search).get("chat") }) },
+        { method: "POST", body: JSON.stringify({ question, retry_message_id: retryId, chat_id: new URLSearchParams(window.location.search).get("chat") }) },
       );
       // The stream closed without an answer or an error: say so instead of leaving the status spinning.
       if (!answered && !failed) patchAnswer({ text: "Lost signal. Try again.", status: undefined });
@@ -1110,6 +1113,7 @@ export default function NotebookView() {
                   messageId={t.id}
                   initial={t.feedback}
                   text={t.text}
+                  onRetry={i === turns.length - 1 && i > 0 && turns[i - 1].role === "user" && !busy && !t.action ? () => void ask(turns[i - 1].text, t.id) : undefined}
                   extra={i === lastAnswerAt && !busy && !t.action && nb.documents.length > 0 ? <NextStepHint actions={nextSteps(t.topic)} /> : undefined}
                 />
               )}
@@ -1203,7 +1207,7 @@ export default function NotebookView() {
                      slidesOpen={makingSlides} onSlidesClose={() => setMakingSlides(false)} onCreateSlides={() => openSlides()}
                      cardsOpen={makingCards} onCardsClose={() => setMakingCards(false)} onCreateCards={() => openCards()}
                      mapOpen={makingMap} onMapClose={() => setMakingMap(false)} onCreateMap={() => openMap()}
-                     disabled={nb.documents.length === 0}
+                     disabled={nb.documents.length === 0} onNeedPosts={() => setAdding(true)}
                      onCreateVideo={() => openVideo()}
                      onClose={phone ? undefined : () => setToolsRail(false)}
                      section={phone ? (drawer === "library" ? "library" : "create") : undefined}
@@ -1238,7 +1242,7 @@ export default function NotebookView() {
                 setImports((cur) => [...cur, job]);
                 closeAdding();
               }} />
-              <NotebookPostsManager notebookId={nb.id} docs={nb.documents} readOnly={nb.is_archive} onChanged={load} />
+              <NotebookPostsManager notebookId={nb.id} docs={nb.documents} readOnly={nb.is_archive} onChanged={load} onRead={(id) => setReading({ id })} />
             </>
           )}
         </Modal>

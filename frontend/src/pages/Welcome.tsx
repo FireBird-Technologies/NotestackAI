@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { docsApi, jobsApi, notebooksApi, settingsApi, sourcesApi, type NotebookLmImportResult } from "../api/endpoints";
 import type { Job, Source } from "../api/types";
+import { NotebookLmTransferButton } from "../components/NotebookLmTransferButton";
 import { CloseIcon, UploadIcon } from "../components/icons/Icons";
 import Logo from "../components/Logo";
 import SkyCanvas from "../components/SkyCanvas";
@@ -29,7 +30,7 @@ type Mode = "feed" | "url" | "file" | "notebooklm";
 
 const MODES: { id: Mode; label: string }[] = [
   { id: "feed", label: "Blog or website" },
-  // Hidden for now: { id: "notebooklm", label: "Transfer from NotebookLM" },
+  { id: "notebooklm", label: "Transfer from NotebookLM" },
   { id: "url", label: "One article" },
   { id: "file", label: "Upload files" },
 ];
@@ -527,9 +528,7 @@ export default function Welcome() {
                       </p>
                       {notebookLmLaunchMessage && <p className="muted small" role="status">{notebookLmLaunchMessage}</p>}
                     </div>
-                    <button type="button" className="btn btn-small btn-primary" disabled={!extensionInstalled} onClick={beginNotebookLmExport}>
-                      Open NotebookLM
-                    </button>
+                    <NotebookLmTransferButton disabled={!extensionInstalled} onClick={beginNotebookLmExport} />
                   </div>
                   <div className="welcome-transfer-flow-step disabled">
                     <span className="welcome-transfer-flow-number">3</span>

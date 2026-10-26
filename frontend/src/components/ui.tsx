@@ -107,14 +107,14 @@ export function Modal({
   );
 }
 
-export function Drawer({ onClose, children, label }: { onClose: () => void; children: ReactNode; label: string }) {
+export function Drawer({ onClose, children, label, className = "" }: { onClose: () => void; children: ReactNode; label: string; className?: string }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
   return (
-    <div className="drawer-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div className={`drawer-backdrop${className ? ` ${className}` : ""}`} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <aside className="drawer" role="dialog" aria-modal="true" aria-label={label}>
         <button className="icon-btn drawer-close" onClick={onClose} aria-label="Close">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">

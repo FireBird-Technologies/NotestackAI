@@ -70,6 +70,9 @@ class DocumentsIn(BaseModel):
 class ChatIn(BaseModel):
     question: str = Field(min_length=1, max_length=4000)
     chat_id: uuid.UUID | None = None
+    # Retry: the assistant answer to run again. It and the question before it are deleted, then the question is asked
+    # afresh (never from the answer cache, and not counted against the chat limit).
+    retry_message_id: uuid.UUID | None = None
     label: str | None = Field(None, max_length=30)  # who is asking (an app over MCP): "Claude: <question>" titles the chat
 
 
@@ -557,6 +560,22 @@ async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)
             chat_row = Chat(workspace_id=workspace_id, notebook_id=nb.id, title=title[:120])
             db.add(chat_row)
             db.flush()
+        retrying = False
+        if body.retry_message_id and chat_row.notebook_id == nb.id:
+            # Only a chat's last answer can be retried; it and its question go, the question is asked again below.
+            last_two = db.scalars(
+                select(Message).where(Message.chat_id == chat_row.id).order_by(Message.created_at.desc()).limit(2)
+            ).all()
+            if (len(last_two) == 2 and last_two[0].id == body.retry_message_id and last_two[0].role == "assistant"
+                    and last_two[1].role == "user"):
+                body.question = last_two[1].content
+                for old in last_two:
+                    db.delete(old)
+                db.flush()
+                retrying = True
+            else:
+                log.warning("Retry of message %s refused: it is not the last answer of chat %s",
+                            body.retry_message_id, chat_row.id)
         chat_row.updated_at = datetime.now(UTC)  # keeps the history list newest first
         trace.chat_id = str(chat_row.id)
         yield _sse("status", {"chat_id": str(chat_row.id), "message": "Opening the archive"})
@@ -588,10 +607,13 @@ async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)
         last_answer = _last_answer(db, prior)
         # A message that refers back to the conversation ("explain how to use it") is never a cached repeat.
         cache_key = (answer_cache_key(nb.id, body.question, docs, profile)
-                     if settings.chat_answer_cache_days > 0 and docs and not refers_back(body.question) else None)
+                     if settings.chat_answer_cache_days > 0 and docs and not refers_back(body.question)
+                     else None)
+        lookup_key = None if retrying else cache_key  # a retry researches again: it never takes a cached answer
         user_msg = Message(chat_id=chat_row.id, role="user", content=body.question)
         db.add(user_msg)
-        record_chat_message(db, workspace_id)  # saved with the question by the commit below
+        if not retrying:  # a retry replaces a message that was already counted
+            record_chat_message(db, workspace_id)  # saved with the question by the commit below
         trace.add("load",
                   f"history: {len(prior)} message(s) of this chat  [Postgres]",
                   f"workspace notes: {len(facts)} note(s)  [Postgres]",
@@ -611,7 +633,7 @@ async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)
         def on_delta(text: str | None) -> None:
             loop.call_soon_threadsafe(steps.put_nowait, ("delta", text) if text is not None else ("reset", ""))
 
-        cached = _cached_answer(db, cache_key) if cache_key else None
+        cached = _cached_answer(db, lookup_key) if lookup_key else None
         if cached is not None:
             hit, result = cached
             with trace.stage("save-question"):
