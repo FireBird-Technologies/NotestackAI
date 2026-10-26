@@ -1,8 +1,5 @@
-// Use the published listing when it is available. The search URL remains a valid destination
-// during Chrome Web Store review and will surface the listing once it is public.
-export const NOTEBOOKLM_EXTENSION_URL =
-  import.meta.env.VITE_NOTEBOOKLM_EXTENSION_URL ??
-  "https://chromewebstore.google.com/search/NotebookLM%20Transfer%20to%20Notestack";
+// Chrome Web Store listing, set in .env (VITE_NOTEBOOKLM_EXTENSION_URL).
+export const NOTEBOOKLM_EXTENSION_URL: string = import.meta.env.VITE_NOTEBOOKLM_EXTENSION_URL ?? "";
 
 const EXTENSION_MARKER = "notestackNotebooklmExporter";
 const OPEN_EXTENSION_EVENT = "notestack:open-notebooklm-exporter";
@@ -83,10 +80,13 @@ export function notebookLmPlanLimitPreviewMessage(_selected: number, room: numbe
  * directly to website JavaScript.
  */
 export function isNotebookLmExtensionInstalled(): boolean {
+  // Dev only: the store build's bridge does not run on localhost, so let .env show the installed UI.
+  if (import.meta.env.DEV && import.meta.env.VITE_NOTEBOOKLM_ASSUME_INSTALLED === "true") return true;
   return typeof document !== "undefined" && document.documentElement.dataset[EXTENSION_MARKER] === "installed";
 }
 
 export function openNotebookLmExtensionStore(): void {
+  if (!NOTEBOOKLM_EXTENSION_URL) return;
   window.open(NOTEBOOKLM_EXTENSION_URL, "_blank", "noopener,noreferrer");
 }
 

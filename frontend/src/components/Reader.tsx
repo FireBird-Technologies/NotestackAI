@@ -36,7 +36,7 @@ export function Reader({
   }
 
   return (
-    <Drawer onClose={onClose} label="Post reader">
+    <Drawer onClose={onClose} label="Post reader" className="drawer-side">
       {!doc && !error && <Loading label="Opening post" />}
       {error && <p className="error-text">{error}</p>}
       {doc && (
