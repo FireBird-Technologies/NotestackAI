@@ -52,6 +52,7 @@ from app.pipeline.prefetch import (
     OVERVIEW_BUDGET_CHARS,
     OVERVIEW_LIST_CHARS,
     openings,
+    passages_of,
     prefetch,
 )
 from app.pipeline.trace import MEMORY_GIVES, ChatTrace, current_trace, probs_text
@@ -450,6 +451,57 @@ def notebook_brief(title: str, allowed: dict[str, str]) -> str:
     return f"Notebook: {title}. {len(allowed)} posts, including: " + "; ".join(titles)
 
 
+OFF_TOPIC_RETRIES = 2  # extra Jev looks, with every title and the openings, before a message is brushed off
+RECHECK_OPENING_CHARS = 600  # per post: its first two paragraphs, cut here
+RECHECK_BUDGET_CHARS = 60_000  # all the openings together; posts past it are listed by title only
+RECHECK_TIMEOUT = 12.0  # the brief is far bigger than the first look's
+RECHECK_INSTRUCTIONS = (
+    "A first look called this message off topic. Compare its subject with EVERY post title and opening below. "
+    "If the subject appears in any of them, even loosely or in different words, it is archive",
+    "Two looks disagree on this message, so be strict: it is off_topic only if NO post title or opening below "
+    "touches its subject at all. Any overlap, a broader or narrower angle, or a doubt means archive",
+)
+
+
+def notebook_brief_full(title: str, allowed: dict[str, str], corpus: Corpus) -> str:
+    """Every post title, each with the first two paragraphs of the post (until the budget is used)."""
+    lines, used = [], 0
+    for rel, post_title in allowed.items():
+        opening = ""
+        if used < RECHECK_BUDGET_CHARS:
+            paragraphs = [" ".join(t.strip() for t in p.lines if t.strip()) for p in passages_of(corpus, rel, post_title)[:2]]
+            opening = shorten(" ".join(x for x in paragraphs if x), RECHECK_OPENING_CHARS)
+            used += len(opening)
+        lines.append(f"- {post_title}" + (f": {opening}" if opening else ""))
+    return f"Notebook: {title}. {len(allowed)} posts:\n" + "\n".join(lines)
+
+
+def recheck_off_topic(route: Triage, message: str, history: list[Turn], brief: str) -> Triage:
+    """Jev called the message off topic from 25 titles alone. Look again, up to OFF_TOPIC_RETRIES times, with every
+    title and each post's opening. Any look that says archive (or is unsure) sends it to research; it stays off topic
+    only when every look agrees. If Jev fails, research anyway: a wasted search beats a wrong brush off."""
+    state = {"notebook": brief, "conversation": conversation_text(history, limit=4), "message": message}
+    for attempt in range(1, OFF_TOPIC_RETRIES + 1):
+        qid = f"intent_retry{attempt}"
+        try:
+            a = jev.decide(state, {"intent": {"instructions": RECHECK_INSTRUCTIONS[attempt - 1], "criteria": JEV_INTENT}},
+                           timeout=RECHECK_TIMEOUT)["intent"]
+        except jev.JevError as exc:
+            route.notes.append(f"off_topic recheck {attempt} failed ({exc}) -> archive")
+            route.kind, route.reply = "archive", ""
+            return route
+        route.jev[qid] = {"choice": a.choice, "confidence": round(a.confidence, 2),
+                          "probabilities": {k: round(v, 2) for k, v in a.probabilities.items()}}
+        if a.choice == "off_topic" and a.confidence >= JEV_MIN_CONFIDENCE:
+            route.notes.append(f"off_topic recheck {attempt}: still off_topic ({a.confidence:.2f})")
+            continue
+        route.notes.append(f"off_topic recheck {attempt}: {a.choice} ({a.confidence:.2f}) -> archive")
+        route.kind, route.reply = "archive", ""
+        return route
+    route.notes.append(f"off_topic confirmed by {OFF_TOPIC_RETRIES} rechecks with all titles and openings")
+    return route
+
+
 def archive_guide(tools: ScopedTools) -> str:
     return (
         f"This notebook has {len(tools.allowed)} posts stored as markdown files under sources/. "
@@ -741,7 +793,7 @@ def _trace_triage(trace: ChatTrace, route: Triage) -> None:
     """The triage section of the log: every Jev answer with its confidence, then what our thresholds did to it."""
     trace.add("triage", f"engine   : {route.engine or 'unknown'}")
     if route.jev:
-        for qid in ("intent", "depth", "detail", "reuse", "memory", "topic"):
+        for qid in ("intent", "intent_retry1", "intent_retry2", "depth", "detail", "reuse", "memory", "topic"):
             a = route.jev.get(qid)
             if a:
                 trace.add("triage", f"{qid:<9}: {a['choice']:<22} confidence {a['confidence']:.2f}   "
@@ -803,6 +855,13 @@ def research(
     pool.shutdown(wait=False)
     with trace.stage("triage"):
         route = triage(question, history, notebook_brief(notebook_title, allowed), chat_memory)
+    if route.kind == "off_topic" and route.engine == "jev":
+        with trace.stage("recheck-off-topic"):
+            try:
+                synced.result()  # the openings are read from the synced posts
+            except Exception:
+                logging.getLogger(__name__).warning("Posts sync failed before the off topic recheck", exc_info=True)
+            route = recheck_off_topic(route, question, history, notebook_brief_full(notebook_title, allowed, corpus))
     _trace_triage(trace, route)
     if route.kind == "create":
         action, reply, p_tok, c_tok = None, "", 0, 0
