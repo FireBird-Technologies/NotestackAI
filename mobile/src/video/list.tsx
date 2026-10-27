@@ -4,7 +4,6 @@ import type { VideoListItem } from "@notestack/shared/types";
 import { BUSY, shortUrl, statusOf } from "@notestack/shared/video";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
-import * as WebBrowser from "expo-web-browser";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
@@ -12,6 +11,7 @@ import { RocketIcon, TrashIcon } from "@/icons";
 import { Composer } from "@/launchpad/editors";
 import { colors, fonts, radius } from "@/theme";
 import { formatDate, Loading } from "@/ui";
+import { useUpgrade } from "@/upgrade";
 import { Dialog, Pager, PillButton, Sheet } from "@/widgets";
 
 import { vstyles } from "./ui";
@@ -25,6 +25,7 @@ const PAGE = 10;
  */
 export function VideosList() {
   const queryClient = useQueryClient();
+  const upgrade = useUpgrade();
   const [page, setPage] = useState(0);
   const [deleting, setDeleting] = useState<VideoListItem | null>(null);
   const [busy, setBusy] = useState(false);
@@ -67,7 +68,7 @@ export function VideosList() {
           {q ? `${q.used} of ${q.limit} video${q.limit === 1 ? "" : "s"} used${q.resets_at ? ` this period, refills ${formatDate(q.resets_at)}` : " on your plan"}` : ""}
         </Text>
         {out ? (
-          <PillButton small variant="primary" title="Get more videos" onPress={() => void WebBrowser.openBrowserAsync("https://notestack.ai/pricing", { controlsColor: colors.blue })} />
+          <PillButton small variant="primary" title="Get more videos" onPress={() => upgrade({ highlight: q?.plan === "writer" ? "studio" : "writer" })} />
         ) : (
           <PillButton small variant="primary" title="New video" onPress={() => router.push("/library/videos/new")} />
         )}

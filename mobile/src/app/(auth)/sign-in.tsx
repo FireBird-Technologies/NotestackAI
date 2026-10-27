@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import { useState } from "react";
 
 import { useAuth } from "@/auth";
+import { SocialButtons } from "@/social-buttons";
 import { Body, Button, ErrorText, Field, FormScreen, Title } from "@/ui";
 
 export default function SignIn() {
@@ -28,6 +29,7 @@ export default function SignIn() {
     <FormScreen>
       <Title>Welcome back</Title>
       <Body muted>Sign in to your Notestack account.</Body>
+      <SocialButtons mode="signin" />
       <Field
         label="Email"
         value={email}

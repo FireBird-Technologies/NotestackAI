@@ -23,6 +23,7 @@ from datetime import UTC, datetime
 
 import httpx
 from sqlalchemy import select, text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.chat_memory.organize import forget_orphans, organize_chat, rebuild_chat
@@ -605,6 +606,10 @@ def run_loop(stop: threading.Event, worker_id: str | None = None) -> None:
             try:
                 with SessionLocal() as db:
                     job_id = claim_next(db, worker_id)
+            except OperationalError as exc:
+                # The database is out of reach (network, DNS, a restart): one line, and the next poll tries again.
+                log.warning("claim failed, database unreachable: %s", str(exc.orig or exc).splitlines()[0])
+                break
             except Exception:
                 log.exception("claim failed")
                 break

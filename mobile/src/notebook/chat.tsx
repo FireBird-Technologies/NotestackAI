@@ -7,14 +7,16 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import { useRef, useState } from "react";
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { planQuery } from "@/nav-drawer";
 import { AnswerText } from "@/notebook/answer-text";
+import { RingSpinner } from "@/spinner";
 import { colors, fonts, gutter, radius } from "@/theme";
 import { Loading } from "@/ui";
+import { useUpgrade } from "@/upgrade";
 
 type Turn = { key: string; role: "user" | "assistant"; text: string; citations?: Citation[]; status?: string };
 type ChatQuota = { used: number; limit: number; left: number };
@@ -22,6 +24,32 @@ type ChatQuota = { used: number; limit: number; left: number };
 /** A streaming draft as shown: [n] markers (and a half-written "[12" at the end) are hidden until they are verified. */
 function streamingText(draft: string): string {
   return draft.replace(/ ?\[\d+\]/g, "").replace(/ ?\[\d*$/, "");
+}
+
+/**
+ * The text as it is revealed on screen: an answer that grows (streaming) runs out a few characters a frame, faster the
+ * further behind it is, so bursts from the network read as an even flow. Anything else (a saved answer, the final one
+ * with its markers) shows at once.
+ */
+function useSmoothText(text: string): string {
+  const [shown, setShown] = useState(text);
+  const shownRef = useRef(text);
+  useEffect(() => {
+    let frame = 0;
+    const tick = () => {
+      const cur = shownRef.current;
+      if (cur === text) return;
+      const next = text.startsWith(cur)
+        ? text.slice(0, cur.length + Math.max(2, Math.ceil((text.length - cur.length) / 8)))
+        : text;
+      shownRef.current = next;
+      setShown(next);
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [text]);
+  return shown;
 }
 
 /** The notebook bar's height under the status bar, for keeping the ask bar above the keyboard. */
@@ -33,6 +61,7 @@ const BAR_HEIGHT = 60;
  */
 export function ChatTab({ notebook, chatId, onStarted }: { notebook: Notebook; chatId: string | null; onStarted: (id: string) => void }) {
   const queryClient = useQueryClient();
+  const upgrade = useUpgrade();
   const insets = useSafeAreaInsets();
   const list = useRef<FlatList<Turn>>(null);
   const asked = useRef(0); // numbers this screen's questions, for their turns' keys
@@ -145,7 +174,8 @@ export function ChatTab({ notebook, chatId, onStarted }: { notebook: Notebook; c
           contentContainerStyle={[styles.turns, turns.length === 0 && styles.turnsEmpty]}
           keyboardDismissMode="interactive"
           keyboardShouldPersistTaps="handled"
-          onContentSizeChange={() => turns.length && list.current?.scrollToEnd({ animated: true })}
+          // While an answer streams in, follow it without animating, so the scroll never lags behind the text
+          onContentSizeChange={() => turns.length && list.current?.scrollToEnd({ animated: !busy })}
           renderItem={({ item }) => <TurnView turn={item} />}
           ListEmptyComponent={
             <View style={styles.empty}>
@@ -189,7 +219,7 @@ export function ChatTab({ notebook, chatId, onStarted }: { notebook: Notebook; c
                 {Math.min(quota.used, quota.limit)}/{quota.limit}
               </Text>{" "}
               ·{" "}
-              <Text style={styles.upgrade} onPress={() => router.push("/pricing")} accessibilityRole="link">
+              <Text style={styles.upgrade} onPress={() => upgrade({ highlight: "writer" })} accessibilityRole="link">
                 Upgrade
               </Text>
             </Text>
@@ -215,7 +245,7 @@ export function ChatTab({ notebook, chatId, onStarted }: { notebook: Notebook; c
             disabled={off || !question.trim()}
             style={({ pressed }) => [styles.send, (off || !question.trim()) && !busy && styles.sendOff, pressed && styles.pressed]}>
             {busy ? (
-              <ActivityIndicator size="small" color={colors.white} />
+              <RingSpinner size={20} color={colors.white} />
             ) : (
               <SymbolView name={{ ios: "arrow.up", android: "arrow_upward" }} size={20} weight="semibold" tintColor={colors.white} />
             )}
@@ -229,6 +259,7 @@ export function ChatTab({ notebook, chatId, onStarted }: { notebook: Notebook; c
 /** One turn: the question on the right in blue, the answer full width with its sources under it. */
 function TurnView({ turn }: { turn: Turn }) {
   const [open, setOpen] = useState(false);
+  const text = useSmoothText(turn.text);
   if (turn.role === "user") {
     return (
       <View style={styles.mine}>
@@ -243,11 +274,11 @@ function TurnView({ turn }: { turn: Turn }) {
     <View style={styles.answer}>
       {turn.status ? (
         <View style={styles.statusRow}>
-          <ActivityIndicator size="small" color={colors.blue} />
+          <RingSpinner size={16} />
           <Text style={styles.status}>{turn.status}...</Text>
         </View>
       ) : null}
-      {turn.text ? <AnswerText text={turn.text} /> : null}
+      {text ? <AnswerText text={text} /> : null}
       {sources.length > 0 ? (
         <View style={styles.sources}>
           <Pressable onPress={() => setOpen((o) => !o)} accessibilityRole="button" accessibilityState={{ expanded: open }} style={styles.sourcesHead}>

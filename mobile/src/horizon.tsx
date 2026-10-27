@@ -82,6 +82,8 @@ export function Horizon({ rise }: { rise: number }) {
   );
 }
 
+const GLOW = { shadowColor: colors.blue, shadowOpacity: 1, shadowRadius: 6, shadowOffset: { width: 0, height: 0 } } as const;
+
 const styles = StyleSheet.create({
   wrap: { position: "absolute", left: 0, right: 0, bottom: 0, overflow: "visible" },
   planet: {
@@ -125,11 +127,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     opacity: 0,
-    shadowColor: colors.blue,
-    shadowOpacity: 1,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 0 },
   },
-  glintH: { position: "absolute", width: 12, height: 1.5, borderRadius: 1, backgroundColor: colors.white },
-  glintV: { position: "absolute", width: 1.5, height: 12, borderRadius: 1, backgroundColor: colors.white },
+  // The glow sits on the two solid strokes, not on their empty container, so iOS can draw it from their shape.
+  glintH: { position: "absolute", width: 12, height: 1.5, borderRadius: 1, backgroundColor: colors.white, ...GLOW },
+  glintV: { position: "absolute", width: 1.5, height: 12, borderRadius: 1, backgroundColor: colors.white, ...GLOW },
 });

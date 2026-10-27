@@ -4,6 +4,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { AppState } from "react-native";
 
 import { on } from "@/platform";
+import { forgetCustomer } from "@/purchases";
+import { signOutOfGoogle } from "@/social-auth";
 
 type AuthState = {
   user: User | null;
@@ -73,6 +75,8 @@ export function AuthProvider({ children, onSignOut }: { children: ReactNode; onS
     tokens.clear();
     onSignOut?.();
     setUser(null);
+    signOutOfGoogle();
+    forgetCustomer();
     if (access) {
       const timeout = new Promise<void>((resolve) => setTimeout(resolve, REVOKE_TIMEOUT_MS));
       await Promise.race([authApi.logout(access).catch(() => undefined), timeout]);

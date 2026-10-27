@@ -34,8 +34,8 @@ import {
 } from "@/icons";
 import { FlashcardsScreen } from "@/flashcards";
 import { InfographicThumb, InfographicViewer } from "@/infographic";
-import { LaunchKitScreen } from "@/launch-kit";
 import { Composer } from "@/launchpad/editors";
+import { RenderVideoDialog } from "@/launchpad/render-dialog";
 import { MindMapScreen, savedShape } from "@/mind-map";
 import { ReportScreen } from "@/report/screen";
 import { QuizFeedbackRow, QuizScreen } from "@/quiz";
@@ -97,7 +97,6 @@ const openWeb = (path: string) => WebBrowser.openBrowserAsync(`${SITE}${path}`, 
 function viewPath(a: Artifact): string {
   if (a.type === "report") return `/app/reports/${a.id}`;
   if (a.type === "video" && a.provider === "blog2video") return `/app/videos/${a.id}`;
-  if (a.type === "launch_kit") return `/app/launchpad/kits/${a.id}`;
   return `/app/artifacts/${a.id}`;
 }
 
@@ -158,7 +157,7 @@ function detailLine(a: Artifact, running: boolean, failed: boolean): string | nu
 export function ArtifactCard({ artifact: a, onRemoved, onChanged }: { artifact: Artifact; onRemoved: (id: string) => void; onChanged: () => void }) {
   const [error, setError] = useState("");
   const [sharing, setSharing] = useState(false);
-  const [launching, setLaunching] = useState<"audio" | "post" | null>(null);
+  const [launching, setLaunching] = useState<"audio" | "render" | "post" | null>(null);
   const queryClient = useQueryClient();
   const accounts = useQuery({ queryKey: ["launchpad", "accounts"], queryFn: launchpadApi.accounts, enabled: launching === "post" });
   const [transcript, setTranscript] = useState(false);
@@ -177,7 +176,8 @@ export function ArtifactCard({ artifact: a, onRemoved, onChanged }: { artifact: 
   const failed = a.status === "failed" ? String(a.content?.error ?? a.job?.error ?? "Could not be made.") : null;
   // A video's pill is its own status (blog2video's states); the others show their job's.
   const pill = a.type !== "video" && running ? (a.job!.status === "queued" ? "queued" : "working") : a.status;
-  const viewable = ready && VIEWABLE.has(a.type);
+  // A launch kit opens while it is being written too: its page shows the progress.
+  const viewable = (ready || (a.type === "launch_kit" && running)) && VIEWABLE.has(a.type);
   const segments = (a.content?.segments as Segment[] | undefined) ?? [];
   // One player for the card and its transcript, so opening the transcript carries on where the card's player is.
   const audioSrc = a.type === "audio_overview" && ready && a.url ? a.url : null;
@@ -194,7 +194,8 @@ export function ArtifactCard({ artifact: a, onRemoved, onChanged }: { artifact: 
     if (a.type === "audio_overview") return setTranscript(true);
     if (a.type === "quiz") return setQuiz(true);
     if (a.type === "slide_deck") return setDeck(true);
-    if (a.type === "summary" || a.type === "flashcards" || a.type === "infographic" || a.type === "mind_map" || a.type === "report" || a.type === "launch_kit") return setOpened(true);
+    if (a.type === "summary" || a.type === "flashcards" || a.type === "infographic" || a.type === "mind_map" || a.type === "report") return setOpened(true);
+    if (a.type === "launch_kit") return router.push({ pathname: "/launchpad/kits/[id]", params: { id: a.id } });
     if (a.type === "video" && a.provider === "blog2video") return setPreviewing(true);
     void openWeb(viewPath(a));
   };
@@ -210,12 +211,7 @@ export function ArtifactCard({ artifact: a, onRemoved, onChanged }: { artifact: 
   // the composer with it attached (web: launchpad/PostButton.tsx).
   const launch = () => {
     if (a.type === "audio_overview") return setLaunching("audio");
-    if (a.provider === "blog2video" && !a.content?.video_url) {
-      return Alert.alert("Render the video first", "This video isn't rendered yet. Render it first to go ahead with the launch: its editor opens and the render starts there.", [
-        { text: "Cancel", style: "cancel" },
-        { text: "Render video", onPress: () => editVideo(true) },
-      ]);
-    }
+    if (a.provider === "blog2video" && !a.content?.video_url) return setLaunching("render");
     setLaunching("post");
   };
 
@@ -358,24 +354,23 @@ export function ArtifactCard({ artifact: a, onRemoved, onChanged }: { artifact: 
           download={files.length ? <FileMenu items={files} onError={setError} /> : null}
         />
       ) : null}
-      {a.type === "launch_kit" && ready ? (
-        <LaunchKitScreen
-          artifact={a}
-          visible={opened}
-          onClose={() => setOpened(false)}
-          onDeleted={() => {
-            setOpened(false);
-            void destroy();
-          }}
-          onChanged={onChanged}
-        />
-      ) : null}
       {a.type === "mind_map" && ready && a.content?.root ? (
         <MindMapScreen map={{ id: a.id, title: a.title, root: a.content.root as MindNode }} visible={opened} onClose={() => setOpened(false)} feedback={<CardFeedback artifact={a} />} />
       ) : null}
       {isVideo && viewable ? <VideoPreview artifact={a} visible={previewing} onClose={() => setPreviewing(false)} /> : null}
       {pictures.node}
       {canShare(a) ? <ShareDialog artifactId={a.id} what={SHARE_WHAT[a.type] ?? "item"} visible={sharing} onClose={() => setSharing(false)} /> : null}
+      {launching === "render" ? (
+        // Rendered here, then "Schedule it" opens the composer with the video attached.
+        <RenderVideoDialog
+          video={{ id: a.id, title: a.title, rendering: a.status === "rendering" }}
+          onClose={() => setLaunching(null)}
+          onRendered={(_, schedule) => {
+            onChanged();
+            if (schedule) setLaunching("post");
+          }}
+        />
+      ) : null}
       {a.type === "audio_overview" ? (
         <AudioOnlyDialog title={a.title} downloadUrl={a.download_url} visible={launching === "audio"} onClose={() => setLaunching(null)} />
       ) : (

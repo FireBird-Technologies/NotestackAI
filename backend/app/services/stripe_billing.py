@@ -138,6 +138,13 @@ def ensure_customer(sc: stripe.StripeClient, db: Session, user: User, workspace:
 
 def sync_subscription(db: Session, workspace_id: uuid.UUID, stripe_sub) -> Subscription:
     """Store the subscription's true state. Safe to call any number of times, in any order."""
+    from app.services.billing import held_by_other
+
+    current = db.scalar(select(Subscription).where(Subscription.workspace_id == workspace_id))
+    if held_by_other(current, "stripe"):
+        log.warning("stripe subscription %s ignored: workspace %s is billed by %s",
+                    _get(stripe_sub, "id"), workspace_id, current.provider)
+        return current
     items = _get(_get(stripe_sub, "items", {}), "data", [])
     first = items[0] if items else {}
     status = _get(stripe_sub, "status", "canceled")
@@ -155,6 +162,16 @@ def sync_subscription(db: Session, workspace_id: uuid.UUID, stripe_sub) -> Subsc
     if workspace:
         video_quota.sync_video_quota(db, workspace)
     return sub
+
+
+def cancel_now(subscription_id: str) -> bool:
+    """End a subscription at once, with no refund for the time left (account deletion). True when Stripe agreed."""
+    try:
+        client().v1.subscriptions.cancel(subscription_id)
+        return True
+    except stripe.StripeError as exc:
+        log.warning("stripe cancel of %s failed: %s", subscription_id, exc)
+        return False
 
 
 def _workspace_for(db: Session, stripe_sub=None, customer_id: str | None = None) -> uuid.UUID | None:

@@ -36,31 +36,34 @@ export function PublicHeader() {
   };
 
   return (
-    <View style={[styles.layer, { paddingTop: insets.top }]} pointerEvents="box-none">
+    <View style={styles.layer} pointerEvents="box-none">
       {open && (
         <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(160)} style={styles.backdrop}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setOpen(false)} accessibilityLabel="Close menu" />
         </Animated.View>
       )}
 
-      <View style={[styles.bar, open && styles.barOpen]}>
-        <Pressable
-          onPress={home}
-          accessibilityRole="link"
-          accessibilityLabel="Notestack home"
-          hitSlop={8}
-          style={({ pressed }) => [styles.brand, pressed && styles.pressed]}>
-          <Image source={require("@/assets/images/logo.png")} style={styles.logo} accessibilityIgnoresInvertColors />
-          <Text style={styles.wordmark}>Notestack</Text>
-        </Pressable>
-        <Pressable
-          onPress={() => setOpen((o) => !o)}
-          accessibilityRole="button"
-          accessibilityLabel={open ? "Close menu" : "Open menu"}
-          accessibilityState={{ expanded: open }}
-          style={({ pressed }) => [styles.menuButton, pressed && styles.pressed]}>
-          {open ? <CloseIcon /> : <MenuIcon />}
-        </Pressable>
+      {/* Solid behind the status bar and the bar, so content scrolling underneath does not show through. */}
+      <View style={[styles.top, { paddingTop: insets.top }, open && styles.topOpen]}>
+        <View style={styles.bar}>
+          <Pressable
+            onPress={home}
+            accessibilityRole="link"
+            accessibilityLabel="Notestack home"
+            hitSlop={8}
+            style={({ pressed }) => [styles.brand, pressed && styles.pressed]}>
+            <Image source={require("@/assets/images/logo.png")} style={styles.logo} accessibilityIgnoresInvertColors />
+            <Text style={styles.wordmark}>Notestack</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setOpen((o) => !o)}
+            accessibilityRole="button"
+            accessibilityLabel={open ? "Close menu" : "Open menu"}
+            accessibilityState={{ expanded: open }}
+            style={({ pressed }) => [styles.menuButton, pressed && styles.pressed]}>
+            {open ? <CloseIcon /> : <MenuIcon />}
+          </Pressable>
+        </View>
       </View>
 
       {open && (
@@ -116,7 +119,9 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: gutter * 1.5,
   },
-  barOpen: { backgroundColor: colors.black },
+  top: { backgroundColor: colors.black, borderBottomWidth: 1, borderBottomColor: colors.line },
+  // The open menu panel draws its own bottom edge.
+  topOpen: { borderBottomWidth: 0 },
   brand: { flexDirection: "row", alignItems: "center", gap: 10 },
   logo: { width: 34, height: 34, borderRadius: 9 },
   wordmark: { color: colors.text, fontFamily: fonts.displayBold, fontSize: 22, letterSpacing: -0.2 },

@@ -20,6 +20,7 @@ import type {
 } from "@notestack/shared/types";
 import { Dropdown } from "../components/Dropdown";
 import { CheckIcon, SparkleIcon, ArrowLeftIcon } from "../components/icons/Icons";
+import { MakingVideo } from "../components/video/MakingVideo";
 import { ErrorText, errorMessage, Loading, Modal, PageHeader } from "../components/ui";
 import { OPEN_SUPPORT_EVENT } from "../components/support/SupportWidget";
 import { SourcePicker, type VideoSource } from "../components/video/SourcePicker";
@@ -267,10 +268,10 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
       setLimitHit(true);
       return;
     }
+    const from = sourceFields();
+    if (!from) return;
     setBusy(true);
     try {
-      const from = sourceFields();
-      if (!from) return;
       // The notebook it is made in, so the notebook lists it: the notebook picked, or the one the wizard was opened from.
       const notebook = source?.kind === "notebook" ? source.id : startNotebook;
       const a = await videosApi.create({ ...options(), ...from, ...focusFields(), ...(notebook ? { notebook_id: notebook } : {}) });
@@ -325,6 +326,16 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
             <button type="button" className="btn btn-primary" onClick={() => openUpgrade()}>Upgrade</button>
           </div>
         </section>
+      </div>
+    );
+  }
+
+  // Generate clicked: the video is shown being made at once (step 1) while the server accepts it; its editor follows.
+  if (busy) {
+    return (
+      <div className={inModal ? "vw-in-modal" : "page-wrap"}>
+        {!inModal && <PageHeader eyebrow="Videos" title="New video" />}
+        <MakingVideo step={1} />
       </div>
     );
   }

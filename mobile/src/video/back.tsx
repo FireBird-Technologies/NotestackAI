@@ -4,12 +4,12 @@ import { Pressable, StyleSheet, Text } from "react-native";
 import { ArrowLeftIcon } from "@/icons";
 import { colors } from "@/theme";
 
-/** "← Back", as the web's video pages: where you came from, else the Library (opened from a notebook or a link,
- * there is no screen behind it in this stack). */
-export function BackLink() {
+/** "← Back", as the web's video pages: where you came from, else `fallback` (opened from a notebook or a link, there
+ * is no screen behind it in this stack). */
+export function BackLink({ fallback = "/library" }: { fallback?: "/library" | "/launchpad" }) {
   return (
     <Pressable
-      onPress={() => (router.canGoBack() ? router.back() : router.replace("/library"))}
+      onPress={() => (router.canGoBack() ? router.back() : router.replace(fallback))}
       hitSlop={10}
       accessibilityRole="button"
       accessibilityLabel="Back"

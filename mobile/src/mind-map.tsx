@@ -464,7 +464,7 @@ export function MindMapExplorer({ map, onClose, feedback, embedded = false, onEx
         <>
           <SafeAreaView edges={["top"]} style={styles.top} pointerEvents="box-none">
             <View style={styles.topRow}>
-              {feedback}
+              {/* Back first, at the left edge, as the web's */}
               {onClose ? (
                 <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Back" style={styles.btn}>
                   <Svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
@@ -472,22 +472,22 @@ export function MindMapExplorer({ map, onClose, feedback, embedded = false, onEx
                   </Svg>
                 </Pressable>
               ) : null}
+              {feedback}
               <View style={styles.titleBox}>
                 <Text style={styles.title} numberOfLines={1}>
                   {mindConstellationTitle(map.title)}
                 </Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  <Text style={styles.trail} numberOfLines={1}>
-                    {trail.map((t, i) => (
-                      <Text key={t.node.id}>
-                        {i > 0 ? <Text style={styles.sep}> / </Text> : null}
-                        <Text onPress={() => focus(t.node.id)} style={styles.trailLink}>
-                          {t.node.label}
-                        </Text>
+                {/* One line; a long trail ends in "..." */}
+                <Text style={styles.trail} numberOfLines={1} ellipsizeMode="tail">
+                  {trail.map((t, i) => (
+                    <Text key={t.node.id}>
+                      {i > 0 ? <Text style={styles.sep}> / </Text> : null}
+                      <Text onPress={() => focus(t.node.id)} style={styles.trailLink}>
+                        {t.node.label}
                       </Text>
-                    ))}
-                  </Text>
-                </ScrollView>
+                    </Text>
+                  ))}
+                </Text>
               </View>
             </View>
             <View style={styles.shapes} accessibilityLabel="Shape of the map">

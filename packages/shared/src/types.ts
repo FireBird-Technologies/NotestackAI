@@ -536,6 +536,10 @@ export type BillingStatus = {
   next_plan: string | null;
   can_upgrade: boolean;
   has_billing_account: boolean;
+  /** Who bills the paid plan: Stripe (managed on the web) or a phone's store (managed in the app). null on Free. */
+  billed_by: "stripe" | "app_store" | "play_store" | "test_store" | null;
+  /** The in-app purchase customer id (the workspace): the apps log in to RevenueCat with it. */
+  store_customer_id: string;
   period_end: string | null;
   meters: Meter[];
   /** Posts indexed, reports, infographics and chat messages: shown when the sidebar plan card is opened. */

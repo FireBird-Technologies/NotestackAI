@@ -1,16 +1,15 @@
-import { useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { VideoDialog } from "@/create/video";
 import { BackLink } from "@/video/back";
+import { trackNewVideo } from "@/video/pending";
 import { Starfield } from "@/starfield";
 import { colors, fonts, gutter } from "@/theme";
 
 /** A new video on its own (web: /app/videos/new): the three-step wizard (it says how many videos are left), then
- * straight to its editor. */
+ * straight to its screen, which waits there for the server to accept it. */
 export default function NewVideoScreen() {
-  const queryClient = useQueryClient();
   return (
     <View style={styles.fill}>
       <Starfield />
@@ -19,10 +18,7 @@ export default function NewVideoScreen() {
         <Text style={styles.eyebrow}>VIDEOS</Text>
         <Text style={styles.title}>New video</Text>
         <VideoDialog
-          onCreate={(_request, video) => {
-            void queryClient.invalidateQueries({ queryKey: ["videos"] });
-            router.replace({ pathname: "/library/videos/[id]", params: { id: video.id } });
-          }}
+          onCreate={(created) => router.replace({ pathname: "/library/videos/[id]", params: { id: trackNewVideo(created) } })}
         />
       </ScrollView>
     </View>

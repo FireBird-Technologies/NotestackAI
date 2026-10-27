@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import { useState } from "react";
 
 import { useAuth } from "@/auth";
+import { SocialButtons } from "@/social-buttons";
 import { Body, Button, ErrorText, Field, FormScreen, Notice, Title } from "@/ui";
 
 const MIN_PASSWORD = 8;
@@ -35,8 +36,6 @@ export default function SignUp() {
         setCode("");
         setCodeDead(true);
       }
-      // Registered with Google: that sign-in is not in the app yet, so send them back to sign in.
-      if (e.code === "wrong_provider") router.back();
     } finally {
       setBusy(false);
     }
@@ -100,6 +99,7 @@ export default function SignUp() {
     <FormScreen>
       <Title>Create your account</Title>
       <Body muted>Your archive, ready to ask.</Body>
+      <SocialButtons mode="signup" />
       <Field label="Name" value={name} onChangeText={setName} autoComplete="name" textContentType="name" />
       <Field
         label="Email"

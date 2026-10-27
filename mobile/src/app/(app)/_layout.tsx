@@ -1,6 +1,7 @@
 import { Tabs } from "expo-router/js-tabs";
 
 import { DrawerProvider, SECTIONS } from "@/nav-drawer";
+import { UpgradeProvider } from "@/upgrade";
 
 /**
  * Every section of the web app's sidebar. They switch from the side panel (the menu button in each top bar), as the
@@ -8,12 +9,14 @@ import { DrawerProvider, SECTIONS } from "@/nav-drawer";
  */
 export default function AppSections() {
   return (
-    <DrawerProvider>
+    <UpgradeProvider>
+      <DrawerProvider>
       <Tabs screenOptions={{ headerShown: false }} tabBar={() => null}>
         {[...SECTIONS, { name: "settings", label: "Settings" }].map((s) => (
           <Tabs.Screen key={s.name} name={s.name} options={{ title: s.label }} />
         ))}
       </Tabs>
-    </DrawerProvider>
+      </DrawerProvider>
+    </UpgradeProvider>
   );
 }

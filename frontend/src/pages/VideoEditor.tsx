@@ -3,7 +3,8 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { ApiError } from "@notestack/shared/client";
 import { videoEditApi, videosApi, type LayoutInfo, type LayoutSchema } from "@notestack/shared/endpoints";
 import type { LegacyVideo, ScriptScene, VideoCatalog, VideoConfig, VideoJobState, VideoProject, VideoQuota, VideoStatus } from "@notestack/shared/types";
-import { CheckIcon, DownloadIcon, SparkleIcon } from "../components/icons/Icons";
+import { DownloadIcon, SparkleIcon } from "../components/icons/Icons";
+import { MakingVideo } from "../components/video/MakingVideo";
 import { ConfirmButton, ErrorText, errorMessage, Loading, Modal, PageHeader, StatusPill, Tabs, VIDEO_UPDATING } from "../components/ui";
 import { ImagesPanel, VoicePanel, type PanelProps } from "../components/video/EditorPanels";
 import { LookPanel } from "../components/video/SettingsPanel";
@@ -15,7 +16,7 @@ import { finished, jobPercent } from "../components/video/jobState";
 import { useUpgrade } from "../hooks/useUpgrade";
 import { ShareButton } from "../components/ShareDialog";
 import { CardFeedback } from "../components/CardFeedback";
-import { B2V_READY, embedUrl, FINISH_CAP_MS, isFailed, isReady, jobByLabel, jobDetail, JOBS, LOADING_STEP, mediaOf, REVIEW, STEPS } from "@notestack/shared/video";
+import { B2V_READY, embedUrl, FINISH_CAP_MS, isFailed, isReady, jobByLabel, jobDetail, JOBS, LOADING_STEP, mediaOf, REVIEW } from "@notestack/shared/video";
 
 
 
@@ -382,25 +383,7 @@ export default function VideoEditor() {
         {project && !generating && pillStatus && <StatusPill status={pillStatus} />}
       </PageHeader>
 
-      {generating && (
-        <section className="card stack vw-making">
-          <h2>Making your video</h2>
-          <ol className="vw-progress" aria-label={`Step ${step} of ${STEPS.length}`}>
-            {STEPS.map((s, i) => {
-              const n = i + 1;
-              const done = n < step;
-              return (
-                <li key={s} className={done ? "done" : n === step ? "on" : ""} aria-current={n === step ? "step" : undefined}>
-                  <span className="vw-progress-dot">{done ? <CheckIcon size={16} /> : n}</span>
-                  <span className="vw-progress-label">{s}</span>
-                </li>
-              );
-            })}
-          </ol>
-          <p className="muted">You can leave this page; the video keeps going.</p>
-          {project && <StatusPill status={project.artifact.status} />}
-        </section>
-      )}
+      {generating && <MakingVideo step={step} status={project?.artifact.status} />}
 
       {failed && (
         <section className="card stack">

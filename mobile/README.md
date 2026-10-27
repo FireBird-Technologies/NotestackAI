@@ -19,10 +19,11 @@ Rebuild (`npm run ios` again) after adding a native package or changing `app.con
 
 | Variant | App name | Bundle ID / package |
 | --- | --- | --- |
-| development (default) | Notestack Dev | `ai.notestack.app.dev` |
+| development (default) | Notestack Dev | `ai.notestack.app` |
 | production | Notestack | `ai.notestack.app` |
 
-Only the development variant allows plain HTTP, for the local API.
+Both variants share one id, because Google and Apple sign in are registered for it, so the dev build replaces a
+store install on the same device. Only the development variant allows plain HTTP, for the local API.
 
 ## Checks
 

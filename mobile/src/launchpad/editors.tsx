@@ -3,11 +3,12 @@ import { launchpadApi } from "@notestack/shared/endpoints";
 import { nextSlot, PLATFORMS, toWall, userTimeZone, wallToDate } from "@notestack/shared/schedule";
 import type { CalendarItem, PostableArtifact, SocialAccounts } from "@notestack/shared/types";
 import * as Clipboard from "expo-clipboard";
+import { router } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
-import { AttachmentChip, AttachPicker } from "@/launchpad/attachment";
+import { AttachmentChip, AttachSheet } from "@/launchpad/attachment";
 import { SlotPicker } from "@/launchpad/slot-picker";
 import { colors, fonts, radius } from "@/theme";
 import { ErrorText, formatDate } from "@/ui";
@@ -59,32 +60,16 @@ function PostField({ label, value, onChange, limit, locked }: { label: string; v
   );
 }
 
-/** "Attachment": the chip, or the button that opens the Library picker in place. */
-function AttachField({ attached, picking, setPicking, setAttached, locked }: {
+/** "Attachment": the chip, or the button that opens the Library in a sheet over this one. `onCreateKit` (the
+ * composer) offers making a launch kit instead. */
+function AttachField({ attached, picking, setPicking, setAttached, locked, onCreateKit }: {
   attached: PostableArtifact | null;
   picking: boolean;
   setPicking: (v: boolean) => void;
   setAttached: (a: PostableArtifact | null) => void;
   locked?: boolean;
+  onCreateKit?: () => void;
 }) {
-  if (picking) {
-    return (
-      <View style={styles.field}>
-        <View style={styles.fieldHead}>
-          <Text style={pageStyles.label}>Attach from your Library</Text>
-          <Text style={pageStyles.link} onPress={() => setPicking(false)}>
-            Cancel
-          </Text>
-        </View>
-        <AttachPicker
-          onPick={(a) => {
-            setAttached(a);
-            setPicking(false);
-          }}
-        />
-      </View>
-    );
-  }
   if (!attached && locked) return null;
   return (
     <View style={styles.field}>
@@ -94,6 +79,15 @@ function AttachField({ attached, picking, setPicking, setAttached, locked }: {
       ) : (
         <PillButton title="+ Attach from your Library" onPress={() => setPicking(true)} />
       )}
+      <AttachSheet
+        visible={picking}
+        onClose={() => setPicking(false)}
+        onPick={(a) => {
+          setAttached(a);
+          setPicking(false);
+        }}
+        onCreateKit={onCreateKit}
+      />
     </View>
   );
 }
@@ -171,6 +165,14 @@ export function Composer({
     if (res.error) setError(res.error);
   };
 
+  // "Create a new launch kit" from the Library sheet: this post is left, for the kit's own pages, once the sheets
+  // have slid away.
+  const createKit = () => {
+    setPicking(false);
+    onCancel();
+    setTimeout(() => router.push("/launchpad/kits"), 450);
+  };
+
   const submit = async (now: boolean) => {
     if (blocker) return setError(blocker);
     if (!now && wallToDate(when) <= new Date()) return setError("Pick a time that is still ahead.");
@@ -205,7 +207,7 @@ export function Composer({
           <Text style={styles.platformText}>LinkedIn</Text>
         </View>
       </View>
-      {kit ? <Text style={pageStyles.mono}>Written from the launch kit: {kit.title}</Text> : <AttachField attached={attached} picking={picking} setPicking={setPicking} setAttached={attach} />}
+      {kit ? <Text style={pageStyles.mono}>Written from the launch kit: {kit.title}</Text> : <AttachField attached={attached} picking={picking} setPicking={setPicking} setAttached={attach} onCreateKit={createKit} />}
       <View style={styles.platformBox}>
         <View style={styles.platformHead}>
           <Text style={styles.platformName}>LinkedIn</Text>

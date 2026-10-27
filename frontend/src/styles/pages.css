@@ -8578,7 +8578,8 @@ a.rp-src-main:hover .rp-src-out {
 
 .pub-signin .input,
 .pub-signin .btn,
-.pub-signin .google-redirect-btn {
+.pub-signin .google-redirect-btn,
+.pub-signin .apple-redirect-btn {
   height: 38px;
   min-height: 38px;
   font-size: 0.875rem;

@@ -1,12 +1,16 @@
 import { authApi } from "@notestack/shared/auth";
 import { ApiError, tokens } from "@notestack/shared/client";
+import { deletePlanWarning } from "@notestack/shared/billing";
 import { settingsApi, type SettingsPatch } from "@notestack/shared/endpoints";
 import type { Settings as SettingsData } from "@notestack/shared/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { Alert, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 
 import { useAuth } from "@/auth";
+import { planQuery } from "@/nav-drawer";
+import { manageSubscriptions } from "@/purchases";
+import { useUpgrade } from "@/upgrade";
 import { ConnectedApps } from "@/connected-apps";
 import { colors } from "@/theme";
 import { ErrorText, Loading, formatDate } from "@/ui";
@@ -18,6 +22,40 @@ export default function Settings() {
   const { logout } = useAuth();
   const settings = useQuery({ queryKey: ["settings"], queryFn: settingsApi.get });
   const s = settings.data;
+  const upgrade = useUpgrade();
+  const billing = useQuery(planQuery);
+  // A plan bought in this app's store is managed (changed, cancelled) on the store's own page.
+  const storeBilled = billing.data?.billed_by === "app_store" || billing.data?.billed_by === "play_store";
+  const planWarning = deletePlanWarning(billing.data);
+  const appleBilled = billing.data?.billed_by === "app_store";
+
+  const confirmDelete = () =>
+    confirm(
+      "Delete account for good?",
+      "Delete account",
+      async () => {
+        try {
+          await authApi.deleteAccount();
+          tokens.clear();
+          await logout();
+        } catch (e) {
+          setError(e instanceof ApiError ? e.message : "Could not delete the account. Try again.");
+        }
+      },
+      `Your notebooks, sources and everything you made are deleted. This can't be undone.${planWarning ? `\n\n${planWarning}` : ""}`,
+    );
+
+  // An App Store subscription outlives the account unless the person cancels it (only they can): offer that first.
+  const cancelAppleFirst = () =>
+    Alert.alert(
+      "Cancel your subscription first",
+      "Apple keeps charging you for Notestack until you cancel your App Store subscription, even after the account is deleted. We can't cancel it for you.",
+      [
+        { text: "Cancel subscription", onPress: () => void manageSubscriptions() },
+        { text: "I've cancelled it, delete", style: "destructive", onPress: confirmDelete },
+        { text: "Back", style: "cancel" },
+      ],
+    );
   // What is being typed, until it is saved; otherwise the fields show what is saved.
   const [nameDraft, setNameDraft] = useState<string | null>(null);
   const [workspaceDraft, setWorkspaceDraft] = useState<string | null>(null);
@@ -75,7 +113,7 @@ export default function Settings() {
           <TextInput style={pageStyles.input} value={name} onChangeText={setNameDraft} onBlur={() => void saveProfile()} returnKeyType="done" />
         </View>
         <Text style={pageStyles.mono}>
-          {s.user.email} · signed in with {s.user.auth_provider === "google" ? "Google" : "email and password"}
+          {s.user.email} · signed in with {s.user.auth_provider === "google" ? "Google" : s.user.auth_provider === "apple" ? "Apple" : "email and password"}
         </Text>
         <View style={styles.field}>
           <Text style={pageStyles.label}>Workspace name</Text>
@@ -123,9 +161,19 @@ export default function Settings() {
           Refills on the 1st of every month.
           {u.videos_resets_at ? ` Videos refill on ${formatDate(u.videos_resets_at)}.` : ""}
         </Text>
+        {billing.data?.billing_enabled ? (
+          <View style={pageStyles.row}>
+            {billing.data.can_upgrade && billing.data.billed_by !== "stripe" ? (
+              <PillButton small variant="primary" title="Upgrade" onPress={() => upgrade()} />
+            ) : null}
+            {storeBilled ? <PillButton small title="Manage subscription" onPress={() => void manageSubscriptions()} /> : null}
+            {billing.data.billed_by === "stripe" ? <Text style={pageStyles.mono}>Billed on notestack.ai.</Text> : null}
+          </View>
+        ) : null}
       </Section>
 
       <Section title="Account">
+        {planWarning ? <Text style={styles.warning}>Deleting your account: {planWarning}</Text> : null}
         <View style={pageStyles.row}>
           <PillButton
             title="Sign out everywhere"
@@ -135,21 +183,7 @@ export default function Settings() {
               void logout();
             }}
           />
-          <PillButton
-            title="Delete account"
-            variant="danger"
-            onPress={() =>
-              confirm("Delete account for good?", "Delete account", async () => {
-                try {
-                  await authApi.deleteAccount();
-                  tokens.clear();
-                  await logout();
-                } catch (e) {
-                  setError(e instanceof ApiError ? e.message : "Could not delete the account. Try again.");
-                }
-              }, "Your notebooks, sources and everything you made are deleted. This can't be undone.")
-            }
-          />
+          <PillButton title="Delete account" variant="danger" onPress={() => (appleBilled ? cancelAppleFirst() : confirmDelete())} />
         </View>
       </Section>
     </Page>
@@ -173,6 +207,7 @@ function Toggle({ value, onChange, label }: { value: boolean; onChange: (v: bool
 
 const styles = StyleSheet.create({
   field: { gap: 6 },
+  warning: { color: colors.text2, fontSize: 14, lineHeight: 20 },
   toggle: { flexDirection: "row", alignItems: "flex-start", gap: 12, paddingVertical: 4 },
   toggleText: { flex: 1 },
   plan: { color: colors.text2, fontSize: 17 },

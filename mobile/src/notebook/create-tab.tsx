@@ -1,4 +1,3 @@
-import { ApiError } from "@notestack/shared/client";
 import { artifactsApi, launchpadApi } from "@notestack/shared/endpoints";
 import type { Artifact, ArtifactType, ChatSummary, Notebook, SocialAccounts } from "@notestack/shared/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -14,6 +13,7 @@ import { VideoDialog } from "@/create/video";
 import { ConnectorModal } from "@/connector-modal";
 import { Composer } from "@/launchpad/editors";
 import { colors, fonts, radius } from "@/theme";
+import { trackNewVideo } from "@/video/pending";
 import { pageStyles, Sheet } from "@/widgets";
 
 type Kind = Exclude<ArtifactType, "summary" | "quote_card" | "carousel" | "launch_kit" | "upload">;
@@ -149,7 +149,11 @@ export function CreateTab({
         {making === "video" ? (
           <VideoDialog
             notebook={notebook}
-            onCreate={(request, video) => start(STARTING_LABEL.video, request, () => router.push({ pathname: "/library/videos/[id]", params: { id: video.id } }))}
+            onCreate={(created) => {
+              // The video's screen opens as the sheet goes and waits there; the Library shows the same request starting.
+              const id = trackNewVideo(created);
+              start(STARTING_LABEL.video, () => created, () => router.push({ pathname: "/library/videos/[id]", params: { id } }));
+            }}
           />
         ) : null}
       </Sheet>
@@ -170,12 +174,11 @@ export function CreateTab({
   );
 }
 
-/** Start a make. Out of this kind on the plan: say so; plans change on the web, so there is no purchase button. */
+/** Start a make. Out of this kind on the plan, the refusal opens the upgrade sheet (UpgradeProvider). */
 async function generate(body: Parameters<typeof artifactsApi.generate>[0]): Promise<Artifact> {
   try {
     return await artifactsApi.generate(body);
   } catch (e) {
-    if (e instanceof ApiError && e.status === 402) throw new Error(`${e.message} You can change your plan on notestack.ai.`);
     throw e;
   }
 }

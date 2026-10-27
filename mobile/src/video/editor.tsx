@@ -2,10 +2,9 @@ import { ApiError } from "@notestack/shared/client";
 import { type LayoutInfo, type LayoutSchema, videoEditApi, videosApi } from "@notestack/shared/endpoints";
 import { finished, jobPercent } from "@notestack/shared/jobState";
 import type { LegacyVideo, ScriptScene, VideoCatalog, VideoConfig, VideoJobState, VideoProject, VideoQuota, VideoStatus } from "@notestack/shared/types";
-import { B2V_READY, embedUrl, FINISH_CAP_MS, isFailed, isReady, jobByLabel, jobDetail, JOBS, LOADING_STEP, mediaOf, REVIEW, STEPS } from "@notestack/shared/video";
+import { B2V_READY, embedUrl, FINISH_CAP_MS, isFailed, isReady, jobByLabel, jobDetail, JOBS, LOADING_STEP, mediaOf, REVIEW } from "@notestack/shared/video";
 import { Image } from "expo-image";
 import { router } from "expo-router";
-import * as WebBrowser from "expo-web-browser";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { WebView } from "react-native-webview";
@@ -13,12 +12,14 @@ import { WebView } from "react-native-webview";
 import { CardFeedback } from "@/artifact-card";
 import { ShareDialog } from "@/card-dialogs";
 import { fileName, saveFile } from "@/downloads";
-import { CheckIcon, DownloadIcon, PhoneIcon, ScreenIcon, ShareIcon, SparkleIcon } from "@/icons";
+import { DownloadIcon, PhoneIcon, ScreenIcon, ShareIcon, SparkleIcon } from "@/icons";
 import { colors, fonts, gutter, radius } from "@/theme";
+import { useUpgrade } from "@/upgrade";
 import { Dialog, PillButton, StatusPill, confirm } from "@/widgets";
 
 import { BackLink } from "./back";
 import { ImagesPanel } from "./images";
+import { MakingPage, MakingVideo } from "./making";
 import { SceneList } from "./scenes";
 import { LookPanel } from "./settings";
 import type { PanelProps } from "./types";
@@ -29,19 +30,18 @@ type Panel = "scenes" | "images" | "audio" | "settings";
 type Format = "landscape" | "portrait";
 type Running = { label: string; poll: () => Promise<VideoJobState | null> } | null;
 
-const SITE = "https://notestack.ai";
 const message = (e: unknown) => (e instanceof ApiError || e instanceof Error ? e.message : "Something went wrong. Try again.");
 const busyMessage = (e: unknown) => (e instanceof ApiError && e.status === 409 ? "Another change is still running, try again in a moment." : message(e));
 const isWebUrl = (u: unknown): u is string => typeof u === "string" && /^https?:\/\//.test(u);
 
-/** Out of videos on the plan: say so; plans change on the web, so there is no purchase here. */
-function outOfVideos(q?: VideoQuota | null) {
+/** Out of videos on the plan: say so, and offer the plans (the upgrade sheet). */
+function outOfVideos(q: VideoQuota | null | undefined, onPlans: () => void) {
   Alert.alert(
     "Your video limit is reached",
     q ? `You've used ${q.used} of ${q.limit} videos this period.` : "You've used every video in your plan this period.",
     [
       { text: "OK", style: "cancel" },
-      { text: "See plans", onPress: () => void WebBrowser.openBrowserAsync(`${SITE}/pricing`, { controlsColor: colors.blue }) },
+      { text: "See plans", onPress: onPlans },
     ],
   );
 }
@@ -194,6 +194,7 @@ function ConfirmDialog({ title, body, cancel = "Cancel", confirm: ok, busyLabel,
 /** Download: the rendered MP4 now, or render (again) and download it when it is up. Rendering again uses a video: a
  * warning first, then the allowance is checked. */
 function DownloadModal({ rendered, onDownloadNow, onRender, onClose }: { rendered: boolean; onDownloadNow: () => Promise<void>; onRender: () => Promise<void>; onClose: () => void }) {
+  const upgrade = useUpgrade();
   const [choice, setChoice] = useState<"now" | "render">(rendered ? "now" : "render");
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -223,7 +224,7 @@ function DownloadModal({ rendered, onDownloadNow, onRender, onClose }: { rendere
       if (now && now.used >= now.limit) {
         setBusy(false);
         onClose();
-        return outOfVideos(now);
+        return outOfVideos(now, () => upgrade());
       }
     }
     await (choice === "now" ? onDownloadNow() : onRender());
@@ -359,7 +360,7 @@ function LegacyVideoView({ video, onRemove }: { video: LegacyVideo; onRemove: ()
  * Audio and Settings. One background job runs at a time (template, voice, language, add scene, render); every change
  * reloads the video.
  */
-export function VideoEditor({ id, renderOnOpen = false }: { id: string; renderOnOpen?: boolean }) {
+export function VideoEditor({ id, renderOnOpen = false, fresh = false }: { id: string; renderOnOpen?: boolean; fresh?: boolean }) {
   const win = useWindowDimensions();
   const [loaded, setProject] = useState<VideoProject | LegacyVideo | null>(null);
   const legacy = loaded?.legacy ? (loaded as LegacyVideo) : null;
@@ -610,6 +611,8 @@ export function VideoEditor({ id, renderOnOpen = false }: { id: string; renderOn
     );
   }
   if (legacy) return <LegacyVideoView video={legacy} onRemove={() => void remove()} />;
+  // Just generated: keep showing step 1 (as the screen before it did) rather than a loading spinner.
+  if (!project && !status && fresh) return <MakingPage title="New video" />;
   if (!project && !status) {
     return (
       <View style={[styles.page, styles.center]}>
@@ -670,31 +673,7 @@ export function VideoEditor({ id, renderOnOpen = false }: { id: string; renderOn
         {project && !generating && pillStatus ? <StatusPill status={pillStatus} /> : null}
       </View>
 
-      {generating ? (
-        // As the web's: one card in the middle, the steps as circles wired together in a row, each label under its circle.
-        <View style={[vstyles.card, styles.making]}>
-          <Text style={[vstyles.h2, styles.centered]}>Making your video</Text>
-          <View style={styles.steps} accessibilityLabel={`Step ${step} of ${STEPS.length}`}>
-            {STEPS.map((s, i) => {
-              const n = i + 1;
-              const done = n < step;
-              const on = n === step;
-              return (
-                <View key={s} style={styles.step} accessibilityState={{ selected: on }}>
-                  {/* The wire from the previous circle to this one, blue once that step is done */}
-                  {i > 0 ? <View style={[styles.wire, n <= step && styles.wireDone]} /> : null}
-                  <View style={[styles.stepDot, done && styles.stepDone, on && styles.stepOn]}>
-                    {done ? <CheckIcon size={16} color={colors.blue} /> : <Text style={[styles.stepNum, on && styles.stepNumOn]}>{n}</Text>}
-                  </View>
-                  <Text style={[styles.stepLabel, done && styles.stepLabelDone, on && styles.stepLabelOn]}>{s}</Text>
-                </View>
-              );
-            })}
-          </View>
-          <Text style={[vstyles.muted, styles.centered, styles.note]}>You can leave this screen; the video keeps going.</Text>
-          {project ? <StatusPill status={project.artifact.status} /> : null}
-        </View>
-      ) : null}
+      {generating ? <MakingVideo step={step} status={project?.artifact.status ?? "generating"} /> : null}
 
       {failed ? (
         <View style={vstyles.card}>
@@ -874,22 +853,6 @@ const styles = StyleSheet.create({
   jobIcon: { width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center", backgroundColor: colors.blue10 },
   tip: { gap: 4, padding: 12, borderRadius: radius.sm + 2, backgroundColor: colors.surface, alignSelf: "stretch" },
   tipLabel: { color: colors.blue, fontFamily: fonts.mono, fontSize: 11.5, letterSpacing: 1.6 },
-  making: { alignItems: "center", gap: 28, paddingVertical: 40, paddingHorizontal: 14, marginTop: 24 },
-  centered: { textAlign: "center" },
-  note: { fontSize: 16, lineHeight: 24 },
-  steps: { flexDirection: "row", alignSelf: "stretch" },
-  step: { flex: 1, alignItems: "center", gap: 14, paddingHorizontal: 5 },
-  // From the previous circle's edge (plus a little air) to this circle's: half a column back, half forward.
-  wire: { position: "absolute", top: 19, left: "-50%", right: "50%", marginLeft: 26, marginRight: 26, height: 2, borderRadius: 1, backgroundColor: colors.lineStrong },
-  wireDone: { backgroundColor: colors.blue },
-  stepDot: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.lineStrong, backgroundColor: "#0a0a0a" },
-  stepDone: { borderColor: colors.blue, backgroundColor: colors.blue10 },
-  stepOn: { borderColor: colors.blue, backgroundColor: colors.blue, shadowColor: colors.blue, shadowOpacity: 0.7, shadowRadius: 10, shadowOffset: { width: 0, height: 0 } },
-  stepNum: { color: colors.text2, fontSize: 15, fontWeight: "600" },
-  stepNumOn: { color: colors.white },
-  stepLabel: { color: colors.text3, fontSize: 13, lineHeight: 18, textAlign: "center" },
-  stepLabelDone: { color: colors.text2 },
-  stepLabelOn: { color: colors.white },
   scriptScene: { gap: 8, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line },
   sceneNo: { color: colors.text2, fontFamily: fonts.mono, fontSize: 13 },
   short: { minHeight: 64, textAlignVertical: "top" },

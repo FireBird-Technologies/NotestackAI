@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.auth import Ctx, get_ctx
 from app.config import settings
 from app.db import get_db
-from app.services.billing import billing_status, create_checkout_url, create_portal_url
+from app.services.billing import STORE_NAMES, billing_status, create_checkout_url, create_portal_url, store_billed
 from app.services.plans import PLANS, effective_plan, plan_dict, plan_order
 
 router = APIRouter(prefix="/api/billing", tags=["billing"])
@@ -35,10 +35,19 @@ def status(ctx: Ctx = Depends(get_ctx)):
     return billing_status(ctx.db, ctx.workspace)
 
 
+def _not_billed_by_store(ctx: Ctx) -> None:
+    """A plan bought in the iOS or Android app is changed and cancelled there; the web can't touch it."""
+    if store := store_billed(ctx.db, ctx.workspace):
+        raise HTTPException(409, {"code": "billed_by_store", "store": store,
+                                  "message": f"Your plan is billed through {STORE_NAMES[store]}. "
+                                             "Change or cancel it in the Notestack app on your phone."})
+
+
 @router.post("/checkout")
 def checkout(body: CheckoutIn, ctx: Ctx = Depends(get_ctx)):
     if not settings.billing_enabled:
         raise HTTPException(409, {"code": "billing_disabled", "message": "Checkout is not available yet."})
+    _not_billed_by_store(ctx)
     current = effective_plan(ctx.db, ctx.workspace)
     order = plan_order()
     if body.plan not in PLANS or order.index(body.plan) <= order.index(current.id):
@@ -50,6 +59,7 @@ def checkout(body: CheckoutIn, ctx: Ctx = Depends(get_ctx)):
 def portal(ctx: Ctx = Depends(get_ctx)):
     if not settings.billing_enabled:
         raise HTTPException(409, {"code": "billing_disabled", "message": "Billing is not available yet."})
+    _not_billed_by_store(ctx)
     return {"url": create_portal_url(ctx.db, ctx.workspace)}
 
 
@@ -78,3 +88,29 @@ async def webhook(request: Request, db: Session = Depends(get_db)):
 
     event = stripe_billing.parse_event(await request.body(), request.headers.get("stripe-signature"))
     return {"received": True, "result": stripe_billing.handle_event(db, event)}
+
+
+# In-app purchases (services/revenuecat.py)
+
+
+@router.post("/iap/sync")
+def iap_sync(ctx: Ctx = Depends(get_ctx)):
+    """Called by the app right after a purchase or a restore, so the plan applies before RevenueCat's webhook."""
+    if not settings.billing_enabled or not settings.revenuecat_secret_key:
+        raise HTTPException(409, {"code": "billing_disabled", "message": "In-app purchases are not available yet."})
+    from app.services import revenuecat
+
+    revenuecat.sync_workspace(ctx.db, ctx.workspace.id)
+    return billing_status(ctx.db, ctx.workspace)
+
+
+@router.post("/revenuecat/webhook")
+async def revenuecat_webhook(request: Request, db: Session = Depends(get_db)):
+    """RevenueCat events for both stores. Point its webhook at {API_URL}/api/billing/revenuecat/webhook with the
+    Authorization header set to REVENUECAT_WEBHOOK_AUTH."""
+    from app.services import revenuecat
+
+    revenuecat.check_auth(request.headers.get("authorization"))
+    if not settings.billing_enabled or not settings.revenuecat_secret_key:
+        return {"ignored": True}
+    return {"received": True, "result": revenuecat.handle_event(db, await request.json())}

@@ -3,6 +3,7 @@ import { dayKey, monthGrid, nextSlot } from "@notestack/shared/schedule";
 import type { CalendarItem, SocialAccounts } from "@notestack/shared/types";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
+import { router } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useMemo, useState } from "react";
 import { Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
@@ -98,7 +99,7 @@ export default function Launchpad() {
     <Page
       refresh={<RefreshControl refreshing={items.isRefetching && !items.isPlaceholderData} onRefresh={reload} tintColor={colors.blue} />}>
       <PageHead eyebrow="Launchpad" title="Launch calendar">
-        <PillButton title="Schedule a launch" variant="primary" onPress={() => compose(null)} />
+        <PillButton title="Schedule a launch" variant="primary" onPress={() => router.push("/launchpad/new")} />
       </PageHead>
       {notice ? <Text style={styles.notice}>{notice}</Text> : null}
       <ErrorText>{error}</ErrorText>

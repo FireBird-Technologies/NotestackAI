@@ -206,6 +206,12 @@ export const ArrowLeftIcon = (p: P) => (
   </Icon>
 );
 
+export const ArrowRightIcon = (p: P) => (
+  <Icon {...p}>
+    <Path d="M5 12h14M13 6l6 6-6 6" />
+  </Icon>
+);
+
 export const SparkleIcon = (p: P) => (
   <Icon {...p}>
     <Path d="M12 3l1.8 7.2L21 12l-7.2 1.8L12 21l-1.8-7.2L3 12l7.2-1.8z" />

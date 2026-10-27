@@ -4,7 +4,16 @@ import type { ConfigContext, ExpoConfig } from "expo/config";
 const VARIANT = process.env.APP_VARIANT === "production" ? "production" : "development";
 const IS_DEV = VARIANT === "development";
 
-const APP_ID = IS_DEV ? "ai.notestack.app.dev" : "ai.notestack.app";
+// One id for both: Google and Apple sign in are registered for this bundle id / package only. The dev build
+// therefore replaces a store install on the same device.
+const APP_ID = "ai.notestack.app";
+
+// Google sign in on iOS needs this build's own iOS OAuth client; its reversed id is the URL scheme Google returns to.
+// Without it the Google button stays hidden on iOS (src/social-auth.ts) and the plugin is left out.
+const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+const GOOGLE_IOS_URL_SCHEME = GOOGLE_IOS_CLIENT_ID
+  ? `com.googleusercontent.apps.${GOOGLE_IOS_CLIENT_ID.replace(/\.apps\.googleusercontent\.com$/, "")}`
+  : null;
 
 const MICROPHONE = "Notestack records your voice sample when you set up your voice profile.";
 
@@ -21,6 +30,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ios: {
     bundleIdentifier: APP_ID,
     supportsTablet: true,
+    usesAppleSignIn: true,
     infoPlist: {
       NSMicrophoneUsageDescription: MICROPHONE,
       ITSAppUsesNonExemptEncryption: false,
@@ -49,6 +59,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     // A video scene's own picture, picked from the library (no camera, no recording).
     ["expo-image-picker", { photosPermission: "Notestack adds the photos you pick to your video scenes.", cameraPermission: false, microphonePermission: false }],
     "expo-video",
+    "expo-apple-authentication",
+    ...(GOOGLE_IOS_URL_SCHEME
+      ? [["@react-native-google-signin/google-signin", { iosUrlScheme: GOOGLE_IOS_URL_SCHEME }] as [string, unknown]]
+      : []),
     [
       "expo-splash-screen",
       {

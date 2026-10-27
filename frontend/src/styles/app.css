@@ -856,6 +856,20 @@
   box-shadow: var(--glow-md);
 }
 
+/* Apple's web guidelines: a black button with the white logo, the same size as the Google one */
+.apple-redirect-btn {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 10px;
+  background: #000;
+  color: #fff;
+  border-color: var(--line-strong);
+}
+
+.apple-redirect-btn:hover {
+  box-shadow: var(--glow-md);
+}
+
 .auth-hint {
   text-align: center;
 }

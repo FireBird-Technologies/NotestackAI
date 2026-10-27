@@ -1,4 +1,3 @@
-import { ApiError } from "@notestack/shared/client";
 import { docsApi, notebooksApi, videosApi } from "@notestack/shared/endpoints";
 import { VIDEO_DEFAULTS } from "@notestack/shared/notebook";
 import type {
@@ -15,15 +14,15 @@ import type {
 import { useQuery } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import { SymbolView } from "expo-symbols";
-import * as WebBrowser from "expo-web-browser";
 import { type ComponentRef, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Linking, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 
 import { useVoicePlayer, voicePreviewUrl } from "@/audio";
 import { createStyles, CustomTopic, FocusCards, Foot, Hint, Label, Select } from "@/create/fields";
 import { voicesQuery } from "@/create/media";
 import { colors, fonts, radius } from "@/theme";
 import { ErrorText, formatDate, Loading } from "@/ui";
+import { useUpgrade } from "@/upgrade";
 import { pageStyles, PillButton } from "@/widgets";
 
 type Source = { kind: "notebook"; id: string } | { kind: "post"; id: string };
@@ -69,10 +68,11 @@ function Steps({ step }: { step: number }) {
 export function VideoDialog({ notebook, onCreate }: {
   /** Opened from a notebook: it starts from that notebook. On its own (Videos → New video): the whole archive. */
   notebook?: Notebook;
-  /** The video was accepted: its start for a notebook's Library, and the video itself, whose editor opens next. */
-  onCreate: (request: () => Promise<Artifact>, video: Artifact) => void;
+  /** Generate was pressed: the create request, on its way. The video's screen opens at once and waits for it. */
+  onCreate: (created: Promise<Artifact>) => void;
 }) {
   const config = useQuery({ queryKey: ["videos", "config"], queryFn: videosApi.config });
+  const upgrade = useUpgrade();
   const quota = useQuery({ queryKey: ["videos", "quota"], queryFn: videosApi.quota });
   const catalog = useQuery({ queryKey: ["videos", "catalog"], queryFn: videosApi.catalog, enabled: Boolean(config.data?.configured) });
   const voices = useQuery({ ...voicesQuery, enabled: Boolean(config.data?.configured) });
@@ -123,7 +123,8 @@ export function VideoDialog({ notebook, onCreate }: {
 
   const notebookCount = source?.kind === "notebook" ? (notebooks.data?.find((n) => n.id === source.id)?.document_count ?? null) : null;
   const wholeNotebook = source?.kind === "notebook";
-  const sourceReady = source?.kind === "post" || (wholeNotebook && notebookCount !== 0);
+  // Choosing a single post: nothing to focus on until one is picked (the notebook behind it no longer counts).
+  const sourceReady = source?.kind === "post" || (wholeNotebook && !choosingPost && notebookCount !== 0);
   const sourceKey = !source ? "" : `${source.kind}:${source.id}`;
   const sourceFields = (): VideoFocusSource | null => (!source ? null : source.kind === "post" ? { document_id: source.id } : { notebook_id: source.id });
 
@@ -175,21 +176,10 @@ export function VideoDialog({ notebook, onCreate }: {
         ? { focus_prompt: custom.trim() }
         : {};
     const body: VideoCreateBody = { ...o, ...from, ...focusFields, notebook_id: source?.kind === "notebook" ? source.id : notebook?.id };
+    // The video's screen opens now and waits for the server there (the limit, the service and other refusals show
+    // on it); busy only guards against a second tap while this sheet goes away.
     setBusy(true);
-    // Check it is accepted here (the limit and the service), then hand the finished start to the notebook's Library.
-    try {
-      const a = await videosApi.create(body);
-      onCreate(() => Promise.resolve(a), a);
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 402) setLimitHit(true);
-      else if (e instanceof ApiError && (e.status === 503 || e.status === 502)) {
-        Alert.alert("Oops, we are sorry!", "We have faced some issue generating your video. Please try again in a while, or contact support for help.", [
-          { text: "Contact support", onPress: () => void Linking.openURL("mailto:arslan@firebird-technologies.com?subject=Notestack%20video") },
-          { text: "OK", style: "cancel" },
-        ]);
-      } else setError(e instanceof Error ? e.message : "Could not start the video.");
-      setBusy(false);
-    }
+    onCreate(videosApi.create(body));
   };
 
   if (config.error) return <ErrorText>{config.error.message}</ErrorText>;
@@ -202,7 +192,7 @@ export function VideoDialog({ notebook, onCreate }: {
         <Text style={pageStyles.body}>
           You have used all of the videos included in your current plan. Upgrade to a bigger plan to keep turning your posts and chats into videos.
         </Text>
-        <PillButton title="Upgrade" variant="primary" onPress={() => void WebBrowser.openBrowserAsync("https://notestack.ai/pricing", { controlsColor: colors.blue })} />
+        <PillButton title="Upgrade" variant="primary" onPress={() => upgrade()} />
       </View>
     );
   }
@@ -252,20 +242,23 @@ export function VideoDialog({ notebook, onCreate }: {
           {sourceReady ? (
             <View style={createStyles.field}>
               <Label>{wholeNotebook ? "What should the video be about?" : "What should the video focus on?"}</Label>
-              {wholeNotebook ? (
-                <CustomTopic
-                  title="Your topic"
-                  rows={2}
-                  value={custom}
-                  onChange={(t) => {
-                    setCustom(t);
-                    setFocus(null);
-                  }}
-                  onFocus={() => setFocus(null)}
-                  note="We find what your posts say about it. If none cover it, you get an overview of the whole notebook."
-                />
-              ) : null}
-              {wholeNotebook && shownTopics?.length !== 0 ? <Hint>Or pick a suggested topic</Hint> : null}
+              {/* Your own topic first, the suggestions under it: the same for a notebook and a single post */}
+              <CustomTopic
+                title={wholeNotebook ? "Your topic" : undefined}
+                rows={2}
+                value={custom}
+                onChange={(t) => {
+                  setCustom(t);
+                  setFocus(null);
+                }}
+                onFocus={() => setFocus(null)}
+                note={
+                  wholeNotebook
+                    ? "We find what your posts say about it. If none cover it, you get an overview of the whole notebook."
+                    : "Keep it to what the selected posts cover; anything they don't cover is left out of the video."
+                }
+              />
+              {shownTopics?.length !== 0 ? <Hint>Or pick a suggested topic</Hint> : null}
               <FocusCards
                 topics={shownTopics}
                 picked={focus}
@@ -274,18 +267,6 @@ export function VideoDialog({ notebook, onCreate }: {
                   setCustom("");
                 }}
               />
-              {!wholeNotebook ? (
-                <CustomTopic
-                  rows={2}
-                  value={custom}
-                  onChange={(t) => {
-                    setCustom(t);
-                    setFocus(null);
-                  }}
-                  onFocus={() => setFocus(null)}
-                  note="Keep it to what the selected posts cover; anything they don't cover is left out of the video."
-                />
-              ) : null}
             </View>
           ) : null}
 
@@ -580,6 +561,8 @@ export function ColorField({ label, value, onChange }: { label: string; value: s
 /** One post to make the video from: a search over the indexed posts, newest added first. */
 function PostPicker({ selected, onPick }: { selected: string | null; onPick: (id: string) => void }) {
   const [q, setQ] = useState("");
+  // The list scrolls in its own box, sized from the first row: about 3.5 rows show, the next one cut off.
+  const [row, setRow] = useState(0);
   const posts = useQuery({ queryKey: ["docs", "picker", "indexed"], queryFn: () => docsApi.list({ sort: "added", limit: 5000, indexed_only: true }) });
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -597,13 +580,14 @@ function PostPicker({ selected, onPick }: { selected: string | null; onPick: (id
         autoCapitalize="none"
       />
       {posts.isPending ? <ActivityIndicator color={colors.blue} /> : null}
-      <View style={styles.postList}>
+      <ScrollView style={[styles.postList, { maxHeight: row ? row * 3.5 : 260 }]} nestedScrollEnabled showsVerticalScrollIndicator keyboardShouldPersistTaps="handled">
         {shown.map((d, i) => {
           const on = d.id === selected;
           return (
             <Pressable
               key={d.id}
               onPress={() => onPick(d.id)}
+              onLayout={i === 0 ? (e) => e.nativeEvent.layout.height !== row && setRow(e.nativeEvent.layout.height) : undefined}
               accessibilityRole="radio"
               accessibilityState={{ checked: on }}
               style={[styles.postRow, i > 0 && styles.postLine, on && styles.postOn]}>
@@ -618,7 +602,7 @@ function PostPicker({ selected, onPick }: { selected: string | null; onPick: (id
           );
         })}
         {posts.data && shown.length === 0 ? <Hint>No posts match.</Hint> : null}
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -714,7 +698,7 @@ const styles = StyleSheet.create({
   voicePick: { flex: 1, gap: 2 },
   voiceName: { color: colors.text, fontSize: 16, fontWeight: "600" },
   voiceMeta: { color: colors.text3, fontSize: 13.5 },
-  postList: { borderRadius: radius.sm + 2, borderWidth: 1, borderColor: colors.line, overflow: "hidden" },
+  postList: { flexGrow: 0, borderRadius: radius.sm + 2, borderWidth: 1, borderColor: colors.line, overflow: "hidden" },
   postRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 12 },
   postLine: { borderTopWidth: 1, borderTopColor: colors.line },
   postOn: { backgroundColor: colors.blue10 },

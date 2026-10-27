@@ -234,5 +234,6 @@ const styles = StyleSheet.create({
   faqHead: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
   faqQuestion: { flex: 1, color: colors.text, fontSize: 17, lineHeight: 24, fontWeight: "600" },
   faqSign: { color: colors.blue, fontSize: 22, lineHeight: 24 },
-  cardHighlight: { borderColor: colors.blue, shadowColor: colors.blue, shadowOpacity: 0.5, shadowRadius: 18 },
+  // Solid (the card's see-through fill over black), so iOS can draw the glow from the card's shape.
+  cardHighlight: { borderColor: colors.blue, backgroundColor: "#080a0f", shadowColor: colors.blue, shadowOpacity: 0.5, shadowRadius: 18 },
 });

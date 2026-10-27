@@ -3,15 +3,15 @@ import { artifactsApi, launchpadApi } from "@notestack/shared/endpoints";
 import type { Artifact, LaunchKitContent } from "@notestack/shared/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Clipboard from "expo-clipboard";
-import { useEffect, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import { router } from "expo-router";
+import { useState } from "react";
+import { StyleSheet, Text, TextInput, View } from "react-native";
 
-import { ChevronLeftIcon } from "@/icons";
 import { Composer } from "@/launchpad/editors";
 import { colors, fonts, gutter, radius } from "@/theme";
-import { ErrorText, formatDate } from "@/ui";
-import { confirm, PillButton, pageStyles, Sheet, StatusPill } from "@/widgets";
+import { ErrorText, formatDate, Loading } from "@/ui";
+import { BackLink } from "@/video/back";
+import { confirm, JobProgress, Page, PillButton, Sheet, StatusPill } from "@/widgets";
 
 /** LinkedIn's limit for one post. */
 const LIMIT = 3000;
@@ -31,49 +31,50 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
+const working = (k: Artifact) => k.status === "generating" || k.status === "pending" || k.job?.status === "queued" || k.job?.status === "running";
+
 /**
- * A Launch Kit, opened from its card (web: pages/LaunchKit.tsx KitView): the LinkedIn post to edit, copy and schedule,
- * and its hooks, strongest first, each of which can go out on its own. Kits are worked for LinkedIn only for now.
+ * A Launch Kit's page (web: pages/LaunchKit.tsx, /app/launchpad/kits/:id): its progress while it is being written, then
+ * the LinkedIn post to edit, copy and schedule, and its hooks, strongest first, each of which can go out on its own.
  */
-export function LaunchKitScreen({ artifact, visible, onClose, onDeleted, onChanged }: {
-  artifact: Artifact;
-  visible: boolean;
-  onClose: () => void;
-  onDeleted: () => void;
-  onChanged: () => void;
-}) {
-  const [kit, setKit] = useState(artifact);
+export function LaunchKitView({ id }: { id: string }) {
+  const queryClient = useQueryClient();
+  const kitQuery = useQuery({
+    queryKey: ["artifact", id],
+    queryFn: () => artifactsApi.get(id),
+    // While it is being written: its job's progress for the bar, until it is ready or failed.
+    refetchInterval: (q) => (q.state.data && working(q.state.data) ? 2000 : false),
+  });
+  if (!kitQuery.data) {
+    return (
+      <Page>
+        <BackLink fallback="/launchpad" />
+        {kitQuery.error ? <ErrorText>{kitQuery.error.message}</ErrorText> : <Loading />}
+      </Page>
+    );
+  }
+  // Keyed by status: the post editor starts from the written kit once it is ready.
+  return <KitBody key={kitQuery.data.status} kit={kitQuery.data} onSaved={(k) => queryClient.setQueryData(["artifact", id], k)} />;
+}
+
+function KitBody({ kit, onSaved }: { kit: Artifact; onSaved: (k: Artifact) => void }) {
+  const queryClient = useQueryClient();
   const c = (kit.content ?? {}) as LaunchKitContent;
-  const saved = c.posts?.linkedin ?? [];
-  const [posts, setPosts] = useState<string[]>(saved);
+  const [posts, setPosts] = useState<string[]>(c.posts?.linkedin ?? []);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [schedule, setSchedule] = useState<string | null>(null);
-  const queryClient = useQueryClient();
   const accounts = useQuery({ queryKey: ["launchpad", "accounts"], queryFn: launchpadApi.accounts, enabled: schedule !== null });
   const title = c.post_title ?? kit.title;
-
-  // The kit as the server has it, each time it opens.
-  useEffect(() => {
-    if (!visible) return;
-    artifactsApi.get(artifact.id).then(
-      (k) => {
-        setKit(k);
-        setPosts((k.content as LaunchKitContent)?.posts?.linkedin ?? []);
-        setDirty(false);
-      },
-      () => undefined,
-    );
-  }, [visible, artifact.id]);
+  const running = working(kit);
 
   const save = async () => {
     setSaving(true);
     setError("");
     try {
-      setKit(await artifactsApi.update(kit.id, { content: { posts: { ...c.posts, linkedin: posts } } }));
+      onSaved(await artifactsApi.update(kit.id, { content: { posts: { ...c.posts, linkedin: posts } } }));
       setDirty(false);
-      onChanged();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Could not save the edits. Try again.");
     } finally {
@@ -81,87 +82,96 @@ export function LaunchKitScreen({ artifact, visible, onClose, onDeleted, onChang
     }
   };
 
-  return (
-    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
-      <SafeAreaProvider>
-      <SafeAreaView style={pageStyles.sheet} edges={["top", "bottom"]}>
-        <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
-          <Pressable onPress={onClose} hitSlop={10} accessibilityRole="button" style={styles.back}>
-            <ChevronLeftIcon size={16} color={colors.text2} />
-            <Text style={styles.backText}>Back</Text>
-          </Pressable>
-          <View style={styles.head}>
-            <View style={styles.headText}>
-              <Text style={styles.eyebrow}>LAUNCH KIT</Text>
-              <Text style={styles.title} accessibilityRole="header">
-                {title}
-              </Text>
-              <Text style={styles.date}>{formatDate(kit.created_at, true)}</Text>
-            </View>
-            <View style={styles.headSide}>
-              <StatusPill status={kit.status} />
-              <PillButton small variant="danger" title="Delete" onPress={() => confirm("Delete launch kit?", "Delete", onDeleted, title)} />
-            </View>
-          </View>
-          <ErrorText>{error}</ErrorText>
+  const remove = () =>
+    confirm(
+      "Delete launch kit?",
+      "Delete",
+      () => {
+        artifactsApi.remove(kit.id).then(
+          () => {
+            void queryClient.invalidateQueries({ queryKey: ["launchpad"] });
+            void queryClient.invalidateQueries({ queryKey: ["library"] });
+            if (router.canGoBack()) router.back();
+            else router.replace("/launchpad/kits");
+          },
+          (e: unknown) => setError(e instanceof ApiError ? e.message : "Could not delete it. Try again."),
+        );
+      },
+      title,
+    );
 
-          {kit.status === "ready" ? (
-            <>
-              <View style={styles.section}>
-                <Text style={styles.h}>LinkedIn post</Text>
-                <View style={styles.between}>
-                  <Text style={styles.muted}>The full post, written from the article. Edit it here, then schedule it.</Text>
+  return (
+    <Page>
+      <BackLink fallback="/launchpad" />
+      <View style={styles.section}>
+        <Text style={styles.eyebrow}>LAUNCH KIT</Text>
+        <Text style={styles.title} accessibilityRole="header">
+          {title}
+        </Text>
+        <Text style={styles.date}>{formatDate(kit.created_at, true)}</Text>
+        <View style={styles.row}>
+          <StatusPill status={running ? "working" : kit.status} />
+          <PillButton small title="Delete" onPress={remove} />
+        </View>
+        {kit.job && (running || kit.status === "failed") ? <JobProgress job={kit.job} /> : null}
+        <ErrorText>{error}</ErrorText>
+
+        {kit.status === "ready" ? (
+          <>
+            <View style={styles.rule} />
+            <Text style={styles.h}>LinkedIn post</Text>
+            <Text style={styles.muted}>The full post, written from the article. Edit it here, then schedule it.</Text>
+            {posts.map((p, i) => (
+              <View key={i} style={styles.post}>
+                <Text style={[styles.count, p.length > LIMIT && styles.over]}>
+                  {p.length} / {LIMIT}
+                </Text>
+                <TextInput
+                  style={styles.input}
+                  value={p}
+                  multiline
+                  scrollEnabled
+                  textAlignVertical="top"
+                  onChangeText={(v) => {
+                    setPosts(posts.map((x, j) => (j === i ? v : x)));
+                    setDirty(true);
+                  }}
+                  accessibilityLabel="LinkedIn post"
+                />
+                <View style={styles.row}>
+                  <CopyButton text={p} />
+                  {/* Just this post, as it reads on screen, saved or not */}
+                  <PillButton small title="Schedule" onPress={() => setSchedule(p)} />
                   {dirty ? <PillButton small variant="primary" title={saving ? "Saving..." : "Save edits"} busy={saving} onPress={() => void save()} /> : null}
                 </View>
-                {posts.map((p, i) => (
-                  <View key={i} style={styles.post}>
-                    <Text style={[styles.count, p.length > LIMIT && styles.over]}>
-                      {p.length} / {LIMIT}
-                    </Text>
-                    <TextInput
-                      style={styles.input}
-                      value={p}
-                      multiline
-                      textAlignVertical="top"
-                      onChangeText={(v) => {
-                        setPosts(posts.map((x, j) => (j === i ? v : x)));
-                        setDirty(true);
-                      }}
-                      accessibilityLabel="LinkedIn post"
-                    />
+              </View>
+            ))}
+
+            {(c.hooks?.length ?? 0) > 0 ? (
+              <>
+                <View style={styles.rule} />
+                <Text style={styles.h}>Hooks</Text>
+                <Text style={styles.muted}>{c.hooks.length} short lines to lead with, strongest first. Each can go out on its own.</Text>
+                {c.hooks.map((h, i) => (
+                  <View key={i} style={styles.hook}>
+                    <View style={styles.between}>
+                      <Text style={styles.hookNum}>Hook {i + 1}</Text>
+                      <Text style={styles.strength}>strength {Math.round(h.strength * 100)}</Text>
+                    </View>
+                    <Text style={styles.hookText}>{h.text}</Text>
+                    <Text style={styles.muted}>{h.rationale}</Text>
                     <View style={styles.row}>
-                      <CopyButton text={p} />
-                      {/* Just this post, as it reads on screen, saved or not */}
-                      <PillButton small title="Schedule" onPress={() => setSchedule(p)} />
+                      <CopyButton text={h.text} />
+                      <PillButton small title="Schedule" onPress={() => setSchedule(h.text)} />
                     </View>
                   </View>
                 ))}
-              </View>
+              </>
+            ) : null}
+          </>
+        ) : null}
+      </View>
 
-              {(c.hooks?.length ?? 0) > 0 ? (
-                <View style={styles.section}>
-                  <Text style={styles.h}>Hooks</Text>
-                  <Text style={styles.muted}>{c.hooks.length} short lines to lead with, strongest first. Each can go out on its own.</Text>
-                  {c.hooks.map((h, i) => (
-                    <View key={i} style={styles.hook}>
-                      <View style={styles.between}>
-                        <Text style={styles.hookNum}>Hook {i + 1}</Text>
-                        <Text style={styles.strength}>strength {Math.round(h.strength * 100)}</Text>
-                      </View>
-                      <Text style={styles.hookText}>{h.text}</Text>
-                      <Text style={styles.muted}>{h.rationale}</Text>
-                      <View style={styles.row}>
-                        <CopyButton text={h.text} />
-                        <PillButton small title="Schedule" onPress={() => setSchedule(h.text)} />
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              ) : null}
-            </>
-          ) : null}
-        </ScrollView>
-      </SafeAreaView>
       <Sheet visible={schedule !== null} title="New post" onClose={() => setSchedule(null)}>
         {schedule !== null ? (
           <Composer
@@ -178,42 +188,36 @@ export function LaunchKitScreen({ artifact, visible, onClose, onDeleted, onChang
           />
         ) : null}
       </Sheet>
-    </SafeAreaProvider>
-    </Modal>
+    </Page>
   );
 }
 
 const styles = StyleSheet.create({
-  page: { padding: gutter * 1.25, paddingBottom: gutter * 3, gap: 16 },
-  back: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", paddingVertical: 4 },
-  backText: { color: colors.text2, fontSize: 15 },
-  head: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
-  headText: { flex: 1, gap: 6 },
-  headSide: { alignItems: "flex-end", gap: 8 },
+  section: { gap: 12, padding: gutter * 1.25, borderRadius: radius.md + 2, borderWidth: 1, borderColor: colors.line, backgroundColor: "rgba(12, 12, 12, 0.92)" },
   eyebrow: { color: colors.blue, fontFamily: fonts.mono, fontSize: 12.5, letterSpacing: 3 },
   title: { color: colors.text, fontFamily: fonts.displayBold, fontSize: 24, lineHeight: 30 },
   date: { color: colors.text2, fontFamily: fonts.mono, fontSize: 13 },
-  section: { gap: 12, padding: gutter, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, backgroundColor: "rgba(12, 12, 12, 0.92)" },
-  h: { color: colors.text, fontFamily: fonts.displayBold, fontSize: 19 },
-  muted: { flex: 1, color: colors.text2, fontSize: 14.5, lineHeight: 21 },
+  rule: { height: StyleSheet.hairlineWidth, backgroundColor: colors.lineStrong, marginVertical: 6 },
+  h: { color: colors.text, fontFamily: fonts.displayBold, fontSize: 24 },
+  muted: { color: colors.text2, fontSize: 15, lineHeight: 22 },
   between: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
-  post: { gap: 8 },
-  count: { alignSelf: "flex-end", color: colors.text3, fontFamily: fonts.mono, fontSize: 12.5 },
+  post: { gap: 8, padding: gutter * 0.75, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line },
+  count: { alignSelf: "flex-end", color: colors.text2, fontFamily: fonts.mono, fontSize: 13 },
   over: { color: colors.danger },
   input: {
-    minHeight: 220,
+    height: 320,
     color: colors.text,
-    fontSize: 15.5,
-    lineHeight: 22,
+    fontSize: 16,
+    lineHeight: 23,
     padding: 14,
     borderRadius: radius.sm + 2,
     borderWidth: 1,
     borderColor: colors.lineStrong,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.black,
   },
-  row: { flexDirection: "row", gap: 8 },
-  hook: { gap: 8, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line },
-  hookNum: { color: colors.text3, fontFamily: fonts.mono, fontSize: 12.5 },
-  strength: { color: colors.blue, fontFamily: fonts.mono, fontSize: 12.5 },
-  hookText: { color: colors.white, fontSize: 16.5, lineHeight: 24, fontWeight: "500" },
+  row: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 },
+  hook: { gap: 10, padding: gutter * 0.9, borderRadius: radius.md, borderWidth: 1, borderLeftWidth: 3, borderColor: colors.line, borderLeftColor: colors.blue20 },
+  hookNum: { color: colors.blue, fontFamily: fonts.mono, fontSize: 13.5 },
+  strength: { color: colors.text2, fontFamily: fonts.mono, fontSize: 13 },
+  hookText: { color: colors.white, fontSize: 17, lineHeight: 26, fontWeight: "500" },
 });

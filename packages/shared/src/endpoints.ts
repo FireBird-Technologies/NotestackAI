@@ -336,6 +336,8 @@ export const billingApi = {
   checkout: (plan: string, cycle: BillingCycle) => post<{ url: string }>("/api/billing/checkout", { plan, cycle }),
   portal: () => post<{ url: string }>("/api/billing/portal"),
   confirm: (sessionId: string) => post<BillingStatus>("/api/billing/confirm", { session_id: sessionId }),
+  /** After an in-app purchase or restore: the server reads the store's state now rather than waiting for its webhook. */
+  iapSync: () => post<BillingStatus>("/api/billing/iap/sync"),
 };
 
 /** A file in the mobile app: a local file by its address. React Native's FormData uploads it as the file itself. */

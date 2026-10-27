@@ -4,6 +4,7 @@ import { tokens } from "@notestack/shared/client";
 import { settingsApi, type SettingsPatch } from "@notestack/shared/endpoints";
 import type { Settings as SettingsData } from "@notestack/shared/types";
 import { ConnectedApps } from "../components/ConnectedApps";
+import { deletePlanWarning } from "@notestack/shared/billing";
 import { ConfirmButton, errorMessage, formatDate, Loading, PageHeader } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import { useUpgrade } from "../hooks/useUpgrade";
@@ -89,7 +90,7 @@ export default function Settings() {
               <input className="input input-sm" value={name} onChange={(e) => setName(e.target.value)} onBlur={saveProfile} />
             </label>
             <p className="mono muted">
-              {s.user.email} · signed in with {s.user.auth_provider === "google" ? "Google" : "email and password"}
+              {s.user.email} · signed in with {s.user.auth_provider === "google" ? "Google" : s.user.auth_provider === "apple" ? "Apple" : "email and password"}
             </p>
             <label className="field">
               <span>Workspace name</span>
@@ -145,7 +146,13 @@ export default function Settings() {
               Refills on the 1st of every month.
               {u.videos_resets_at && ` Videos refill on ${formatDate(u.videos_resets_at)}.`}
             </p>
-            {s.billing_enabled && (
+            {s.billing_enabled && (upgrade.status?.billed_by === "app_store" || upgrade.status?.billed_by === "play_store") ? (
+              // Bought in the iOS or Android app: only that store can change or cancel it
+              <p className="muted">
+                Your plan is billed through {upgrade.status.billed_by === "app_store" ? "the App Store" : "Google Play"}. Change or
+                cancel it in the Notestack app on your phone.
+              </p>
+            ) : s.billing_enabled && (
               <div className="row">
                 {upgrade.status?.can_upgrade && (
                   <button className="btn btn-primary btn-small" onClick={() => upgrade.openUpgrade()}>
@@ -163,6 +170,20 @@ export default function Settings() {
           </Section>
 
           <Section title="Account">
+            {deletePlanWarning(upgrade.status) && (
+              <p className="notice">
+                Deleting your account: {deletePlanWarning(upgrade.status)}
+                {upgrade.status?.billed_by === "app_store" && (
+                  <>
+                    {" "}
+                    {/* Apple's own page: opens the subscription list on an iPhone, iPad or Mac */}
+                    <a href="https://apps.apple.com/account/subscriptions" target="_blank" rel="noreferrer">
+                      Open my App Store subscriptions
+                    </a>
+                  </>
+                )}
+              </p>
+            )}
             <div className="row">
               <button className="btn" onClick={logout} disabled={signingOut}>
                 Sign out everywhere

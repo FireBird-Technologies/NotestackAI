@@ -8,6 +8,7 @@ import Animated, { FadeIn, FadeOut, SlideInLeft, SlideOutLeft } from "react-nati
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAuth } from "@/auth";
+import { useUpgrade } from "@/upgrade";
 import { colors, fonts, gutter, radius } from "@/theme";
 
 /**
@@ -64,6 +65,7 @@ function SidePanel({ onClose }: { onClose: () => void }) {
   const insets = useSafeAreaInsets();
   const segments = useSegments() as string[];
   const { user, logout } = useAuth();
+  const upgrade = useUpgrade();
   const current = segments[1] ?? "notebooks";
 
   const go = (name: string) => {
@@ -102,7 +104,7 @@ function SidePanel({ onClose }: { onClose: () => void }) {
           <View style={styles.spacer} />
           <PlanCard onPlans={() => {
             onClose();
-            router.navigate("/pricing");
+            upgrade();
           }} />
           <NavItem item={SETTINGS} active={current === "settings"} onPress={() => go("settings")} />
           <Text style={styles.email} numberOfLines={1}>
@@ -172,7 +174,7 @@ function fuelLeft(m: { used: number; limit: number; unit: string }): string {
   return `${Number.isInteger(left) ? left : left.toFixed(1)}${m.unit ? ` ${m.unit}` : ""} left`;
 }
 
-/** The plan and what is left of it this period (the web's FuelGauge). Upgrading is not offered in the app. */
+/** The plan and what is left of it this period (the web's FuelGauge). "View plans" opens the upgrade sheet. */
 function PlanCard({ onPlans }: { onPlans: () => void }) {
   const { data } = useQuery(planQuery);
   if (!data) return null;

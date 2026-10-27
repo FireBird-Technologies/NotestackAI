@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { POPULAR_PLAN } from "@notestack/shared/billing";
 import { api } from "@notestack/shared/client";
 import { annualMonthly, annualTotal, FALLBACK_PLANS as FALLBACK, money, savingsPct, type Cycle, type Plan } from "@notestack/shared/content/marketing";
 import { CheckIcon } from "./icons/Icons";
@@ -35,7 +36,7 @@ export default function PricingTiers() {
       </div>
       <div className="pricing-grid">
         {plans.map((plan) => {
-          const featured = plan.id === "writer";
+          const featured = plan.id === POPULAR_PLAN;
           const free = plan.price_monthly_usd === 0;
           const annual = cycle === "annual" && !free;
           return (

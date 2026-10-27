@@ -95,7 +95,7 @@ def test_free_allowances_are_totals_and_paid_ones_are_monthly(client, auth, bill
 
     ws = db_session.query(Workspace).one()
     free, writer, studio = PLANS["free"], PLANS["writer"], PLANS["studio"]
-    assert (free.videos, free.audio_overviews, free.launch_kits, free.infographics) == (2, 1, 2, 2) and free.lifetime
+    assert (free.videos, free.audio_overviews, free.launch_kits, free.infographics) == (1, 1, 2, 2) and free.lifetime
     assert (writer.launch_kits, writer.audio_minutes, writer.reports) == (20, 60, 30) and not writer.lifetime
     assert (studio.launch_kits, studio.audio_minutes, studio.reports) == (50, 240, -1)
 
