@@ -93,9 +93,6 @@ export function AnswerFeedback({ messageId, initial, text, extra }: {
             <CopyGlyph done={copied} />
           </button>
         )}
-        <button type="button" className={`fb-btn${fb?.rating === "up" ? " is-on" : ""}`} aria-pressed={fb?.rating === "up"} aria-label="Good answer" title="Good answer" onClick={() => choose("up")}>
-          <Thumb />
-        </button>
         <button type="button" className={`fb-btn${fb?.rating === "down" ? " is-on" : ""}`} aria-pressed={fb?.rating === "down"} aria-label="Bad answer" title="Bad answer" onClick={() => choose("down")}>
           <Thumb down />
         </button>

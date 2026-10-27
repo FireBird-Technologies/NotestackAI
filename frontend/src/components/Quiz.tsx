@@ -399,10 +399,10 @@ export function QuizPlayer({ artifact, onClose }: { artifact: Artifact; onClose:
 export function QuizBody({ artifact }: { artifact: Artifact }) {
   const [playing, setPlaying] = useState(false);
   const c = artifact.content;
-  const from = sourceSummary(c.source);
+  const from = artifact.transferred_from_notebooklm ? "NotebookLM" : sourceSummary(c.source);
   return (
     <div className="artifact-body">
-      <p className="muted">{c.question_count ?? 0} questions · {c.difficulty ?? "medium"} · from {from}</p>
+      <p className="muted">{c.question_count ?? 0} questions{artifact.transferred_from_notebooklm ? "" : ` · ${c.difficulty ?? "medium"}`} · from {from}</p>
       <ViewButton label="Start quiz" onClick={() => setPlaying(true)} />
       {playing && <QuizPlayer artifact={artifact} onClose={() => setPlaying(false)} />}
     </div>

@@ -153,6 +153,7 @@ def serialize_artifact(a: Artifact, job: Job | None = None) -> dict:
         "download_url": (storage.presign_get(a.storage_key, download_name=download_name(a)) if a.storage_key
                          else content.get("video_url")),
         "provider": content.get("provider"),
+        "transferred_from_notebooklm": bool(content.get("transferred_from_notebooklm") or content.get("provider") == "notebooklm"),
         "slide_urls": [storage.presign_get(k) for k in slides],
         "created_at": a.created_at.isoformat() if a.created_at else None,
         "job": serialize_job(job) if job else None,

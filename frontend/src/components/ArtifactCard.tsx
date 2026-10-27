@@ -186,7 +186,7 @@ export function Body({ artifact, onCite }: { artifact: Artifact; onCite?: (c: Ci
     case "mind_map":
       return (
         <div className="artifact-body">
-          <p className="muted">{c.node_count ?? 0} stars across {c.post_count ?? 0} posts.</p>
+          <p className="muted">{c.node_count ?? 0} stars{artifact.transferred_from_notebooklm ? " · from NotebookLM" : ` across ${c.post_count ?? 0} posts`}.</p>
           <ViewButton label="Open Mind Constellation" onClick={() => setExploring(true)} />
           {exploring && <MindMapExplorer artifact={artifact} onClose={() => setExploring(false)} />}
         </div>
@@ -250,6 +250,7 @@ export function ArtifactCard({
           <h3>{artifact.title}</h3>
           <p className="mono muted">
             {formatDate(artifact.created_at, true)}
+            {artifact.transferred_from_notebooklm ? " · Transferred from NotebookLM" : ""}
             {artifact.content.duration_s ? ` · ${formatDuration(artifact.content.duration_s)}` : ""}
           </p>
         </div>

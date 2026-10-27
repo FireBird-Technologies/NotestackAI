@@ -72,6 +72,7 @@ export function ArtifactRow({
         <span className="muted">{st.label}</span>
       </span>
       <span className="vw-list-meta muted">
+        {artifact.transferred_from_notebooklm && <span className="notebooklm-origin">Transferred from NotebookLM</span>}
         {artifact.created_at && <span>{formatDate(artifact.created_at, true)}</span>}
         {artifact.content.duration_s ? <span>{formatDuration(artifact.content.duration_s)}</span> : null}
         {artifact.content.aspect_ratio && <span>{artifact.content.aspect_ratio === "portrait" ? "Portrait" : "Landscape"}</span>}

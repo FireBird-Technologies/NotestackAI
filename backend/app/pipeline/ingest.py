@@ -10,6 +10,7 @@ All of them end in `store_entries`, which writes documents, raw HTML and corpus 
 
 import hashlib
 import io
+import json
 import logging
 import re
 import time
@@ -306,6 +307,8 @@ class FeedEntry:
     published_at: datetime | None
     html: str
     sections: list[tuple[str | None, str]] | None = None  # set when the source is not HTML
+    # Origin-specific details that should follow the stored post. Normal feeds leave this empty.
+    metadata: dict | None = None
 
 
 _MD_IMAGE = re.compile(r"!\[([^\]]*)\]\(([^)\s]*)[^)]*\)")
@@ -623,6 +626,7 @@ def store_entries(
         doc.clean_text = "\n\n".join(f"## {h}\n{t}" if h else t for h, t in sections)
         doc.metadata_json = {
             **{k: v for k, v in (doc.metadata_json or {}).items() if k != "locked"},
+            **(entry.metadata or {}),
             "headings": [h for h, _ in sections if h],
             "words": len(doc.clean_text.split()),
         }
@@ -800,4 +804,50 @@ def entry_from_upload(filename: str, content_type: str, data: bytes) -> FeedEntr
     title = first_heading.group(1).strip() if first_heading else stem
     if sections and sections[0][0] == title:
         sections[0] = (None, sections[0][1])
-    return FeedEntry(title=title, url=url, published_at=None, html="", sections=sections)
+    notebooklm = _notebooklm_chat_frontmatter(text)
+    if notebooklm:
+        identity = "\0".join((notebooklm["notebook_id"], notebooklm["notebook_title"], "chat"))
+        source_url = notebooklm["source_url"]
+        url = source_url if source_url.startswith(("http://", "https://")) else (
+            f"notebooklm://import/{hashlib.sha256(identity.encode()).hexdigest()}"
+        )
+    return FeedEntry(
+        title=title,
+        url=url,
+        published_at=None,
+        html="",
+        sections=sections,
+        metadata={"notebooklm": {**notebooklm, "kind": "chat"}} if notebooklm else None,
+    )
+
+
+def _notebooklm_chat_frontmatter(text: str) -> dict[str, str] | None:
+    """Read only the small frontmatter block produced by the NotebookLM exporter.
+
+    This deliberately is not a general YAML parser: the extension writes scalar JSON strings, and recognizing its
+    explicit type keeps an unrelated Markdown upload from being mislabeled.
+    """
+    match = re.match(r"^\ufeff?---\s*\n(.*?)\n---(?:\s*\n|$)", text, re.S)
+    if not match:
+        return None
+    fields: dict[str, str] = {}
+    for line in match.group(1).splitlines():
+        key, separator, raw = line.partition(":")
+        if not separator:
+            continue
+        value = raw.strip()
+        if value.startswith('"'):
+            try:
+                value = str(json.loads(value))
+            except (json.JSONDecodeError, TypeError):
+                value = value.strip('"')
+        elif len(value) >= 2 and value[0] == value[-1] == "'":
+            value = value[1:-1]
+        fields[key.strip()] = value
+    if fields.get("type") != "notebooklm-chat-transcript":
+        return None
+    return {
+        "notebook_id": fields.get("notebook_id", "")[:300],
+        "notebook_title": fields.get("notebook", "NotebookLM notebook")[:300],
+        "source_url": fields.get("source_url", "")[:1000],
+    }

@@ -107,14 +107,15 @@ export function Modal({
   );
 }
 
-export function Drawer({ onClose, children, label }: { onClose: () => void; children: ReactNode; label: string }) {
+export function Drawer({ onClose, children, label, className = "" }: { onClose: () => void; children: ReactNode; label: string; className?: string }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
-  return (
-    <div className="drawer-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+  // Rendered into <body>, like Modal, so a drawer opened from a dialog stacks above it instead of inside the page's stacking context.
+  return createPortal(
+    <div className={`drawer-backdrop${className ? ` ${className}` : ""}`} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <aside className="drawer" role="dialog" aria-modal="true" aria-label={label}>
         <button className="icon-btn drawer-close" onClick={onClose} aria-label="Close">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
@@ -123,7 +124,8 @@ export function Drawer({ onClose, children, label }: { onClose: () => void; chil
         </button>
         {children}
       </aside>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -131,16 +133,21 @@ export function Tabs<T extends string>({
   tabs,
   value,
   onChange,
+  className = "",
+  label,
 }: {
   tabs: { id: T; label: string; count?: number }[];
   value: T;
   onChange: (id: T) => void;
+  className?: string;
+  label?: string;
 }) {
   return (
-    <div className="tabs" role="tablist">
+    <div className={`tabs${className ? ` ${className}` : ""}`} role="tablist" aria-label={label}>
       {tabs.map((t) => (
         <button
           key={t.id}
+          type="button"
           role="tab"
           aria-selected={value === t.id}
           className={`tab${value === t.id ? " active" : ""}`}

@@ -778,6 +778,20 @@
   background: rgba(0, 0, 0, 0.7);
 }
 
+.notebooklm-import-card {
+  justify-items: start;
+}
+
+.notebooklm-import-card .btn {
+  width: 100%;
+}
+
+.notebooklm-import-loader {
+  width: 32px;
+  height: 32px;
+  margin: 2px 0;
+}
+
 .auth-title {
   font-size: 1.6rem;
 }

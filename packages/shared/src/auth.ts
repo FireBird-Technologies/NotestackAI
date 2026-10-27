@@ -27,7 +27,8 @@ export function safeNext(path: string | null | undefined): string {
 /** Where a new account goes after signing up from `next`: onboarding, except people who came to use a free tool or to
  * read a shared preview, who go straight back to it. */
 export function afterSignUp(next: string): string {
-  return next.startsWith("/tools/") || next.startsWith("/r/") ? next : "/welcome";
+  return next.startsWith("/tools/") || next.startsWith("/r/") || next === "/notebooklm-import" || next === "/notebooklm-connect"
+    || next === "/welcome?notebooklm=import" || next === "/app/sources?notebooklm=import" ? next : "/welcome";
 }
 
 export const authApi = {

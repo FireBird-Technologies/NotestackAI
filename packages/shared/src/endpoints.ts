@@ -66,6 +66,44 @@ import type {
 
 type SourceJob = { source: Source; job: Job };
 
+export type NotebookLmTransferPost = {
+  title: string;
+  content: string;
+  source_url?: string | null;
+  source_id?: string;
+  notebook_id?: string;
+  notebook_title?: string;
+  kind: "source" | "chat" | "report";
+  added_at?: string | null;
+};
+
+export type NotebookLmTransferArtifact = {
+  external_id: string;
+  type: "quiz" | "flashcards" | "mind_map";
+  title: string;
+  content: Record<string, unknown>;
+  source_url?: string | null;
+  notebook_id?: string;
+  notebook_title?: string;
+  created_at?: string | null;
+};
+
+export type NotebookLmImportResult = {
+  transfer_id: string;
+  plan: string;
+  plan_limit: number;
+  room_before: number;
+  received: number;
+  eligible: number;
+  imported: number;
+  unchanged: number;
+  skipped_plan: number;
+  document_ids: string[];
+  artifacts_received: number;
+  artifacts_imported: number;
+  artifacts_updated: number;
+};
+
 export const sourcesApi = {
   list: () => api<Source[]>("/api/sources"),
   // notebookId: added from inside a notebook, so the posts join it.
@@ -75,6 +113,10 @@ export const sourcesApi = {
     const { upload_id } = await uploadFile(file);
     return post<SourceJob>("/api/sources/upload", { upload_id, notebook_id: notebookId });
   },
+  importNotebookLm: (transferId: string, posts: NotebookLmTransferPost[], artifacts: NotebookLmTransferArtifact[] = [], notebookId?: string) =>
+    post<NotebookLmImportResult>("/api/sources/notebooklm", {
+      transfer_id: transferId, posts, artifacts, target_notebook_id: notebookId,
+    }),
   sync: (id: string) => post<SourceJob>(`/api/sources/${id}/sync`),
   remove: (id: string) => del<{ ok: true; removed_posts: number }>(`/api/sources/${id}`),
 };

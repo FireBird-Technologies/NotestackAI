@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
-import { docsApi, jobsApi, notebooksApi, sourcesApi } from "@notestack/shared/endpoints";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
+import { docsApi, jobsApi, notebooksApi, settingsApi, sourcesApi, type NotebookLmImportResult } from "@notestack/shared/endpoints";
 import type { Job, Source } from "@notestack/shared/types";
+import { NotebookLmTransferButton } from "../components/NotebookLmTransferButton";
 import { CloseIcon, UploadIcon } from "../components/icons/Icons";
 import Logo from "../components/Logo";
 import SkyCanvas from "../components/SkyCanvas";
@@ -9,15 +10,27 @@ import { SourceUrlHint, useSourceUrlCheck } from "../components/SourceUrlCheck";
 import { errorMessage, JobProgress, Tabs } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import { useJob } from "../hooks/useJob";
+import {
+  completeNotebookLmTransfer,
+  isNotebookLmExtensionInstalled,
+  NOTEBOOKLM_PLAN_LIMIT_REACHED,
+  openNotebookLmExtensionStore,
+  openNotebookLmTransfer,
+  notebookLmPlanLimitMessage,
+  notebookLmPlanLimitPreviewMessage,
+  pendingNotebookLmTransfer,
+  reportNotebookLmTransferStatus,
+} from "../lib/notebooklm";
 import { classifyUrl } from "@notestack/shared/urlScrapability";
 import { PENDING_SOURCE_KEY } from "./Landing";
 
 type Step = "connect" | "indexing" | "goal" | "ready";
 type Goal = "ask" | "audio" | "launch";
-type Mode = "feed" | "url" | "file";
+type Mode = "feed" | "url" | "file" | "notebooklm";
 
 const MODES: { id: Mode; label: string }[] = [
   { id: "feed", label: "Blog or website" },
+  { id: "notebooklm", label: "Transfer from NotebookLM" },
   { id: "url", label: "One article" },
   { id: "file", label: "Upload files" },
 ];
@@ -33,6 +46,16 @@ const GOALS: { id: Goal; title: string; body: string }[] = [
 ];
 
 export const ONBOARDED_KEY = "ns_onboarded";
+const NOTEBOOKLM_GUIDE_KEY = "ns_notebooklm_guide_open";
+const NOTEBOOKLM_RETURN_PATH = "/welcome?notebooklm=import";
+
+function notebookLmGuideWasOpen(): boolean {
+  try {
+    return sessionStorage.getItem(NOTEBOOKLM_GUIDE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
 
 export function markOnboarded() {
   try {
@@ -66,8 +89,10 @@ async function waitForJobs(ids: string[]): Promise<void> {
 export default function Welcome() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const returningFromNotebookLm = searchParams.get("notebooklm") === "import";
   const [step, setStep] = useState<Step>("connect");
-  const [mode, setMode] = useState<Mode>("feed");
+  const [mode, setMode] = useState<Mode>(() => notebookLmGuideWasOpen() ? "notebooklm" : "feed");
   const [files, setFiles] = useState<File[]>([]);
   const [dragging, setDragging] = useState(false);
   const earlierJobs = useRef<string[]>([]);
@@ -78,6 +103,13 @@ export default function Welcome() {
   const [job, setJob] = useState<Job | null>(null);
   const [goal, setGoal] = useState<Goal | null>(null);
   const [posts, setPosts] = useState(0);
+  const [extensionInstalled, setExtensionInstalled] = useState(isNotebookLmExtensionInstalled);
+  const [waitingForStoreReturn, setWaitingForStoreReturn] = useState(false);
+  const [notebookLmImportState, setNotebookLmImportState] = useState<"idle" | "reading" | "importing" | "done" | "limit" | "error">("idle");
+  const [notebookLmImportResult, setNotebookLmImportResult] = useState<NotebookLmImportResult | null>(null);
+  const [notebookLmLimitWarning, setNotebookLmLimitWarning] = useState<string | null>(null);
+  const [notebookLmLaunchMessage, setNotebookLmLaunchMessage] = useState<string | null>(null);
+  const notebookLmImportStarted = useRef(false);
   const autoStarted = useRef(false);
 
   const live = useJob(job, async (j) => {
@@ -147,22 +179,195 @@ export default function Welcome() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
+  // The extension announces itself at document_start. Polling also catches a newly injected bridge without making the
+  // person click a separate "check again" control.
+  useEffect(() => {
+    const detect = () => setExtensionInstalled(isNotebookLmExtensionInstalled());
+    detect();
+    window.addEventListener("notestack:notebooklm-exporter-ready", detect);
+    const timer = window.setInterval(detect, 750);
+    return () => {
+      window.removeEventListener("notestack:notebooklm-exporter-ready", detect);
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  // Chrome does not inject a newly installed content script into a page that was already open. After the person returns
+  // from the Web Store, refresh this one onboarding page once; the bridge then loads at document_start and Step 2 enables.
+  useEffect(() => {
+    if (!waitingForStoreReturn) return;
+    let leftForStore = false;
+    let timer: number | undefined;
+    const onBlur = () => { leftForStore = true; };
+    const onFocus = () => {
+      if (!leftForStore) return;
+      setWaitingForStoreReturn(false);
+      timer = window.setTimeout(() => {
+        if (isNotebookLmExtensionInstalled()) setExtensionInstalled(true);
+        else window.location.reload();
+      }, 350);
+    };
+    window.addEventListener("blur", onBlur);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      window.removeEventListener("blur", onBlur);
+      window.removeEventListener("focus", onFocus);
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [waitingForStoreReturn]);
+
+  // An export started here returns to the regular onboarding Index screen. Importing is synchronous, then the same
+  // Choose step used by blogs and file uploads opens automatically.
+  useEffect(() => {
+    if (!user || !returningFromNotebookLm || notebookLmImportStarted.current) return;
+    notebookLmImportStarted.current = true;
+    let active = true;
+    let continueTimer: number | undefined;
+    setStep("indexing");
+    setSource(null);
+    setJob(null);
+    setError(null);
+    setNotebookLmImportState("reading");
+
+    const run = async () => {
+      let transferId = "";
+      try {
+        const transfer = await pendingNotebookLmTransfer();
+        if (!transfer) throw new Error("No pending NotebookLM transfer was found. Return to the transfer steps and try again.");
+        transferId = transfer.transferId;
+        if (!active) return;
+        const usage = await settingsApi.usage().catch(() => null);
+        const limit = usage?.limits.indexed_posts ?? -1;
+        const used = usage?.used.indexed_posts ?? 0;
+        const room = limit < 0 ? transfer.posts.length : Math.max(0, limit - used);
+        const artifactCount = transfer.artifacts.length;
+        const selectedCount = transfer.posts.length + artifactCount;
+        const overPlan = transfer.posts.length > room;
+        const preflightMessage = overPlan
+          ? notebookLmPlanLimitPreviewMessage(transfer.posts.length, room)
+          : `Transferring ${selectedCount} ${selectedCount === 1 ? "item" : "items"} to Notestack…`;
+        setNotebookLmLimitWarning(null);
+        if (limit >= 0 && room === 0 && artifactCount === 0) {
+          const summary = {
+            selectedCount,
+            acceptedCount: 0,
+            skippedPlan: transfer.posts.length,
+            plan: usage?.plan ?? "",
+            planLimit: limit,
+          };
+          setNotebookLmLimitWarning(NOTEBOOKLM_PLAN_LIMIT_REACHED);
+          setNotebookLmImportState("limit");
+          await completeNotebookLmTransfer(transfer.transferId, NOTEBOOKLM_PLAN_LIMIT_REACHED, summary, user);
+          return;
+        }
+        setNotebookLmImportState("importing");
+        reportNotebookLmTransferStatus(transfer.transferId, "importing", preflightMessage, 0.68, {
+          selectedCount,
+          acceptedCount: Math.min(transfer.posts.length, room) + artifactCount,
+          skippedPlan: Math.max(0, transfer.posts.length - room),
+          plan: usage?.plan ?? "",
+          planLimit: Math.max(0, limit),
+        }, user);
+        const imported = await sourcesApi.importNotebookLm(transfer.transferId, transfer.posts, transfer.artifacts);
+        const accepted = imported.eligible - imported.skipped_plan;
+        const importedArtifacts = imported.artifacts_imported + imported.artifacts_updated;
+        const totalReady = accepted + importedArtifacts;
+        const planLimitReached = accepted === 0 && imported.skipped_plan > 0 && importedArtifacts === 0;
+        const completionMessage = planLimitReached
+          ? NOTEBOOKLM_PLAN_LIMIT_REACHED
+          : imported.skipped_plan > 0
+          ? importedArtifacts
+            ? `Transfer complete. ${totalReady} ${totalReady === 1 ? "item is" : "items are"} ready; ${imported.skipped_plan} ${imported.skipped_plan === 1 ? "post exceeds" : "posts exceed"} your plan limit.`
+            : notebookLmPlanLimitMessage(imported.eligible, accepted, imported.skipped_plan)
+          : `Transfer complete. ${totalReady} ${totalReady === 1 ? "item is" : "items are"} ready in Notestack.`;
+        setNotebookLmLimitWarning(imported.skipped_plan > 0 ? completionMessage : null);
+        const completionSummary = {
+          selectedCount: imported.eligible + imported.artifacts_received,
+          acceptedCount: totalReady,
+          skippedPlan: imported.skipped_plan,
+          plan: imported.plan,
+          planLimit: imported.plan_limit,
+        };
+        if (planLimitReached) {
+          if (active) {
+            setNotebookLmImportResult(imported);
+            setNotebookLmImportState("limit");
+          }
+          await completeNotebookLmTransfer(transfer.transferId, completionMessage, completionSummary, user);
+          return;
+        }
+        // Importing is synchronous and committed above. Complete the extension handoff before
+        // the optional page refresh so leaving onboarding cannot freeze the panel at 90%.
+        await completeNotebookLmTransfer(transfer.transferId, completionMessage, completionSummary, user);
+        if (!active) return;
+        setNotebookLmImportResult(imported);
+        setNotebookLmImportState("done");
+        const list = await docsApi.list({ limit: 1 }).catch(() => null);
+        if (!active) return;
+        if (list) setPosts(list.total);
+        try {
+          sessionStorage.removeItem(NOTEBOOKLM_GUIDE_KEY);
+        } catch {
+          /* ignore */
+        }
+        // A transfer launched during onboarding always stays in onboarding. Once indexing finishes, continue to
+        // Step 3 even when the plan imported only part of the selection.
+        continueTimer = window.setTimeout(() => {
+          setStep("goal");
+          navigate("/welcome", { replace: true });
+        }, 1100);
+      } catch (e) {
+        if (!active) return;
+        setNotebookLmImportState("error");
+        const message = errorMessage(e, "The NotebookLM transfer could not be completed.");
+        setError(message);
+        if (transferId) reportNotebookLmTransferStatus(transferId, "error", message, 0);
+      }
+    };
+
+    const startTimer = window.setTimeout(() => void run(), 0);
+    return () => {
+      active = false;
+      notebookLmImportStarted.current = false;
+      window.clearTimeout(startTimer);
+      if (continueTimer !== undefined) window.clearTimeout(continueTimer);
+    };
+  }, [user, returningFromNotebookLm, navigate]);
+
   if (loading) return <div className="boot"><div className="orbit-loader"><span /></div></div>;
   if (!user) return <Navigate to="/auth?mode=signup" replace />;
 
-  const indexingDone = live?.status === "done";
-  const indexingFailed = live?.status === "failed";
+  const notebookLmIndexing = notebookLmImportState !== "idle";
+  const indexingDone = live?.status === "done" || notebookLmImportState === "done";
+  const indexingFailed = live?.status === "failed" || notebookLmImportState === "error";
   // The ingest job lists the whole archive but indexes only the plan's limit; the rest waits behind an upgrade.
-  const locked = Number(live?.result?.locked ?? 0);
+  const locked = notebookLmImportResult?.skipped_plan ?? Number(live?.result?.locked ?? 0);
   const capped = indexingDone && locked > 0;
-  const available = Number(live?.result?.available ?? posts);
-  const found = Number(live?.result?.found ?? posts);
-  const lockedNotice = capped ? (
+  const available = notebookLmImportResult
+    ? notebookLmImportResult.eligible - notebookLmImportResult.skipped_plan
+    : Number(live?.result?.available ?? posts);
+  const found = notebookLmImportResult?.eligible ?? Number(live?.result?.found ?? posts);
+  const notebookLmLockedNotice = capped && notebookLmImportResult ? (
     <div className="welcome-cap">
       <div>
-        <strong>
-          We found {found} posts. The free plan indexed only your latest {available}.
-        </strong>
+        <strong>{notebookLmPlanLimitMessage(found, available, locked)}</strong>
+      </div>
+      <button
+        type="button"
+        className="btn btn-small"
+        onClick={() => {
+          markOnboarded();
+          navigate("/app?upgrade=1", { replace: true });
+        }}
+      >
+        Upgrade to import more
+      </button>
+    </div>
+  ) : null;
+  const standardLockedNotice = capped && !notebookLmImportResult ? (
+    <div className="welcome-cap">
+      <div>
+        <strong>We found {found} posts. The free plan indexed only your latest {available}.</strong>
         <p className="muted small">
           The other {locked} are sitting in your archive, unread. Until you upgrade, answers, audio overviews and Launch
           Kits can only use {available} posts. Upgrade and all {found} are indexed automatically.
@@ -180,6 +385,7 @@ export default function Welcome() {
       </button>
     </div>
   ) : null;
+  const lockedNotice = notebookLmLockedNotice ?? standardLockedNotice;
   const first = (user.name ?? user.email).split(/[ @]/)[0];
 
   /** The All posts notebook: where a skipped (or empty) onboarding ends, to add sources from there. */
@@ -208,7 +414,49 @@ export default function Welcome() {
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (mode === "file") void upload();
-    else if (await check(url)) void connect(url, mode);
+    else if (mode !== "notebooklm" && await check(url)) void connect(url, mode);
+  };
+
+  const selectMode = (next: Mode) => {
+    setMode(next);
+    try {
+      if (next === "notebooklm") sessionStorage.setItem(NOTEBOOKLM_GUIDE_KEY, "1");
+      else sessionStorage.removeItem(NOTEBOOKLM_GUIDE_KEY);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const setNotebookLmGuide = (open: boolean) => selectMode(open ? "notebooklm" : "feed");
+
+  const installNotebookLmExtension = () => {
+    setNotebookLmGuide(true);
+    setWaitingForStoreReturn(true);
+    openNotebookLmExtensionStore();
+  };
+
+  const beginNotebookLmExport = async () => {
+    if (!extensionInstalled) return;
+    setNotebookLmGuide(true);
+    setNotebookLmLaunchMessage(null);
+    const result = await openNotebookLmTransfer(NOTEBOOKLM_RETURN_PATH, user);
+    setNotebookLmLaunchMessage(
+      result.alreadyOpen
+        ? result.message || "A NotebookLM transfer is already open and still running."
+        : result.ok
+          ? "Transfer side panel opened. Keep it open to watch progress."
+          : result.error || "NotebookLM could not be opened.",
+    );
+  };
+
+  const backToNotebookLmSteps = () => {
+    setNotebookLmImportState("idle");
+    setNotebookLmImportResult(null);
+    setNotebookLmLimitWarning(null);
+    setError(null);
+    setStep("connect");
+    setNotebookLmGuide(true);
+    navigate("/welcome", { replace: true });
   };
 
   const stepIndex = { connect: 0, indexing: 1, goal: 2, ready: 3 }[step];
@@ -243,115 +491,214 @@ export default function Welcome() {
             <Tabs<Mode>
               tabs={MODES}
               value={mode}
-              onChange={(m) => {
-                setMode(m);
+              label="Choose how to add your writing"
+              onChange={(next) => {
+                selectMode(next);
                 setError(null);
               }}
             />
-            <p className="muted small">
-              {mode === "feed" && "Substack, Ghost, WordPress, Medium or anything with a feed. We find the feed, pull in your archive and keep it in sync."}
-              {mode === "url" && "Any single article on the web. Add more later from Sources."}
-              {mode === "file" && "Markdown, text, VTT transcripts, HTML or PDF: drafts, exports and posts that never had a feed. Add as many as you like."}
-            </p>
-            <form onSubmit={submit} className="welcome-form">
-              {mode === "file" ? (
-                <label
-                  className={`welcome-drop${dragging ? " over" : ""}`}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    setDragging(true);
-                  }}
-                  onDragLeave={() => setDragging(false)}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    setDragging(false);
-                    addFiles(e.dataTransfer.files);
-                  }}
-                >
-                  <input
-                    type="file"
-                    multiple
-                    accept={FILE_ACCEPT}
-                    onChange={(e) => {
-                      addFiles(e.target.files);
-                      e.target.value = "";
-                    }}
-                    aria-label="Files to upload"
-                  />
-                  <UploadIcon size={28} />
-                  <strong>Drop files here or click to choose</strong>
-                  <span className="mono muted small">.md · .txt · .html · .pdf</span>
-                </label>
-              ) : (
-                <input
-                  key={mode}
-                  className="input"
-                  autoFocus
-                  placeholder={mode === "feed" ? "yourblog.com" : "https://example.com/my-essay"}
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  aria-label={mode === "feed" ? "Blog, newsletter or site address" : "Article URL"}
-                />
-              )}
-              {mode === "file" && files.length > 0 && (
-                <ul className="welcome-files mono small">
-                  {files.map((f) => (
-                    <li key={`${f.name}-${f.size}`}>
-                      <span>{f.name}</span>
-                      <button type="button" className="icon-btn" onClick={() => setFiles(files.filter((x) => x !== f))} aria-label={`Remove ${f.name}`} title="Remove">
-                        <CloseIcon size={14} />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <button className="btn btn-primary" disabled={busy || (mode === "file" ? !files.length : !url.trim())}>
-                {mode === "feed" && (busy ? "Finding your feed..." : "Connect")}
-                {mode === "url" && (busy ? "Importing..." : "Import")}
-                {mode === "file" && (busy ? "Uploading..." : files.length === 1 ? "Upload 1 file" : `Upload ${files.length || ""} files`.replace("  ", " "))}
-              </button>
-            </form>
-            {mode !== "file" && <SourceUrlHint url={url} />}
-            {modal}
-            {mode === "feed" && (
-              <div className="welcome-examples mono muted">
-                Try:{" "}
-                {EXAMPLES.map((ex) => (
-                  <button key={ex} type="button" className="chip" onClick={() => setUrl(ex)}>
-                    {ex}
-                  </button>
-                ))}
+            {mode === "notebooklm" ? (
+              <div className="source-method-panel source-method-panel--notebooklm">
+                <div className="source-method-heading">
+                  <p className="eyebrow">NotebookLM transfer</p>
+                  <h2>Move your notebooks into Notestack</h2>
+                  <p className="muted small">Install the extension once, transfer your notebooks, then return here to index everything.</p>
+                </div>
+                <div className="welcome-transfer-flow" id="notebooklm-transfer-guide">
+                  <div className={`welcome-transfer-flow-step${extensionInstalled ? " done" : " current"}`}>
+                    <span className="welcome-transfer-flow-number">1</span>
+                    <div>
+                      <strong>Install the extension</strong>
+                      <p className="muted small">Get NotebookLM Transfer to Notestack from the Chrome Web Store.</p>
+                    </div>
+                    {extensionInstalled ? (
+                      <span className="welcome-transfer-installed mono">Installed</span>
+                    ) : (
+                      <button type="button" className="btn btn-small" onClick={installNotebookLmExtension}>Open Chrome Web Store</button>
+                    )}
+                  </div>
+                  <div className={`welcome-transfer-flow-step${extensionInstalled ? " current" : " disabled"}`}>
+                    <span className="welcome-transfer-flow-number">2</span>
+                    <div>
+                      <strong>Transfer to Notestack</strong>
+                      <p className="muted small">
+                        {extensionInstalled
+                          ? "Now you can extract your notebooks. Choose what to bring over in the extension."
+                          : "This unlocks automatically after the extension is installed."}
+                      </p>
+                      {notebookLmLaunchMessage && <p className="muted small" role="status">{notebookLmLaunchMessage}</p>}
+                    </div>
+                    <NotebookLmTransferButton disabled={!extensionInstalled} onClick={beginNotebookLmExport} />
+                  </div>
+                  <div className="welcome-transfer-flow-step disabled">
+                    <span className="welcome-transfer-flow-number">3</span>
+                    <div>
+                      <strong>Return and index</strong>
+                      <p className="muted small">After the transfer, you return here automatically. We index everything, then continue to Choose.</p>
+                    </div>
+                  </div>
+                </div>
               </div>
+            ) : (
+              <>
+                <p className="muted small">
+                  {mode === "feed" && "Substack, Ghost, WordPress, Medium or anything with a feed. We find the feed, pull in your archive and keep it in sync."}
+                  {mode === "url" && "Any single article on the web. Add more later from Sources."}
+                  {mode === "file" && "Markdown, text, VTT transcripts, HTML or PDF: drafts, exports and posts that never had a feed. Add as many as you like."}
+                </p>
+                <form onSubmit={submit} className="welcome-form">
+                  {mode === "file" ? (
+                    <label
+                      className={`welcome-drop${dragging ? " over" : ""}`}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setDragging(true);
+                      }}
+                      onDragLeave={() => setDragging(false)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setDragging(false);
+                        addFiles(e.dataTransfer.files);
+                      }}
+                    >
+                      <input
+                        type="file"
+                        multiple
+                        accept={FILE_ACCEPT}
+                        onChange={(e) => {
+                          addFiles(e.target.files);
+                          e.target.value = "";
+                        }}
+                        aria-label="Files to upload"
+                      />
+                      <UploadIcon size={28} />
+                  <strong>Drop files here or click to choose</strong>
+                      <span className="mono muted small">.md · .txt · .html · .pdf</span>
+                    </label>
+                  ) : (
+                    <input
+                      key={mode}
+                      className="input"
+                      autoFocus
+                      placeholder={mode === "feed" ? "yourblog.com" : "https://example.com/my-essay"}
+                      value={url}
+                      onChange={(e) => setUrl(e.target.value)}
+                      aria-label={mode === "feed" ? "Blog, newsletter or site address" : "Article URL"}
+                    />
+                  )}
+                  {mode === "file" && files.length > 0 && (
+                    <ul className="welcome-files mono small">
+                      {files.map((f) => (
+                        <li key={`${f.name}-${f.size}`}>
+                          <span>{f.name}</span>
+                          <button type="button" className="icon-btn" onClick={() => setFiles(files.filter((x) => x !== f))} aria-label={`Remove ${f.name}`} title="Remove"><CloseIcon size={14} /></button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <button className="btn btn-primary" disabled={busy || (mode === "file" ? !files.length : !url.trim())}>
+                    {mode === "feed" && (busy ? "Finding your feed..." : "Connect")}
+                    {mode === "url" && (busy ? "Importing..." : "Import")}
+                    {mode === "file" && (busy ? "Uploading..." : files.length === 1 ? "Upload 1 file" : `Upload ${files.length || ""} files`.replace("  ", " "))}
+                  </button>
+                </form>
+                {mode !== "file" && <SourceUrlHint url={url} />}
+                {modal}
+                {mode === "feed" && (
+                  <div className="welcome-examples mono muted">
+                    Try:{" "}
+                    {EXAMPLES.map((ex) => (
+                      <button key={ex} type="button" className="chip" onClick={() => setUrl(ex)}>{ex}</button>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
-            {error && (
-              <p className="error-text" role="alert">
-                {error}
-              </p>
-            )}
+            {error && <p className="error-text" role="alert">{error}</p>}
           </section>
         )}
 
         {step === "indexing" && (
           <section className="card welcome-card">
-            <p className="eyebrow">{source?.title ?? "Your archive"}</p>
-            <h1>{indexingFailed ? "That did not land" : "Bringing your posts into orbit"}</h1>
-            {live && <JobProgress job={live} />}
-            {lockedNotice}
-            {indexingFailed ? (
-              <div className="row">
-                <button className="btn btn-primary" onClick={() => setStep("connect")}>
-                  Try again
-                </button>
-                <Link className="btn" to="/app/sources">
-                  Import posts another way
-                </Link>
-              </div>
+            {notebookLmIndexing ? (
+              <>
+                <p className="eyebrow">NotebookLM transfer</p>
+                <h1>
+                  {notebookLmImportState === "limit"
+                    ? "Plan limit reached"
+                    : notebookLmImportState === "error"
+                    ? "We could not finish the transfer"
+                    : notebookLmImportState === "done" ? "Your notebooks are indexed" : "Bringing your notebooks into Notestack"}
+                </h1>
+                {notebookLmLimitWarning && notebookLmImportState !== "done" && (
+                  <div className="welcome-cap" role="alert">
+                    <div>
+                      <strong>Plan limit warning</strong>
+                      <p className="muted small">{notebookLmLimitWarning.replace(/^Plan limit warning:\s*/i, "")}</p>
+                    </div>
+                  </div>
+                )}
+                <ol className="welcome-notebooklm-index-steps" aria-label="NotebookLM transfer progress">
+                  <li className="done"><span>1</span><div><strong>Extension installed</strong><small>Notestack can securely receive your transfer.</small></div></li>
+                  <li className="done"><span>2</span><div><strong>Notebooks transferred</strong><small>Your selected NotebookLM content is ready.</small></div></li>
+                  <li className={notebookLmImportState === "done" ? "done" : notebookLmImportState === "limit" || notebookLmImportState === "error" ? "error" : "current"}>
+                    <span>3</span>
+                    <div>
+                      <strong>{notebookLmImportState === "limit" ? "Plan limit reached" : notebookLmImportState === "done" ? "Index complete" : "Index in Notestack"}</strong>
+                      <small>
+                        {notebookLmImportState === "reading" && "Reading the transfer from your extension…"}
+                        {notebookLmImportState === "importing" && (notebookLmLimitWarning ?? "Adding the notebooks to your searchable archive…")}
+                        {notebookLmImportState === "done" && "Opening the Choose step…"}
+                        {notebookLmImportState === "limit" && NOTEBOOKLM_PLAN_LIMIT_REACHED}
+                        {notebookLmImportState === "error" && (error ?? "The transfer could not be completed.")}
+                      </small>
+                    </div>
+                    {(notebookLmImportState === "reading" || notebookLmImportState === "importing") && (
+                      <div className="orbit-loader orbit-loader--inline" aria-hidden="true"><span /></div>
+                    )}
+                  </li>
+                </ol>
+                {notebookLmLockedNotice}
+                <div className="row">
+                  {notebookLmImportState === "limit" ? (
+                    <button className="btn btn-primary" onClick={backToNotebookLmSteps}>Back</button>
+                  ) : notebookLmImportState === "error" ? (
+                    <>
+                      <button className="btn btn-primary" onClick={backToNotebookLmSteps}>Back to transfer steps</button>
+                      <Link className="btn" to="/app/sources">Add content another way</Link>
+                    </>
+                  ) : notebookLmImportState === "done" ? (
+                    <button
+                      className="btn btn-primary"
+                      onClick={() => {
+                        setStep("goal");
+                        navigate("/welcome", { replace: true });
+                      }}
+                    >
+                      Continue to Choose
+                    </button>
+                  ) : (
+                    <button className="btn" onClick={backToNotebookLmSteps}>Back</button>
+                  )}
+                </div>
+              </>
             ) : (
               <>
-                <p className="muted">This takes a minute for big archives. While it runs, tell us what you want to do first.</p>
-                <button className="btn btn-primary" onClick={() => setStep("goal")}>
-                  Continue
-                </button>
+                <p className="eyebrow">{source?.title ?? "Your archive"}</p>
+                <h1>{indexingFailed ? "That did not land" : "Bringing your posts into orbit"}</h1>
+                {live && <JobProgress job={live} />}
+                {standardLockedNotice}
+                {indexingFailed ? (
+                  <div className="row">
+                    <button className="btn btn-primary" onClick={() => setStep("connect")}>Try again</button>
+                    <Link className="btn" to="/app/sources">Add posts another way</Link>
+                  </div>
+                ) : (
+                  <>
+                    <p className="muted">This takes a minute for big archives. While it runs, tell us what you want to do first.</p>
+                    <button className="btn btn-primary" onClick={() => setStep("goal")}>Continue</button>
+                  </>
+                )}
               </>
             )}
           </section>

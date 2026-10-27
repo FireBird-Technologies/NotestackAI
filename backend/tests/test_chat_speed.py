@@ -855,3 +855,71 @@ def test_a_cached_answer_saved_before_topics_is_answered_afresh(client, db_sessi
     assert len(runs) == 2 and json.loads(re.search(r"event: answer\ndata: (.*)", body).group(1))["topic"] == "your pricing"
     ask()  # the fresh answer, with its topic, is now the one reused
     assert len(runs) == 2
+
+
+# Off topic is rechecked with every title and each post's opening before the writer is brushed off
+
+
+def _off_topic_jev(monkeypatch, *retries):
+    """The first look says off_topic; each recheck answers the next of `retries` as (choice, confidence)."""
+    monkeypatch.setattr(settings, "typesafe_api_key", "sk-test")
+    seen = []
+
+    def decide(state, questions, timeout=6.0):
+        seen.append((state, questions))
+        if len(seen) == 1:
+            return {"intent": jev.Choice("off_topic", 0.9, {}), "depth": jev.Choice("quick", 0.8, {})}
+        got = retries[len(seen) - 2]
+        if isinstance(got, Exception):
+            raise got
+        return {"intent": jev.Choice(*got, {})}
+
+    monkeypatch.setattr(jev, "decide", decide)
+    return seen
+
+
+def _recheck(monkeypatch, tmp_path, *retries):
+    seen = _off_topic_jev(monkeypatch, *retries)
+    c, allowed = _corpus(tmp_path)
+    t = ChatTrace()
+    monkeypatch.setattr(r, "instant_reply", lambda *a: None)
+    # An archive verdict would start the research agent: stop there, the route is what matters.
+    monkeypatch.setattr(r, "archive_guide", lambda *a: (_ for _ in ()).throw(RuntimeError("research started")))
+    try:
+        res = r.research(c, allowed, "Which wine goes with fish?", trace=t)
+    except RuntimeError as exc:
+        assert "research started" in str(exc)
+        res = None
+    return res, seen, t
+
+
+def test_the_recheck_brief_has_every_title_and_the_first_two_paragraphs(tmp_path):
+    c, allowed = _corpus(tmp_path)
+    brief = r.notebook_brief_full("nb", allowed, c)
+    assert "On Pricing" in brief and "Hiring" in brief and "Raise prices once a year" in brief
+    many = {f"sources/x/p{i}.md": f"Post {i}" for i in range(40)}
+    assert all(f"- Post {i}" in r.notebook_brief_full("nb", many, c) for i in range(40))  # titles of posts past 25
+
+
+def test_a_recheck_that_finds_the_subject_sends_it_to_research(monkeypatch, tmp_path):
+    res, seen, t = _recheck(monkeypatch, tmp_path, ("archive", 0.8))
+    assert res is None and len(seen) == 2  # research started after one recheck; the second was not needed
+    assert "Raise prices once a year" in seen[1][0]["notebook"]
+    assert "intent_retry1" in t.sections["triage"] or "recheck 1" in "".join(t.sections["triage"])
+
+
+def test_two_rechecks_that_agree_keep_it_off_topic(monkeypatch, tmp_path):
+    res, seen, _ = _recheck(monkeypatch, tmp_path, ("off_topic", 0.9), ("off_topic", 0.8))
+    assert len(seen) == 3 and res.kind == "off_topic" and "I only answer from the posts" in res.text
+
+
+def test_the_second_recheck_can_still_save_it_and_an_unsure_one_researches(monkeypatch, tmp_path):
+    res, seen, _ = _recheck(monkeypatch, tmp_path, ("off_topic", 0.9), ("archive", 0.7))
+    assert res is None and len(seen) == 3
+    res, seen, _ = _recheck(monkeypatch, tmp_path, ("off_topic", 0.3))  # below the confidence cutoff
+    assert res is None and len(seen) == 2
+
+
+def test_a_failed_recheck_researches_instead_of_brushing_off(monkeypatch, tmp_path):
+    res, seen, _ = _recheck(monkeypatch, tmp_path, jev.JevError("down"))
+    assert res is None and len(seen) == 2

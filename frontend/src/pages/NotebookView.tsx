@@ -6,6 +6,7 @@ import { ApiError } from "@notestack/shared/client";
 import { groupChats, STARTERS } from "@notestack/shared/notebook";
 import { streamSSE } from "@notestack/shared/stream";
 import { createTypewriter } from "../lib/typewriter";
+import { NOTEBOOKLM_PANEL_OPENED_AT_MARKER, NOTEBOOKLM_PANEL_OPENED_EVENT } from "../lib/notebooklm";
 import type { AnswerFeedback as Feedback, Artifact, ChatAction, ChatArtifact, ChatPreset, ChatSummary, Citation, Job, MemoryChange, Notebook } from "@notestack/shared/types";
 import { AnswerFeedback } from "../components/AnswerFeedback";
 import { ArtifactCard, CitationList } from "../components/ArtifactCard";
@@ -32,7 +33,7 @@ import { seedDocs } from "../components/video/sourceCache";
 import { errorMessage, formatDate, JobProgress, Loading, Modal } from "../components/ui";
 import { useTopbarCrumb, useTopbarSlot } from "../components/AppShell";
 import { useJob } from "../hooks/useJob";
-import { AddSource } from "./Sources";
+import { AddSource, NotebookLmImportSteps } from "./Sources";
 import { VideoCreateForm } from "./VideoCreate";
 import { canPost, PostButton } from "../components/launchpad/PostButton";
 import { VideoCard } from "../components/video/VideoCard";
@@ -93,12 +94,14 @@ const VIDEO_BUSY = new Set(["generating", "pending", "rendering", "regenerating"
   "language_regenerating", "script_regenerating"]);
 
 /** Create: one click per format with sensible defaults, options folded away; then what was made from this notebook. */
-function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, presets, presetKey, quizOpen, onQuizClose, onCreateQuiz, cardsOpen, onCardsClose, onCreateCards, infographicOpen, onInfographicClose, onCreateInfographic, audioOpen, onAudioClose, onCreateAudio, slidesOpen, onSlidesClose, onCreateSlides, reportOpen, onReportClose, onCreateReport, mapOpen, onMapClose, onCreateMap, onCreateVideo, onClose, section, onStarted }: {
+function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, onNeedPosts, presets, presetKey, quizOpen, onQuizClose, onCreateQuiz, cardsOpen, onCardsClose, onCreateCards, infographicOpen, onInfographicClose, onCreateInfographic, audioOpen, onAudioClose, onCreateAudio, slidesOpen, onSlidesClose, onCreateSlides, reportOpen, onReportClose, onCreateReport, mapOpen, onMapClose, onCreateMap, onCreateVideo, onClose, section, onStarted }: {
   notebookId: string;
   docs: { id: string; title: string; locked?: boolean }[];
   chats: ChatSummary[];
   currentChatId: string | null;
+  /** The notebook has no posts yet: the Create buttons stay clickable but open the add-posts dialog instead. */
   disabled: boolean;
+  onNeedPosts: () => void;
   /** Settings asked for in the chat, per artifact: its dialog opens with them. */
   presets: Partial<Record<ChatArtifact, ChatPreset>>;
   /** Changes each time the chat opens a dialog, so one that is already open starts again from the new settings. */
@@ -217,7 +220,7 @@ function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, presets
   const others = artifacts;
 
   const cite = (c: Citation) => c.document_id && setReading({ id: c.document_id, start: c.line_start, end: c.line_end });
-  const off = disabled;
+  const gate = (open: () => void) => (disabled ? onNeedPosts : open);
   const [launching, setLaunching] = useState(false); // the Launch composer is open
   const showCreate = section !== "library";
   const showMade = section !== "create";
@@ -237,7 +240,7 @@ function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, presets
         )}
       </div>
       <div className="nbv-make">
-        <button className="nbv-make-stars" disabled={off} onClick={onCreateMap}>
+        <button className="nbv-make-stars" onClick={gate(onCreateMap)}>
           <span className="nbv-stars-text">
             <strong>Mind Constellation</strong>
             <small>Explore your posts as stars</small>
@@ -251,25 +254,25 @@ function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, presets
             <circle cx="58" cy="18" r="2" fill="currentColor" />
           </svg>
         </button>
-        <button className="nbv-make-audio" disabled={off} onClick={onCreateAudio}>
+        <button className="nbv-make-audio" onClick={gate(onCreateAudio)}>
           <HeadphonesIcon size={18} /> <span className="nbv-make-text">Audio overview</span>
         </button>
-        <button className="nbv-make-slides" disabled={off} onClick={onCreateSlides}>
+        <button className="nbv-make-slides" onClick={gate(onCreateSlides)}>
           <SlidesIcon size={18} /> <span className="nbv-make-text">Slide deck</span>
         </button>
-        <button disabled={off} onClick={onCreateVideo}>
+        <button onClick={gate(onCreateVideo)}>
           <VideoIcon size={18} /> <span className="nbv-make-text">Video</span>
         </button>
-        <button disabled={off} onClick={onCreateReport}>
+        <button onClick={gate(onCreateReport)}>
           <ReportIcon size={18} /> <span className="nbv-make-text">Report</span>
         </button>
-        <button disabled={off} onClick={onCreateInfographic}>
+        <button onClick={gate(onCreateInfographic)}>
           <InfographicIcon size={18} /> <span className="nbv-make-text">Infographic</span>
         </button>
-        <button disabled={off} onClick={onCreateQuiz}>
+        <button onClick={gate(onCreateQuiz)}>
           <QuizIcon size={18} /> <span className="nbv-make-text">Quiz</span>
         </button>
-        <button disabled={off} onClick={onCreateCards}>
+        <button onClick={gate(onCreateCards)}>
           <FlashcardsIcon size={18} /> <span className="nbv-make-text">Flashcards</span>
         </button>
         {/* Launch: the composer, to post something from the Library (or just words) to LinkedIn */}
@@ -307,7 +310,6 @@ function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, presets
       </div>
       </>}
       {launching && <ScheduleModal platform="linkedin" posts={[]} onClose={() => setLaunching(false)} />}
-      {showCreate && disabled && <p className="muted small">Add posts to this notebook to start creating.</p>}
       {error && <p className="error-text">{error}</p>}
       {showMade && (!others || others.length > 0 || starting.length > 0) && <span className="vw-label nbv-made-label">Made from this notebook</span>}
       {section === "library" && others?.length === 0 && starting.length === 0 && (
@@ -382,6 +384,8 @@ export default function NotebookView() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [q, setQ] = useState("");
+  const [removing, setRemoving] = useState<{ id: string; title: string } | null>(null); // the post awaiting confirmation
+  const [removeError, setRemoveError] = useState<string | null>(null);
   const [deletingChat, setDeletingChat] = useState<{ id: string; title: string } | null>(null); // the chat awaiting confirmation
   const [deleteChatBusy, setDeleteChatBusy] = useState(false);
   const [deleteChatError, setDeleteChatError] = useState<string | null>(null);
@@ -426,8 +430,12 @@ export default function NotebookView() {
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState("");
   const [historyOpen, setHistoryOpen] = useState(readChatRailOpen);
-  const [toolsOpen, setToolsOpen] = useState(readToolsRailOpen);
+  // The Create column only sits beside the chat on wide screens. Narrower, it starts closed and opens over the chat.
+  const roomy = useMedia("(min-width: 1350px)");
+  const [toolsOpen, setToolsOpen] = useState(() => readToolsRailOpen() && roomy);
+  useEffect(() => setToolsOpen(roomy && readToolsRailOpen()), [roomy]);
   const [params, setParams] = useSearchParams();
+  const returningFromNotebookLm = params.get("notebooklm") === "import";
   // The open chat lives in the URL (?chat=<id>), not only in React state: a state reset, a reload or a hot reload can no
   // longer turn the next message into a new chat. `shown` is the chat whose messages are on screen right now.
   const chatId = params.get("chat");
@@ -452,6 +460,24 @@ export default function NotebookView() {
     if (!phone) setDrawer(null);
   }, [phone]);
 
+  // A NotebookLM transfer launched here returns to this notebook and reopens the same Add source dialog.
+  useEffect(() => {
+    if (returningFromNotebookLm) setAdding(true);
+  }, [returningFromNotebookLm]);
+
+  const closeAdding = () => {
+    setAdding(false);
+    if (!returningFromNotebookLm) return;
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        next.delete("notebooklm");
+        return next;
+      },
+      { replace: true },
+    );
+  };
+
   // Auto-save the title shortly after the user stops typing.
   useEffect(() => {
     if (!editingTitle || !nb) return;
@@ -463,15 +489,24 @@ export default function NotebookView() {
     return () => clearTimeout(t);
   }, [title, editingTitle, nb]);
 
+  // Notebook loads can take seconds, so an older one may land after a newer one (or after a post was removed). Only the
+  // latest response is used, and posts removed here stay out of it.
+  const loadSeq = useRef(0);
+  const removedDocs = useRef(new Set<string>());
   const load = useCallback(
-    () =>
-      notebooksApi.get(id).then(
+    () => {
+      const seq = ++loadSeq.current;
+      return notebooksApi.get(id).then(
         (n) => {
-          setNb(n);
+          if (seq !== loadSeq.current) return;
+          setNb({ ...n, documents: n.documents.filter((d) => !removedDocs.current.has(d.id)) });
+          const present = new Set(n.documents.map((d) => d.id));
+          for (const gone of [...removedDocs.current]) if (!present.has(gone)) removedDocs.current.delete(gone); // the server agrees now
           setTitle(n.title);
         },
         () => setLoadError("Notebook not found."),
-      ),
+      );
+    },
     [id],
   );
   const loadChats = useCallback(() => notebooksApi.chats(id).then(setChats), [id]);
@@ -575,10 +610,26 @@ export default function NotebookView() {
     }
   };
 
-  const ask = async (text: string) => {
+  // Chrome's NotebookLM transfer panel consumes a large slice of the viewport. Close this notebook's own Create rail
+  // first so the chat and its artifacts keep their position instead of the rail falling into a row underneath them.
+  useEffect(() => {
+    const closeForNotebookLmPanel = () => {
+      setToolsRail(false);
+      setDrawer((current) => current === "tools" ? null : current);
+    };
+    window.addEventListener(NOTEBOOKLM_PANEL_OPENED_EVENT, closeForNotebookLmPanel);
+    const openedAt = Number(document.documentElement.dataset[NOTEBOOKLM_PANEL_OPENED_AT_MARKER]);
+    if (Number.isFinite(openedAt) && Date.now() - openedAt < 5000) closeForNotebookLmPanel();
+    return () => window.removeEventListener(NOTEBOOKLM_PANEL_OPENED_EVENT, closeForNotebookLmPanel);
+    // The listener is installed once; React state setters and the local-storage key are stable for this page.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // retryId: the last answer to run again. It and its question leave the screen (and the chat) and the question is asked afresh.
+  const ask = async (text: string, retryId?: string) => {
     const question = text.trim();
-    if (!question || busy || loadingChatId || outOfChat) return;
-    setQ("");
+    if (!question || busy || loadingChatId || (outOfChat && !retryId)) return;
+    if (!retryId) setQ("");
     setBusy(true);
     // Every update from this question's stream finds its own answer by this key, never by position. When the chat on
     // screen changes (New chat, another chat) while an earlier answer is still streaming or typing, its updates find
@@ -587,9 +638,10 @@ export default function NotebookView() {
     const askKey = `ask-${seq}`;
     const latest = () => askSeq.current === seq;
     const sentIn = chatLoad.current; // the chat on screen when it was sent: opening or starting another one changes it
-    setTurns((t) => [...t, { role: "user", text: question }, { role: "assistant", text: "", status: "Scanning", askKey }]);
+    setTurns((t) => [...(retryId ? t.slice(0, -2) : t), { role: "user", text: question }, { role: "assistant", text: "", status: "Scanning", askKey }]);
     // Count the question as soon as it is sent (the server counts it then too); the answer brings the exact number.
-    if (quota) setChatQuota({ used: Math.min(quota.used + 1, quota.limit), limit: quota.limit, left: Math.max(quota.left - 1, 0) });
+    // A retry replaces a counted message, so it adds nothing.
+    if (quota && !retryId) setChatQuota({ used: Math.min(quota.used + 1, quota.limit), limit: quota.limit, left: Math.max(quota.left - 1, 0) });
     const patchAnswer = (p: Partial<Turn> | ((x: Turn) => Partial<Turn>)) =>
       setTurns((t) => t.map((x) => (x.askKey === askKey ? { ...x, ...(typeof p === "function" ? p(x) : p) } : x)));
     let answered = "";
@@ -650,7 +702,7 @@ export default function NotebookView() {
           }
         },
         // Read at send time from the URL, the one place a stale closure or a state reset cannot change.
-        { method: "POST", body: JSON.stringify({ question, chat_id: new URLSearchParams(window.location.search).get("chat") }) },
+        { method: "POST", body: JSON.stringify({ question, retry_message_id: retryId, chat_id: new URLSearchParams(window.location.search).get("chat") }) },
       );
       // The stream closed without an answer or an error: say so instead of leaving the status spinning.
       if (!answered && !failed) patchAnswer({ text: "Lost signal. Try again.", status: undefined });
@@ -719,7 +771,7 @@ export default function NotebookView() {
   }, [nb]);
 
   if (loadError) return <p className="error-text">{loadError}</p>;
-  if (!nb) return <Loading label="Opening notebook" center="full" />;
+  if (!nb) return <Loading center="full" />;
 
   const openReport = (preset?: ChatPreset) => {
     seedDocs(nb.id, nb.documents);
@@ -1139,7 +1191,7 @@ export default function NotebookView() {
                      slidesOpen={makingSlides} onSlidesClose={() => setMakingSlides(false)} onCreateSlides={() => openSlides()}
                      cardsOpen={makingCards} onCardsClose={() => setMakingCards(false)} onCreateCards={() => openCards()}
                      mapOpen={makingMap} onMapClose={() => setMakingMap(false)} onCreateMap={() => openMap()}
-                     disabled={nb.documents.length === 0}
+                     disabled={nb.documents.length === 0} onNeedPosts={() => setAdding(true)}
                      onCreateVideo={() => openVideo()}
                      onClose={phone ? undefined : () => setToolsRail(false)}
                      section={phone ? (drawer === "library" ? "library" : "create") : undefined}
@@ -1152,17 +1204,31 @@ export default function NotebookView() {
         </Modal>
       )}
       {adding && (
-        <Modal title={nb.is_archive ? "Connect a source" : `Add to ${nb.title}`} onClose={() => setAdding(false)} wide>
-          {nb.is_archive ? (
-            <p className="muted small">This archive already contains all your posts. Posts from a new source join it automatically.</p>
+        <Modal title={nb.is_archive ? "Connect a source" : `Add to ${nb.title}`} onClose={closeAdding} wide>
+          {returningFromNotebookLm ? (
+            <NotebookLmImportSteps
+              notebookId={nb.id}
+              backLabel="Back to notebook"
+              onImported={load}
+              onBack={closeAdding}
+            />
           ) : (
-            <p className="muted small">Every post it imports joins this notebook.</p>
+            <>
+              {nb.is_archive ? (
+                <p className="muted small">This archive already contains all your posts. Posts from a new source join it automatically.</p>
+              ) : (
+                <>
+                  <p className="eyebrow muted">Connect a source</p>
+                  <p className="muted small">Every post it imports joins this notebook.</p>
+                </>
+              )}
+              <AddSource compact notebookId={nb.is_archive ? undefined : nb.id} returnToNotebookId={nb.id} onAdded={(_, job) => {
+                setImports((cur) => [...cur, job]);
+                closeAdding();
+              }} />
+              <NotebookPostsManager notebookId={nb.id} docs={nb.documents} readOnly={nb.is_archive} onChanged={load} onRead={(id) => setReading({ id })} />
+            </>
           )}
-          <AddSource compact notebookId={nb.is_archive ? undefined : nb.id} onAdded={(_, job) => {
-            setImports((cur) => [...cur, job]);
-            setAdding(false);
-          }} />
-          <NotebookPostsManager notebookId={nb.id} docs={nb.documents} readOnly={nb.is_archive} onChanged={load} />
         </Modal>
       )}
       {reading && <Reader documentId={reading.id} highlight={reading.start ? { start: reading.start, end: reading.end ?? reading.start } : undefined} onClose={() => setReading(null)} />}
@@ -1190,6 +1256,44 @@ export default function NotebookView() {
                 }}
               >
                 {deleteChatBusy ? "Deleting..." : "Delete chat"}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+      {removing && (
+        // While the removal runs, Escape, the backdrop and the close button do nothing.
+        <Modal title="Remove this post?" onClose={() => setRemoving(null)}>
+          <div className="stack">
+            <p>
+              "<strong>{removing.title}</strong>" will be removed from this notebook. The post itself is kept in your
+              library, and you can add it back later.
+            </p>
+            {removeError && <p className="error-text">{removeError}</p>}
+            <div className="vw-nav">
+              <button className="btn" onClick={() => setRemoving(null)}>Cancel</button>
+              <button
+                className="btn btn-danger vw-delete-confirm"
+                onClick={() => {
+                  // Gone from the list and the dialog closed at once; the server catches up in the background.
+                  const gone = removing;
+                  const notebookId = nb.id;
+                  removedDocs.current.add(gone.id);
+                  setNb((cur) => (cur ? { ...cur, documents: cur.documents.filter((d) => d.id !== gone.id) } : cur));
+                  setRemoving(null);
+                  setRemoveError(null);
+                  notebooksApi.removeDoc(notebookId, gone.id).then(
+                    () => void load(),
+                    (e) => {
+                      removedDocs.current.delete(gone.id);
+                      void load(); // it is still there: bring it back and say why
+                      setRemoving(gone);
+                      setRemoveError(`Could not remove "${gone.title}": ${errorMessage(e)}`);
+                    },
+                  );
+                }}
+              >
+                Remove post
               </button>
             </div>
           </div>

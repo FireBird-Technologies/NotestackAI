@@ -129,7 +129,7 @@ export function FlashcardsPlayer({ artifact, onClose }: { artifact: Artifact; on
 export function FlashcardsBody({ artifact }: { artifact: Artifact }) {
   const [open, setOpen] = useState(false);
   const c = artifact.content;
-  const from = sourceSummary(c.source);
+  const from = artifact.transferred_from_notebooklm ? "NotebookLM" : sourceSummary(c.source);
   return (
     <div className="artifact-body">
       <p className="muted">{c.card_count ?? 0} cards · from {from}</p>

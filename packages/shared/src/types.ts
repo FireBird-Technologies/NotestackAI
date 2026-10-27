@@ -40,6 +40,8 @@ export type Doc = {
   /** When this post was uploaded or imported into Notestack. */
   added_at: string | null;
   published_at: string | null;
+  /** Imported from a NotebookLM export, rather than a regular feed or file. */
+  transferred_from_notebooklm: boolean;
   words: number;
   evergreen_score: number | null;
   /** Found but past the plan's post limit: title and link only, not indexed until the workspace upgrades. */
@@ -244,6 +246,8 @@ export type Artifact = {
   job: Job | null;
   /** "blog2video" for videos made in the Videos editor. */
   provider?: string | null;
+  /** Imported from a NotebookLM Studio artifact and kept independently in Library. */
+  transferred_from_notebooklm?: boolean;
   /** This person's thumbs up or down on a finished report, quiz, flashcard set or infographic. */
   feedback?: AnswerFeedback | null;
   /** A report: the visuals being added right now (several at once), by the suggestion each answers. */
