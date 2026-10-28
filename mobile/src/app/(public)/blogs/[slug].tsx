@@ -13,8 +13,8 @@ import {
   PublicPage,
   publicText,
   Related,
-} from "@/public-page";
-import { colors, fonts, gutter, radius } from "@/theme";
+} from "@/shell/public-page";
+import { colors, fonts, gutter, radius } from "@/ui/theme";
 import { Button } from "@/ui";
 
 /** One post: the question it answers and the short answer up front, then its sections, questions and related reads. */

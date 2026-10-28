@@ -3,7 +3,7 @@ import { SymbolView } from "expo-symbols";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { colors, gutter } from "@/theme";
+import { colors, gutter } from "@/ui/theme";
 
 export type NotebookTab = "sources" | "chat" | "create" | "library";
 

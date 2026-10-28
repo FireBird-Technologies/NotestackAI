@@ -7,14 +7,14 @@ import Animated, { useAnimatedReaction, useAnimatedScrollHandler, useAnimatedSty
 import Svg, { Line } from "react-native-svg";
 import { scheduleOnRN } from "react-native-worklets";
 
-import { FlashcardDeck } from "@/flashcards";
-import { ChevronIcon } from "@/icons";
-import { InfographicFrame } from "@/infographic";
-import { Markdown } from "@/markdown";
-import { MindMapExplorer, MindMapScreen } from "@/mind-map";
-import { QuizRunner, useQuiz } from "@/quiz";
-import { colors, fonts, gutter, radius } from "@/theme";
-import { PillButton } from "@/widgets";
+import { FlashcardDeck } from "@/artifacts/flashcards";
+import { ChevronIcon } from "@/ui/icons";
+import { InfographicFrame } from "@/artifacts/infographic";
+import { Markdown } from "@/ui/markdown";
+import { MindMapExplorer, MindMapScreen } from "@/artifacts/mind-map";
+import { QuizRunner, useQuiz } from "@/artifacts/quiz";
+import { colors, fonts, gutter, radius } from "@/ui/theme";
+import { PillButton } from "@/ui/widgets";
 
 import { ReportPlot } from "./plot";
 

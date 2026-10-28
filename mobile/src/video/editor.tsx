@@ -9,13 +9,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { WebView } from "react-native-webview";
 
-import { CardFeedback } from "@/artifact-card";
-import { ShareDialog } from "@/card-dialogs";
-import { fileName, saveFile } from "@/downloads";
-import { DownloadIcon, PhoneIcon, ScreenIcon, ShareIcon, SparkleIcon } from "@/icons";
-import { colors, fonts, gutter, radius } from "@/theme";
-import { useUpgrade } from "@/upgrade";
-import { Dialog, PillButton, StatusPill, confirm } from "@/widgets";
+import { CardFeedback } from "@/artifacts/artifact-card";
+import { ShareDialog } from "@/artifacts/card-dialogs";
+import { fileName, saveFile } from "@/lib/downloads";
+import { DownloadIcon, PhoneIcon, ScreenIcon, ShareIcon, SparkleIcon } from "@/ui/icons";
+import { colors, fonts, gutter, radius } from "@/ui/theme";
+import { useUpgrade } from "@/account/upgrade";
+import { Dialog, PillButton, StatusPill, confirm } from "@/ui/widgets";
 
 import { BackLink } from "./back";
 import { ImagesPanel } from "./images";

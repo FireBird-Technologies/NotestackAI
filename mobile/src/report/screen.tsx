@@ -5,14 +5,14 @@ import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
-import { SHARE_WHAT, ShareDialog } from "@/card-dialogs";
+import { SHARE_WHAT, ShareDialog } from "@/artifacts/card-dialogs";
 import { Select } from "@/create/fields";
 import { ThemePicker } from "@/create/media";
-import { ArrowLeftIcon, ShareIcon, TrashIcon } from "@/icons";
-import { type Cited, ReaderSheet } from "@/reader";
-import { colors, fonts, gutter } from "@/theme";
+import { ArrowLeftIcon, ShareIcon, TrashIcon } from "@/ui/icons";
+import { type Cited, ReaderSheet } from "@/artifacts/reader";
+import { colors, fonts, gutter } from "@/ui/theme";
 import { ErrorText } from "@/ui";
-import { confirm, Dialog, JobProgress, PillButton, pageStyles } from "@/widgets";
+import { confirm, Dialog, JobProgress, PillButton, pageStyles } from "@/ui/widgets";
 
 import { ReportView } from "./view";
 

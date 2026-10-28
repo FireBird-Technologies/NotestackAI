@@ -1,18 +1,18 @@
 import { docsApi, jobsApi, sourcesApi } from "@notestack/shared/endpoints";
 import type { Doc, Job, Source } from "@notestack/shared/types";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import * as WebBrowser from "expo-web-browser";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
-import { AddSource } from "@/add-source";
-import { SourcesNav } from "@/sources-nav";
-import { Starfield } from "@/starfield";
-import { colors, fonts, gutter } from "@/theme";
+import { AddSource } from "@/sources/add-source";
+import { SourcesNav } from "@/sources/sources-nav";
+import { Starfield } from "@/shell/starfield";
+import { colors, fonts, gutter } from "@/ui/theme";
 import { Body, Centered, ErrorText, Loading, formatDate } from "@/ui";
-import { CARD_RADIUS, JobProgress, Pager, StatusPill } from "@/widgets";
+import { CARD_RADIUS, JobProgress, Pager, StatusPill } from "@/ui/widgets";
 
 const PAGE = 10; // posts on one page of the list, as on the web
 
@@ -37,7 +37,10 @@ export default function Sources() {
   const docs = useQuery({
     queryKey: ["docs", "sources", search, page],
     queryFn: () => docsApi.list({ q: search, indexed_only: true, sort: "added", limit: PAGE, offset: page * PAGE }),
+    // The last total meanwhile, so the count and pager stay put; the rows wait for the new page (below).
+    placeholderData: keepPreviousData,
   });
+  const docsLoading = docs.isPending || docs.isPlaceholderData;
   const reload = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: ["sources"] });
     void queryClient.invalidateQueries({ queryKey: ["docs"] });
@@ -139,11 +142,9 @@ export default function Sources() {
               autoCapitalize="none"
               accessibilityLabel="Search posts"
             />
-            {(docs.data?.items ?? []).map((d) => (
-              <PostRow key={d.id} doc={d} onRemoved={reload} />
-            ))}
-            {docs.data && docs.data.items.length === 0 ? <Body muted>No posts match.</Body> : null}
-            {docs.isPending ? <Loading /> : null}
+            {docsLoading && !docs.error ? <Loading /> : null}
+            {!docsLoading ? (docs.data?.items ?? []).map((d) => <PostRow key={d.id} doc={d} onRemoved={reload} />) : null}
+            {!docsLoading && docs.data && docs.data.items.length === 0 ? <Body muted>No posts match.</Body> : null}
             <Pager page={page} pages={Math.ceil(total / PAGE)} onChange={setPage} />
           </View>
         ) : null}

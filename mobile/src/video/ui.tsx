@@ -4,8 +4,8 @@ import { useVideoPlayer, VideoView } from "expo-video";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, AppState, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
-import { ChevronIcon } from "@/icons";
-import { colors, fonts, radius } from "@/theme";
+import { ChevronIcon } from "@/ui/icons";
+import { colors, fonts, radius } from "@/ui/theme";
 
 /* The pieces the video editor's panels share (web: the vw-* styles in styles/videos.css and video/parts.tsx). */
 

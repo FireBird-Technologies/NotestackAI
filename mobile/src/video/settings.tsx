@@ -4,12 +4,12 @@ import { FONTS } from "@notestack/shared/videoFonts";
 import { type ComponentRef, type ReactNode, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Switch, Text, useWindowDimensions, View } from "react-native";
 
-import { useVoicePlayer } from "@/audio";
+import { useVoicePlayer } from "@/lib/audio";
 import { Select } from "@/create/fields";
 import { ColorField, TemplateThumb } from "@/create/video";
-import { CheckIcon } from "@/icons";
-import { colors, fonts, radius } from "@/theme";
-import { PillButton, Sheet } from "@/widgets";
+import { CheckIcon } from "@/ui/icons";
+import { colors, fonts, radius } from "@/ui/theme";
+import { PillButton, Sheet } from "@/ui/widgets";
 
 import { ConfirmModal } from "./scene-media";
 import type { PanelProps } from "./types";

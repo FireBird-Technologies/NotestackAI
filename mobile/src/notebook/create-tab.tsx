@@ -10,11 +10,11 @@ import { AudioDialog, InfographicDialog, SlidesDialog } from "@/create/media";
 import { ReportDialog } from "@/create/report";
 import { type CreateBody, type DialogProps, FlashcardsDialog, MindMapDialog, QuizDialog } from "@/create/study";
 import { VideoDialog } from "@/create/video";
-import { ConnectorModal } from "@/connector-modal";
+import { ConnectorModal } from "@/sources/connector-modal";
 import { Composer } from "@/launchpad/editors";
-import { colors, fonts, radius } from "@/theme";
+import { colors, fonts, radius } from "@/ui/theme";
 import { trackNewVideo } from "@/video/pending";
-import { pageStyles, Sheet } from "@/widgets";
+import { pageStyles, Sheet } from "@/ui/widgets";
 
 type Kind = Exclude<ArtifactType, "summary" | "quote_card" | "carousel" | "launch_kit" | "upload">;
 

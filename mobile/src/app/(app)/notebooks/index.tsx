@@ -5,9 +5,9 @@ import { router } from "expo-router";
 import { useState } from "react";
 import { Alert, FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from "react-native";
 
-import { PlanetIcon } from "@/planet";
-import { Starfield } from "@/starfield";
-import { colors, fonts, gutter, radius } from "@/theme";
+import { PlanetIcon } from "@/shell/planet";
+import { Starfield } from "@/shell/starfield";
+import { colors, fonts, gutter, radius } from "@/ui/theme";
 import { Body, Button, Centered, Loading, formatDate } from "@/ui";
 
 /** Every notebook, "All posts" first, as the web's Research notebooks page. */

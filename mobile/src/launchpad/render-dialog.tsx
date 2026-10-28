@@ -4,10 +4,10 @@ import { finished, jobPercent } from "@notestack/shared/jobState";
 import { useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import { colors, fonts } from "@/theme";
+import { colors, fonts } from "@/ui/theme";
 import { ErrorText } from "@/ui";
 import { Spinner } from "@/video/ui";
-import { Dialog, pageStyles, PillButton } from "@/widgets";
+import { Dialog, pageStyles, PillButton } from "@/ui/widgets";
 
 type Step = "confirm" | "rendering" | "done" | "failed";
 

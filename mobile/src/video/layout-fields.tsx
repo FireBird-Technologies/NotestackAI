@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Switch, Text, TextInput, View } from "react-nati
 
 import { ColorField } from "@/create/video";
 import { Select } from "@/create/fields";
-import { colors, fonts, radius } from "@/theme";
+import { colors, fonts, radius } from "@/ui/theme";
 
 import { Label, vstyles } from "./ui";
 

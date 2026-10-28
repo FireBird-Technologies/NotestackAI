@@ -7,14 +7,14 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Alert, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 
-import { useAuth } from "@/auth";
-import { planQuery } from "@/nav-drawer";
-import { manageSubscriptions } from "@/purchases";
-import { useUpgrade } from "@/upgrade";
-import { ConnectedApps } from "@/connected-apps";
-import { colors } from "@/theme";
+import { useAuth } from "@/account/auth";
+import { planQuery } from "@/shell/nav-drawer";
+import { manageSubscriptions } from "@/account/purchases";
+import { useUpgrade } from "@/account/upgrade";
+import { ConnectedApps } from "@/sources/connected-apps";
+import { colors } from "@/ui/theme";
 import { ErrorText, Loading, formatDate } from "@/ui";
-import { confirm, Meter, Page, PageHead, pageStyles, PillButton, Section } from "@/widgets";
+import { confirm, Meter, Page, PageHead, pageStyles, PillButton, Section } from "@/ui/widgets";
 
 /** Station settings (web: pages/Settings.tsx): profile, connected apps, privacy and email, plan and usage, account. */
 export default function Settings() {
@@ -29,17 +29,21 @@ export default function Settings() {
   const planWarning = deletePlanWarning(billing.data);
   const appleBilled = billing.data?.billed_by === "app_store";
 
+  // Deleting: the button says so (and takes no second tap) until the account is gone or it failed.
+  const [deleting, setDeleting] = useState(false);
   const confirmDelete = () =>
     confirm(
       "Delete account for good?",
       "Delete account",
       async () => {
+        setDeleting(true);
         try {
           await authApi.deleteAccount();
           tokens.clear();
           await logout();
         } catch (e) {
           setError(e instanceof ApiError ? e.message : "Could not delete the account. Try again.");
+          setDeleting(false);
         }
       },
       `Your notebooks, sources and everything you made are deleted. This can't be undone.${planWarning ? `\n\n${planWarning}` : ""}`,
@@ -178,12 +182,19 @@ export default function Settings() {
           <PillButton
             title="Sign out everywhere"
             busy={leaving}
+            disabled={deleting}
             onPress={() => {
               setLeaving(true);
               void logout();
             }}
           />
-          <PillButton title="Delete account" variant="danger" onPress={() => (appleBilled ? cancelAppleFirst() : confirmDelete())} />
+          <PillButton
+            title={deleting ? "Deleting account..." : "Delete account"}
+            variant="danger"
+            busy={deleting}
+            disabled={leaving}
+            onPress={() => (appleBilled ? cancelAppleFirst() : confirmDelete())}
+          />
         </View>
       </Section>
     </Page>

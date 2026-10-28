@@ -1,7 +1,7 @@
 import { Fragment } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import { colors, fonts } from "@/theme";
+import { colors, fonts } from "@/ui/theme";
 
 /** **bold**, *italic*, `code` and [n] citation markers inside one line. */
 function Inline({ text }: { text: string }) {

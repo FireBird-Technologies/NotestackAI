@@ -4,8 +4,8 @@ import { SymbolView, type AndroidSymbol, type SFSymbol } from "expo-symbols";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { LibraryPicker } from "@/launchpad/library-picker";
-import { colors, radius } from "@/theme";
-import { pageStyles, PillButton, Sheet } from "@/widgets";
+import { colors, radius } from "@/ui/theme";
+import { pageStyles, PillButton, Sheet } from "@/ui/widgets";
 
 const fmtDuration = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
 

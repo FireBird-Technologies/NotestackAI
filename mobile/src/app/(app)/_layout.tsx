@@ -1,7 +1,7 @@
 import { Tabs } from "expo-router/js-tabs";
 
-import { DrawerProvider, SECTIONS } from "@/nav-drawer";
-import { UpgradeProvider } from "@/upgrade";
+import { DrawerProvider, SECTIONS } from "@/shell/nav-drawer";
+import { UpgradeProvider } from "@/account/upgrade";
 
 /**
  * Every section of the web app's sidebar. They switch from the side panel (the menu button in each top bar), as the

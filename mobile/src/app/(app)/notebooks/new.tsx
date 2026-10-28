@@ -7,7 +7,7 @@ import { useMemo, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { colors, fonts, gutter, radius } from "@/theme";
+import { colors, fonts, gutter, radius } from "@/ui/theme";
 import { Body, Button, ErrorText, Loading, formatDate } from "@/ui";
 
 /** New notebook, as the web's dialog: what it is about, and the posts it reads from. */

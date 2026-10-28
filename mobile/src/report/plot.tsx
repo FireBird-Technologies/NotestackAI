@@ -4,8 +4,8 @@ import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Svg, { Circle, G, Line, Path, Rect, Text as SvgText } from "react-native-svg";
 
-import { ChevronIcon } from "@/icons";
-import { colors, fonts, radius } from "@/theme";
+import { ChevronIcon } from "@/ui/icons";
+import { colors, fonts, radius } from "@/ui/theme";
 
 /* A report's plot (web: ReportPlot, drawn there with Plotly), drawn natively from the same verified points: bars
    (sideways when there are few or the labels are long), a line, a scatter or a donut, in the web's blues. A tap on a

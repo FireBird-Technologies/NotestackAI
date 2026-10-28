@@ -190,6 +190,7 @@ export default function Settings() {
               </button>
               <ConfirmButton
                 confirmLabel="Delete account for good?"
+                busyLabel="Deleting account..."
                 className="btn btn-danger"
                 onConfirm={async () => {
                   await authApi.deleteAccount();

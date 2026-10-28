@@ -9,7 +9,7 @@ const IS_DEV = VARIANT === "development";
 const APP_ID = "ai.notestack.app";
 
 // Google sign in on iOS needs this build's own iOS OAuth client; its reversed id is the URL scheme Google returns to.
-// Without it the Google button stays hidden on iOS (src/social-auth.ts) and the plugin is left out.
+// Without it the Google button stays hidden on iOS (src/account/social-auth.ts) and the plugin is left out.
 const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
 const GOOGLE_IOS_URL_SCHEME = GOOGLE_IOS_CLIENT_ID
   ? `com.googleusercontent.apps.${GOOGLE_IOS_CLIENT_ID.replace(/\.apps\.googleusercontent\.com$/, "")}`

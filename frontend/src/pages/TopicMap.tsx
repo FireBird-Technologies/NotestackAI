@@ -228,6 +228,9 @@ export default function TopicMap() {
   const [data, setData] = useState<TopicMapData | null>(null);
   const [job, setJob] = useState<Job | null>(null);
   const [selected, setSelected] = useState<TopicDetail | null>(null);
+  // The topic being opened: its panel shows the loader, never the last topic, until it arrives (a later click wins).
+  const [opening, setOpening] = useState<string | null>(null);
+  const openingRef = useRef<string | null>(null);
   const [briefing, setBriefing] = useState(false);
   const [menu, setMenu] = useState(false);
   const [acting, setActing] = useState<string | null>(null);
@@ -323,7 +326,17 @@ export default function TopicMap() {
       const p = placed.get(id);
       if (p) focusOn(p.x, p.y);
     }
-    setSelected(await topicsApi.get(id));
+    openingRef.current = id;
+    setSelected(null);
+    setOpening(id);
+    try {
+      const detail = await topicsApi.get(id);
+      if (openingRef.current === id) setSelected(detail);
+    } catch (e) {
+      if (openingRef.current === id) setError(errorMessage(e));
+    } finally {
+      if (openingRef.current === id) setOpening(null);
+    }
   };
 
   const startDrag = (e: ReactPointerEvent, ids: string[]) => {
@@ -447,7 +460,7 @@ export default function TopicMap() {
         />
       )}
       {data && data.nodes.length > 0 && (
-        <div className={`map-layout${selected || briefing ? "" : " map-full"}`}>
+        <div className={`map-layout${selected || opening || briefing ? "" : " map-full"}`}>
           <div className="card map-canvas">
             <div className="map-controls">
               <button className="icon-btn" onClick={() => zoomAt(0.75)} aria-label="Zoom in" title="Zoom in">
@@ -672,9 +685,10 @@ export default function TopicMap() {
             </svg>
           </div>
 
-          {(selected || briefing) && (
+          {(selected || opening || briefing) && (
           <aside className="card map-side">
-            {!selected && (
+            {opening && !selected && <Loading label="Opening the topic" />}
+            {!selected && !opening && (
               <>
                 <p className="eyebrow">Mission briefing</p>
                 <p className="muted small">
@@ -761,7 +775,10 @@ export default function TopicMap() {
 
             {selected && (
               <>
-                <button className="link-btn mono muted small" onClick={() => setSelected(null)}>
+                <button className="link-btn mono muted small" onClick={() => {
+                  openingRef.current = null;
+                  setSelected(null);
+                }}>
                   {briefing ? "Back to briefing" : "Close"}
                 </button>
                 <div className="row between">

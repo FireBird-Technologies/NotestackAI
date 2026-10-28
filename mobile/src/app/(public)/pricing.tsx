@@ -5,13 +5,13 @@ import { router } from "expo-router";
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 
-import { CycleToggle, PlanCard } from "@/plans";
-import { Eyebrow, Lede, PageTitle, PublicPage } from "@/public-page";
+import { CycleToggle, PlanCard } from "@/account/plans";
+import { Eyebrow, Lede, PageTitle, PublicPage } from "@/shell/public-page";
 import { Button } from "@/ui";
 
 /**
  * The plans, as on the landing page's pricing section, for people not signed in: what each plan includes and costs,
- * then Start free. Signed in, plans are bought in the upgrade sheet (src/upgrade.tsx).
+ * then Start free. Signed in, plans are bought in the upgrade sheet (src/account/upgrade.tsx).
  */
 export default function Pricing() {
   const [cycle, setCycle] = useState<Cycle>("annual");

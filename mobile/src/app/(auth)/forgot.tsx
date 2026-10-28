@@ -2,7 +2,7 @@ import { authApi, type LoginResult } from "@notestack/shared/auth";
 import { ApiError } from "@notestack/shared/client";
 import { useState } from "react";
 
-import { useAuth } from "@/auth";
+import { useAuth } from "@/account/auth";
 import { Body, Button, ErrorText, Field, FormScreen, Notice, Title } from "@/ui";
 
 const MIN_PASSWORD = 8;

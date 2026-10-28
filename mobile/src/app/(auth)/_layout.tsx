@@ -4,7 +4,7 @@ export const unstable_settings = { anchor: "sign-up" };
 
 export default function AuthLayout() {
   return (
-    // The public navbar (src/public-header.tsx) replaces the native header; swiping from the edge still goes back.
+    // The public navbar (src/shell/public-header.tsx) replaces the native header; swiping from the edge still goes back.
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="welcome" />
       <Stack.Screen name="sign-in" />

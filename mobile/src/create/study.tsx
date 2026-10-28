@@ -6,8 +6,8 @@ import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { Check, createStyles, Foot, Label, Pills, Select, SourceFocusFields, type SourceSelection, TextArea } from "@/create/fields";
-import { colors, radius } from "@/theme";
-import { PillButton } from "@/widgets";
+import { colors, radius } from "@/ui/theme";
+import { PillButton } from "@/ui/widgets";
 
 export type CreateBody = Omit<GenerateBody, "type">;
 export type DialogProps = {

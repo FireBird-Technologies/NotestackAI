@@ -374,14 +374,30 @@ export default function Launchpad() {
     const key = `${view}|${start.toISOString()}`;
     asked.current = key;
     return launchpadApi.items({ start: start.toISOString(), end: end.toISOString() })
-      .then((list) => asked.current === key && setItems(list));
+      .then((list) => asked.current === key && setItems(list))
+      .catch(() => {
+        // Not a spinner forever: an empty calendar and what went wrong.
+        if (asked.current !== key) return;
+        setItems([]);
+        setError("Could not load your calendar. Try again.");
+      });
   }, [days, view]);
 
-  // Another month or view: the spinner until its posts arrive, never the last month's meanwhile.
+  // Another month or view: the spinner until its posts arrive, never the last month's meanwhile (the controls below
+  // clear the list as they are clicked, so it isn't shown for a frame first).
   useEffect(() => {
     setItems(null);
-    load();
+    void load();
   }, [load]);
+  const goToMonth = (next: Date) => {
+    setItems(null);
+    setMonth(next);
+  };
+  const pickView = (next: "month" | "agenda") => {
+    if (next === view) return;
+    setItems(null);
+    setView(next);
+  };
   // Posts with a video or images upload in the background: check back until they are posted (or failed).
   const publishing = (items ?? []).some((i) => i.status === "publishing");
   useEffect(() => {
@@ -445,18 +461,19 @@ export default function Launchpad() {
 
 
       <div className="lp-layout">
+      <div className="lp-cal-col">
       <section className="card">
         <div className="row between cal-head">
           <div className="row cal-nav">
-            <button className="btn btn-small" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))} aria-label="Previous month">
+            <button className="btn btn-small" onClick={() => goToMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))} aria-label="Previous month">
               <ArrowLeftIcon size={16} className="icon cal-nav-arrow" /><span className="cal-nav-label">Prev</span>
             </button>
             <h2>{month.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</h2>
-            <button className="btn btn-small" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))} aria-label="Next month">
+            <button className="btn btn-small" onClick={() => goToMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))} aria-label="Next month">
               <span className="cal-nav-label">Next</span><ArrowRightIcon size={16} className="icon cal-nav-arrow" />
             </button>
           </div>
-          <Tabs tabs={[{ id: "month", label: "Month" }, { id: "agenda", label: "Agenda" }]} value={view} onChange={setView} />
+          <Tabs tabs={[{ id: "month", label: "Month" }, { id: "agenda", label: "Agenda" }]} value={view} onChange={pickView} />
         </div>
         {!items && <div className="loading-center lp-cal-loading"><Loading label="Loading your calendar" /></div>}
         {items && items.length === 0 && (
@@ -534,16 +551,25 @@ export default function Launchpad() {
             {items.length === 0 && <li className="muted">Nothing scheduled. Quiet moon tonight.</li>}
           </ul>
         )}
-        {items && (
-          <div className="lp-cal-foot">
-            <p className="mono muted small">{upcoming.length} upcoming in view</p>
-            <p className="muted small lp-cal-hint">
+      </section>
+      {/* Under the calendar, outside its card */}
+      {items && (
+        <div className={`lp-cal-foot${view === "agenda" ? " lp-cal-foot--agenda" : ""}`}>
+          {/* Desktop: just the short hint; a phone keeps the count and the full one. The hint is about the month's
+              days, so the agenda leaves it out. */}
+          <p className="mono muted small lp-cal-count">{upcoming.length} upcoming in view</p>
+          {view === "month" && (
+          <p className="muted small lp-cal-hint">
+            <span className="lp-cal-hint-short">Click a day to schedule a launch, or a post to edit it.</span>
+            <span className="lp-cal-hint-full">
               Click a day to schedule a launch on it, or a post to edit it: change its words or time, reschedule it, or
               publish it now.
-            </p>
-          </div>
-        )}
-      </section>
+            </span>
+          </p>
+          )}
+        </div>
+      )}
+      </div>
 
         <ConnectionsPanel accounts={accounts} onConnect={connect} onChanged={async () => {
           setAccounts(await launchpadApi.accounts());

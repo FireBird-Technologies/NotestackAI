@@ -6,12 +6,12 @@ import { SymbolView } from "expo-symbols";
 import { useEffect, useRef, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View, type ScrollViewInstance } from "react-native";
 
-import { ArtifactCard, isMaking } from "@/artifact-card";
-import { Starfield } from "@/starfield";
+import { ArtifactCard, isMaking } from "@/artifacts/artifact-card";
+import { Starfield } from "@/shell/starfield";
 import { VideosList } from "@/video/list";
-import { colors, fonts, gutter, radius } from "@/theme";
+import { colors, fonts, gutter, radius } from "@/ui/theme";
 import { Body, Button, Loading } from "@/ui";
-import { CARD_RADIUS, Pager } from "@/widgets";
+import { CARD_RADIUS, Pager } from "@/ui/widgets";
 
 /** The kinds to show, in the web Library's order. "videos" lists the Videos editor's videos. */
 const KINDS = [
@@ -70,7 +70,9 @@ export default function Library() {
     scroller.current?.scrollTo({ y: 0, animated: true });
   };
 
-  const items = list.data?.items ?? [];
+  // Another kind, search or page: the loader until its items arrive, never the last ones meanwhile.
+  const loading = list.isPending || list.isPlaceholderData;
+  const items = loading ? [] : (list.data?.items ?? []);
   const total = list.data?.total ?? 0;
   const label = KINDS.find((k) => k.id === kind)?.label ?? "All";
 
@@ -137,7 +139,7 @@ export default function Library() {
         ) : null}
 
         {kind === "videos" ? <VideosList /> : null}
-        {kind !== "videos" && list.isPending ? <Loading /> : null}
+        {kind !== "videos" && loading && !list.error ? <Loading /> : null}
         {list.error && !list.data ? (
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>Could not load your library</Text>
@@ -145,7 +147,7 @@ export default function Library() {
             <Button title="Try again" onPress={reload} />
           </View>
         ) : null}
-        {kind !== "videos" && list.data && items.length === 0 ? (
+        {kind !== "videos" && list.data && !loading && items.length === 0 ? (
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>Nothing here yet</Text>
             <Body muted>

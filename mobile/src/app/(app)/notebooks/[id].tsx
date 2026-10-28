@@ -5,15 +5,15 @@ import { Stack, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
 
-import { isMaking } from "@/artifact-card";
+import { isMaking } from "@/artifacts/artifact-card";
 import { prefetchFocus, prefetchSuggestions, useArtifactLimits } from "@/create/fields";
 import { ChatTab } from "@/notebook/chat";
 import { CreateTab } from "@/notebook/create-tab";
 import { LibraryTab } from "@/notebook/library-tab";
 import { SourcesTab } from "@/notebook/sources-tab";
 import { NotebookBar, type NotebookTab } from "@/notebook/tabs-bar";
-import { Starfield } from "@/starfield";
-import { colors } from "@/theme";
+import { Starfield } from "@/shell/starfield";
+import { colors } from "@/ui/theme";
 import { Body, Button, Centered, Loading } from "@/ui";
 
 /**

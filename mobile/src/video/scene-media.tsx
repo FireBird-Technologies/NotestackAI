@@ -7,9 +7,9 @@ import { Image } from "expo-image";
 import { type ReactNode, useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
-import { CheckIcon, CloseIcon, ListIcon } from "@/icons";
-import { colors, fonts, radius } from "@/theme";
-import { Dialog, PillButton, Sheet } from "@/widgets";
+import { CheckIcon, CloseIcon, ListIcon } from "@/ui/icons";
+import { colors, fonts, radius } from "@/ui/theme";
+import { Dialog, PillButton, Sheet } from "@/ui/widgets";
 
 import type { PanelProps } from "./types";
 import { clock, ClipView, Spinner, vstyles } from "./ui";

@@ -2,8 +2,8 @@ import { tools, toolsHub } from "@notestack/shared/content/tools";
 import { router } from "expo-router";
 import { Pressable, StyleSheet, Text } from "react-native";
 
-import { Card, Eyebrow, Lede, PageTitle, PublicPage, publicText } from "@/public-page";
-import { colors } from "@/theme";
+import { Card, Eyebrow, Lede, PageTitle, PublicPage, publicText } from "@/shell/public-page";
+import { colors } from "@/ui/theme";
 
 export default function ToolsHub() {
   return (

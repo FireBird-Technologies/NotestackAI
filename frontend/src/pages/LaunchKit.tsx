@@ -173,10 +173,18 @@ export function LaunchKits() {
   const [error, setError] = useState<string | null>(null);
   const autoStarted = useRef(false);
 
+  // Each search: the loader until its posts arrive, never the last search's meanwhile; a late answer to an older
+  // search is dropped.
+  const asked = useRef("");
   useEffect(() => {
     const t = setTimeout(() => {
-      docsApi.list({ q: q || undefined, limit: 30 }).then((p) => setPosts(p.items.filter((d) => !d.locked)),
-                                                            (e) => setError(errorMessage(e)));
+      asked.current = q;
+      setPosts(null);
+      setError(null);
+      docsApi.list({ q: q || undefined, limit: 30 }).then(
+        (p) => asked.current === q && setPosts(p.items.filter((d) => !d.locked)),
+        (e) => asked.current === q && setError(errorMessage(e)),
+      );
     }, 200);
     return () => clearTimeout(t);
   }, [q]);

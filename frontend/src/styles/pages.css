@@ -1695,6 +1695,7 @@ select.input option {
      their longest entry, the status fits its pill, and the post text gets the rest */
   grid-template-columns: auto auto auto minmax(0, 1fr) auto;
   column-gap: 20px;
+  row-gap: 10px; /* each post is a card of its own */
 }
 
 .agenda-row > .mono,
@@ -1721,10 +1722,10 @@ select.input option {
   column-gap: 20px;
   align-items: center;
   width: 100%;
-  padding: 10px 4px;
-  border: none;
-  border-bottom: 1px solid var(--line);
-  background: transparent;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
   color: var(--text);
   font: inherit;
   text-align: left;
@@ -1732,6 +1733,7 @@ select.input option {
 }
 
 .agenda-row:hover {
+  border-color: var(--blue-20);
   background: var(--blue-05);
 }
 
@@ -1769,14 +1771,53 @@ select.input option {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  /* A phone's card, as in the app: when and the status on top, the platform and its kind, then the post */
   .agenda > li > .agenda-row,
   .agenda-row {
-    grid-template-columns: 1fr auto;
-    gap: 8px 12px;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "date date end"
+      "platform kind clicks"
+      "text text text";
+    gap: 8px 10px;
+    padding: 12px 14px;
+  }
+
+  .agenda-row > .mono {
+    grid-area: date;
+  }
+
+  .agenda-platform {
+    grid-area: platform;
+  }
+
+  .agenda-row .agenda-kind {
+    grid-area: kind;
+    justify-self: start;
+    min-width: 0;
+    padding: 1px 9px;
+    font-size: 0.72rem;
   }
 
   .agenda-text {
-    grid-column: 1 / -1;
+    grid-area: text;
+    color: var(--text-2);
+  }
+
+  /* The status beside the date, the click count (when there is one) beside the platform */
+  .agenda-end {
+    display: contents;
+  }
+
+  .agenda-end > :last-child {
+    grid-area: end;
+    justify-self: end;
+  }
+
+  .agenda-end > .mono:not(:last-child) {
+    grid-area: clicks;
+    justify-self: end;
+    white-space: nowrap;
   }
 }
 
@@ -4964,7 +5005,15 @@ select.input,
 }
 
 /* Under the calendar: how many posts are coming up, and how to change one */
+/* The calendar card with its hint under it, outside the card */
+.lp-cal-col {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
 .lp-cal-foot {
+  padding: 0 6px;
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -4978,6 +5027,21 @@ select.input,
 
 .lp-cal-hint {
   color: var(--text-2);
+}
+
+/* Desktop: only the short hint under the calendar; phones keep the upcoming count and the full hint */
+@media (min-width: 721px) {
+  .lp-cal-count,
+  .lp-cal-hint-full,
+  .lp-cal-foot--agenda {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .lp-cal-hint-short {
+    display: none;
+  }
 }
 
 /* Editing a scheduled post: When and Account side by side, their labels and boxes on one line (the time zone note
@@ -5143,6 +5207,26 @@ details.map-legend[open] summary {
 }
 
 /* Sources: one smart input, files drop anywhere */
+/* Add a source: Link and Upload side by side, NotebookLM across the row below, square-cornered. */
+.tabs.source-methods {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  width: 100%;
+  border-radius: 18px;
+}
+
+.tabs.source-methods .tab {
+  justify-content: center;
+  padding: 5px 14px;
+  border-radius: 14px;
+  text-align: center;
+}
+
+.tabs.source-methods .tab:nth-child(3) {
+  grid-column: 1 / -1;
+}
+
 .source-method-panel {
   display: grid;
   gap: 12px;
@@ -5221,10 +5305,14 @@ details.map-legend[open] summary {
   font-size: 0.82rem;
 }
 
-.add-source--compact .add-smart .input,
-.add-source--compact .add-smart .btn.btn-small {
+.add-source--compact .add-smart .input {
   height: 44px;
   min-height: 44px;
+}
+
+.add-source--compact .add-smart .btn.btn-small {
+  height: 38px;
+  min-height: 38px;
 }
 
 .source-upload-drop {
@@ -5308,6 +5396,11 @@ details.map-legend[open] summary {
     height: 44px;
     min-height: 44px;
     flex-basis: auto;
+  }
+
+  .add-source--compact .add-smart .btn.btn-small {
+    height: 38px;
+    min-height: 38px;
   }
 }
 
@@ -13386,9 +13479,6 @@ body.nbv-resizing iframe {
     display: none;
   }
 
-  .lp-cal-foot {
-    margin-top: 10px;
-  }
 }
 
 /* Add voices: each way to make a voice is its own pill (no shared track, so wrapping on a phone stays tidy) */

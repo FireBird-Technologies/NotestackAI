@@ -8,11 +8,11 @@ import { SymbolView } from "expo-symbols";
 import { useMemo, useState } from "react";
 import { Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 
-import { Segments } from "@/sources-nav";
-import { colors, fonts, radius } from "@/theme";
+import { Segments } from "@/sources/sources-nav";
+import { colors, fonts, radius } from "@/ui/theme";
 import { ErrorText, Loading, formatDate } from "@/ui";
 import { Composer, connectLinkedIn, PostEditor } from "@/launchpad/editors";
-import { confirm, Page, PageHead, pageStyles, PillButton, Section, Sheet, StatusPill } from "@/widgets";
+import { confirm, Page, PageHead, pageStyles, PillButton, Section, Sheet, StatusPill } from "@/ui/widgets";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const sameDay = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
@@ -80,8 +80,10 @@ export default function Launchpad() {
     setComposeAt(at);
     setComposing(true);
   };
-  const list = items.data ?? [];
-  const upcoming = list.filter((i) => i.status === "scheduled" || i.status === "draft");
+  // Another month or view: the loader until its posts arrive, never the last ones meanwhile (the grid stays).
+  const loading = items.isPending || items.isPlaceholderData;
+  const loaded = items.data && !loading ? items.data : null;
+  const list = loaded ?? [];
 
   const connect = async () => {
     setError("");
@@ -123,10 +125,10 @@ export default function Launchpad() {
           value={view}
           onChange={setView}
         />
-        {items.isPending ? <Loading /> : null}
-        {items.data && list.length === 0 && view === "month" ? <Text style={pageStyles.body}>Nothing scheduled this month.</Text> : null}
+        {loading && !items.error ? <Loading /> : null}
+        {loaded && list.length === 0 && view === "month" ? <Text style={pageStyles.body}>Nothing scheduled this month.</Text> : null}
 
-        {items.data && view === "month" ? (
+        {view === "month" ? (
           <View>
             <View style={styles.week}>
               {WEEKDAYS.map((d) => (
@@ -166,8 +168,8 @@ export default function Launchpad() {
           </View>
         ) : null}
 
-        {items.data && view === "agenda" ? (
-          <View>
+        {loaded && view === "agenda" ? (
+          <View style={styles.agenda}>
             {list.map((i) => (
               <Pressable key={i.id} onPress={() => setOpen(i)} style={({ pressed }) => [styles.agendaRow, pressed && styles.pressed]}>
                 <View style={styles.agendaHead}>
@@ -188,15 +190,9 @@ export default function Launchpad() {
           </View>
         ) : null}
 
-        {items.data ? (
-          <>
-            <Text style={pageStyles.mono}>{upcoming.length} upcoming in view</Text>
-            <Text style={pageStyles.body}>
-              Tap a day to schedule a launch on it, or a post to edit it: change its words or time, reschedule it, or publish it now.
-            </Text>
-          </>
-        ) : null}
       </Section>
+      {/* Under the calendar, outside its card; only the month has days to tap (web: .lp-cal-foot) */}
+      {loaded && view === "month" ? <Text style={styles.hint}>Tap a day to schedule a launch, or a post to edit it.</Text> : null}
 
       <Connections now={now} accounts={accounts.data ?? null} onConnect={() => void connect()} onChanged={reload} />
 
@@ -385,11 +381,17 @@ const styles = StyleSheet.create({
   reminded: { backgroundColor: "rgba(255, 255, 255, 0.14)" },
   itemTime: { color: colors.white, fontFamily: fonts.mono, fontSize: 9 },
   more: { color: colors.text3, fontFamily: fonts.mono, fontSize: 10 },
+  hint: { color: colors.text2, fontSize: 14.5, lineHeight: 21, paddingHorizontal: 6 },
+  // Each post a card of its own (web: .agenda-row)
+  agenda: { gap: 10 },
   agendaRow: {
     gap: 6,
     paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: colors.line,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: "rgba(255, 255, 255, 0.02)",
   },
   agendaHead: {
     flexDirection: "row",

@@ -3,10 +3,10 @@ import { Image } from "expo-image";
 import { useEffect, useState, type ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import { ConnectedApps } from "@/connected-apps";
-import { MCP_SERVER_URL } from "@/connector-modal";
-import { colors, fonts, radius } from "@/theme";
-import { Page, PageHead, pageStyles, PillButton, Section } from "@/widgets";
+import { ConnectedApps } from "@/sources/connected-apps";
+import { MCP_SERVER_URL } from "@/sources/connector-modal";
+import { colors, fonts, radius } from "@/ui/theme";
+import { Page, PageHead, pageStyles, PillButton, Section } from "@/ui/widgets";
 
 
 /** Connect to Notestack (web: pages/Connector.tsx): how to add Notestack to Claude or ChatGPT, and the apps added. */

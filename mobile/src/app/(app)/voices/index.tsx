@@ -22,12 +22,12 @@ import { SymbolView } from "expo-symbols";
 import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 
-import { useVoicePlayer, voicePreviewUrl as previewUrl } from "@/audio";
+import { useVoicePlayer, voicePreviewUrl as previewUrl } from "@/lib/audio";
 import { Select } from "@/create/fields";
-import { Segments } from "@/sources-nav";
-import { colors, fonts, radius } from "@/theme";
+import { Segments } from "@/sources/sources-nav";
+import { colors, fonts, radius } from "@/ui/theme";
 import { ErrorText, Loading } from "@/ui";
-import { confirm, JobProgress, Page, PageHead, pageStyles, PillButton, Section, Sheet } from "@/widgets";
+import { confirm, JobProgress, Page, PageHead, pageStyles, PillButton, Section, Sheet } from "@/ui/widgets";
 
 const cap = (s?: string | null) => (s ? s[0].toUpperCase() + s.slice(1) : "");
 const fmtSeconds = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;

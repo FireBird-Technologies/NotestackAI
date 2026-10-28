@@ -44,7 +44,8 @@ export default function Archive() {
       <div className="lib-filter-phone">
         <Dropdown<Tab> label="Show" value={tab} options={TABS.map((t) => ({ value: t.id, label: t.label }))} onChange={pickTab} />
       </div>
-      {tab === "videos" ? <Videos /> : <MadeList filter={tab} />}
+      {/* Keyed by tab: another tab starts empty, with the loader, never the last tab's items for a frame */}
+      {tab === "videos" ? <Videos /> : <MadeList key={tab} filter={tab} />}
     </div>
   );
 }
@@ -80,19 +81,22 @@ function MadeList({ filter }: { filter: Filter }) {
     [filter, q, page],
   );
 
-  // Another tab: the loader until its items are fetched, never the last tab's items meanwhile.
-  useEffect(() => {
-    setItems(null);
-    setFailed(false);
-  }, [filter]);
+  // Another search starts again on the first page. (Another tab is a fresh list: the parent keys it by tab.)
+  useEffect(() => setPage(0), [q]);
 
-  // Another tab or search starts again on the first page.
-  useEffect(() => setPage(0), [filter, q]);
-
+  // A new search: the loader until its items arrive, never the last ones meanwhile.
+  const searched = useRef(q);
   useEffect(() => {
-    const t = setTimeout(() => load(), 200);
+    const t = setTimeout(() => {
+      if (searched.current !== q) {
+        searched.current = q;
+        setItems(null);
+        setFailed(false);
+      }
+      void load();
+    }, 200);
     return () => clearTimeout(t);
-  }, [load]);
+  }, [load, q]);
 
   // Another page: the loader until its items arrive, never the last page's items meanwhile.
   const goTo = (p: number) => {

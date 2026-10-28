@@ -17,13 +17,13 @@ import { SymbolView } from "expo-symbols";
 import { type ComponentRef, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 
-import { useVoicePlayer, voicePreviewUrl } from "@/audio";
+import { useVoicePlayer, voicePreviewUrl } from "@/lib/audio";
 import { createStyles, CustomTopic, FocusCards, Foot, Hint, Label, Select } from "@/create/fields";
 import { voicesQuery } from "@/create/media";
-import { colors, fonts, radius } from "@/theme";
+import { colors, fonts, radius } from "@/ui/theme";
 import { ErrorText, formatDate, Loading } from "@/ui";
-import { useUpgrade } from "@/upgrade";
-import { pageStyles, PillButton } from "@/widgets";
+import { useUpgrade } from "@/account/upgrade";
+import { pageStyles, PillButton } from "@/ui/widgets";
 
 type Source = { kind: "notebook"; id: string } | { kind: "post"; id: string };
 const ONE_POST = "__post";

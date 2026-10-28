@@ -8,12 +8,12 @@ import * as WebBrowser from "expo-web-browser";
 import { useEffect, useMemo, useState } from "react";
 import { ActionSheetIOS, Alert, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, useWindowDimensions, View } from "react-native";
 
-import { Segments, SourcesNav } from "@/sources-nav";
-import { Starfield } from "@/starfield";
-import { colors, fonts, gutter } from "@/theme";
-import { STATUS_LABEL, Sparkline, StarMap, type ColorMode } from "@/topic-map";
+import { Segments, SourcesNav } from "@/sources/sources-nav";
+import { Starfield } from "@/shell/starfield";
+import { colors, fonts, gutter } from "@/ui/theme";
+import { STATUS_LABEL, Sparkline, StarMap, type ColorMode } from "@/sources/topic-map";
 import { Body, Button, ErrorText, Loading, formatDate } from "@/ui";
-import { CARD_RADIUS, JobProgress } from "@/widgets";
+import { CARD_RADIUS, JobProgress } from "@/ui/widgets";
 
 function momentumText(m: number) {
   if (!Number.isFinite(m) || m === 0) return "no recent posts";

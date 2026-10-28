@@ -4,10 +4,10 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, TextInput, View } from "react-native";
 
-import { colors, fonts, radius } from "@/theme";
+import { colors, fonts, radius } from "@/ui/theme";
 import { ErrorText, Loading } from "@/ui";
 import { BackLink } from "@/video/back";
-import { Page, PageHead, pageStyles, PillButton, Section } from "@/widgets";
+import { Page, PageHead, pageStyles, PillButton, Section } from "@/ui/widgets";
 
 /**
  * Create a launch kit (web: pages/LaunchKit.tsx LaunchKits, /app/launchpad/kits): pick one of your posts, and its kit

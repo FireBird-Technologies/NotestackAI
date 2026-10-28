@@ -2,8 +2,8 @@ import type { VideoScene } from "@notestack/shared/types";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { TrashIcon } from "@/icons";
-import { colors, fonts, radius } from "@/theme";
+import { TrashIcon } from "@/ui/icons";
+import { colors, fonts, radius } from "@/ui/theme";
 
 import { DeleteAssetModal, RemoveMediaModal } from "./scene-media";
 import type { PanelProps } from "./types";

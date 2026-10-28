@@ -6,9 +6,9 @@ import { useState } from "react";
 import { Pressable, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 
 import { Select } from "@/create/fields";
-import { ChevronIcon } from "@/icons";
-import { colors, fonts, radius } from "@/theme";
-import { PillButton, Sheet } from "@/widgets";
+import { ChevronIcon } from "@/ui/icons";
+import { colors, fonts, radius } from "@/ui/theme";
+import { PillButton, Sheet } from "@/ui/widgets";
 
 import { LayoutFields } from "./layout-fields";
 import { errorMessage } from "./scene-media";

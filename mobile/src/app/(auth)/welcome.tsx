@@ -2,10 +2,10 @@ import { router } from "expo-router";
 import { StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { Horizon } from "@/horizon";
-import { Starfield } from "@/starfield";
-import { PUBLIC_HEADER_HEIGHT, PublicHeader } from "@/public-header";
-import { colors, fonts, gutter } from "@/theme";
+import { Horizon } from "@/shell/horizon";
+import { Starfield } from "@/shell/starfield";
+import { PUBLIC_HEADER_HEIGHT, PublicHeader } from "@/shell/public-header";
+import { colors, fonts, gutter } from "@/ui/theme";
 import { Button } from "@/ui";
 
 /** How much of the screen width the planet's glowing edge rises from the bottom. */

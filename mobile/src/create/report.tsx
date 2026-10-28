@@ -8,8 +8,8 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 
 
 import { ChoiceCard, createStyles, Foot, Hint, Label, SourceFocusFields, type SourceSelection, suggestTemplates } from "@/create/fields";
 import type { DialogProps } from "@/create/study";
-import { colors, radius } from "@/theme";
-import { PillButton } from "@/widgets";
+import { colors, radius } from "@/ui/theme";
+import { PillButton } from "@/ui/widgets";
 
 type Format = "document" | "interactive";
 

@@ -1,8 +1,8 @@
 import { useLocalSearchParams } from "expo-router";
 import { StyleSheet, View } from "react-native";
 
-import { Starfield } from "@/starfield";
-import { colors } from "@/theme";
+import { Starfield } from "@/shell/starfield";
+import { colors } from "@/ui/theme";
 import { VideoEditor } from "@/video/editor";
 import { PendingVideo } from "@/video/making";
 import { isPendingId } from "@/video/pending";

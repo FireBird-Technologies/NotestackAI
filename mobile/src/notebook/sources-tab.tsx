@@ -6,10 +6,10 @@ import { SymbolView } from "expo-symbols";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
-import { AddSource } from "@/add-source";
-import { colors, fonts, radius } from "@/theme";
+import { AddSource } from "@/sources/add-source";
+import { colors, fonts, radius } from "@/ui/theme";
 import { ErrorText, formatDate, Loading } from "@/ui";
-import { confirm, JobProgress, pageStyles, PillButton, Section, Sheet } from "@/widgets";
+import { confirm, JobProgress, pageStyles, PillButton, Section, Sheet } from "@/ui/widgets";
 
 /**
  * The Sources tab (web: NotebookView's chats column on a phone): the notebook's chats under date headings, with + New,
@@ -253,7 +253,7 @@ function PostsManager({ notebook, readOnly, onChanged }: { notebook: Notebook; r
       )}
 
       {readOnly || tab === "inside" ? (
-        <View style={styles.panel}>
+        <ScrollView style={styles.panel} nestedScrollEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator>
           {inside.map((d, i) => (
             <View key={d.id} style={[styles.pmRow, i > 0 && styles.pmRowLine]}>
               <View style={styles.pmText}>
@@ -280,11 +280,11 @@ function PostsManager({ notebook, readOnly, onChanged }: { notebook: Notebook; r
             </View>
           ))}
           {inside.length === 0 ? <Text style={styles.pmEmpty}>{docs.length ? "No posts match." : "No posts yet."}</Text> : null}
-        </View>
+        </ScrollView>
       ) : all.isPending ? (
         <Loading />
       ) : (
-        <View style={styles.panel}>
+        <ScrollView style={styles.panel} nestedScrollEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator>
           {all.error ? <ErrorText>{all.error.message}</ErrorText> : null}
           {outsideShown.map((d, i) => (
             <View key={d.id} style={[styles.pmRow, i > 0 && styles.pmRowLine]}>
@@ -307,7 +307,7 @@ function PostsManager({ notebook, readOnly, onChanged }: { notebook: Notebook; r
           {outsideShown.length === 0 ? (
             <Text style={styles.pmEmpty}>{outside.length ? "No posts match." : "All your posts are in this notebook."}</Text>
           ) : null}
-        </View>
+        </ScrollView>
       )}
     </View>
   );
@@ -356,7 +356,8 @@ const styles = StyleSheet.create({
   tabOn: { borderColor: colors.blue, backgroundColor: colors.black },
   tabText: { color: colors.text3, fontSize: 16, fontWeight: "500" },
   tabTextOn: { color: colors.text },
-  panel: { borderRadius: radius.sm + 2, borderWidth: 1, borderColor: colors.line, overflow: "hidden" },
+  // About six and a half rows, the list scrolling inside its box (the sheet around it scrolls on its own).
+  panel: { maxHeight: 430, flexGrow: 0, borderRadius: radius.sm + 2, borderWidth: 1, borderColor: colors.line, overflow: "hidden" },
   pmRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingVertical: 12 },
   pmRowLine: { borderTopWidth: 1, borderTopColor: colors.line },
   pmText: { flex: 1, gap: 3 },

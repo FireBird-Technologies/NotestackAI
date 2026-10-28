@@ -84,8 +84,8 @@ type AddSourceMethod = "link" | "upload" | "notebooklm";
 
 const ADD_SOURCE_METHODS: { id: AddSourceMethod; label: string }[] = [
   { id: "link", label: "Link" },
-  { id: "notebooklm", label: "Transfer from NotebookLM" },
   { id: "upload", label: "Upload" },
+  { id: "notebooklm", label: "Transfer from NotebookLM" },
 ];
 
 /** Imports each file as its own post. Returns how many failed. */
@@ -245,6 +245,7 @@ export function AddSource({
     <div className={`card add-source${compact ? " add-source--compact" : ""}`}>
       <Tabs<AddSourceMethod>
         tabs={ADD_SOURCE_METHODS}
+        className="source-methods"
         value={method}
         label="Choose an import method"
         onChange={(next) => {
@@ -526,7 +527,7 @@ export default function Sources() {
   const returningFromNotebookLm = searchParams.get("notebooklm") === "import";
   const [sources, setSources] = useState<Source[] | null>(null);
   const { openUpgrade } = useUpgrade();
-  const [docs, setDocs] = useState<Doc[]>([]);
+  const [docs, setDocs] = useState<Doc[] | null>(null); // null: a page is loading (the loader, not the last page)
   const [total, setTotal] = useState(0);
   const [q, setQ] = useState("");
   const [removing, setRemoving] = useState<Set<string>>(new Set()); // sources being deleted: dimmed at once, gone when done
@@ -550,13 +551,18 @@ export default function Sources() {
   }), []);
   /** One page of posts, from `start` (default: the page shown, so a refresh keeps it). A page past the end (posts were
    * deleted) gives way to the last one. */
+  const docsAsked = useRef(0); // the latest request: an older answer (another search or page) is dropped
   const loadDocs = useCallback(
-    (start = offset): Promise<void> => docsApi.list({ q, indexed_only: true, sort: "added", limit: PAGE, offset: start }).then((p) => {
-      if (!p.items.length && start > 0 && p.total > 0) return loadDocs(Math.floor((p.total - 1) / PAGE) * PAGE);
-      setTotal(p.total);
-      setOffset(start);
-      setDocs(p.items);
-    }),
+    (start = offset): Promise<void> => {
+      const asked = ++docsAsked.current;
+      return docsApi.list({ q, indexed_only: true, sort: "added", limit: PAGE, offset: start }).then((p) => {
+        if (asked !== docsAsked.current) return;
+        if (!p.items.length && start > 0 && p.total > 0) return loadDocs(Math.floor((p.total - 1) / PAGE) * PAGE);
+        setTotal(p.total);
+        setOffset(start);
+        setDocs(p.items);
+      });
+    },
     [q, offset],
   );
 
@@ -597,7 +603,14 @@ export default function Sources() {
   }, [loadSources]);
 
   useEffect(() => {
-    const t = setTimeout(() => loadDocs(0), 200); // a new search starts on its first page
+    // A new search starts on its first page, with the loader until it arrives
+    const t = setTimeout(() => {
+      setDocs(null);
+      loadDocs(0).catch(() => {
+        setDocs([]);
+        setError("Could not load your posts. Try again.");
+      });
+    }, 200);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
@@ -750,7 +763,7 @@ export default function Sources() {
                     }
                     // Gone from the page now; the lists refresh behind it.
                     setSources((list) => (list ?? []).filter((x) => x.id !== s.id));
-                    setDocs((list) => list.filter((d) => d.source_id !== s.id));
+                    setDocs((list) => list?.filter((d) => d.source_id !== s.id) ?? list);
                     loadSources();
                     loadDocs();
                   }}
@@ -776,7 +789,12 @@ export default function Sources() {
             <input className="input input-sm search" placeholder="Search titles and text" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search posts" />
           </div>
           <ul className="doc-list">
-            {docs.map((d) => (
+            {!docs && (
+              <li>
+                <Loading />
+              </li>
+            )}
+            {docs?.map((d) => (
               <li key={d.id} className="doc-row">
                 <button className="link-btn doc-title" onClick={() => setReading(d.id)}>
                   {d.title}
@@ -801,7 +819,7 @@ export default function Sources() {
                     if (reading === d.id) setReading(null);
                     // The page refills from the next one; its last post gone, the page before it
                     void loadDocs(docs.length === 1 && offset > 0 ? offset - PAGE : offset).catch(() => {
-                      setDocs((list) => list.filter((post) => post.id !== d.id));
+                      setDocs((list) => list?.filter((post) => post.id !== d.id) ?? list);
                       setTotal((n) => Math.max(0, n - 1));
                     });
                     setSources((list) => list?.map((source) => source.id === d.source_id
@@ -813,10 +831,18 @@ export default function Sources() {
                 </DeleteButton>
               </li>
             ))}
-            {docs.length === 0 && <li className="muted">No posts match.</li>}
+            {docs?.length === 0 && <li className="muted">No posts match.</li>}
           </ul>
           <Pager page={Math.floor(offset / PAGE)} pages={Math.ceil(total / PAGE)}
-                 onChange={(page) => void loadDocs(page * PAGE).catch(() => setError("Could not load that page. Try again."))} />
+                 onChange={(page) => {
+                   // That page at once, with the loader until its posts arrive
+                   setDocs(null);
+                   setOffset(page * PAGE);
+                   void loadDocs(page * PAGE).catch(() => {
+                     setDocs([]);
+                     setError("Could not load that page. Try again.");
+                   });
+                 }} />
         </section>
       )}
       {reading && <Reader documentId={reading} onClose={() => setReading(null)} />}

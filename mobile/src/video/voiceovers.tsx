@@ -3,7 +3,7 @@ import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { colors, fonts, radius } from "@/theme";
+import { colors, fonts, radius } from "@/ui/theme";
 
 import type { PanelProps } from "./types";
 import { clock, GroupHead, inFives, NumBadge, vstyles } from "./ui";

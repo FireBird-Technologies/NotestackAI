@@ -2,8 +2,8 @@ import { FEATURES, STEPS } from "@notestack/shared/content/marketing";
 import { router } from "expo-router";
 import { StyleSheet, Text, View } from "react-native";
 
-import { Card, Eyebrow, Lede, PageTitle, PublicPage, publicText, SectionTitle } from "@/public-page";
-import { colors, fonts } from "@/theme";
+import { Card, Eyebrow, Lede, PageTitle, PublicPage, publicText, SectionTitle } from "@/shell/public-page";
+import { colors, fonts } from "@/ui/theme";
 import { Button } from "@/ui";
 
 /** The landing page's "What you get" and "How it works" sections, as their own screen. */

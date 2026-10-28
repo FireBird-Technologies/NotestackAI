@@ -11,12 +11,12 @@ import { useEffect, useRef, useState } from "react";
 import { FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { planQuery } from "@/nav-drawer";
+import { planQuery } from "@/shell/nav-drawer";
 import { AnswerText } from "@/notebook/answer-text";
-import { RingSpinner } from "@/spinner";
-import { colors, fonts, gutter, radius } from "@/theme";
+import { RingSpinner } from "@/ui/spinner";
+import { colors, fonts, gutter, radius } from "@/ui/theme";
 import { Loading } from "@/ui";
-import { useUpgrade } from "@/upgrade";
+import { useUpgrade } from "@/account/upgrade";
 
 type Turn = { key: string; role: "user" | "assistant"; text: string; citations?: Citation[]; status?: string };
 type ChatQuota = { used: number; limit: number; left: number };

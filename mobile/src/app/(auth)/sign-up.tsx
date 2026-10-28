@@ -3,8 +3,8 @@ import { ApiError } from "@notestack/shared/client";
 import { router } from "expo-router";
 import { useState } from "react";
 
-import { useAuth } from "@/auth";
-import { SocialButtons } from "@/social-buttons";
+import { useAuth } from "@/account/auth";
+import { SocialButtons } from "@/account/social-buttons";
 import { Body, Button, ErrorText, Field, FormScreen, Notice, Title } from "@/ui";
 
 const MIN_PASSWORD = 8;

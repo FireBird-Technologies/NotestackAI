@@ -4,8 +4,8 @@ import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { VideoDialog } from "@/create/video";
 import { BackLink } from "@/video/back";
 import { trackNewVideo } from "@/video/pending";
-import { Starfield } from "@/starfield";
-import { colors, fonts, gutter } from "@/theme";
+import { Starfield } from "@/shell/starfield";
+import { colors, fonts, gutter } from "@/ui/theme";
 
 /** A new video on its own (web: /app/videos/new): the three-step wizard (it says how many videos are left), then
  * straight to its screen, which waits there for the server to accept it. */

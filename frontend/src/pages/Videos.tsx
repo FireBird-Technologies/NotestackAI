@@ -45,6 +45,7 @@ export default function Videos() {
   // Another page: the loader until its videos arrive, never the last page's meanwhile.
   const goTo = (p: number) => {
     setVideos(null);
+    setError(null); // the loader again, even after a page that failed
     setPage(p);
   };
 

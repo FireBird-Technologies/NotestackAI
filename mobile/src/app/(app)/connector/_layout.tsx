@@ -1,7 +1,7 @@
 import { Stack } from "expo-router";
 
-import { brandHeader } from "@/header-brand";
-import { tabStackOptions } from "@/theme";
+import { brandHeader } from "@/shell/header-brand";
+import { tabStackOptions } from "@/ui/theme";
 
 export default function ConnectorLayout() {
   return (

@@ -534,12 +534,20 @@ export function LibraryPicker({ onPick, onPickKit, onCreateKit, fill = false, on
   // Another kind or search starts on the first page.
   useEffect(() => setPage(0), [kind, q]);
 
+  // A new search: the loader until its items arrive, never the last ones meanwhile. (A reload of the same list, after
+  // a reschedule or delete, keeps it on screen.)
+  const searched = useRef(q);
   useEffect(() => {
     const t = setTimeout(() => {
+      if (searched.current !== q) {
+        searched.current = q;
+        setItems(null);
+      }
+      setError(null);
       load().catch((e) => setError(errorMessage(e)));
     }, 200);
     return () => clearTimeout(t);
-  }, [load]);
+  }, [load, q]);
 
   // Another page or kind: the loader until its items arrive, never the last ones meanwhile.
   const goTo = (p: number) => {

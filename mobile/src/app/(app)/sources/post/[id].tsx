@@ -4,7 +4,7 @@ import { Stack, useLocalSearchParams } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { ScrollView, StyleSheet, Text } from "react-native";
 
-import { colors, fonts, gutter } from "@/theme";
+import { colors, fonts, gutter } from "@/ui/theme";
 import { Body, Button, Centered, Loading, formatDate } from "@/ui";
 
 /** One post's text as Notestack indexed it (the web's Reader). */

@@ -8,7 +8,7 @@ import { Composer, PostEditor } from "@/launchpad/editors";
 import { LibraryPicker } from "@/launchpad/library-picker";
 import { ErrorText } from "@/ui";
 import { BackLink } from "@/video/back";
-import { Page, PageHead, Section, Sheet } from "@/widgets";
+import { Page, PageHead, Section, Sheet } from "@/ui/widgets";
 
 /** A new post: from a Library item (attached), or a copy of a scheduled post (its words and attachment). */
 type Draft = { artifactId: string; text?: string };

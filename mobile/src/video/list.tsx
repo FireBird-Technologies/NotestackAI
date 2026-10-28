@@ -7,12 +7,12 @@ import { router } from "expo-router";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { RocketIcon, TrashIcon } from "@/icons";
+import { RocketIcon, TrashIcon } from "@/ui/icons";
 import { Composer } from "@/launchpad/editors";
-import { colors, fonts, radius } from "@/theme";
+import { colors, fonts, radius } from "@/ui/theme";
 import { formatDate, Loading } from "@/ui";
-import { useUpgrade } from "@/upgrade";
-import { Dialog, Pager, PillButton, Sheet } from "@/widgets";
+import { useUpgrade } from "@/account/upgrade";
+import { Dialog, Pager, PillButton, Sheet } from "@/ui/widgets";
 
 import { vstyles } from "./ui";
 
@@ -39,7 +39,8 @@ export function VideosList() {
     refetchInterval: (q) => (q.state.data?.items.some((v) => BUSY.has(v.status) || BUSY.has(v.b2v_status ?? "")) ? 15_000 : false),
   });
   const accounts = useQuery({ queryKey: ["launchpad", "accounts"], queryFn: launchpadApi.accounts, enabled: launching !== null });
-  const videos = list.data?.items ?? null;
+  // Another page: the loader until it arrives, never the last page meanwhile.
+  const videos = list.isPlaceholderData ? null : (list.data?.items ?? null);
   const total = list.data?.total ?? 0;
   const q = quota.data;
   const out = !!q && q.used >= q.limit;

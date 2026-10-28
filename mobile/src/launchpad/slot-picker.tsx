@@ -2,7 +2,7 @@ import { pad, SLOTS, toWall, wallToDate, type Wall } from "@notestack/shared/sch
 import { useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
-import { colors, fonts, radius } from "@/theme";
+import { colors, fonts, radius } from "@/ui/theme";
 
 const ITEM = 44;
 const VISIBLE = 6;

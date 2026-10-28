@@ -2,8 +2,8 @@ import { blogPosts, missionNumber, missionOf } from "@notestack/shared/content/b
 import { router } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { Card, Eyebrow, Lede, PageTitle, PublicPage, publicText } from "@/public-page";
-import { colors, fonts } from "@/theme";
+import { Card, Eyebrow, Lede, PageTitle, PublicPage, publicText } from "@/shell/public-page";
+import { colors, fonts } from "@/ui/theme";
 
 const POSTS = [...blogPosts].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
 

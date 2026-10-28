@@ -1,8 +1,8 @@
 import type { Artifact } from "@notestack/shared/types";
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 
-import { ArtifactCard } from "@/artifact-card";
-import { colors, fonts, radius } from "@/theme";
+import { ArtifactCard } from "@/artifacts/artifact-card";
+import { colors, fonts, radius } from "@/ui/theme";
 import { ErrorText, Loading } from "@/ui";
 
 /**

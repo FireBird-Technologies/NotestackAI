@@ -7,9 +7,9 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { colors, fonts, radius } from "@/theme";
+import { colors, fonts, radius } from "@/ui/theme";
 import { formatDate } from "@/ui";
-import { pageStyles } from "@/widgets";
+import { pageStyles } from "@/ui/widgets";
 
 /* ---------- Small pieces ---------- */
 

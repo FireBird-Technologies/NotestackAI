@@ -4,7 +4,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
 import { Share, StyleSheet, Text, TextInput, View } from "react-native";
 
-import { useAuth } from "@/auth";
+import { useAuth } from "@/account/auth";
 import {
   Card,
   ContentSection,
@@ -16,8 +16,8 @@ import {
   PublicPage,
   publicText,
   Related,
-} from "@/public-page";
-import { colors, fonts, radius } from "@/theme";
+} from "@/shell/public-page";
+import { colors, fonts, radius } from "@/ui/theme";
 import { Button } from "@/ui";
 
 /** A free tool: its pitch and sections, with the script builder for anyone signed in (as on the web). */

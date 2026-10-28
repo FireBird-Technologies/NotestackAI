@@ -9,14 +9,14 @@ import * as WebBrowser from "expo-web-browser";
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
-import { AudioOnlyDialog } from "@/card-dialogs";
-import { extOf, fileName, saveFile } from "@/downloads";
-import { ArrowRightIcon, MoreIcon, UploadIcon } from "@/icons";
+import { AudioOnlyDialog } from "@/artifacts/card-dialogs";
+import { extOf, fileName, saveFile } from "@/lib/downloads";
+import { ArrowRightIcon, MoreIcon, UploadIcon } from "@/ui/icons";
 import { mediaLabel, Thumb } from "@/launchpad/attachment";
 import { RenderVideoDialog } from "@/launchpad/render-dialog";
-import { colors, radius } from "@/theme";
+import { colors, radius } from "@/ui/theme";
 import { ErrorText, formatDate, Loading } from "@/ui";
-import { confirm, Dialog, Pager, pageStyles, PillButton, PopMenu, type MenuItem } from "@/widgets";
+import { confirm, Dialog, Pager, pageStyles, PillButton, PopMenu, type MenuItem } from "@/ui/widgets";
 
 type Kind = "all" | "kits" | "video" | "decks" | "reports" | "infographics" | "audio" | "uploads";
 const PAGE = 10;
@@ -119,7 +119,10 @@ export function LibraryPicker({ onPick, onPickKit, onCreateKit, onReschedule, on
     queryFn: () => launchpadApi.library({ q: search, kind, kits, limit: PAGE, offset: page * PAGE }),
     placeholderData: keepPreviousData,
   });
-  const items = list.data?.items;
+  // Another kind, search or page: the loader until its items arrive, never the last ones meanwhile (the pager keeps
+  // the last total so it doesn't jump).
+  const loading = list.isPending || list.isPlaceholderData;
+  const items = loading ? undefined : list.data?.items;
   const total = list.data?.total ?? 0;
 
   // Videos rendering (from here, the editor, or the web): check on them, and reload once one is done.
@@ -260,7 +263,7 @@ export function LibraryPicker({ onPick, onPickKit, onCreateKit, onReschedule, on
       />
       <ErrorText>{error}</ErrorText>
       {list.error ? <ErrorText>{list.error.message}</ErrorText> : null}
-      {list.isPending ? <Loading /> : null}
+      {loading && !list.error ? <Loading /> : null}
       {items && items.length === 0 ? <Text style={styles.empty}>{EMPTY[kind]}</Text> : null}
 
       {items?.map((a) => {

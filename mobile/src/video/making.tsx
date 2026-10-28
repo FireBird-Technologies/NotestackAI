@@ -5,10 +5,10 @@ import { router } from "expo-router";
 import { type ReactNode, useEffect, useState } from "react";
 import { Alert, Linking, ScrollView, StyleSheet, Text, View } from "react-native";
 
-import { CheckIcon } from "@/icons";
-import { colors, fonts, gutter } from "@/theme";
-import { useUpgrade } from "@/upgrade";
-import { PillButton, StatusPill } from "@/widgets";
+import { CheckIcon } from "@/ui/icons";
+import { colors, fonts, gutter } from "@/ui/theme";
+import { useUpgrade } from "@/account/upgrade";
+import { PillButton, StatusPill } from "@/ui/widgets";
 
 import { BackLink } from "./back";
 import { pendingVideo } from "./pending";

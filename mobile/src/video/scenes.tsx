@@ -7,9 +7,9 @@ import * as ImagePicker from "expo-image-picker";
 import { useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
-import { ChevronIcon, FilmIcon, SparkleIcon, TrashIcon, UploadIcon } from "@/icons";
-import { colors, fonts, radius } from "@/theme";
-import { Dialog, PillButton } from "@/widgets";
+import { ChevronIcon, FilmIcon, SparkleIcon, TrashIcon, UploadIcon } from "@/ui/icons";
+import { colors, fonts, radius } from "@/ui/theme";
+import { Dialog, PillButton } from "@/ui/widgets";
 
 import { FontSliders, SceneEditModal } from "./scene-edit";
 import { AiImageModal, AiReviewModal, AssetPickerModal, ChoiceModal, ConfirmModal, errorMessage, IMAGE_MAX, IMAGE_TYPES, RemoveMediaModal, StockSearchModal } from "./scene-media";

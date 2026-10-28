@@ -10,9 +10,9 @@ import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { AttachmentChip, AttachSheet } from "@/launchpad/attachment";
 import { SlotPicker } from "@/launchpad/slot-picker";
-import { colors, fonts, radius } from "@/theme";
+import { colors, fonts, radius } from "@/ui/theme";
 import { ErrorText, formatDate } from "@/ui";
-import { confirm, pageStyles, PillButton, StatusPill } from "@/widgets";
+import { confirm, pageStyles, PillButton, StatusPill } from "@/ui/widgets";
 
 const LINKEDIN = PLATFORMS.find((p) => p.id === "linkedin")!;
 
