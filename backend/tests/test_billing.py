@@ -35,7 +35,7 @@ def test_free_plan_nudges_and_out_of_fuel_402(client, auth, billing_on, db_sessi
     db_session.commit()
 
     body = client.get("/api/billing/status", headers=auth).json()
-    assert body["plan"]["id"] == "free" and body["can_upgrade"] and body["next_plan"] == "writer"
+    assert body["plan"]["id"] == "free" and body["can_upgrade"] and body["next_plan"] == "starter"
     kits = next(m for m in body["meters"] if m["key"] == "launch_kits")
     assert kits["used"] == 2 and kits["pct"] == 1
     more = {m["key"]: m for m in body["more_meters"]}  # the rest of the plan, behind the sidebar card's chevron
@@ -52,7 +52,7 @@ def test_free_plan_nudges_and_out_of_fuel_402(client, auth, billing_on, db_sessi
     assert client.post("/api/artifacts/generate", headers=auth, json=body_in).status_code == 200
     r = client.post("/api/artifacts/generate", headers=auth, json=body_in)
     detail = r.json()["detail"]
-    assert r.status_code == 402 and detail["kind"] == "audio_overviews" and detail["upgrade_to"] == "writer"
+    assert r.status_code == 402 and detail["kind"] == "audio_overviews" and detail["upgrade_to"] == "starter"
     assert "in total" in detail["message"]
     audio = next(m for m in client.get("/api/billing/status", headers=auth).json()["meters"] if m["key"] == "audio_overviews")
     assert audio["used"] == 1 and audio["limit"] == 1
@@ -84,9 +84,9 @@ def test_post_limit_is_one_total_across_sources_links_and_uploads(client, auth, 
 
     # A link or a file is refused with the upgrade prompt once all five are used.
     r = client.post("/api/sources/url", headers=auth, json={"url": "https://example.com/a-post"})
-    assert r.status_code == 402 and r.json()["detail"]["kind"] == "indexed_posts" and r.json()["detail"]["upgrade_to"] == "writer"
+    assert r.status_code == 402 and r.json()["detail"]["kind"] == "indexed_posts" and r.json()["detail"]["upgrade_to"] == "starter"
     assert client.post("/api/sources/upload", headers=auth, json={"upload_id": "00000000-0000-0000-0000-000000000000"}).status_code == 404
-    assert (PLANS["writer"].indexed_posts, PLANS["studio"].indexed_posts) == (100, 250)
+    assert (PLANS["starter"].indexed_posts, PLANS["writer"].indexed_posts, PLANS["studio"].indexed_posts) == (30, 100, 250)
 
 
 def test_free_allowances_are_totals_and_paid_ones_are_monthly(client, auth, billing_on, db_session):
@@ -94,10 +94,11 @@ def test_free_allowances_are_totals_and_paid_ones_are_monthly(client, auth, bill
     from app.services.usage import check_limit, month_usage
 
     ws = db_session.query(Workspace).one()
-    free, writer, studio = PLANS["free"], PLANS["writer"], PLANS["studio"]
-    assert (free.videos, free.audio_overviews, free.launch_kits, free.infographics) == (2, 1, 2, 2) and free.lifetime
-    assert (writer.launch_kits, writer.audio_minutes, writer.reports) == (20, 60, 30) and not writer.lifetime
-    assert (studio.launch_kits, studio.audio_minutes, studio.reports) == (50, 240, -1)
+    free, starter, writer, studio = (PLANS[pid] for pid in ("free", "starter", "writer", "studio"))
+    assert (free.videos, free.audio_overviews, free.launch_kits, free.infographics) == (1, 1, 2, 2) and free.lifetime
+    assert (starter.launch_kits, starter.audio_minutes, starter.reports) == (20, 30, 20) and not starter.lifetime
+    assert (writer.launch_kits, writer.audio_minutes, writer.reports, writer.infographics) == (40, 60, 50, 50)
+    assert (studio.launch_kits, studio.audio_minutes, studio.reports) == (-1, 240, -1)
 
     old = Artifact(workspace_id=ws.id, type="infographic", status="ready")
     db_session.add_all([old, Artifact(workspace_id=ws.id, type="infographic", status="failed")])
@@ -141,10 +142,11 @@ def test_plan_limit_error_names_the_upgrade():
     from app.services.plans import PLANS, plan_limit_error, upgrade_for
 
     assert upgrade_for(PLANS["free"], "voice_cloning") == "writer"
+    assert upgrade_for(PLANS["free"], "indexed_posts") == "starter"
     assert upgrade_for(PLANS["writer"], "launch_kits") == "studio"
     assert upgrade_for(PLANS["studio"], "audio_minutes") is None
     detail = plan_limit_error(PLANS["free"], "audio_minutes", "x").detail
-    assert detail["code"] == "plan_limit" and detail["upgrade_to"] == "writer" and detail["kind"] == "audio_minutes"
+    assert detail["code"] == "plan_limit" and detail["upgrade_to"] == "starter" and detail["kind"] == "audio_minutes"
 
 
 @pytest.fixture()
@@ -167,9 +169,12 @@ def plans_table(monkeypatch):
     with session_factory() as db:
         for i, p in enumerate(DEFAULT_PLANS.values()):
             db.add(PlanRecord(id=p.id, sort_order=i, name=p.name, tagline=p.tagline,
-                              price_monthly_usd=p.price_monthly_usd, sources=p.sources, indexed_posts=p.indexed_posts,
-                              audio_minutes=p.audio_minutes, videos=p.videos, launch_kits=p.launch_kits,
-                              voice_cloning=p.voice_cloning, features=list(p.features)))
+                              price_monthly_usd=p.price_monthly_usd, price_annual_usd=p.price_annual_usd,
+                              sources=p.sources, indexed_posts=p.indexed_posts, audio_minutes=p.audio_minutes,
+                              audio_overviews=p.audio_overviews, videos=p.videos, videos_monthly=p.videos_monthly,
+                              launch_kits=p.launch_kits, reports=p.reports, infographics=p.infographics,
+                              chat_messages=p.chat_messages, voice_cloning=p.voice_cloning,
+                              video_limits=p.video_limits, features=list(p.features)))
         db.commit()
     PLANS.reload()
     yield session_factory
@@ -186,7 +191,7 @@ def test_plans_come_from_the_table(plans_table):
         db.commit()
     PLANS.reload()
     assert PLANS["studio"].videos == 50 and PLANS["writer"].features == ("Edited copy",)
-    assert list(PLANS) == ["free", "writer", "studio"] and next_plan(PLANS["free"]).id == "writer"
+    assert list(PLANS) == ["free", "starter", "writer", "studio"] and next_plan(PLANS["free"]).id == "starter"
 
 
 def test_edited_limit_reaches_video_quota(plans_table, client, auth, db_session):

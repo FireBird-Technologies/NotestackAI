@@ -49,7 +49,7 @@ _ABOUT_MY_DATA = re.compile(
 )
 # A question about what the plans include ("How many Launch Kits do I get on each plan?") is product help, not about the
 # writer's own content, unless it also asks what they have made or hold.
-_PLAN_WORDS = re.compile(r"(?i)\b(?:plans?|tiers?|pricing|prices?|free|writer|studio|allowance|limits?|upgrade|subscription)\b")
+_PLAN_WORDS = re.compile(r"(?i)\b(?:plans?|tiers?|pricing|prices?|free|starter|writer|studio|allowance|limits?|upgrade|subscription)\b")
 _OWN_STATE = re.compile(r"(?i)\b(?:i\s+have|have\s+i|did\s+i|i\s+(?:wrote|made|created|used|posted|published))\b")
 _OWN_CONTENT = re.compile(
     rf"(?i)\bmy\s+(?:[\w'-]+\s+){{0,3}}{_MINE}\b|\b(?:the|this)\s+(?:notebook|chat|conversation)\b|\b(?:in|from)\s+(?:our|my|this)\s+(?:chat|conversation|notebook)\b"

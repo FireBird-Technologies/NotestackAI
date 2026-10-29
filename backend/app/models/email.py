@@ -37,7 +37,7 @@ class UpdateEmail(IdMixin, TimestampMixin, Base):
 
     subject: Mapped[str] = mapped_column(String(300))
     body: Mapped[str] = mapped_column(Text)
-    user_filter: Mapped[str] = mapped_column(String(20), default="all")  # all | free | paid | writer | studio
+    user_filter: Mapped[str] = mapped_column(String(20), default="all")  # all | free | paid | starter | writer | studio
     batch_size: Mapped[int] = mapped_column(Integer, default=50)
     send_hour: Mapped[int] = mapped_column(Integer, default=-1)  # -1 = config default, UTC
     total_users: Mapped[int] = mapped_column(Integer, default=0)

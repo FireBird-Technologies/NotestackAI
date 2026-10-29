@@ -469,7 +469,7 @@ def update_email_batch(session_factory: Callable[[], Session] = SessionLocal) ->
                 User.is_active.is_(True), User.email_unsubscribed.is_(False), User.id.not_in(already)
             )
             if campaign.user_filter != "all":
-                plans = {"paid": ["writer", "studio"]}.get(campaign.user_filter, [campaign.user_filter])
+                plans = {"paid": ["starter", "writer", "studio"]}.get(campaign.user_filter, [campaign.user_filter])
                 q = (
                     q.join(WorkspaceMember, WorkspaceMember.user_id == User.id)
                     .join(Subscription, Subscription.workspace_id == WorkspaceMember.workspace_id)

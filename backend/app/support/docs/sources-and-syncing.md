@@ -48,7 +48,7 @@ Paste a deep link to one article instead of a whole site. The button changes to 
 Click **Upload files** and pick md, markdown, txt, html or pdf files. You can choose several at once.
 
 # Indexed posts and limits
-Each plan limits how many posts are indexed in total, across every source, link and upload: 5 on Free, 100 on Writer and 250 on Studio. There is no limit on how many sources you connect. A feed shows the posts past the limit as locked previews (title and link only); a link or file you add once the limit is reached is refused with an upgrade prompt. Posts that are already indexed are never removed when a plan goes down, but no new ones are added until you are under the limit. See the plans and billing topic for the numbers.
+Each plan limits how many posts are indexed in total, across every source, link and upload: 5 on Free, 30 on Starter, 100 on Writer and 250 on Studio. There is no limit on how many sources you connect. A feed shows the posts past the limit as locked previews (title and link only); a link or file you add once the limit is reached is refused with an upgrade prompt. Posts that are already indexed are never removed when a plan goes down, but no new ones are added until you are under the limit. See the plans and billing topic for the numbers.
 
 # Reading and managing posts
 The Sources page lists your posts. Click a post title to read it. Use the filter next to a source to show only its posts.
