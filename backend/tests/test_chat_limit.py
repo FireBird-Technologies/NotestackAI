@@ -47,7 +47,7 @@ def test_free_gets_ten_questions_then_a_402(client, db_session, monkeypatch, set
     resp = _ask(client, auth, nb, "one more")
     detail = resp.json()["detail"]
     assert resp.status_code == 402 and detail["code"] == "plan_limit" and detail["kind"] == "chat_messages"
-    assert detail["upgrade_to"] == "writer" and "10 free chat messages" in detail["message"]
+    assert detail["upgrade_to"] == "starter" and "10 free chat messages" in detail["message"]
     assert detail["limit"] == 10
 
     meter = next(m for m in client.get("/api/billing/status", headers=auth).json()["more_meters"]

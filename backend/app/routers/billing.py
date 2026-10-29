@@ -14,7 +14,7 @@ router = APIRouter(prefix="/api/billing", tags=["billing"])
 
 
 class CheckoutIn(BaseModel):
-    plan: Literal["writer", "studio"]
+    plan: Literal["starter", "writer", "studio"]
     cycle: Literal["monthly", "annual"] = "monthly"
 
 

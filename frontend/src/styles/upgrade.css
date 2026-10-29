@@ -275,7 +275,7 @@
   background: var(--surface);
 }
 
-/* "View plans": all three plans fit on one row */
+/* "View plans": all plans fit on one row when space allows. */
 @media (min-width: 640px) {
   .upg-plans.upg-plans-all {
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
