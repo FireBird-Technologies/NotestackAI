@@ -23,7 +23,8 @@ export function safeNext(path: string | null | undefined): string {
  * read a shared preview, who go straight back to it. */
 export function afterSignUp(next: string): string {
   return next.startsWith("/tools/") || next.startsWith("/r/") || next === "/notebooklm-import" || next === "/notebooklm-connect"
-    || next === "/welcome?notebooklm=import" || next === "/app/sources?notebooklm=import" ? next : "/welcome";
+    || next === "/welcome?notebooklm=import" || next === "/app/sources?notebooklm=import"
+    || next.startsWith("/app/notebooks?upgrade=") ? next : "/welcome";
 }
 
 export const authApi = {
