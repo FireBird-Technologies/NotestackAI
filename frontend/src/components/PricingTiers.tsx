@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
+import { useAuth } from "../hooks/useAuth";
 import { CheckIcon } from "./icons/Icons";
 
 type Plan = {
@@ -114,6 +115,7 @@ export function annualTotal(plan: Plan): number {
 }
 
 export default function PricingTiers() {
+  const { user } = useAuth();
   const [plans, setPlans] = useState<Plan[]>(FALLBACK);
   const [billingEnabled, setBillingEnabled] = useState(false);
   const [cycle, setCycle] = useState<Cycle>("annual");
@@ -151,6 +153,12 @@ export default function PricingTiers() {
           const featured = plan.id === "writer";
           const free = plan.price_monthly_usd === 0;
           const annual = cycle === "annual" && !free;
+          const upgradePath = `/app/notebooks?upgrade=${plan.id}`;
+          const destination = free
+            ? "/auth?mode=signup"
+            : user
+              ? upgradePath
+              : `/auth?${new URLSearchParams({ mode: "signup", next: upgradePath })}`;
           return (
             <article key={plan.id} className={`card tier${featured ? " tier-featured active" : ""}`}>
               {featured && <span className="badge tier-flag">Most popular</span>}
@@ -179,7 +187,7 @@ export default function PricingTiers() {
                 ))}
               </ul>
               <Link
-                to={billingEnabled && !free ? `/app?upgrade=${plan.id}` : "/auth?mode=signup"}
+                to={billingEnabled ? destination : "/auth?mode=signup"}
                 className={`btn ${featured ? "btn-primary" : ""} tier-cta`}
               >
                 {billingEnabled && !free ? `Choose ${plan.name}` : "Start free"}

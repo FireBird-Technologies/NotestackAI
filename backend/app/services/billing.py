@@ -203,7 +203,7 @@ def resync_sources(db: Session, workspace_id) -> None:
 def return_urls() -> tuple[str, str]:
     """(success_url, cancel_url) for the hosted checkout page."""
     base = settings.frontend_url.rstrip("/")
-    return f"{base}/app?checkout=success", f"{base}/app?checkout=cancel"
+    return f"{base}/app/notebooks?checkout=success", f"{base}/app/notebooks?checkout=cancel"
 
 
 def create_checkout_url(db: Session, user: User, workspace: Workspace, plan: Plan, cycle: str) -> str:
