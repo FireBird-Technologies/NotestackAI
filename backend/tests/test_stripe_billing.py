@@ -199,7 +199,7 @@ def test_checkout_creates_one_customer_and_confirm_applies_plan(client, stripe_o
     assert r.json()["plan"]["id"] == "writer"
     # A second checkout while subscribed changes the plan in place instead of a second subscription.
     r = client.post("/api/billing/checkout", json={"plan": "studio", "cycle": "monthly"}, headers=headers)
-    assert r.json()["url"].endswith("/app?checkout=success")
+    assert r.json()["url"].endswith("/app/notebooks?checkout=success")
     assert [c[0] for c in stripe_on.calls].count("customer") == 1
     assert plan_of(db_session, ws) == "studio"
 
