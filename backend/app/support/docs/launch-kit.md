@@ -34,4 +34,4 @@ Hooks, an X thread, a LinkedIn post, Substack Notes, a Bluesky post, an SEO pack
 3. Start the kit and wait for it to finish.
 4. Edit any piece, then send it to the Launchpad to schedule it.
 
-Launch Kits depend on your plan: Free has 2 in total (they do not renew), Writer 20 a month and Studio 50 a month.
+Launch Kits depend on your plan: Free has 2 in total (they do not renew), Starter has 20 a month, Writer has 40 a month and Studio is unlimited.

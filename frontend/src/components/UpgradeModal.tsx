@@ -6,7 +6,7 @@ import { useUpgrade } from "../hooks/useUpgrade";
 import { CheckIcon } from "./icons/Icons";
 import { annualMonthly, annualTotal, money } from "./PricingTiers";
 
-const ORDER = ["free", "writer", "studio"];
+const ORDER = ["free", "starter", "writer", "studio"];
 
 const LIMIT_TITLES: Record<string, string> = {
   audio_minutes: "Out of audio fuel",
@@ -31,7 +31,7 @@ function boosts(plan: PlanInfo, current: PlanInfo): string[] {
   if (plan.indexed_posts > current.indexed_posts) out.push(`${plan.indexed_posts} indexed posts`);
   // Free has one audio overview; a paid plan's audio is said relative to it, as on the pricing page ("10x more audio than Free").
   if (current.audio_overviews >= 0 && plan.audio_overviews < 0) {
-    const vsFree: Record<string, number> = { writer: 10, studio: 40 };
+    const vsFree: Record<string, number> = { starter: 5, writer: 10, studio: 40 };
     out.push(vsFree[plan.id] ? `${vsFree[plan.id]}x more audio than Free` : `${plan.audio_minutes} min of audio a month`);
   }
   times(plan.audio_minutes, current.audio_minutes, "audio minutes");

@@ -54,7 +54,11 @@ def test_update_email_replies_go_to_team(client):
 def test_plans_endpoint(client):
     body = client.get("/api/billing/plans").json()
     assert body["billing_enabled"] is False
-    assert [p["id"] for p in body["plans"]] == ["free", "writer", "studio"]
+    assert [p["id"] for p in body["plans"]] == ["free", "starter", "writer", "studio"]
+    starter = body["plans"][1]
+    assert (starter["price_monthly_usd"], starter["price_annual_usd"], starter["price_annual_monthly_usd"]) == (14.99, 136.99, 11.49)
+    assert [p["price_annual_monthly_usd"] for p in body["plans"][2:]] == [18.99, 36.99]
+    assert {p["annual_savings_pct"] for p in body["plans"][1:]} == {24}
     assert "—" not in str(body)
 
 

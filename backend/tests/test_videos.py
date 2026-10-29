@@ -1459,7 +1459,7 @@ def test_library_delete_removes_it_from_blog2video_and_keeps_the_record(client, 
     assert row.status == "deleted" and row.artifact_id is None
 
 
-# Video limits: Free 1 in total, Writer 10 a month, Studio 20 a month
+# Video limits: Free 1 in total; Starter 5, Writer 10 and Studio 20 a month
 
 
 def _on_plan(db, ws, plan: str) -> None:
@@ -1472,7 +1472,7 @@ def test_plan_video_limits(client, owner, db_session, monkeypatch):
     _, ws = owner
     monkeypatch.setattr(settings, "billing_enabled", True)
     video_quota.sync_video_quota(db_session, ws)
-    for plan, limit in (("free", 1), ("writer", 10), ("studio", 20)):
+    for plan, limit in (("free", 1), ("starter", 5), ("writer", 10), ("studio", 20)):
         _on_plan(db_session, ws, plan)
         assert video_quota.sync_video_quota(db_session, ws).video_limit == limit
 

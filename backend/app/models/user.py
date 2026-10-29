@@ -98,11 +98,12 @@ class PlanRecord(TimestampMixin, Base):
 
     __tablename__ = "plans"
 
-    id: Mapped[str] = mapped_column(String(20), primary_key=True)  # free | writer | studio
+    id: Mapped[str] = mapped_column(String(20), primary_key=True)  # free | starter | writer | studio
     sort_order: Mapped[int] = mapped_column(Integer, default=0)  # cheapest first; upgrades go up this order
     name: Mapped[str] = mapped_column(String(50))
     tagline: Mapped[str] = mapped_column(String(200), default="")
     price_monthly_usd: Mapped[float] = mapped_column(Float, default=0)
+    price_annual_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
     sources: Mapped[int] = mapped_column(Integer, default=1)
     indexed_posts: Mapped[int] = mapped_column(Integer, default=5)
     audio_minutes: Mapped[int] = mapped_column(Integer, default=0)
