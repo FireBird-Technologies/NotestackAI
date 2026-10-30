@@ -7,7 +7,7 @@ import * as WebBrowser from "expo-web-browser";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Platform, StyleSheet, Text, View } from "react-native";
 
-import { planQuery } from "@/shell/nav-drawer";
+import { planQuery } from "@/account/plan";
 import { on } from "@/lib/platform";
 import { CycleToggle, PlanCard } from "@/account/plans";
 import { buy, getPackages, identify, manageSubscriptions, purchasesReady, restore } from "@/account/purchases";

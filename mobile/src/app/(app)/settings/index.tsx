@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import { Alert, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 
 import { useAuth } from "@/account/auth";
-import { planQuery } from "@/shell/nav-drawer";
+import { planQuery } from "@/account/plan";
 import { manageSubscriptions } from "@/account/purchases";
 import { useUpgrade } from "@/account/upgrade";
 import { ConnectedApps } from "@/sources/connected-apps";

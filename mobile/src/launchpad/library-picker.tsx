@@ -16,7 +16,7 @@ import { mediaLabel, Thumb } from "@/launchpad/attachment";
 import { RenderVideoDialog } from "@/launchpad/render-dialog";
 import { colors, radius } from "@/ui/theme";
 import { ErrorText, formatDate, Loading } from "@/ui";
-import { confirm, Dialog, Pager, pageStyles, PillButton, PopMenu, type MenuItem } from "@/ui/widgets";
+import { confirm, Dialog, Pager, pageStyles, PillButton, PopMenu, Sheet, type MenuItem } from "@/ui/widgets";
 
 type Kind = "all" | "kits" | "video" | "decks" | "reports" | "infographics" | "audio" | "uploads";
 const PAGE = 10;
@@ -339,6 +339,21 @@ export function LibraryPicker({ onPick, onPickKit, onCreateKit, onReschedule, on
 
 /** The web's dark blue outline on chips and video badges. */
 const CHIP_LINE = "rgba(33, 124, 255, 0.35)";
+
+/** Pick something from the Library to attach, in a sheet over the composer (web: AttachPicker). Launch kits are never
+ * attachments; `onCreateKit` links to making one. */
+export function AttachSheet({ visible, onPick, onCreateKit, onClose }: {
+  visible: boolean;
+  onPick: (a: PostableArtifact) => void;
+  onCreateKit?: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <Sheet visible={visible} title="Attach from your Library" onClose={onClose}>
+      {visible ? <LibraryPicker onPick={onPick} onCreateKit={onCreateKit} /> : null}
+    </Sheet>
+  );
+}
 
 const styles = StyleSheet.create({
   stack: { gap: 14 },

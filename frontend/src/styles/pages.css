@@ -5227,6 +5227,17 @@ details.map-legend[open] summary {
   grid-column: 1 / -1;
 }
 
+/* Desktop: all three on one row */
+@media (min-width: 721px) {
+  .tabs.source-methods {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .tabs.source-methods .tab:nth-child(3) {
+    grid-column: auto;
+  }
+}
+
 .source-method-panel {
   display: grid;
   gap: 12px;

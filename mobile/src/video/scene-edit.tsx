@@ -282,7 +282,7 @@ function Collapse({ label, open, onPress }: { label: string; open: boolean; onPr
 }
 
 /** A scene's font sizes: the stored value, or the template's default for the scene's layout when none is stored. */
-export function FontSliders({ title, desc, defaults, saving, onTitle, onDesc }: {
+export function FontSliders({ title, desc, defaults, saving, onTitle, onDesc, onDone }: {
   title: number | null;
   desc: number | null;
   defaults: FontDefaults;
@@ -290,17 +290,19 @@ export function FontSliders({ title, desc, defaults, saving, onTitle, onDesc }: 
   saving?: { title: boolean; desc: boolean };
   onTitle: (v: number) => void;
   onDesc: (v: number) => void;
+  /** A slider was let go: the moment to save. */
+  onDone?: (kind: "title" | "desc", v: number) => void;
 }) {
   const rows = [
-    ["Title font size", title, FONT.title, defaults.title, onTitle, !!saving?.title],
-    ["Display text font size", desc, FONT.desc, defaults.desc, onDesc, !!saving?.desc],
+    ["Title font size", "title", title, FONT.title, defaults.title, onTitle, !!saving?.title],
+    ["Display text font size", "desc", desc, FONT.desc, defaults.desc, onDesc, !!saving?.desc],
   ] as const;
   return (
     <View style={styles.gap6}>
       <Label>
         Typography <Text style={styles.optional}>(optional)</Text>
       </Label>
-      {rows.map(([label, value, range, fallback, set, busy]) => (
+      {rows.map(([label, kind, value, range, fallback, set, busy]) => (
         <View key={label} style={styles.fontRow}>
           <View style={vstyles.between}>
             <Text style={[vstyles.body, vstyles.small]}>{label}</Text>
@@ -309,7 +311,7 @@ export function FontSliders({ title, desc, defaults, saving, onTitle, onDesc }: 
               <Text style={styles.value}>{value ?? fallback}</Text>
             </View>
           </View>
-          <Slider value={value ?? fallback} min={range.min} max={range.max} onChange={set} label={label} />
+          <Slider value={value ?? fallback} min={range.min} max={range.max} onChange={set} onDone={onDone && ((v) => onDone(kind, v))} label={label} />
         </View>
       ))}
     </View>

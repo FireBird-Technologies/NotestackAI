@@ -86,11 +86,11 @@ export function SceneList(p: PanelProps & { aiEditsLeft: number | null }) {
                         </Pressable>
                       </View>
                       <View style={styles.actions}>
-                        <PillButton small title="Edit" disabled={p.disabled} onPress={() => setEditing(s)} />
                         <StatePill label="Scene" ok={!!s.layout} />
                         <StatePill label="Audio" ok={!!s.audio_url} />
                         <Text style={styles.duration}>{Number(s.duration_seconds ?? 0).toFixed(1)}s</Text>
                         <View style={styles.grow} />
+                        <PillButton small title="Edit" disabled={p.disabled} onPress={() => setEditing(s)} />
                         <Pressable onPress={() => setExpanded(isOpen ? null : s.id)} hitSlop={6} accessibilityRole="button" accessibilityLabel={isOpen ? "Collapse" : "Expand"} style={styles.iconBtn}>
                           <View style={isOpen && styles.flip}>
                             <ChevronIcon size={16} />
@@ -229,11 +229,17 @@ function SceneDetail(p: PanelProps & { scene: VideoScene; aiEditsLeft: number | 
 
   useEffect(() => () => clearTimeout(saveTimer.current), []);
 
-  // Font sizes save by themselves a moment after the slider stops, like blog2video.
+  // Font sizes save by themselves once the slider is let go, like blog2video; dragging only moves the number. A second
+  // change soon after (the other slider, a quick re-adjust) folds into the same save.
+  const fontDraft = useRef({ title, desc });
   function setFont(kind: "title" | "desc", value: number) {
-    const next = { title, desc, [kind]: value };
+    fontDraft.current = { ...fontDraft.current, [kind]: value };
     if (kind === "title") setTitle(value);
     else setDesc(value);
+  }
+  function saveFont(kind: "title" | "desc", value: number) {
+    setFont(kind, value);
+    const next = fontDraft.current;
     setFontSaving((f) => ({ ...f, [kind]: true }));
     const seq = ++saveSeq.current;
     clearTimeout(saveTimer.current);
@@ -244,7 +250,7 @@ function SceneDetail(p: PanelProps & { scene: VideoScene; aiEditsLeft: number | 
         }),
       );
       if (saveSeq.current === seq) setFontSaving({ title: false, desc: false });
-    }, 500);
+    }, 400);
   }
 
   /** A photo from the phone's library: PNG, JPEG or WebP up to 5 MB, as the web's file input. */
@@ -290,6 +296,7 @@ function SceneDetail(p: PanelProps & { scene: VideoScene; aiEditsLeft: number | 
         saving={fontSaving}
         onTitle={(v) => setFont("title", v)}
         onDesc={(v) => setFont("desc", v)}
+        onDone={saveFont}
       />
       <View style={styles.block}>
         <Label>Audio</Label>
@@ -317,9 +324,9 @@ function SceneDetail(p: PanelProps & { scene: VideoScene; aiEditsLeft: number | 
             </View>
           ) : null}
           {/* Add tiles: icon in a tinted circle, label under it */}
-          <AddTile label="AI image" ai disabled={p.disabled || aiRunning} onPress={() => setModal("ai")} icon={<SparkleIcon size={18} color={colors.blue} />} />
-          <AddTile label="Image" disabled={p.disabled || uploading} onPress={() => setModal("image")} icon={<UploadIcon size={18} />} />
-          <AddTile label="Stock footage" disabled={p.disabled} onPress={() => setModal("stock")} icon={<FilmIcon size={18} />} />
+          <AddTile label="AI image" ai disabled={p.disabled || aiRunning} onPress={() => setModal("ai")} icon={<SparkleIcon size={16} color={colors.blue} />} />
+          <AddTile label="Image" disabled={p.disabled || uploading} onPress={() => setModal("image")} icon={<UploadIcon size={16} />} />
+          <AddTile label="Stock footage" disabled={p.disabled} onPress={() => setModal("stock")} icon={<FilmIcon size={16} />} />
         </View>
         {aiRunning ? (
           <View style={vstyles.row}>
@@ -405,7 +412,9 @@ function AddTile({ label, icon, ai, disabled, onPress }: { label: string; icon: 
   return (
     <Pressable onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityLabel={label} style={({ pressed }) => [styles.tile, styles.addTile, disabled && styles.off, pressed && styles.pressed]}>
       <View style={[styles.addIcon, ai && styles.addIconAi]}>{icon}</View>
-      <Text style={styles.addLabel}>{label}</Text>
+      <Text style={styles.addLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -437,13 +446,14 @@ const styles = StyleSheet.create({
   track: { flex: 1, height: 4, borderRadius: 2, backgroundColor: colors.surface2, overflow: "hidden" },
   fill: { height: 4, backgroundColor: colors.blue },
   tiles: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  tile: { width: "31%", aspectRatio: 16 / 10, borderRadius: radius.sm, overflow: "hidden", backgroundColor: "#111", borderWidth: 1, borderColor: colors.line },
+  // Three to a row on any phone; 4:3 leaves the add tiles room for their icon and label even on a narrow screen.
+  tile: { width: "31%", aspectRatio: 4 / 3, borderRadius: radius.sm, overflow: "hidden", backgroundColor: "#111", borderWidth: 1, borderColor: colors.line },
   tileX: { position: "absolute", right: 4, top: 4, width: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.7)" },
   tileXText: { color: colors.white, fontSize: 12 },
   loading: { alignItems: "center", justifyContent: "center" },
-  addTile: { alignItems: "center", justifyContent: "center", gap: 4, borderStyle: "dashed", borderColor: colors.lineStrong, backgroundColor: colors.surface },
-  addIcon: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface2 },
+  addTile: { alignItems: "center", justifyContent: "center", gap: 4, paddingHorizontal: 4, borderStyle: "dashed", borderColor: colors.lineStrong, backgroundColor: colors.surface },
+  addIcon: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface2 },
   addIconAi: { backgroundColor: colors.blue10 },
-  addLabel: { color: colors.text2, fontSize: 11.5 },
+  addLabel: { color: colors.text2, fontSize: 11.5, textAlign: "center" },
   link: { color: colors.blue, textDecorationLine: "underline" },
 });

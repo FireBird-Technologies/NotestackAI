@@ -11,7 +11,7 @@ import { useEffect, useRef, useState } from "react";
 import { FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { planQuery } from "@/shell/nav-drawer";
+import { planQuery } from "@/account/plan";
 import { AnswerText } from "@/notebook/answer-text";
 import { RingSpinner } from "@/ui/spinner";
 import { colors, fonts, gutter, radius } from "@/ui/theme";

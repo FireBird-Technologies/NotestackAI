@@ -1,8 +1,8 @@
-import RNSlider from "@react-native-community/slider";
 import { Image } from "expo-image";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, AppState, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { GestureDetector, useCompetingGestures, usePanGesture, useTapGesture } from "react-native-gesture-handler";
 
 import { ChevronIcon } from "@/ui/icons";
 import { colors, fonts, radius } from "@/ui/theme";
@@ -65,31 +65,79 @@ export function usePoll<T>(
 }
 
 /** The web's thin range input: blue up to the handle. */
-export function Slider({ value, min, max, step = 1, disabled, onChange, label }: {
+export function Slider({ value, min, max, step = 1, disabled, onChange, onDone, label }: {
   value: number;
   min: number;
   max: number;
   step?: number;
   disabled?: boolean;
   onChange: (v: number) => void;
+  /** Once the finger lifts (or a screen reader step), with the value it ended on: the moment to save. */
+  onDone?: (v: number) => void;
   label: string;
 }) {
+  const [width, setWidth] = useState(0);
+  const last = useRef(value);
+
+  const clamp = (v: number) => Math.min(max, Math.max(min, v));
+  const pick = (x: number) => {
+    if (width <= KNOB) return;
+    const at = Math.min(1, Math.max(0, (x - KNOB / 2) / (width - KNOB)));
+    last.current = clamp(Math.round((min + at * (max - min)) / step) * step);
+    onChange(last.current);
+  };
+
+  // A thin slider like the web's .range-thin. Only a sideways drag moves it: a vertical swipe that starts on it fails
+  // the drag and scrolls the page instead. A tap jumps to that spot.
+  const drag = usePanGesture({
+    runOnJS: true,
+    enabled: !disabled,
+    activeOffsetX: [-6, 6],
+    failOffsetY: [-8, 8],
+    onActivate: (e) => pick(e.x),
+    onUpdate: (e) => pick(e.x),
+    onDeactivate: () => onDone?.(last.current),
+  });
+  const tap = useTapGesture({
+    runOnJS: true,
+    enabled: !disabled,
+    onActivate: (e) => {
+      pick(e.x);
+      onDone?.(last.current);
+    },
+  });
+  const gesture = useCompetingGestures(drag, tap);
+
+  const ratio = max > min ? Math.min(1, Math.max(0, (value - min) / (max - min))) : 0;
+  const left = ratio * Math.max(0, width - KNOB);
+  const nudge = (by: number) => {
+    const v = clamp(value + by);
+    onChange(v);
+    onDone?.(v);
+  };
   return (
-    <RNSlider
-      value={value}
-      minimumValue={min}
-      maximumValue={max}
-      step={step}
-      disabled={disabled}
-      onValueChange={(v) => onChange(Math.round(v / step) * step)}
-      minimumTrackTintColor={colors.blue}
-      maximumTrackTintColor={colors.lineStrong}
-      thumbTintColor={colors.white}
-      accessibilityLabel={label}
-      style={[styles.slider, disabled && styles.off]}
-    />
+    <GestureDetector gesture={gesture}>
+      <View
+        onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
+        accessible
+        accessibilityRole="adjustable"
+        accessibilityLabel={label}
+        accessibilityValue={{ min, max, now: value }}
+        accessibilityState={{ disabled: !!disabled }}
+        accessibilityActions={[{ name: "increment" }, { name: "decrement" }]}
+        onAccessibilityAction={(e) => nudge(e.nativeEvent.actionName === "increment" ? step : -step)}
+        style={[styles.slider, disabled && styles.off]}
+      >
+        <View pointerEvents="none" style={styles.track}>
+          <View style={[styles.trackFill, { width: left + KNOB / 2 }]} />
+        </View>
+        <View pointerEvents="none" style={[styles.knob, { left }]} />
+      </View>
+    </GestureDetector>
   );
 }
+
+const KNOB = 14;
 
 /** A clip, muted and looping (web: a <video muted loop>): still until `playing`, its first frame showing. */
 export function ClipView({ uri, playing, style }: { uri: string; playing: boolean; style?: object }) {
@@ -209,7 +257,22 @@ export const vstyles = StyleSheet.create({
 
 const styles = StyleSheet.create({
   fill: { width: "100%", height: "100%", backgroundColor: "#111" },
-  slider: { width: "100%", height: 36 },
+  slider: { width: "100%", height: 28, justifyContent: "center" },
+  track: { height: 4, borderRadius: 999, backgroundColor: colors.lineStrong, overflow: "hidden" },
+  trackFill: { height: "100%", backgroundColor: colors.blue },
+  knob: {
+    position: "absolute",
+    width: KNOB,
+    height: KNOB,
+    borderRadius: KNOB / 2,
+    borderWidth: 2,
+    borderColor: colors.white,
+    backgroundColor: colors.blue,
+    shadowColor: colors.blue,
+    shadowOpacity: 0.6,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 0 },
+  },
   off: { opacity: 0.4 },
   tabs: { gap: 6, padding: 4, borderRadius: 999, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface },
   tab: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999 },

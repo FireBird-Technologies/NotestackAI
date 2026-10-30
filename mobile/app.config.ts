@@ -21,6 +21,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: IS_DEV ? "Notestack Dev" : "Notestack",
   slug: "notestack",
+  owner: "firebird-technologies",
+  extra: { ...config.extra, eas: { projectId: "e9daae10-bb96-4649-874f-5c6dbe45c011" } },
   version: "0.1.0",
   orientation: "portrait",
   icon: "./assets/images/icon.png",

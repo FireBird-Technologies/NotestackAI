@@ -3,9 +3,8 @@ import { Image } from "expo-image";
 import { SymbolView, type AndroidSymbol, type SFSymbol } from "expo-symbols";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { LibraryPicker } from "@/launchpad/library-picker";
 import { colors, radius } from "@/ui/theme";
-import { pageStyles, PillButton, Sheet } from "@/ui/widgets";
+import { pageStyles, PillButton } from "@/ui/widgets";
 
 const fmtDuration = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
 
@@ -62,21 +61,6 @@ export function AttachmentChip({ a, onChange, onRemove }: { a: PostableArtifact;
         </Pressable>
       ) : null}
     </View>
-  );
-}
-
-/** Pick something from the Library to attach, in a sheet over the composer (web: AttachPicker). Launch kits are never
- * attachments; `onCreateKit` links to making one. */
-export function AttachSheet({ visible, onPick, onCreateKit, onClose }: {
-  visible: boolean;
-  onPick: (a: PostableArtifact) => void;
-  onCreateKit?: () => void;
-  onClose: () => void;
-}) {
-  return (
-    <Sheet visible={visible} title="Attach from your Library" onClose={onClose}>
-      {visible ? <LibraryPicker onPick={onPick} onCreateKit={onCreateKit} /> : null}
-    </Sheet>
   );
 }
 

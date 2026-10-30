@@ -8,7 +8,8 @@ import * as WebBrowser from "expo-web-browser";
 import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
-import { AttachmentChip, AttachSheet } from "@/launchpad/attachment";
+import { AttachmentChip } from "@/launchpad/attachment";
+import { AttachSheet } from "@/launchpad/library-picker";
 import { SlotPicker } from "@/launchpad/slot-picker";
 import { colors, fonts, radius } from "@/ui/theme";
 import { ErrorText, formatDate } from "@/ui";

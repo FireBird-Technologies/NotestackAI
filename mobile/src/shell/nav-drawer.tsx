@@ -1,4 +1,3 @@
-import { billingApi } from "@notestack/shared/endpoints";
 import { useQuery } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import { router, useSegments, type Href } from "expo-router";
@@ -8,6 +7,7 @@ import Animated, { FadeIn, FadeOut, SlideInLeft, SlideOutLeft } from "react-nati
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAuth } from "@/account/auth";
+import { planQuery } from "@/account/plan";
 import { useUpgrade } from "@/account/upgrade";
 import { colors, fonts, gutter, radius } from "@/ui/theme";
 
@@ -24,9 +24,6 @@ export const SECTIONS: { name: string; label: string; icon: number }[] = [
   { name: "connector", label: "Connector", icon: require("@/assets/images/tabs/connector.png") },
 ];
 const SETTINGS = { name: "settings", label: "Settings", icon: require("@/assets/images/tabs/settings.png") };
-
-/** The plan and its meters; kept a minute before it is asked for again. */
-export const planQuery = { queryKey: ["billing", "status"], queryFn: billingApi.status, staleTime: 60_000 } as const;
 
 const DrawerContext = createContext<{ open: () => void } | null>(null);
 
