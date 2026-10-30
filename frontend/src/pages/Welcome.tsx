@@ -357,7 +357,7 @@ export default function Welcome() {
         className="btn btn-small"
         onClick={() => {
           markOnboarded();
-          navigate("/app?upgrade=1", { replace: true });
+          navigate("/app/notebooks?upgrade=1", { replace: true });
         }}
       >
         Upgrade to import more
@@ -378,7 +378,7 @@ export default function Welcome() {
         className="btn btn-small"
         onClick={() => {
           markOnboarded();
-          navigate("/app?upgrade=1", { replace: true });
+          navigate("/app/notebooks?upgrade=1", { replace: true });
         }}
       >
         Index all {found} posts

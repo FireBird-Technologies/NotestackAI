@@ -62,11 +62,18 @@ def _ts(value) -> datetime | None:
 
 
 def lookup_key(plan_id: str, cycle: str) -> str:
+    if plan_id == "starter" and cycle == "annual":
+        return "notestack_starter_annual_13699"
     return f"notestack_{plan_id}_{cycle}"
 
 
+def _pinned_price_id(plan_id: str, cycle: str) -> str:
+    """Optional STRIPE_PRICE_<PLAN>_<CYCLE> id pinned in the environment."""
+    return getattr(settings, f"stripe_price_{plan_id}_{cycle}", "")
+
+
 def price_id(sc: stripe.StripeClient, plan: Plan, cycle: str) -> str:
-    pinned = getattr(settings, f"stripe_price_{plan.id}_{cycle}", "")
+    pinned = _pinned_price_id(plan.id, cycle)
     if pinned:
         return pinned
     key = lookup_key(plan.id, cycle)
@@ -98,9 +105,11 @@ def price_id(sc: stripe.StripeClient, plan: Plan, cycle: str) -> str:
 def plan_for_price(price) -> str | None:
     """Plan id for a Stripe Price: pinned env ids, then lookup key, then metadata."""
     pid = _get(price, "id")
-    for plan_id in ("writer", "studio"):
+    for plan_id in PLANS:
+        if not PLANS[plan_id].price_monthly_usd:
+            continue
         for cycle in ("monthly", "annual"):
-            if pid and getattr(settings, f"stripe_price_{plan_id}_{cycle}", "") == pid:
+            if pid and _pinned_price_id(plan_id, cycle) == pid:
                 return plan_id
     key = _get(price, "lookup_key") or ""
     if key.startswith("notestack_"):

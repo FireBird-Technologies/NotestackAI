@@ -38,6 +38,10 @@
   width: min(800px, 100%);
 }
 
+.upg-plans-view {
+  width: min(1180px, 100%);
+}
+
 .upg-close {
   position: absolute;
   top: 12px;
@@ -275,10 +279,10 @@
   background: var(--surface);
 }
 
-/* "View plans": all three plans fit on one row */
-@media (min-width: 640px) {
+/* "View plans": all four plans share one row on desktop. */
+@media (min-width: 960px) {
   .upg-plans.upg-plans-all {
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 

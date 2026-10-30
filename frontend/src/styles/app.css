@@ -485,6 +485,10 @@
 }
 
 /* ---------- Pricing ---------- */
+#pricing .container {
+  max-width: 1360px;
+}
+
 .pricing-note {
   display: flex;
   flex-wrap: wrap;
@@ -501,8 +505,26 @@
 
 @media (min-width: 900px) {
   .pricing-grid {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     align-items: stretch;
+  }
+
+  .tier {
+    padding: 24px;
+  }
+
+  .tier-price {
+    gap: 5px;
+    white-space: nowrap;
+  }
+
+  .tier-price .tier-was {
+    margin-right: 0;
+    font-size: 0.9rem;
+  }
+
+  .tier-price .tier-amount {
+    font-size: 2.1rem;
   }
 }
 

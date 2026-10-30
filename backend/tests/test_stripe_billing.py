@@ -13,7 +13,7 @@ from app.config import settings
 from app.models import Subscription, Workspace
 from app.services import stripe_billing
 from app.services.email import ConsoleEmailProvider
-from app.services.plans import effective_plan
+from app.services.plans import PLANS, annual_prices, effective_plan
 from tests.conftest import last_code
 
 SECRET = "whsec_test_secret"
@@ -117,6 +117,19 @@ def plan_of(db, ws) -> str:
     return effective_plan(db, ws).id
 
 
+def test_starter_annual_price_and_pinned_env_ids(monkeypatch):
+    monkeypatch.setattr(settings, "stripe_price_starter_monthly", "price_starter_monthly")
+    monkeypatch.setattr(settings, "stripe_price_starter_annual", "price_starter_annual")
+    starter = PLANS["starter"]
+    assert annual_prices(starter) == (11.42, 136.99)
+    assert annual_prices(PLANS["writer"]) == (19.0, 227.99)
+    assert annual_prices(PLANS["studio"]) == (37.0, 443.99)
+    assert stripe_billing.lookup_key("starter", "annual") == "notestack_starter_annual_13699"
+    assert stripe_billing.price_id(None, starter, "monthly") == "price_starter_monthly"
+    assert stripe_billing.price_id(None, starter, "annual") == "price_starter_annual"
+    assert stripe_billing.plan_for_price({"id": "price_starter_annual"}) == "starter"
+
+
 def test_webhook_rejects_bad_signature(client, stripe_on, owner):
     r = send(client, event("customer.subscription.updated", {"id": "sub_x"}), secret="whsec_wrong")
     assert r.status_code == 400
@@ -186,7 +199,7 @@ def test_checkout_creates_one_customer_and_confirm_applies_plan(client, stripe_o
     assert r.json()["plan"]["id"] == "writer"
     # A second checkout while subscribed changes the plan in place instead of a second subscription.
     r = client.post("/api/billing/checkout", json={"plan": "studio", "cycle": "monthly"}, headers=headers)
-    assert r.json()["url"].endswith("/app?checkout=success")
+    assert r.json()["url"].endswith("/app/notebooks?checkout=success")
     assert [c[0] for c in stripe_on.calls].count("customer") == 1
     assert plan_of(db_session, ws) == "studio"
 

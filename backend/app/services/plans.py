@@ -18,7 +18,8 @@ from app.models import PlanRecord, Subscription, Workspace
 
 log = logging.getLogger(__name__)
 
-ANNUAL_DISCOUNT = 0.25  # annual billing: 25% off the monthly price
+ANNUAL_DISCOUNT = 0.24  # headline annual saving; exact annual totals are set per paid plan
+ANNUAL_MONTHLY_DISPLAY = {"starter": 11.49, "writer": 18.99, "studio": 36.99}
 
 
 @dataclass(frozen=True)
@@ -27,6 +28,7 @@ class Plan:
     name: str
     tagline: str
     price_monthly_usd: float
+    price_annual_usd: float | None
     sources: int
     indexed_posts: int
     audio_minutes: int
@@ -56,6 +58,7 @@ VIDEO_LIMITS = {
 }
 
 FREE_VIDEO_LIMITS = {"ai_edits": 20, "templates": 0, "template_ai_daily": 0}
+STARTER_VIDEO_LIMITS = {"ai_edits": 100, "templates": 0, "template_ai_daily": 0}
 WRITER_VIDEO_LIMITS = {"ai_edits": 300, "templates": 2, "template_ai_daily": 3}
 STUDIO_VIDEO_LIMITS = {"ai_edits": 1000, "templates": 5, "template_ai_daily": 5}
 
@@ -66,6 +69,7 @@ DEFAULT_PLANS: dict[str, Plan] = {
         name="Free",
         tagline="For trying Notestack on your archive",
         price_monthly_usd=0,
+        price_annual_usd=None,
         sources=-1,
         indexed_posts=5,
         audio_minutes=-1,
@@ -88,27 +92,53 @@ DEFAULT_PLANS: dict[str, Plan] = {
         video_limits=FREE_VIDEO_LIMITS,
         videos_monthly=False,
     ),
+    "starter": Plan(
+        id="starter",
+        name="Starter",
+        tagline="For writers growing a focused archive",
+        price_monthly_usd=14.99,
+        price_annual_usd=136.99,
+        sources=-1,
+        indexed_posts=30,
+        audio_minutes=30,
+        videos=5,
+        launch_kits=20,
+        reports=20,
+        infographics=20,
+        voice_cloning=False,
+        features=(
+            "Up to 30 posts indexed, from any source",
+            "Unlimited research chat",
+            "5x more audio overviews than Free",
+            "5 videos a month",
+            "20 Launch Kits a month",
+            "20 reports a month",
+            "20 infographics a month",
+        ),
+        video_limits=STARTER_VIDEO_LIMITS,
+    ),
     "writer": Plan(
         id="writer",
         name="Writer",
         tagline="For writers publishing every week",
         price_monthly_usd=24.99,
+        price_annual_usd=227.99,
         sources=-1,
         indexed_posts=100,
         audio_minutes=60,
         videos=10,
-        launch_kits=20,
-        reports=30,
-        infographics=30,
+        launch_kits=40,
+        reports=50,
+        infographics=50,
         voice_cloning=True,
         features=(
             "Up to 100 posts indexed, from any source",
             "Unlimited research chat",
             "10x more audio overviews than Free",
             "10 videos a month",
-            "20 Launch Kits a month",
-            "30 reports a month",
-            "30 infographics a month",
+            "40 Launch Kits a month",
+            "50 reports a month",
+            "50 infographics a month",
             "Voice cloning with consent",
         ),
         video_limits=WRITER_VIDEO_LIMITS,
@@ -118,11 +148,12 @@ DEFAULT_PLANS: dict[str, Plan] = {
         name="Studio",
         tagline="For publications and power users",
         price_monthly_usd=48.99,
+        price_annual_usd=443.99,
         sources=-1,
         indexed_posts=250,
         audio_minutes=240,
         videos=20,
-        launch_kits=50,
+        launch_kits=-1,
         reports=-1,
         infographics=-1,
         voice_cloning=True,
@@ -131,7 +162,7 @@ DEFAULT_PLANS: dict[str, Plan] = {
             "Unlimited research chat",
             "40x more audio overviews than Free",
             "20 videos a month",
-            "50 Launch Kits a month",
+            "Unlimited Launch Kits",
             "Unlimited reports",
             "Unlimited infographics",
             "Launchpad calendar and resurfacing",
@@ -147,9 +178,12 @@ CACHE_SECONDS = 60
 
 def _plan_from_row(row: PlanRecord) -> Plan:
     return Plan(id=row.id, name=row.name, tagline=row.tagline or "",
-                price_monthly_usd=float(row.price_monthly_usd or 0), sources=row.sources,
+                price_monthly_usd=float(row.price_monthly_usd or 0),
+                price_annual_usd=float(row.price_annual_usd) if row.price_annual_usd is not None else None,
+                sources=row.sources,
                 indexed_posts=row.indexed_posts, audio_minutes=row.audio_minutes,
-                videos=row.videos, launch_kits=row.launch_kits, reports=row.reports, infographics=row.infographics, audio_overviews=row.audio_overviews,
+                videos=row.videos, launch_kits=row.launch_kits, reports=row.reports,
+                infographics=row.infographics, audio_overviews=row.audio_overviews,
                 chat_messages=row.chat_messages,
                 voice_cloning=bool(row.voice_cloning),
                 features=tuple(row.features or ()),
@@ -217,21 +251,21 @@ def to_99(amount: float) -> float:
 
 def annual_prices(plan: Plan) -> tuple[float, float]:
     """(effective monthly price, total billed per year) on annual billing, shown as .99 prices."""
+    if plan.price_annual_usd is not None:
+        return round(plan.price_annual_usd / 12, 2), round(plan.price_annual_usd, 2)
     per_month = to_99(plan.price_monthly_usd * (1 - ANNUAL_DISCOUNT))
     return per_month, round(per_month * 12, 2)
 
 
 def annual_savings_pct(plan: Plan) -> int:
-    if not plan.price_monthly_usd:
-        return 0
-    per_month, _ = annual_prices(plan)
-    return round((1 - per_month / plan.price_monthly_usd) * 100)
+    return round(ANNUAL_DISCOUNT * 100) if plan.price_monthly_usd else 0
 
 
 def plan_dict(plan: Plan) -> dict:
     data = asdict(plan)
     data["features"] = list(plan.features)
     data["price_annual_monthly_usd"], data["price_annual_usd"] = annual_prices(plan)
+    data["price_annual_monthly_usd"] = ANNUAL_MONTHLY_DISPLAY.get(plan.id, data["price_annual_monthly_usd"])
     data["annual_discount"] = ANNUAL_DISCOUNT
     data["annual_savings_pct"] = annual_savings_pct(plan)
     return data

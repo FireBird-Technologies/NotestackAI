@@ -207,6 +207,8 @@ class Settings(BaseSettings):
     )
     # Optional existing Price ids. Empty = Notestack finds or creates prices by lookup key
     # (notestack_<plan>_<cycle>) from the plan table in services/plans.py.
+    stripe_price_starter_monthly: str = ""
+    stripe_price_starter_annual: str = ""
     stripe_price_writer_monthly: str = ""
     stripe_price_writer_annual: str = ""
     stripe_price_studio_monthly: str = ""
