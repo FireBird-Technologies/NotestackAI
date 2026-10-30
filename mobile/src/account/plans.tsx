@@ -1,7 +1,8 @@
 import { annualMonthly, annualTotal, money, savingsPct, type Cycle, type Plan } from "@notestack/shared/content/marketing";
 import { POPULAR_PLAN } from "@notestack/shared/billing";
 import type { ReactNode } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 
 import { Card, publicText } from "@/shell/public-page";
 import { colors, fonts, radius } from "@/ui/theme";

@@ -5,7 +5,8 @@ import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { File } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
 import { useEffect, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 
 import { ChevronIcon, FilmIcon, SparkleIcon, TrashIcon, UploadIcon } from "@/ui/icons";
 import { colors, fonts, radius } from "@/ui/theme";

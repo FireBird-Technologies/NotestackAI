@@ -4,8 +4,9 @@ import type { Doc } from "@notestack/shared/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { useMemo, useState } from "react";
-import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { FlatList, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
+import { useBottomInset } from "@/lib/insets";
 
 import { colors, fonts, gutter, radius } from "@/ui/theme";
 import { Body, Button, ErrorText, Loading, formatDate } from "@/ui";
@@ -13,7 +14,7 @@ import { Body, Button, ErrorText, Loading, formatDate } from "@/ui";
 /** New notebook, as the web's dialog: what it is about, and the posts it reads from. */
 export default function NewNotebook() {
   const queryClient = useQueryClient();
-  const insets = useSafeAreaInsets();
+  const bottomInset = useBottomInset();
   const [topic, setTopic] = useState("");
   const [filter, setFilter] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
@@ -105,7 +106,7 @@ export default function NewNotebook() {
           posts.isPending ? undefined : <Body muted>{filter ? "No posts match that." : "No posts yet. Add a source first."}</Body>
         }
       />
-      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, gutter) }]}>
+      <View style={[styles.footer, { paddingBottom: Math.max(bottomInset, gutter) }]}>
         <ErrorText>{error}</ErrorText>
         <Button
           title={busy ? "Creating..." : `Create with ${selected.length} ${selected.length === 1 ? "post" : "posts"}`}

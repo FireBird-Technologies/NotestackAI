@@ -2,8 +2,9 @@ import { voiceApi } from "@notestack/shared/endpoints";
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { useCallback, useState } from "react";
 
-// Samples play even with the phone's silent switch on: the person pressed Play.
-void setAudioModeAsync({ playsInSilentMode: true }).catch(() => undefined);
+// Samples play even with the phone's silent switch on: the person pressed Play. They mix with whatever else is playing,
+// the same mode as the click sound (lib/click-sound.ts), so neither one resets the other.
+void setAudioModeAsync({ playsInSilentMode: true, interruptionMode: "mixWithOthers" }).catch(() => undefined);
 
 /**
  * One sample at a time (voice rows, previews, recorded takes): play a URL under an id, tap again to stop. `playing`

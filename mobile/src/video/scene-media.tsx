@@ -5,7 +5,8 @@ import type { VideoAsset, VideoScene } from "@notestack/shared/types";
 import { File, Paths } from "expo-file-system";
 import { Image } from "expo-image";
 import { type ReactNode, useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 
 import { CheckIcon, CloseIcon, ListIcon } from "@/ui/icons";
 import { colors, fonts, radius } from "@/ui/theme";

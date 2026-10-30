@@ -5,7 +5,8 @@ import { router } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import * as WebBrowser from "expo-web-browser";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 
 import { AddSource } from "@/sources/add-source";
 import { SourcesNav } from "@/sources/sources-nav";

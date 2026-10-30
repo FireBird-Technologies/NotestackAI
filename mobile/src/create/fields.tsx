@@ -4,7 +4,8 @@ import type { ChatSummary, Doc, ReportTemplate, VideoFocusSource, VideoFocusTopi
 import { useQuery } from "@tanstack/react-query";
 import { SymbolView } from "expo-symbols";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Modal, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { colors, fonts, radius } from "@/ui/theme";
@@ -178,8 +179,8 @@ export function Select<T extends string>({
         <SymbolView name={{ ios: "chevron.down", android: "expand_more" }} size={14} tintColor={colors.text2} />
       </Pressable>
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setOpen(false)} accessibilityLabel="Close">
-          <Pressable style={styles.menu} onPress={() => {}}>
+        <Pressable silent style={styles.backdrop} onPress={() => setOpen(false)} accessibilityLabel="Close">
+          <Pressable silent style={styles.menu} onPress={() => {}}>
             <Text style={styles.menuTitle}>{label}</Text>
             <ScrollView style={styles.menuList}>
               {options.map((o) => {

@@ -67,7 +67,7 @@ export type Plan = {
 
 export type Cycle = "monthly" | "annual";
 
-const ANNUAL_DISCOUNT = 0.25;
+const ANNUAL_DISCOUNT = 0.24;
 
 // Mirrors backend app/services/plans.py so pricing renders before (or without) the API.
 export const FALLBACK_PLANS: Plan[] = [
@@ -87,17 +87,38 @@ export const FALLBACK_PLANS: Plan[] = [
     ],
   },
   {
+    id: "starter",
+    name: "Starter",
+    tagline: "For writers growing a focused archive",
+    price_monthly_usd: 14.99,
+    price_annual_monthly_usd: 11.49,
+    price_annual_usd: 136.99,
+    annual_savings_pct: 24,
+    features: [
+      "Up to 30 posts indexed, from any source",
+      "Unlimited research chat",
+      "5x more audio overviews than Free",
+      "5 videos a month",
+      "20 Launch Kits a month",
+      "20 reports a month",
+      "20 infographics a month",
+    ],
+  },
+  {
     id: "writer",
     name: "Writer",
     tagline: "For writers publishing every week",
     price_monthly_usd: 24.99,
+    price_annual_monthly_usd: 18.99,
+    price_annual_usd: 227.99,
+    annual_savings_pct: 24,
     features: [
       "Up to 100 posts indexed, from any source",
       "10x more audio overviews than Free",
       "10 videos a month",
-      "20 Launch Kits a month",
-      "30 reports a month",
-      "30 infographics a month",
+      "40 Launch Kits a month",
+      "50 reports a month",
+      "50 infographics a month",
       "Voice cloning with consent",
     ],
   },
@@ -106,11 +127,14 @@ export const FALLBACK_PLANS: Plan[] = [
     name: "Studio",
     tagline: "For publications and power users",
     price_monthly_usd: 48.99,
+    price_annual_monthly_usd: 36.99,
+    price_annual_usd: 443.99,
+    annual_savings_pct: 24,
     features: [
       "Up to 250 posts indexed, from any source",
       "40x more audio overviews than Free",
       "20 videos a month",
-      "50 Launch Kits a month",
+      "Unlimited Launch Kits",
       "Unlimited reports",
       "Unlimited infographics",
       "Voice cloning with consent",

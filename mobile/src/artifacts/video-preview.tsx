@@ -2,7 +2,8 @@ import { ApiError } from "@notestack/shared/client";
 import { videosApi } from "@notestack/shared/endpoints";
 import type { Artifact } from "@notestack/shared/types";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Modal, StyleSheet, Text, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
 

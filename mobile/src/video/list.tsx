@@ -5,7 +5,8 @@ import { BUSY, shortUrl, statusOf } from "@notestack/shared/video";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 
 import { RocketIcon, TrashIcon } from "@/ui/icons";
 import { Composer } from "@/launchpad/editors";

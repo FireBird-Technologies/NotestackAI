@@ -3,7 +3,8 @@ import { type FieldDef, isHiddenProp, keyLabel, layoutFieldDefs } from "@notesta
 import { baseLayout, FONT, type FontDefaults, layoutName, MANAGED_PROPS, parseCode, propsOf, withLayout, withProps, wordsAndSeconds } from "@notestack/shared/sceneCode";
 import type { VideoScene } from "@notestack/shared/types";
 import { useState } from "react";
-import { Pressable, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 
 import { Select } from "@/create/fields";
 import { ChevronIcon } from "@/ui/icons";

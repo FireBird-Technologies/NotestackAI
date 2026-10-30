@@ -6,7 +6,8 @@ import { B2V_READY, embedUrl, FINISH_CAP_MS, isFailed, isReady, jobByLabel, jobD
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { Alert, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 import { WebView } from "react-native-webview";
 
 import { CardFeedback } from "@/artifacts/artifact-card";

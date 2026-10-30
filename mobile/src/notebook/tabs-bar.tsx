@@ -1,6 +1,7 @@
 import { router } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { colors, gutter } from "@/ui/theme";

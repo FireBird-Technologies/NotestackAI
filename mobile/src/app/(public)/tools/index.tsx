@@ -1,6 +1,7 @@
 import { tools, toolsHub } from "@notestack/shared/content/tools";
 import { router } from "expo-router";
-import { Pressable, StyleSheet, Text } from "react-native";
+import { StyleSheet, Text } from "react-native";
+import { Pressable } from "@/ui/pressable";
 
 import { Card, Eyebrow, Lede, PageTitle, PublicPage, publicText } from "@/shell/public-page";
 import { colors } from "@/ui/theme";

@@ -2,7 +2,8 @@ import { videoEditApi, videoVoicesApi } from "@notestack/shared/endpoints";
 import type { VideoCatalog, VideoSavedVoice, VideoTemplate } from "@notestack/shared/types";
 import { FONTS } from "@notestack/shared/videoFonts";
 import { type ComponentRef, type ReactNode, useEffect, useRef, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Switch, Text, useWindowDimensions, View } from "react-native";
+import { ScrollView, StyleSheet, Switch, Text, useWindowDimensions, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 
 import { useVoicePlayer } from "@/lib/audio";
 import { Select } from "@/create/fields";

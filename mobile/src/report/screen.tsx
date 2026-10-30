@@ -2,7 +2,8 @@ import { ApiError } from "@notestack/shared/client";
 import { artifactsApi, notebooksApi, reportsApi } from "@notestack/shared/endpoints";
 import type { Artifact, Citation, ReportSuggestion } from "@notestack/shared/types";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Modal, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
 import { SHARE_WHAT, ShareDialog } from "@/artifacts/card-dialogs";

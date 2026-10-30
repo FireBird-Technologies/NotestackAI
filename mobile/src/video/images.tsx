@@ -1,6 +1,7 @@
 import type { VideoScene } from "@notestack/shared/types";
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 
 import { TrashIcon } from "@/ui/icons";
 import { colors, fonts, radius } from "@/ui/theme";

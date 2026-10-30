@@ -77,13 +77,14 @@ export function playClick(): void {
   }
 }
 
-/** One delegated listener for the whole app. */
+/** One delegated listener for the whole app: buttons, button-styled links, the side panel's links, back links
+ * (a.vw-back, .nbv-history-back, .post-back...), tabs and calendar items. */
 export function installClickSounds(): void {
   document.addEventListener(
     "pointerdown",
     (e) => {
       if (e.button !== 0) return;
-      const el = (e.target as Element | null)?.closest?.("button, a.btn, [role='tab'], .cal-item, .agenda-row");
+      const el = (e.target as Element | null)?.closest?.("button, a.btn, a.side-link, a.sidebar-brand, a[class*='back'], [role='tab'], .cal-item, .agenda-row");
       if (!el || (el as HTMLButtonElement).disabled || el.getAttribute("aria-disabled") === "true") return;
       playClick();
     },

@@ -3,14 +3,8 @@ import type { Citation } from "@notestack/shared/types";
 import { useQuery } from "@tanstack/react-query";
 import * as WebBrowser from "expo-web-browser";
 import { type ComponentRef, useRef } from "react";
-import {
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Modal, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { CloseIcon } from "@/ui/icons";

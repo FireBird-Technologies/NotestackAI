@@ -3425,21 +3425,48 @@ select.input option {
   }
 }
 
-/* Phones: a tall map instead of a thin strip. The view crops the sides to fit (fitView in TopicMap.tsx). */
+/* Phones: the map stood upright (TALL in topicLayout), shown whole. The readout sits above it and the zoom buttons
+   and legend below, so nothing covers a star or a name. */
 @media (max-width: 699px) {
+  .map-canvas {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "hud hud"
+      "svg svg"
+      "controls legend";
+    gap: 10px;
+    padding: 10px;
+  }
+
   .map-canvas .map-svg {
+    grid-area: svg;
     width: 100%;
-    height: min(72vh, 620px);
+    height: auto;
     max-height: none;
-    aspect-ratio: auto;
+    border-radius: 12px;
   }
 
   .map-hud {
-    left: 10px;
-    top: 10px;
-    max-width: calc(100% - 76px);
+    grid-area: hud;
+    position: static;
+    max-width: none;
     padding: 8px 10px;
-    font-size: 0.66rem;
+    font-size: 0.7rem;
+  }
+
+  .map-controls {
+    grid-area: controls;
+    position: static;
+    justify-self: start;
+    grid-auto-flow: column;
+  }
+
+  .map-legend {
+    grid-area: legend;
+    position: static;
+    align-self: center;
+    max-width: none;
   }
 }
 
@@ -4409,6 +4436,15 @@ select.input,
 
 .lp-kit-link:hover .icon {
   transform: translateX(3px);
+}
+
+/* Phones: no hover to reveal it as a link, so it is always underlined */
+@media (max-width: 699px) {
+  .lp-kit-link {
+    text-decoration: underline;
+    text-decoration-color: var(--white);
+    text-underline-offset: 4px;
+  }
 }
 
 /* Where a post came from (its Launch Kit): a quiet line, apart from the attachment */
@@ -13382,10 +13418,16 @@ body.nbv-resizing iframe {
     display: none;
   }
 
+  /* The kind picker spans the screen, lined up with the search box under it */
   .lib-filter-phone {
     display: block;
-    justify-self: start;
-    min-width: 200px;
+    justify-self: stretch;
+    width: 100%;
+  }
+
+  .lib-filter-phone .dropdown,
+  .lib-filter-phone .dropdown-btn {
+    width: 100%;
   }
 
   .lib-filter-phone .dropdown-btn {

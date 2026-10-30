@@ -7,7 +7,8 @@ import type { Artifact } from "@notestack/shared/types";
 import { StatusBar } from "expo-status-bar";
 import { SymbolView } from "expo-symbols";
 import { type ComponentRef, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
 

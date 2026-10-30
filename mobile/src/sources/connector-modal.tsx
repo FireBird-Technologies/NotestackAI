@@ -2,7 +2,8 @@ import * as Clipboard from "expo-clipboard";
 import { Image } from "expo-image";
 import { SymbolView } from "expo-symbols";
 import { useEffect, useState, type ReactNode } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Modal, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 
 import { colors, fonts, radius } from "@/ui/theme";
 import { PillButton } from "@/ui/widgets";
@@ -22,8 +23,8 @@ export function ConnectorModal({ visible, onClose }: { visible: boolean; onClose
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.card} onPress={() => {}}>
+      <Pressable silent style={styles.backdrop} onPress={onClose}>
+        <Pressable silent style={styles.card} onPress={() => {}}>
           <ScrollView contentContainerStyle={styles.body} bounces={false}>
             <View style={styles.head}>
               <Text style={styles.title} accessibilityRole="header">

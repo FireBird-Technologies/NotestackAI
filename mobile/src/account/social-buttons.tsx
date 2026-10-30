@@ -3,7 +3,8 @@ import { ApiError } from "@notestack/shared/client";
 import { useQuery } from "@tanstack/react-query";
 import * as AppleAuthentication from "expo-apple-authentication";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Platform, StyleSheet, Text, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 import Svg, { Path } from "react-native-svg";
 
 import { useAuth } from "@/account/auth";

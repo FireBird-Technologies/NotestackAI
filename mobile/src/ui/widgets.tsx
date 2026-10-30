@@ -1,8 +1,9 @@
 import type { Job } from "@notestack/shared/types";
 import { SymbolView } from "expo-symbols";
-import { type ComponentRef, type ReactNode, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View, type StyleProp, type ViewStyle } from "react-native";
-import Animated from "react-native-reanimated";
+import { type ComponentRef, type ReactNode, useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Alert, Modal, Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View, type StyleProp, type ViewStyle } from "react-native";
+import { Pressable } from "@/ui/pressable";
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Starfield } from "@/shell/starfield";
@@ -63,6 +64,31 @@ export function JobProgress({ job }: { job: Job }) {
   );
 }
 
+/**
+ * The progress bar's look while there is no progress to show yet (something just asked for): the glowing fill and its
+ * head sweep along the track, over and over. `label` sits under it, as JobProgress's message does.
+ */
+export function FlowBar({ label }: { label: string }) {
+  const [trackW, setTrackW] = useState(0);
+  const at = useSharedValue(0);
+  useEffect(() => {
+    at.set(withRepeat(withTiming(1, { duration: 1600, easing: Easing.inOut(Easing.quad) }), -1, false));
+  }, [at]);
+  const comet = useAnimatedStyle(() => ({ transform: [{ translateX: -trackW * 0.35 + at.get() * trackW * 1.35 }] }));
+  return (
+    <View style={styles.progress} accessibilityRole="progressbar" accessibilityLabel={label}>
+      <View style={[styles.track, styles.trackClip]} onLayout={(e) => setTrackW(e.nativeEvent.layout.width)}>
+        <Animated.View style={[styles.fill, styles.comet, comet]}>
+          <View style={styles.head} />
+        </Animated.View>
+      </View>
+      <Text style={[styles.progressText, styles.progressLabel]} numberOfLines={2}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
 /** Previous and next page buttons around "Page n of m" (web Pager). Hidden when there is only one page. */
 export function Pager({ page, pages, onChange }: { page: number; pages: number; onChange: (page: number) => void }) {
   if (pages <= 1) return null;
@@ -111,14 +137,17 @@ const styles = StyleSheet.create({
     backgroundImage: "linear-gradient(90deg, rgba(33, 124, 255, 0.1), #217cff)",
     boxShadow: "0 0 12px rgba(33, 124, 255, 0.6)",
   },
+  trackClip: { overflow: "hidden" },
+  comet: { position: "absolute", left: 0, top: 0, width: "35%" },
   fillFailed: { backgroundImage: "none", backgroundColor: colors.white, boxShadow: "none", opacity: 0.6 },
+  // A small bright block the track's height (the web's dot, clipped by its track to a rectangle).
   head: {
     position: "absolute",
     right: 0,
-    top: -1,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    top: 0,
+    width: 9,
+    height: 6,
+    borderRadius: 1.5,
     backgroundColor: colors.white,
     boxShadow: "0 0 10px #ffffff, 0 0 18px #217cff",
   },
@@ -167,8 +196,8 @@ export function Sheet({ visible, title, onClose, onDismissed, children }: { visi
 export function Dialog({ visible, title, onClose, children }: { visible: boolean; title: string; onClose: () => void; children: ReactNode }) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={pageStyles.dialogBackdrop} onPress={onClose}>
-        <Pressable style={pageStyles.dialog} onPress={() => {}}>
+      <Pressable silent style={pageStyles.dialogBackdrop} onPress={onClose}>
+        <Pressable silent style={pageStyles.dialog} onPress={() => {}}>
           <View style={pageStyles.dialogHead}>
             <Text style={pageStyles.sheetTitle}>{title}</Text>
             <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel="Close">
@@ -334,7 +363,7 @@ export function PopMenu({
         onRequestClose={close}
         onDismiss={runPicked}
         supportedOrientations={["portrait", "landscape"]}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={close} accessibilityLabel="Close menu" />
+        <Pressable silent style={StyleSheet.absoluteFill} onPress={close} accessibilityLabel="Close menu" />
         <View
           style={[pageStyles.popMenu, place]}
           accessibilityRole="menu"

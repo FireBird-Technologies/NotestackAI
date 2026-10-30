@@ -6,7 +6,8 @@ import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 
 import { AttachmentChip } from "@/launchpad/attachment";
 import { AttachSheet } from "@/launchpad/library-picker";

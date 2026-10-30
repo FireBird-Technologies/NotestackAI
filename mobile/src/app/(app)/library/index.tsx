@@ -4,7 +4,8 @@ import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-quer
 import { router } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useEffect, useRef, useState } from "react";
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View, type ScrollViewInstance } from "react-native";
+import { RefreshControl, ScrollView, StyleSheet, Text, TextInput, View, type ScrollViewInstance } from "react-native";
+import { Pressable } from "@/ui/pressable";
 
 import { ArtifactCard, isMaking } from "@/artifacts/artifact-card";
 import { Starfield } from "@/shell/starfield";
@@ -177,7 +178,7 @@ const styles = StyleSheet.create({
   eyebrow: { color: colors.blue, fontFamily: fonts.mono, fontSize: 12.5, letterSpacing: 3, textTransform: "uppercase" },
   title: { color: colors.text, fontFamily: fonts.displayBold, fontSize: 28, lineHeight: 34, letterSpacing: -0.4 },
   // The menu opens over the cards below, so this block sits above them.
-  filterWrap: { zIndex: 10, alignSelf: "flex-start", minWidth: 230 },
+  filterWrap: { zIndex: 10, alignSelf: "stretch" },
   filter: {
     flexDirection: "row",
     alignItems: "center",

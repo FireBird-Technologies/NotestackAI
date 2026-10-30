@@ -114,7 +114,11 @@ export function branchPoints(shape: Shape, n: number, seed: number): { x: number
   return pts;
 }
 
-export function place(root: MindNode, shape: Shape, seed: number): { nodes: Placed[]; edges: Edge[]; extent: number } {
+/**
+ * Lays the map out. `tall` (a screen taller than wide, like a phone held upright) turns a wide figure a quarter turn
+ * so it fills the height: every distance stays the same, so branches and their gaps do too.
+ */
+export function place(root: MindNode, shape: Shape, seed: number, tall = false): { nodes: Placed[]; edges: Edge[]; extent: number } {
   const jit = (k: number) => (shape === "orbit" ? 0 : seeded(seed * 3.7 + k) - 0.5);
   const nodes: Placed[] = [];
   const edges: Edge[] = [];
@@ -174,6 +178,18 @@ export function place(root: MindNode, shape: Shape, seed: number): { nodes: Plac
   if (shape !== "orbit") {
     const joined = new Set(edges.filter((e) => e.a === top || e.b === top).map((e) => (e.a === top ? e.b : e.a)));
     bps.filter((bp) => !joined.has(bp)).forEach((bp) => edges.push({ a: top, b: bp, to: bp, faint: true }));
+  }
+  if (tall) {
+    const xs = nodes.map((q) => q.x);
+    const ys = nodes.map((q) => q.y);
+    if (Math.max(...xs) - Math.min(...xs) > 1.05 * (Math.max(...ys) - Math.min(...ys))) {
+      for (const q of nodes) {
+        const x = q.x;
+        q.x = -q.y;
+        q.y = x;
+        q.angle += Math.PI / 2;
+      }
+    }
   }
   const extent = Math.max(MIN_ROOT, ...bps.map((q) => Math.hypot(q.x, q.y)));
   return { nodes, edges, extent };

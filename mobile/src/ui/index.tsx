@@ -1,17 +1,7 @@
 import * as WebBrowser from "expo-web-browser";
 import type { ReactNode } from "react";
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-  type TextInputProps,
-} from "react-native";
+import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View, type TextInputProps } from "react-native";
+import { Pressable } from "@/ui/pressable";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PUBLIC_HEADER_HEIGHT, PublicHeader } from "@/shell/public-header";

@@ -7,14 +7,8 @@ import type {
 import { useQuery } from "@tanstack/react-query";
 import { SymbolView } from "expo-symbols";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
-import {
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  TurboModuleRegistry,
-  View,
-} from "react-native";
+import { StyleSheet, Text, TextInput, TurboModuleRegistry, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 import Animated, {
   Easing,
   useAnimatedProps,

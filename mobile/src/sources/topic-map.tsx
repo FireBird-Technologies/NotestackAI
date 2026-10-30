@@ -1,8 +1,9 @@
-import { H, seeded, W, type P } from "@notestack/shared/topicLayout";
+import { placeLabels, seeded, TALL, textBox, type LabelSpot, type LabelWant, type P, type Rect } from "@notestack/shared/topicLayout";
 import type { TopicMap, TopicNode } from "@notestack/shared/types";
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
-import { GestureDetector, usePanGesture, usePinchGesture, useSimultaneousGestures } from "react-native-gesture-handler";
+import { StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
+import { Pressable } from "@/ui/pressable";
+import { GestureDetector, usePanGesture, usePinchGesture, useSimultaneousGestures, useTapGesture } from "react-native-gesture-handler";
 import Animated, {
   useAnimatedReaction,
   useAnimatedStyle,
@@ -27,9 +28,17 @@ export const STATUS_LABEL: Record<TopicNode["status"], string> = {
 const MAX_ZOOM = 8;
 const MIN_ZOOM = 1 / 1.6;
 
+/** The canvas the map is laid out on (layout(data, TALL)): upright, to fill a phone. */
+const C = TALL;
+const LABEL_FONT = 12.5;
+/** How near a tap must land to a star, in screen pixels. */
+const TAP_PX = 26;
+const GALAXY_FONT = 11;
+
 /**
- * The constellation, as the web's SVG map (frontend/src/pages/TopicMap.tsx), drawn with views on a W x H virtual canvas.
- * Pinch to zoom, drag to pan, tap a star. Labels keep their size on screen as the canvas scales.
+ * The constellation, as the web's SVG map (frontend/src/pages/TopicMap.tsx), drawn with views on the TALL virtual
+ * canvas. Pinch to zoom, drag to pan, tap a star. Labels keep their size on screen as the canvas scales, and only the
+ * ones with room show (placeLabels): zooming in makes room for more.
  */
 export function StarMap({
   data,
@@ -38,7 +47,8 @@ export function StarMap({
   selectedId,
   focusId,
   onSelect,
-  height,
+  maxHeight,
+  recentBucket,
 }: {
   data: TopicMap;
   placed: Map<string, P>;
@@ -47,23 +57,29 @@ export function StarMap({
   /** A star to fly to (from the briefing); the map centres on it when this changes. */
   focusId: { id: string; at: number } | null;
   onSelect: (id: string) => void;
-  height: number;
+  /** The tallest the map may be; it is as tall as its width needs, up to this. */
+  maxHeight: number;
+  /** Where "recent" starts in a star's timeline, highlighted in the readout's sparkline. */
+  recentBucket?: number;
 }) {
-  const [box, setBox] = useState({ w: 0, h: height });
+  const [box, setBox] = useState({ w: 0, h: 0 });
   const [zoomedIn, setZoomedIn] = useState(false);
+  // The zoom in quarter steps of doubling: labels are placed again at each step.
+  const [step, setStep] = useState(0);
   const [legend, setLegend] = useState(false);
   const zoom = useSharedValue(1);
   const ox = useSharedValue(0);
   const oy = useSharedValue(0);
   const base = useSharedValue(1);
 
-  // Opens as the web does on a phone: the map's full height, cropped at the sides around its centre.
+  // Opens on the whole map, centred.
   const home = (w: number, h: number) => {
-    const z = h / H;
-    return { z, x: (w - W * z) / 2, y: 0 };
+    const z = Math.min(w / C.w, h / C.h);
+    return { z, x: (w - C.w * z) / 2, y: (h - C.h * z) / 2 };
   };
   const onLayout = (e: LayoutChangeEvent) => {
-    const { width: w, height: h } = e.nativeEvent.layout;
+    const w = e.nativeEvent.layout.width;
+    const h = Math.min(maxHeight, (w * C.h) / C.w);
     if (w === box.w && h === box.h) return;
     setBox({ w, h });
     const at = home(w, h);
@@ -116,13 +132,35 @@ export function StarMap({
       zoom.set(next);
     },
   });
-  const gestures = useSimultaneousGestures(pan, pinch);
+  // A tap picks the nearest star within a fingertip of it, measured on screen, so even a small star far out is easy to
+  // hit; the stars' own targets would shrink with the map.
+  const tap = useTapGesture({
+    runOnJS: true,
+    onActivate: (e) => {
+      const z = zoom.get();
+      const cx = (e.x - ox.get()) / z;
+      const cy = (e.y - oy.get()) / z;
+      let best: { id: string; d: number } | null = null;
+      for (const [id, p] of placed) {
+        const d = Math.hypot(p.x - cx, p.y - cy) * z; // screen pixels
+        if (d <= Math.max(TAP_PX, p.r * z * 1.5) && (!best || d < best.d)) best = { id, d };
+      }
+      if (best) onSelect(best.id);
+    },
+  });
+  const gestures = useSimultaneousGestures(pan, pinch, tap);
 
-  // Zoomed in past a third, every star shows its name (the web's zoomedIn).
+  // Zoomed in past a third, names carry their post counts (the web's zoomedIn).
   useAnimatedReaction(
     () => zoom.get() / base.get() > 1.33,
     (now, before) => {
       if (now !== before) scheduleOnRN(setZoomedIn, now);
+    },
+  );
+  useAnimatedReaction(
+    () => Math.round(Math.log2(zoom.get()) * 4),
+    (now, before) => {
+      if (now !== before) scheduleOnRN(setStep, now);
     },
   );
 
@@ -164,8 +202,54 @@ export function StarMap({
   const focus = selectedId;
   const galaxyCount = nebulae.length;
 
+  // Every name that has room at this zoom, most important first: the selected star, its neighbours, the brightest,
+  // then the rest by posts. Galaxy names go first and the stars' names keep clear of them.
+  const unit = 2 ** (-step / 4);
+  const galaxyText = (name: string) => `${name.toUpperCase()} GALAXY`;
+  const galaxyBoxes: Rect[] = nebulae.map((g) => {
+    const t = textBox(galaxyText(g.name), GALAXY_FONT, 3);
+    return { x: g.cx - (t.w * unit) / 2, y: g.cy - g.ry + 14, w: t.w * unit, h: t.h * unit };
+  });
+  const rank = (id: string, posts: number) =>
+    id === selectedId ? 4e6 : focus && neighbors.get(focus)?.has(id) ? 3e6 + posts : brightest.has(id) ? 2e6 + posts : posts;
+  const wants: LabelWant[] = data.nodes
+    .map((n) => ({ n, p: placed.get(n.id) }))
+    .filter((x): x is { n: TopicNode; p: P } => Boolean(x.p))
+    .sort((a, b) => rank(b.n.id, b.n.post_count) - rank(a.n.id, a.n.post_count))
+    .map(({ n, p }) => ({
+      id: n.id,
+      x: p.x,
+      y: p.y,
+      r: p.r,
+      text: zoomedIn || n.id === selectedId ? `${n.name}  ${n.post_count}` : n.name,
+      must: n.id === selectedId,
+    }));
+  const spots = placeLabels(wants, { unit, font: LABEL_FONT, canvas: C, blocked: galaxyBoxes });
+
   return (
-    <View style={[styles.box, { height }]} onLayout={onLayout}>
+    <View style={styles.wrap}>
+      {/* The readout sits above the map, so it never covers a star or a name. */}
+      <View style={styles.hud}>
+        {selectedId && byId.get(selectedId) ? (
+          <>
+            <Text style={styles.hudText}>
+              <Text style={styles.hudTitle}>{byId.get(selectedId)!.name}</Text>
+              {"\n"}
+              {byId.get(selectedId)!.post_count} posts · last {formatDate(byId.get(selectedId)!.last_at)} ·{" "}
+              {STATUS_LABEL[byId.get(selectedId)!.status]}
+            </Text>
+            <View style={styles.hudSpark}>
+              <Sparkline values={byId.get(selectedId)!.timeline} height={18} highlightFrom={recentBucket} />
+            </View>
+          </>
+        ) : (
+          <Text style={styles.hudText}>
+            {data.nodes.length} stars · {galaxyCount} galaxies · pinch to zoom, drag to pan, tap a star to light it up, tap it
+            again to let go
+          </Text>
+        )}
+      </View>
+    <View style={[styles.box, { height: box.h || Math.min(maxHeight, 420) }]} onLayout={onLayout}>
       <GestureDetector gesture={gestures}>
         <View style={StyleSheet.absoluteFill} collapsable={false}>
           <Animated.View style={[styles.canvas, canvas]}>
@@ -190,8 +274,8 @@ export function StarMap({
                   r={Math.min(g.rx, g.ry) * 0.75}
                   image="radial-gradient(closest-side, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0.32) 12%, rgba(255,255,255,0.08) 40%, rgba(33,124,255,0.05) 70%, rgba(33,124,255,0) 100%)"
                 />
-                <ScaledLabel zoom={zoom} x={g.cx} y={g.cy - g.ry + 14} style={styles.galaxyLabel}>
-                  {`${g.name.toUpperCase()} GALAXY`}
+                <ScaledLabel zoom={zoom} ax={g.cx} top={g.cy - g.ry + 14} style={styles.galaxyLabel}>
+                  {galaxyText(g.name)}
                 </ScaledLabel>
               </View>
             ))}
@@ -221,7 +305,6 @@ export function StarMap({
               const near = Boolean(focus && neighbors.get(focus)?.has(n.id));
               const dim = Boolean(focus && focus !== n.id && !near);
               const active = selectedId === n.id;
-              const showLabel = zoomedIn || brightest.has(n.id) || n.post_count >= 3 || active || near;
               return (
                 <Star
                   key={n.id}
@@ -231,7 +314,7 @@ export function StarMap({
                   bright={brightest.has(n.id)}
                   dim={dim}
                   active={active}
-                  label={showLabel}
+                  spot={spots.get(n.id)}
                   count={zoomedIn || active}
                   zoom={zoom}
                   onPress={() => onSelect(n.id)}
@@ -242,51 +325,38 @@ export function StarMap({
         </View>
       </GestureDetector>
 
-      {/* The readout and controls sit over the map, as on the web. */}
-      <View style={styles.hud} pointerEvents="none">
-        {selectedId && byId.get(selectedId) ? (
-          <Text style={styles.hudText}>
-            <Text style={styles.hudTitle}>{byId.get(selectedId)!.name}</Text>
-            {"\n"}
-            {byId.get(selectedId)!.post_count} posts · last {formatDate(byId.get(selectedId)!.last_at)} ·{" "}
-            {STATUS_LABEL[byId.get(selectedId)!.status]}
-          </Text>
-        ) : (
-          <Text style={styles.hudText}>
-            {data.nodes.length} stars · {galaxyCount} galaxies · pinch to zoom, drag to pan, tap a star for its posts
-          </Text>
-        )}
-      </View>
-      <View style={styles.controls}>
-        <Pressable onPress={() => zoomBy(1.33)} accessibilityRole="button" accessibilityLabel="Zoom in" style={styles.control}>
-          <Text style={styles.controlText}>+</Text>
-        </Pressable>
-        <Pressable onPress={() => zoomBy(0.75)} accessibilityRole="button" accessibilityLabel="Zoom out" style={styles.control}>
-          <Text style={styles.controlText}>-</Text>
-        </Pressable>
-        <Pressable onPress={reset} accessibilityRole="button" accessibilityLabel="Reset view" style={styles.control}>
-          <Text style={[styles.controlText, styles.mono]}>1:1</Text>
-        </Pressable>
-      </View>
-      <View style={styles.legendWrap}>
-        {legend ? (
-          <View style={styles.legend}>
-            <Text style={styles.legendLine}>● size = posts</Text>
-            {mode === "recency" ? (
-              <Text style={styles.legendLine}>● brighter = written about recently</Text>
-            ) : (
-              <>
-                <Text style={styles.legendLine}>➚ rising</Text>
-                <Text style={styles.legendLine}>◌ dormant</Text>
-              </>
-            )}
-            <Text style={styles.legendLine}>— lines = shared posts</Text>
-          </View>
-        ) : null}
-        <Pressable onPress={() => setLegend((l) => !l)} accessibilityRole="button" style={styles.legendButton}>
+    </View>
+      {/* Zoom and the legend sit under the map, clear of the stars. */}
+      <View style={styles.footer}>
+        <View style={styles.controls}>
+          <Pressable onPress={() => zoomBy(1.33)} accessibilityRole="button" accessibilityLabel="Zoom in" style={styles.control}>
+            <Text style={styles.controlText}>+</Text>
+          </Pressable>
+          <Pressable onPress={() => zoomBy(0.75)} accessibilityRole="button" accessibilityLabel="Zoom out" style={styles.control}>
+            <Text style={styles.controlText}>-</Text>
+          </Pressable>
+          <Pressable onPress={reset} accessibilityRole="button" accessibilityLabel="Reset view" style={styles.control}>
+            <Text style={[styles.controlText, styles.mono]}>1:1</Text>
+          </Pressable>
+        </View>
+        <Pressable onPress={() => setLegend((l) => !l)} accessibilityRole="button" accessibilityState={{ expanded: legend }} style={styles.legendButton}>
           <Text style={styles.legendButtonText}>Legend</Text>
         </Pressable>
       </View>
+      {legend ? (
+        <View style={styles.legend}>
+          <Text style={styles.legendLine}>● size = posts</Text>
+          {mode === "recency" ? (
+            <Text style={styles.legendLine}>● brighter = written about recently</Text>
+          ) : (
+            <>
+              <Text style={styles.legendLine}>➚ rising</Text>
+              <Text style={styles.legendLine}>◌ dormant</Text>
+            </>
+          )}
+          <Text style={styles.legendLine}>— lines = shared posts</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -311,7 +381,7 @@ function Star({
   bright,
   dim,
   active,
-  label,
+  spot,
   count,
   zoom,
   onPress,
@@ -322,7 +392,8 @@ function Star({
   bright: boolean;
   dim: boolean;
   active: boolean;
-  label: boolean;
+  /** Where its name goes; none when it has no room at this zoom. */
+  spot?: LabelSpot;
   count: boolean;
   zoom: SharedValue<number>;
   onPress: () => void;
@@ -362,39 +433,54 @@ function Star({
       ) : null}
       <Disc x={p.x} y={p.y} r={core} color={color} />
       {active ? <Ring x={p.x} y={p.y} r={p.r + 12} color={colors.blue} /> : null}
-      {label ? (
-        <ScaledLabel zoom={zoom} x={p.x} y={p.y + p.r + 6} style={styles.starLabel}>
+      {spot ? (
+        <ScaledLabel zoom={zoom} ax={spot.ax} top={spot.top} align={spot.align} style={styles.starLabel}>
           {n.name}
           {count ? <Text style={styles.starCount}>{`  ${n.post_count}`}</Text> : null}
         </ScaledLabel>
       ) : null}
-      <Pressable
-        onPress={onPress}
+      {/* Taps are caught by the map (StarMap's tap); this keeps each star reachable for screen readers. */}
+      <View
+        pointerEvents="none"
+        accessible
         accessibilityRole="button"
         accessibilityLabel={`${n.name}, ${n.post_count} posts, ${STATUS_LABEL[n.status]}`}
+        accessibilityActions={[{ name: "activate" }]}
+        onAccessibilityAction={onPress}
         style={{ position: "absolute", left: p.x - hit / 2, top: p.y - hit / 2, width: hit, height: hit, borderRadius: hit }}
       />
     </View>
   );
 }
 
-/** Text placed on the canvas at (x, y), centred, keeping its size on screen however far the canvas is zoomed. */
+/**
+ * Text placed on the canvas with its top at `top` and its centre (or left or right edge, by `align`) at `ax`, keeping
+ * its size on screen however far the canvas is zoomed.
+ */
 function ScaledLabel({
   zoom,
-  x,
-  y,
+  ax,
+  top,
+  align = "center",
   style,
   children,
 }: {
   zoom: SharedValue<number>;
-  x: number;
-  y: number;
+  ax: number;
+  top: number;
+  align?: LabelSpot["align"];
   style: object;
   children: React.ReactNode;
 }) {
   const counter = useAnimatedStyle(() => ({ transform: [{ scale: 1 / zoom.get() }] }));
+  const at =
+    align === "left"
+      ? { left: ax, alignItems: "flex-start" as const, transformOrigin: "0% 0%" }
+      : align === "right"
+        ? { left: ax - 300, alignItems: "flex-end" as const, transformOrigin: "100% 0%" }
+        : { left: ax - 150, alignItems: "center" as const, transformOrigin: "50% 0%" };
   return (
-    <Animated.View pointerEvents="none" style={[styles.labelBox, { left: x - 150, top: y }, counter]}>
+    <Animated.View pointerEvents="none" style={[styles.labelBox, { top }, at, counter]}>
       <Text style={style} numberOfLines={1}>
         {children}
       </Text>
@@ -483,8 +569,8 @@ function DeepField() {
   const stars = useMemo(
     () =>
       Array.from({ length: 260 }, (_, i) => ({
-        x: seeded(i + 1) * W,
-        y: seeded(i + 1000) * H,
+        x: seeded(i + 1) * C.w,
+        y: seeded(i + 1000) * C.h,
         r: 0.3 + seeded(i + 2000) * 1.1,
         o: 0.15 + seeded(i + 3000) * 0.5,
       })),
@@ -493,10 +579,10 @@ function DeepField() {
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
       {[140, 260, 390, 520].map((r) => (
-        <Ring key={r} x={W / 2} y={H / 2} r={r} color="rgba(255,255,255,0.05)" />
+        <Ring key={r} x={C.w / 2} y={C.h / 2} r={r} color="rgba(255,255,255,0.05)" />
       ))}
-      <View style={[styles.axis, { left: W / 2, top: 0, width: 1, height: H }]} />
-      <View style={[styles.axis, { left: 0, top: H / 2, width: W, height: 1 }]} />
+      <View style={[styles.axis, { left: C.w / 2, top: 0, width: 1, height: C.h }]} />
+      <View style={[styles.axis, { left: 0, top: C.h / 2, width: C.w, height: 1 }]} />
       {stars.map((s, i) => (
         <Disc key={i} x={s.x} y={s.y} r={s.r} color="#ffffff" opacity={s.o} />
       ))}
@@ -526,10 +612,11 @@ export function Sparkline({ values, height = 44, highlightFrom }: { values: numb
 }
 
 const styles = StyleSheet.create({
+  wrap: { gap: 10 },
   box: { overflow: "hidden", borderRadius: 16, borderWidth: 1, borderColor: colors.line, backgroundColor: "#05070b" },
-  canvas: { position: "absolute", left: 0, top: 0, width: W, height: H, transformOrigin: "0 0" },
+  canvas: { position: "absolute", left: 0, top: 0, width: C.w, height: C.h, transformOrigin: "0 0" },
   axis: { position: "absolute", backgroundColor: "rgba(255,255,255,0.04)" },
-  labelBox: { position: "absolute", width: 300, alignItems: "center", transformOrigin: "50% 0%" },
+  labelBox: { position: "absolute", width: 300 },
   starLabel: {
     color: colors.white,
     fontSize: 12.5,
@@ -541,35 +628,30 @@ const styles = StyleSheet.create({
   starCount: { color: colors.blue, fontFamily: fonts.mono, fontSize: 11 },
   galaxyLabel: { color: "rgba(156,196,255,0.85)", fontFamily: fonts.mono, fontSize: 11, letterSpacing: 3 },
   hud: {
-    position: "absolute",
-    top: 12,
-    left: 12,
-    right: 70,
     padding: 12,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "rgba(33,124,255,0.25)",
     backgroundColor: "rgba(5,7,11,0.85)",
   },
+  hudSpark: { width: 160, marginTop: 6 },
   hudText: { color: colors.text3, fontFamily: fonts.mono, fontSize: 12.5, lineHeight: 19 },
   hudTitle: { color: colors.text, fontSize: 14 },
+  footer: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   controls: {
-    position: "absolute",
-    top: 12,
-    right: 12,
-    paddingVertical: 4,
+    flexDirection: "row",
+    paddingHorizontal: 4,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: colors.lineStrong,
     backgroundColor: "rgba(5,7,11,0.9)",
   },
-  control: { width: 46, height: 44, alignItems: "center", justifyContent: "center" },
+  control: { width: 46, height: 40, alignItems: "center", justifyContent: "center" },
   controlText: { color: colors.text, fontSize: 20, fontWeight: "600" },
   mono: { fontFamily: fonts.mono, fontSize: 14 },
-  legendWrap: { position: "absolute", right: 12, bottom: 12, alignItems: "flex-end", gap: 6 },
   legend: { padding: 10, gap: 4, borderRadius: 10, backgroundColor: "rgba(5,7,11,0.92)", borderWidth: 1, borderColor: colors.line },
   legendLine: { color: colors.text2, fontFamily: fonts.mono, fontSize: 12 },
-  legendButton: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, backgroundColor: "rgba(5,7,11,0.92)" },
+  legendButton: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: colors.line, backgroundColor: "rgba(5,7,11,0.92)" },
   legendButtonText: { color: colors.text2, fontFamily: fonts.mono, fontSize: 14, letterSpacing: 1 },
   spark: { flexDirection: "row", alignItems: "flex-end", gap: 2 },
   sparkBar: { flex: 1, borderRadius: 1 },

@@ -20,7 +20,8 @@ import {
 import { File } from "expo-file-system";
 import { SymbolView } from "expo-symbols";
 import { useEffect, useState } from "react";
-import { Pressable, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 
 import { useVoicePlayer, voicePreviewUrl as previewUrl } from "@/lib/audio";
 import { Select } from "@/create/fields";

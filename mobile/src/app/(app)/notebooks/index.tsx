@@ -3,7 +3,8 @@ import type { NotebookSummary } from "@notestack/shared/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { useState } from "react";
-import { Alert, FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, FlatList, RefreshControl, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 
 import { PlanetIcon } from "@/shell/planet";
 import { Starfield } from "@/shell/starfield";

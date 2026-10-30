@@ -2,12 +2,14 @@ import { useQuery } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import { router, useSegments, type Href } from "expo-router";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { BackHandler, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { BackHandler, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 import Animated, { FadeIn, FadeOut, SlideInLeft, SlideOutLeft } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAuth } from "@/account/auth";
 import { planQuery } from "@/account/plan";
+import { useBottomInset } from "@/lib/insets";
 import { useUpgrade } from "@/account/upgrade";
 import { colors, fonts, gutter, radius } from "@/ui/theme";
 
@@ -60,6 +62,7 @@ export function DrawerProvider({ children }: { children: ReactNode }) {
 
 function SidePanel({ onClose }: { onClose: () => void }) {
   const insets = useSafeAreaInsets();
+  const bottomInset = useBottomInset();
   const segments = useSegments() as string[];
   const { user, logout } = useAuth();
   const upgrade = useUpgrade();
@@ -73,12 +76,12 @@ function SidePanel({ onClose }: { onClose: () => void }) {
   return (
     <View style={StyleSheet.absoluteFill}>
       <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(160)} style={styles.backdrop}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close menu" />
+        <Pressable silent style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close menu" />
       </Animated.View>
       <Animated.View
         entering={SlideInLeft.duration(240)}
         exiting={SlideOutLeft.duration(200)}
-        style={[styles.panel, { paddingTop: insets.top + 8, paddingBottom: Math.max(insets.bottom, gutter) }]}
+        style={[styles.panel, { paddingTop: insets.top + 8, paddingBottom: Math.max(bottomInset, gutter) }]}
         accessibilityViewIsModal>
         <View style={styles.top}>
           <Pressable onPress={() => go("notebooks")} style={styles.brand} accessibilityRole="link" accessibilityLabel="Your notebooks">

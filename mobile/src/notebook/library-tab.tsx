@@ -1,9 +1,10 @@
 import type { Artifact } from "@notestack/shared/types";
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { ArtifactCard } from "@/artifacts/artifact-card";
 import { colors, fonts, radius } from "@/ui/theme";
 import { ErrorText, Loading } from "@/ui";
+import { FlowBar } from "@/ui/widgets";
 
 /**
  * The Library tab (web: StudioPanel's "Made from this notebook" on a phone): what is being started, then everything made
@@ -35,13 +36,9 @@ export function LibraryTab({
         ) : null}
         {artifacts && !empty ? <Text style={styles.label}>MADE FROM THIS NOTEBOOK</Text> : null}
         {starting.map((label, i) => (
-          <View key={`${label}-${i}`} style={styles.starting} accessibilityRole="progressbar" accessibilityLiveRegion="polite">
-            <ActivityIndicator size="small" color={colors.blue} />
-            <View style={styles.startingText}>
-              <Text style={styles.startingTitle}>Starting your {label}</Text>
-              <View style={styles.line} />
-              <View style={[styles.line, styles.lineShort]} />
-            </View>
+          <View key={`${label}-${i}`} style={styles.starting} accessibilityLiveRegion="polite">
+            <Text style={styles.startingTitle}>Starting your {label}</Text>
+            <FlowBar label="Queued for launch" />
           </View>
         ))}
         {artifacts?.map((a) => (
@@ -66,8 +63,6 @@ const styles = StyleSheet.create({
   empty: { maxWidth: 300, color: colors.text2, fontSize: 16, lineHeight: 24, textAlign: "center" },
   label: { color: colors.text3, fontFamily: fonts.mono, fontSize: 12, letterSpacing: 1 },
   starting: {
-    flexDirection: "row",
-    alignItems: "center",
     gap: 12,
     padding: 14,
     borderRadius: radius.md,
@@ -75,8 +70,5 @@ const styles = StyleSheet.create({
     borderColor: "rgba(33, 124, 255, 0.35)",
     backgroundColor: colors.blue10,
   },
-  startingText: { flex: 1, gap: 7 },
   startingTitle: { color: colors.text, fontSize: 16, fontWeight: "600" },
-  line: { height: 6, borderRadius: 3, backgroundColor: colors.surface2 },
-  lineShort: { width: "60%" },
 });

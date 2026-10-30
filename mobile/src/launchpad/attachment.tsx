@@ -1,7 +1,8 @@
 import type { PostableArtifact } from "@notestack/shared/types";
 import { Image } from "expo-image";
 import { SymbolView, type AndroidSymbol, type SFSymbol } from "expo-symbols";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 
 import { colors, radius } from "@/ui/theme";
 import { pageStyles, PillButton } from "@/ui/widgets";

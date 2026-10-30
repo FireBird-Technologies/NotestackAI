@@ -1,5 +1,6 @@
 import { type FieldDef, keyLabel } from "@notestack/shared/layoutFields";
-import { Pressable, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 
 import { ColorField } from "@/create/video";
 import { Select } from "@/create/fields";

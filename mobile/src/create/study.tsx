@@ -3,7 +3,8 @@ import type { GenerateBody } from "@notestack/shared/endpoints";
 import type { ChatSummary, Notebook, QuizQuestionType } from "@notestack/shared/types";
 import { SymbolView } from "expo-symbols";
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 
 import { Check, createStyles, Foot, Label, Pills, Select, SourceFocusFields, type SourceSelection, TextArea } from "@/create/fields";
 import { colors, radius } from "@/ui/theme";

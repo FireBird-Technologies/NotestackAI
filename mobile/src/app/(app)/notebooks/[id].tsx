@@ -8,7 +8,7 @@ import { StyleSheet, View } from "react-native";
 import { isMaking } from "@/artifacts/artifact-card";
 import { prefetchFocus, prefetchSuggestions, useArtifactLimits } from "@/create/fields";
 import { ChatTab } from "@/notebook/chat";
-import { CreateTab } from "@/notebook/create-tab";
+import { CreateTab, type Kind } from "@/notebook/create-tab";
 import { LibraryTab } from "@/notebook/library-tab";
 import { SourcesTab } from "@/notebook/sources-tab";
 import { NotebookBar, type NotebookTab } from "@/notebook/tabs-bar";
@@ -24,12 +24,14 @@ export default function NotebookScreen() {
   const { id } = useLocalSearchParams<{ id: string; title?: string }>();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<NotebookTab>("chat");
-  // The chat on screen: undefined the newest, null a new one, else the one picked in Sources.
-  const [selected, setSelected] = useState<string | null | undefined>(undefined);
+  // The chat on screen: null a new one (where a notebook opens, as on the web), else the one picked in Sources.
+  const [selected, setSelected] = useState<string | null>(null);
   // Bumped when another chat is picked, so the Chat tab starts clean (an answer's own new chat id does not bump it).
   const [session, setSession] = useState(0);
   const [starting, setStarting] = useState<string[]>([]);
   const [makeError, setMakeError] = useState("");
+  // The Create tab's open settings sheet; a next-step suggestion under an answer opens one from the Chat tab.
+  const [making, setMaking] = useState<Kind | null>(null);
 
   const limits = useArtifactLimits();
   const notebook = useQuery({ queryKey: ["notebook", id], queryFn: () => notebooksApi.get(id) });
@@ -53,7 +55,7 @@ export default function NotebookScreen() {
   }, [id, startIds]);
 
   const header = <Stack.Screen options={{ header: () => <NotebookBar tab={tab} onTab={setTab} /> }} />;
-  const chatId = selected === undefined ? (chats.data?.[0]?.id ?? null) : selected;
+  const chatId = selected;
 
   if (notebook.isPending || chats.isPending) {
     return (
@@ -128,10 +130,27 @@ export default function NotebookScreen() {
         />
       </View>
       <View style={[styles.fill, tab !== "chat" && styles.hidden]}>
-        <ChatTab key={session} notebook={nb} chatId={chatId} onStarted={(started) => setSelected(started)} />
+        <ChatTab
+          key={session}
+          notebook={nb}
+          chatId={chatId}
+          onStarted={(started) => setSelected(started)}
+          onNextStep={(kind) => {
+            setTab("create");
+            setMaking(kind);
+          }}
+        />
       </View>
       <View style={[styles.fill, tab !== "create" && styles.hidden]}>
-        <CreateTab notebook={nb} chats={chats.data} chatId={chatId} onMake={(label, request) => void make(label, request)} onStarted={() => setTab("library")} />
+        <CreateTab
+          notebook={nb}
+          chats={chats.data}
+          chatId={chatId}
+          making={making}
+          onMaking={setMaking}
+          onMake={(label, request) => void make(label, request)}
+          onStarted={() => setTab("library")}
+        />
       </View>
       <View style={[styles.fill, tab !== "library" && styles.hidden]}>
         <LibraryTab

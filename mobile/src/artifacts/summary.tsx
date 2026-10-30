@@ -1,7 +1,8 @@
 import { citedLines, groupCitations } from "@notestack/shared/citations";
 import type { Artifact, Citation } from "@notestack/shared/types";
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 
 import { Markdown } from "@/ui/markdown";
 import { type Cited, ReaderSheet } from "@/artifacts/reader";

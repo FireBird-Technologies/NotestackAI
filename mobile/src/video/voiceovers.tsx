@@ -1,7 +1,8 @@
 import type { VideoScene } from "@notestack/shared/types";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 
 import { colors, fonts, radius } from "@/ui/theme";
 

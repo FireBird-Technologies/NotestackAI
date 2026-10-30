@@ -4,7 +4,8 @@ import * as Clipboard from "expo-clipboard";
 import { Image } from "expo-image";
 import * as WebBrowser from "expo-web-browser";
 import { type ReactNode, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 
 import { colors, fonts, radius } from "@/ui/theme";
 

@@ -4,7 +4,8 @@ import type { Job, Source } from "@notestack/shared/types";
 import { classifyUrl, looksLikeArticle } from "@notestack/shared/urlScrapability";
 import { File } from "expo-file-system";
 import { useState } from "react";
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 
 import { UploadIcon } from "@/ui/icons";
 import { colors, fonts, gutter } from "@/ui/theme";

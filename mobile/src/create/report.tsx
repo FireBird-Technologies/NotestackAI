@@ -4,7 +4,8 @@ import type { ReportTemplate } from "@notestack/shared/types";
 import { useQuery } from "@tanstack/react-query";
 import { SymbolView } from "expo-symbols";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 
 import { ChoiceCard, createStyles, Foot, Hint, Label, SourceFocusFields, type SourceSelection, suggestTemplates } from "@/create/fields";
 import type { DialogProps } from "@/create/study";

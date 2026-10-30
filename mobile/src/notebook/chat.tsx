@@ -2,23 +2,35 @@ import { ApiError } from "@notestack/shared/client";
 import { notebooksApi } from "@notestack/shared/endpoints";
 import { STARTERS } from "@notestack/shared/notebook";
 import { streamSSE } from "@notestack/shared/stream";
-import type { Citation, Notebook } from "@notestack/shared/types";
+import type { AnswerFeedback as Feedback, ChatArtifact, Citation, Notebook } from "@notestack/shared/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import { useEffect, useRef, useState } from "react";
-import { FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { type ReactNode, useEffect, useRef, useState } from "react";
+import { FlatList, Keyboard, KeyboardAvoidingView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { planQuery } from "@/account/plan";
+import { useBottomInset } from "@/lib/insets";
+import { AnswerFeedback, NextStepPill, nextSteps } from "@/notebook/answer-feedback";
 import { AnswerText } from "@/notebook/answer-text";
 import { RingSpinner } from "@/ui/spinner";
 import { colors, fonts, gutter, radius } from "@/ui/theme";
 import { Loading } from "@/ui";
 import { useUpgrade } from "@/account/upgrade";
 
-type Turn = { key: string; role: "user" | "assistant"; text: string; citations?: Citation[]; status?: string };
+type Turn = {
+  key: string;
+  role: "user" | "assistant";
+  text: string;
+  citations?: Citation[];
+  status?: string;
+  id?: string; // the saved message, once there is one: what a thumbs down is attached to
+  feedback?: Feedback | null;
+  topic?: string; // what the answer is about, named in the next-step suggestion under it
+};
 type ChatQuota = { used: number; limit: number; left: number };
 
 /** A streaming draft as shown: [n] markers (and a half-written "[12" at the end) are hidden until they are verified. */
@@ -59,11 +71,17 @@ const BAR_HEIGHT = 60;
  * The Chat tab (web: NotebookView's chat pane): the open chat's turns, or the telescope and starter questions, the Free
  * plan's chat limit, and the ask bar. `chatId` null is a new chat; the first answer names it through `onStarted`.
  */
-export function ChatTab({ notebook, chatId, onStarted }: { notebook: Notebook; chatId: string | null; onStarted: (id: string) => void }) {
+export function ChatTab({ notebook, chatId, onStarted, onNextStep }: {
+  notebook: Notebook;
+  chatId: string | null;
+  onStarted: (id: string) => void;
+  /** A next-step suggestion under the last answer was tapped: open that thing's settings. */
+  onNextStep: (kind: ChatArtifact) => void;
+}) {
   const queryClient = useQueryClient();
   const upgrade = useUpgrade();
   const insets = useSafeAreaInsets();
-  const list = useRef<FlatList<Turn>>(null);
+  const bottomInset = useBottomInset();
   const asked = useRef(0); // numbers this screen's questions, for their turns' keys
   const [question, setQuestion] = useState("");
   const [pending, setPending] = useState<Turn[]>([]);
@@ -71,6 +89,16 @@ export function ChatTab({ notebook, chatId, onStarted }: { notebook: Notebook; c
   // Free's chat questions: the latest answer's count, else the billing meter. null = unlimited.
   const [answerQuota, setAnswerQuota] = useState<ChatQuota | null | undefined>(undefined);
   const plan = useQuery(planQuery);
+  const [keyboardUp, setKeyboardUp] = useState(false);
+
+  useEffect(() => {
+    const show = Keyboard.addListener("keyboardDidShow", () => setKeyboardUp(true));
+    const hide = Keyboard.addListener("keyboardDidHide", () => setKeyboardUp(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   const messages = useQuery({
     queryKey: ["chat", chatId, "messages"],
@@ -156,48 +184,61 @@ export function ChatTab({ notebook, chatId, onStarted }: { notebook: Notebook; c
   if (chatId && messages.isPending && !pending.length) return <Loading />;
 
   const turns: Turn[] = [
-    ...(messages.data ?? []).map((m) => ({ key: m.id, role: m.role, text: m.text, citations: m.citations })),
+    ...(messages.data ?? []).map((m) => ({ key: m.id, id: m.id, role: m.role, text: m.text, citations: m.citations, feedback: m.feedback, topic: m.topic })),
     ...pending,
   ];
   const off = busy || !posts || outOfChat;
+  // The next-step suggestion goes under the last answer only, once it is saved and nothing is being asked.
+  const lastAnswer = [...turns].reverse().find((t) => t.role === "assistant");
+  const steps = !busy && posts > 0 && lastAnswer?.id ? nextSteps(lastAnswer.topic) : null;
+
+  const empty = (
+    <View style={styles.empty}>
+      <Image source={require("@/assets/images/create/telescope.png")} style={styles.telescope} tintColor={colors.blue} />
+      <Text style={styles.emptyText}>
+        Ask anything about {posts} {posts === 1 ? "post" : "posts"}. Answers cite the passage they came from.
+      </Text>
+      {posts > 0
+        ? STARTERS.map((s) => (
+            <Pressable
+              key={s}
+              onPress={() => void ask(s)}
+              disabled={off}
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.starter, pressed && styles.pressed]}>
+              <Text style={styles.starterText}>{s}</Text>
+            </Pressable>
+          ))
+        : null}
+    </View>
+  );
 
   return (
     <KeyboardAvoidingView
       style={styles.fill}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      // Padding on both: Android draws edge to edge, so the window no longer resizes for the keyboard by itself.
+      behavior="padding"
       keyboardVerticalOffset={insets.top + BAR_HEIGHT}>
       <View style={styles.card}>
-        <FlatList
-          ref={list}
-          data={turns}
-          keyExtractor={(t) => t.key}
-          contentContainerStyle={[styles.turns, turns.length === 0 && styles.turnsEmpty]}
-          keyboardDismissMode="interactive"
-          keyboardShouldPersistTaps="handled"
-          // While an answer streams in, follow it without animating, so the scroll never lags behind the text
-          onContentSizeChange={() => turns.length && list.current?.scrollToEnd({ animated: !busy })}
-          renderItem={({ item }) => <TurnView turn={item} />}
-          ListEmptyComponent={
-            <View style={styles.empty}>
-              <Image source={require("@/assets/images/create/telescope.png")} style={styles.telescope} tintColor={colors.blue} />
-              <Text style={styles.emptyText}>
-                Ask anything about {posts} {posts === 1 ? "post" : "posts"}. Answers cite the passage they came from.
-              </Text>
-              {posts > 0
-                ? STARTERS.map((s) => (
-                    <Pressable
-                      key={s}
-                      onPress={() => void ask(s)}
-                      disabled={off}
-                      accessibilityRole="button"
-                      style={({ pressed }) => [styles.starter, pressed && styles.pressed]}>
-                      <Text style={styles.starterText}>{s}</Text>
-                    </Pressable>
-                  ))
-                : null}
-            </View>
-          }
-        />
+        {turns.length === 0 ? (
+          <ScrollView contentContainerStyle={[styles.turns, styles.turnsEmpty]} keyboardDismissMode="interactive" keyboardShouldPersistTaps="handled">
+            {empty}
+          </ScrollView>
+        ) : (
+          // Inverted, newest first: it opens on the latest turn and stays pinned to it as an answer streams in or the
+          // keyboard rises.
+          <FlatList
+            inverted
+            data={[...turns].reverse()}
+            keyExtractor={(t) => t.key}
+            contentContainerStyle={styles.turns}
+            keyboardDismissMode="interactive"
+            keyboardShouldPersistTaps="handled"
+            renderItem={({ item }) => (
+              <TurnView turn={item} next={item === lastAnswer && steps ? <NextStepPill steps={steps} onPick={onNextStep} /> : undefined} />
+            )}
+          />
+        )}
         {quota && quota.limit > 0 ? (
           <View style={styles.limit}>
             <View
@@ -225,7 +266,7 @@ export function ChatTab({ notebook, chatId, onStarted }: { notebook: Notebook; c
             </Text>
           </View>
         ) : null}
-        <View style={[styles.ask, { marginBottom: Math.max(insets.bottom, 12) }]}>
+        <View style={[styles.ask, { marginBottom: keyboardUp ? 12 : Math.max(bottomInset, 12) }]}>
           <TextInput
             style={styles.input}
             value={question}
@@ -256,8 +297,11 @@ export function ChatTab({ notebook, chatId, onStarted }: { notebook: Notebook; c
   );
 }
 
-/** One turn: the question on the right in blue, the answer full width with its sources under it. */
-function TurnView({ turn }: { turn: Turn }) {
+/**
+ * One turn: the question on the right in blue; the answer full width with its citations, then copy and thumbs down
+ * (and `next`, the last answer's suggested next step) under it.
+ */
+function TurnView({ turn, next }: { turn: Turn; next?: ReactNode }) {
   const [open, setOpen] = useState(false);
   const text = useSmoothText(turn.text);
   if (turn.role === "user") {
@@ -281,22 +325,23 @@ function TurnView({ turn }: { turn: Turn }) {
       {text ? <AnswerText text={text} /> : null}
       {sources.length > 0 ? (
         <View style={styles.sources}>
-          <Pressable onPress={() => setOpen((o) => !o)} accessibilityRole="button" accessibilityState={{ expanded: open }} style={styles.sourcesHead}>
+          <Pressable onPress={() => setOpen((o) => !o)} accessibilityRole="button" accessibilityLabel={`Citations, ${sources.length}`} accessibilityState={{ expanded: open }} style={styles.sourcesHead}>
+            <Text style={styles.sourcesLabel}>Citations</Text>
+            <View style={styles.count}>
+              <Text style={styles.countText}>{sources.length}</Text>
+            </View>
             <SymbolView
-              name={open ? { ios: "chevron.down", android: "expand_more" } : { ios: "chevron.right", android: "chevron_right" }}
+              name={open ? { ios: "chevron.up", android: "expand_less" } : { ios: "chevron.down", android: "expand_more" }}
               size={12}
               tintColor={colors.text3}
             />
-            <Text style={styles.sourcesLabel}>
-              {sources.length} {sources.length === 1 ? "source" : "sources"}
-            </Text>
           </Pressable>
           {open
             ? sources.map((c) => (
                 <Pressable
                   key={`${c.marker}-${c.path}-${c.line_start}`}
                   disabled={!c.document_id}
-                  onPress={() => c.document_id && router.push({ pathname: "/sources/post/[id]", params: { id: c.document_id } })}
+                  onPress={() => c.document_id && router.push({ pathname: "/notebooks/post/[id]", params: { id: c.document_id } })}
                   style={({ pressed }) => [styles.source, pressed && styles.pressed]}>
                   <Text style={styles.sourceMarker}>[{c.marker}]</Text>
                   <View style={styles.sourceText}>
@@ -316,6 +361,7 @@ function TurnView({ turn }: { turn: Turn }) {
             : null}
         </View>
       ) : null}
+      {turn.id && turn.text && !turn.status ? <AnswerFeedback key={turn.id} messageId={turn.id} initial={turn.feedback} text={turn.text} extra={next} /> : null}
     </View>
   );
 }
@@ -360,9 +406,21 @@ const styles = StyleSheet.create({
   answer: { gap: 10 },
   statusRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   status: { color: colors.text3, fontFamily: fonts.mono, fontSize: 13 },
-  sources: { gap: 6 },
-  sourcesHead: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4 },
-  sourcesLabel: { color: colors.text3, fontFamily: fonts.mono, fontSize: 12.5 },
+  sources: { gap: 6, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.lineStrong },
+  sourcesHead: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 4 },
+  sourcesLabel: { color: colors.text2, fontSize: 15 },
+  count: {
+    minWidth: 22,
+    height: 22,
+    paddingHorizontal: 6,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: colors.blue,
+    backgroundColor: colors.blue10,
+  },
+  countText: { color: colors.text, fontSize: 12, fontWeight: "600" },
   source: {
     flexDirection: "row",
     gap: 10,

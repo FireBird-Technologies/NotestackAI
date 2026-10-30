@@ -12,7 +12,8 @@ import { Image } from "expo-image";
 import { SymbolView } from "expo-symbols";
 import * as WebBrowser from "expo-web-browser";
 import { type ReactNode, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 
 import { AudioOnlyDialog, SHARE_WHAT, ShareDialog } from "@/artifacts/card-dialogs";
 import { extOf, fileName, type FileSource, saveFile } from "@/lib/downloads";
@@ -292,8 +293,11 @@ export function ArtifactCard({ artifact: a, onRemoved, onChanged }: { artifact: 
         {canPost(a) ? <IconButton label="Launch" glyph={<RocketIcon size={15} />} onPress={launch} /> : null}
         {failed && !isVideo ? <IconButton label="Retry" glyph={<RetryIcon size={15} />} onPress={retry} /> : null}
         <IconButton label={`Delete ${a.title}`} glyph={<TrashIcon size={15} />} onPress={remove} />
-        <View style={styles.spacer} />
-        {RATEABLE.has(a.type) && (ready || (a.type === "video" && Boolean(a.content?.video_url))) ? <CardFeedback artifact={a} /> : null}
+        {RATEABLE.has(a.type) && (ready || (a.type === "video" && Boolean(a.content?.video_url))) ? (
+          <View style={styles.thumbs}>
+            <CardFeedback artifact={a} />
+          </View>
+        ) : null}
       </View>
 
       {a.type === "slide_deck" && ready ? (
@@ -673,7 +677,10 @@ const styles = StyleSheet.create({
   detail: { color: colors.text2, fontSize: 16, lineHeight: 22 },
   transcriptLink: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start" },
   transcriptText: { color: colors.blue, fontSize: 15, fontWeight: "600" },
-  actions: { flexDirection: "row", alignItems: "center", gap: 5 },
+  // Wraps on a narrow phone (or a large Android display size) instead of running out of the card; the thumbs stay
+  // at the right end, on the next line if they must.
+  actions: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6 },
+  thumbs: { flexDirection: "row", gap: 6, marginLeft: "auto" },
   iconButton: {
     width: 32,
     height: 32,

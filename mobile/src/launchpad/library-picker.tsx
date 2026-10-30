@@ -7,7 +7,8 @@ import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 
 import { AudioOnlyDialog } from "@/artifacts/card-dialogs";
 import { extOf, fileName, saveFile } from "@/lib/downloads";
@@ -363,7 +364,7 @@ const styles = StyleSheet.create({
   kindText: { color: colors.text2, fontSize: 15 },
   kindTextOn: { color: colors.white },
   kitLink: { flexDirection: "row", alignItems: "center", gap: 8, alignSelf: "flex-start", paddingVertical: 4 },
-  kitLinkText: { color: colors.text, fontSize: 17, fontWeight: "500" },
+  kitLinkText: { color: colors.text, fontSize: 17, fontWeight: "500", textDecorationLine: "underline", textDecorationColor: colors.white },
   drop: {
     alignItems: "center",
     gap: 6,

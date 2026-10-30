@@ -15,7 +15,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import { SymbolView } from "expo-symbols";
 import { type ComponentRef, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Modal, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 
 import { useVoicePlayer, voicePreviewUrl } from "@/lib/audio";
 import { createStyles, CustomTopic, FocusCards, Foot, Hint, Label, Select } from "@/create/fields";
@@ -511,8 +512,8 @@ export function ColorField({ label, value, onChange }: { label: string; value: s
         <Text style={styles.colorLabel}>{label}</Text>
       </Pressable>
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
-          <Pressable style={styles.palette} onPress={() => {}}>
+        <Pressable silent style={styles.backdrop} onPress={() => setOpen(false)}>
+          <Pressable silent style={styles.palette} onPress={() => {}}>
             <Text style={styles.paletteTitle}>{label} colour</Text>
             <View style={styles.swatches}>
               {SWATCHES.map((c) => (

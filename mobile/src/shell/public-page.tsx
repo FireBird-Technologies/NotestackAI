@@ -3,7 +3,8 @@ import * as WebBrowser from "expo-web-browser";
 import { getPost } from "@notestack/shared/content/blogPosts";
 import { getTool } from "@notestack/shared/content/tools";
 import { useState, type ReactNode } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type TextStyle } from "react-native";
+import { ScrollView, StyleSheet, Text, View, type StyleProp, type TextStyle } from "react-native";
+import { Pressable } from "@/ui/pressable";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PUBLIC_HEADER_HEIGHT, PublicHeader } from "@/shell/public-header";

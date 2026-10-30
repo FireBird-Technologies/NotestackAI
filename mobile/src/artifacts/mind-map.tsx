@@ -23,7 +23,8 @@ import {
 import type { MindNode } from "@notestack/shared/types";
 import * as SecureStore from "expo-secure-store";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Modal, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 import { GestureDetector, useExclusiveGestures, usePanGesture, usePinchGesture, useSimultaneousGestures, useTapGesture } from "react-native-gesture-handler";
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
@@ -283,12 +284,21 @@ export function MindMapExplorer({ map, onClose, feedback, embedded = false, onEx
 }) {
   const [shape, setShape] = useState<Shape>(() => savedShape(map.id));
   const seed = useMemo(() => hashSeed(map.id), [map.id]);
-  const { nodes: placed, edges, extent } = useMemo(() => (map.root ? place(map.root, shape, seed) : { nodes: [], edges: [], extent: MIN_ROOT }), [map.root, shape, seed]);
-  const byId = useMemo(() => new Map(placed.map((p) => [p.node.id, p])), [placed]);
   const [size, setSize] = useState({ w: 0, h: 0 });
+  // A screen taller than wide (a phone held upright) gets the figure stood on end, so it fills the height.
+  const tall = size.h > size.w * 1.15;
+  const { nodes: placed, edges, extent } = useMemo(
+    () => (map.root ? place(map.root, shape, seed, tall) : { nodes: [], edges: [], extent: MIN_ROOT }),
+    [map.root, shape, seed, tall],
+  );
+  const byId = useMemo(() => new Map(placed.map((p) => [p.node.id, p])), [placed]);
   const [focusId, setFocusId] = useState("root");
   const [cam, setCam] = useState<Cam>({ x: 0, y: 0, s: 0.1 });
   const [sheetOpen, setSheetOpen] = useState(false);
+  // The details sheet's height as drawn, shut and now: it grows by the system bar's height on Android, so the zoom
+  // buttons and the map's frame go by what it measures rather than a set number.
+  const [sheetShut, setSheetShut] = useState(96);
+  const [sheetNow, setSheetNow] = useState(96);
   const [cite, setCite] = useState<Cited | null>(null);
   // The live camera (the settled one is `cam`): its centre, and its scale as a log, so a zoom moves evenly.
   const lx = useSharedValue(0);
@@ -296,7 +306,7 @@ export function MindMapExplorer({ map, onClose, feedback, embedded = false, onEx
   const ls = useSharedValue(Math.log(0.1));
   const entered = useRef(false);
   // The map is framed above the details sheet's heading.
-  const boxH = Math.max(1, size.h - (embedded ? 0 : 120));
+  const boxH = Math.max(1, size.h - (embedded ? 0 : sheetShut + 24));
   const fit = useMemo(() => (placed.length && size.w ? frame(placed, placed[0], size.w, boxH).s : 1), [placed, size.w, boxH]);
   const minS = fit * 0.5;
 
@@ -344,6 +354,17 @@ export function MindMapExplorer({ map, onClose, feedback, embedded = false, onEx
     if (warp) flyTo(end, 1400);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [placed.length, size.w, size.h]);
+
+  // Turned (upright or back): every star moved, so frame the whole figure again.
+  const tallSeen = useRef(tall);
+  useEffect(() => {
+    if (tallSeen.current === tall) return;
+    tallSeen.current = tall;
+    if (!entered.current || !placed.length) return;
+    setFocusId("root");
+    flyTo(frame(placed, placed[0], size.w, boxH), 600);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tall]);
 
   // A new shape moves every star: fly back out to the whole figure, and remember the choice.
   const shapeSeen = useRef(shape);
@@ -499,7 +520,7 @@ export function MindMapExplorer({ map, onClose, feedback, embedded = false, onEx
             </View>
           </SafeAreaView>
 
-          <View style={[styles.controls, { bottom: (sheetOpen ? size.h * 0.5 : 96) + 12 }]}>
+          <View style={[styles.controls, { bottom: sheetNow + 12 }]}>
             <Pressable onPress={() => zoomBy(1.6)} accessibilityRole="button" accessibilityLabel="Zoom in" style={styles.btn}>
               <Text style={styles.btnText}>+</Text>
             </Pressable>
@@ -522,7 +543,14 @@ export function MindMapExplorer({ map, onClose, feedback, embedded = false, onEx
           </View>
 
           {/* The star in view: shut to its heading at first, so the map has the screen */}
-          <SafeAreaView edges={["bottom"]} style={[styles.sheet, sheetOpen && { height: size.h * 0.5 }]}>
+          <SafeAreaView
+            edges={["bottom"]}
+            style={[styles.sheet, sheetOpen && { height: size.h * 0.5 }]}
+            onLayout={(e) => {
+              const h = e.nativeEvent.layout.height;
+              setSheetNow(h);
+              if (!sheetOpen) setSheetShut(h);
+            }}>
             <Pressable onPress={() => setSheetOpen((o) => !o)} accessibilityRole="button" accessibilityState={{ expanded: sheetOpen }} style={styles.sheetHead}>
               <View style={styles.sheetHeadText}>
                 <Text style={[styles.eyebrow, { color: accentOf(focused) }]}>{LEVEL_NAME[focused.level].toUpperCase()}</Text>

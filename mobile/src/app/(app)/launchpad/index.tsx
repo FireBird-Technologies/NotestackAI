@@ -6,7 +6,8 @@ import { Image } from "expo-image";
 import { router } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useMemo, useState } from "react";
-import { Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { RefreshControl, StyleSheet, Text, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 
 import { Segments } from "@/sources/sources-nav";
 import { colors, fonts, radius } from "@/ui/theme";

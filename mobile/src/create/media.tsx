@@ -13,7 +13,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Image, type ImageSource } from "expo-image";
 import { SymbolView } from "expo-symbols";
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 
 import { ChoiceCard, createStyles, Foot, Hint, Label, Pills, Select, SourceFocusFields, type SourceSelection, TextArea } from "@/create/fields";
 import type { DialogProps } from "@/create/study";

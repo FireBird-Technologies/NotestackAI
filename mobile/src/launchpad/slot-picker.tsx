@@ -1,6 +1,7 @@
 import { pad, SLOTS, toWall, wallToDate, type Wall } from "@notestack/shared/schedule";
 import { useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Modal, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 
 import { colors, fonts, radius } from "@/ui/theme";
 
@@ -124,8 +125,8 @@ function Wheel({
         <Text style={styles.value}>{items[index]?.label}</Text>
       </Pressable>
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setOpen(false)} accessibilityLabel="Close">
-          <Pressable style={styles.menu} onPress={() => {}}>
+        <Pressable silent style={styles.backdrop} onPress={() => setOpen(false)} accessibilityLabel="Close">
+          <Pressable silent style={styles.menu} onPress={() => {}}>
             <Text style={styles.menuTitle}>{name}</Text>
             <ScrollView style={styles.list} contentOffset={{ x: 0, y: Math.max(0, index - 2) * ITEM }}>
               {items.map((it, i) => {

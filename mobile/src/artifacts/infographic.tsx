@@ -2,7 +2,8 @@ import { sourceSummary } from "@notestack/shared/create-options";
 import type { Artifact } from "@notestack/shared/types";
 import { StatusBar } from "expo-status-bar";
 import { type ReactNode, useMemo, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Modal, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
 

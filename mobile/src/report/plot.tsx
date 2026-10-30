@@ -1,7 +1,8 @@
 import { displayTitle, shortLabel, visibleValue } from "@notestack/shared/report";
 import type { ReportBlock } from "@notestack/shared/types";
 import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 import Svg, { Circle, G, Line, Path, Rect, Text as SvgText } from "react-native-svg";
 
 import { ChevronIcon } from "@/ui/icons";

@@ -6,21 +6,28 @@ import { router, Stack, ThemeProvider, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { Platform } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useEffect } from "react";
 
 import { AuthProvider, useAuth } from "@/account/auth";
+import { preloadClicks } from "@/lib/click-sound";
 import { mobilePlatform } from "@/lib/platform";
 import { navTheme } from "@/ui/theme";
 import { Body, Button, Centered } from "@/ui";
 
 configurePlatform(mobilePlatform);
+preloadClicks();
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 30_000 } } });
 
 export default function RootLayout() {
+  // Android draws edge to edge: stand the whole app above the system navigation bar, as a resized window would. iOS
+  // screens leave the home indicator's space themselves (see useBottomInset).
+  const bottom = useSafeAreaInsets().bottom;
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: "#000", paddingBottom: Platform.OS === "android" ? bottom : 0 }}>
       <QueryClientProvider client={queryClient}>
         <AuthProvider onSignOut={() => queryClient.clear()}>
           <ThemeProvider value={navTheme}>

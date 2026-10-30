@@ -1,12 +1,14 @@
 import { ApiError } from "@notestack/shared/client";
 import { artifactsApi, jobsApi, notebooksApi, topicsApi } from "@notestack/shared/endpoints";
-import { layout } from "@notestack/shared/topicLayout";
+import { layout, TALL } from "@notestack/shared/topicLayout";
 import type { Job, TopicDetail, TopicMap } from "@notestack/shared/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
-import { useEffect, useMemo, useState } from "react";
-import { ActionSheetIOS, Alert, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, useWindowDimensions, View } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ActionSheetIOS, Alert, Platform, ScrollView, StyleSheet, Switch, Text, useWindowDimensions, View } from "react-native";
+import { playClick } from "@/lib/click-sound";
+import { Pressable } from "@/ui/pressable";
 
 import { Segments, SourcesNav } from "@/sources/sources-nav";
 import { Starfield } from "@/shell/starfield";
@@ -27,6 +29,9 @@ export default function TopicMapScreen() {
   const [mode, setMode] = useState<ColorMode>("recency");
   const [briefing, setBriefing] = useState(false);
   const [selected, setSelected] = useState<TopicDetail | null>(null);
+  // The star lit on the map (as hovering does on the web): set at once on a tap, before its details arrive.
+  const [picked, setPicked] = useState<string | null>(null);
+  const pickedRef = useRef<string | null>(null);
   const [focusId, setFocusId] = useState<{ id: string; at: number } | null>(null);
   const [job, setJob] = useState<Job | null>(null);
   const [acting, setActing] = useState<string | null>(null);
@@ -34,7 +39,7 @@ export default function TopicMapScreen() {
 
   const map = useQuery<TopicMap>({ queryKey: ["topics"], queryFn: topicsApi.map });
   const data = map.data;
-  const placed = useMemo(() => (data?.nodes.length ? layout(data) : new Map()), [data]);
+  const placed = useMemo(() => (data?.nodes.length ? layout(data, TALL) : new Map()), [data]);
   const running = Boolean(job && (job.status === "queued" || job.status === "running"));
 
   // Follow a rebuild until it ends, then load the new map.
@@ -76,11 +81,26 @@ export default function TopicMapScreen() {
   /** Show a topic's details, and centre the map on it when picked from the briefing. */
   const open = async (id: string, center = false) => {
     if (center) setFocusId({ id, at: Date.now() });
+    pickedRef.current = id;
+    setPicked(id);
     try {
-      setSelected(await topicsApi.get(id));
+      const detail = await topicsApi.get(id);
+      if (pickedRef.current === id) setSelected(detail); // a later tap (or a tap that let go) wins
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Could not load that topic.");
+      if (pickedRef.current === id) setError(e instanceof ApiError ? e.message : "Could not load that topic.");
     }
+  };
+  /** Let go of the lit star and close its details. */
+  const unpick = () => {
+    pickedRef.current = null;
+    setPicked(null);
+    setSelected(null);
+  };
+  // A tap lights a star and opens it; tapping the lit star again lets it go.
+  const tapStar = (id: string) => {
+    playClick(); // a star is tapped with a gesture, not a button, so it clicks here (the web's open does too)
+    if (picked === id) unpick();
+    else void open(id);
   };
 
   const recentBucket = useMemo(() => {
@@ -154,10 +174,11 @@ export default function TopicMapScreen() {
             data={data}
             placed={placed}
             mode={mode}
-            selectedId={selected?.id ?? null}
+            selectedId={picked}
             focusId={focusId}
-            onSelect={(id) => void open(id)}
-            height={Math.min(620, Math.max(420, screenH * 0.62))}
+            onSelect={tapStar}
+            recentBucket={recentBucket}
+            maxHeight={Math.max(420, screenH * 0.72)}
           />
         ) : null}
 
@@ -167,7 +188,7 @@ export default function TopicMapScreen() {
             recentBucket={recentBucket}
             acting={acting}
             closeLabel={briefing ? "Back to briefing" : "Close"}
-            onClose={() => setSelected(null)}
+            onClose={unpick}
             onOpen={(id) => void open(id, true)}
             onAudio={async () => {
               setActing("audio");

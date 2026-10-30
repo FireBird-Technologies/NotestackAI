@@ -4,7 +4,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { Image, type ImageSource } from "expo-image";
 import { type ComponentType, useRef, useState } from "react";
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Platform, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 
 import { AudioDialog, InfographicDialog, SlidesDialog } from "@/create/media";
 import { ReportDialog } from "@/create/report";
@@ -16,7 +17,7 @@ import { colors, fonts, radius } from "@/ui/theme";
 import { trackNewVideo } from "@/video/pending";
 import { pageStyles, Sheet } from "@/ui/widgets";
 
-type Kind = Exclude<ArtifactType, "summary" | "quote_card" | "carousel" | "launch_kit" | "upload">;
+export type Kind = Exclude<ArtifactType, "summary" | "quote_card" | "carousel" | "launch_kit" | "upload">;
 
 /** The things a notebook can make, in the web's order, with their icons. */
 const MAKES: { type: Kind; label: string; icon: ImageSource }[] = [
@@ -62,6 +63,8 @@ export function CreateTab({
   chatId,
   onMake,
   onStarted,
+  making,
+  onMaking,
 }: {
   notebook: Notebook;
   chats: ChatSummary[];
@@ -69,9 +72,12 @@ export function CreateTab({
   onMake: (label: string, request: () => Promise<Artifact>) => void;
   /** A make was started: show it (the Library tab). */
   onStarted: () => void;
+  /** Whose settings are open; held by the notebook screen, so a chat's next-step suggestion can open one too. */
+  making: Kind | null;
+  onMaking: (kind: Kind | null) => void;
 }) {
   const queryClient = useQueryClient();
-  const [making, setMaking] = useState<Kind | null>(null);
+  const setMaking = onMaking;
   // The Library tab opens once the settings sheet has slid away. Switching tabs hides this one, and an iOS sheet hidden
   // while it is still closing never finishes closing: every later sheet would then refuse to open.
   // `then` is what shows it: the Library tab, or a new video's editor (as the web opens it).

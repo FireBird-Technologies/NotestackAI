@@ -48,12 +48,18 @@ export function MindMapExplorer({ artifact, onClose, warp = true, startAt = "roo
   const storeKey = `ns_mindmap_shape_${artifact.id}`;
   const [shape, setShape] = useState<Shape>(() => savedShape(artifact.id));
   const seed = useMemo(() => hashSeed(artifact.id), [artifact.id]);
-  const layoutData = useMemo(() => (root ? place(root, shape, seed) : { nodes: [], edges: [], extent: MIN_ROOT }), [root, shape, seed]);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ w: 1000, h: 700 });
+  // A box taller than wide (a phone held upright) gets the figure stood on end, so it fills the height; the reframe
+  // on resize below then flies to it.
+  const tall = size.h > size.w * 1.15;
+  const layoutData = useMemo(
+    () => (root ? place(root, shape, seed, tall) : { nodes: [], edges: [], extent: MIN_ROOT }),
+    [root, shape, seed, tall],
+  );
   const placed = layoutData.nodes;
   const edges = layoutData.edges;
   const byId = useMemo(() => new Map(placed.map((p) => [p.node.id, p])), [placed]);
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState({ w: 1000, h: 700 });
   const [focusId, setFocusId] = useState<string>(startAt);
   // The camera lives in a ref and is written straight to the DOM every frame. React only re-renders when the zoom
   // crosses a small step (labels and which rings show depend on it), so flying and panning stay smooth.

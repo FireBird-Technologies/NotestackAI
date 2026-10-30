@@ -4,7 +4,8 @@ import type { ChatSummary, Doc, Job, Notebook } from "@notestack/shared/types";
 import { useQuery } from "@tanstack/react-query";
 import { SymbolView } from "expo-symbols";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 
 import { AddSource } from "@/sources/add-source";
 import { colors, fonts, radius } from "@/ui/theme";

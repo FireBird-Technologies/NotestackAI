@@ -7,6 +7,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Alert, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 
+import { setSoundsEnabled, soundsEnabled } from "@/lib/click-sound";
 import { useAuth } from "@/account/auth";
 import { planQuery } from "@/account/plan";
 import { manageSubscriptions } from "@/account/purchases";
@@ -31,6 +32,7 @@ export default function Settings() {
 
   // Deleting: the button says so (and takes no second tap) until the account is gone or it failed.
   const [deleting, setDeleting] = useState(false);
+  const [sounds, setSounds] = useState(soundsEnabled);
   const confirmDelete = () =>
     confirm(
       "Delete account for good?",
@@ -144,6 +146,14 @@ export default function Settings() {
           value={!s.user.email_unsubscribed}
           onChange={(v) => save({ email_unsubscribed: !v }, "privacy")}
           label="Product updates by email. Reminders for scheduled posts always send."
+        />
+        <Toggle
+          value={sounds}
+          onChange={(v) => {
+            setSoundsEnabled(v);
+            setSounds(v);
+          }}
+          label="Soft click sounds on buttons (this phone)."
         />
       </Section>
 

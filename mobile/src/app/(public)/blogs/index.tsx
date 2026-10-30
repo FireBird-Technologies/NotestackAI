@@ -1,6 +1,7 @@
 import { blogPosts, missionNumber, missionOf } from "@notestack/shared/content/blogPosts";
 import { router } from "expo-router";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 
 import { Card, Eyebrow, Lede, PageTitle, PublicPage, publicText } from "@/shell/public-page";
 import { colors, fonts } from "@/ui/theme";

@@ -1,7 +1,8 @@
 import { citedLines } from "@notestack/shared/citations";
 import type { Artifact, FlashcardData } from "@notestack/shared/types";
 import { type ReactNode, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
+import { Pressable } from "@/ui/pressable";
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from "react-native-reanimated";
 
 import { FeedbackRow, StudyModal } from "@/artifacts/study-modal";
