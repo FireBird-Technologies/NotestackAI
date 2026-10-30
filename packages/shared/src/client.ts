@@ -1,0 +1,189 @@
+import { platform } from "./platform";
+
+export { configurePlatform, type Platform } from "./platform";
+
+export const ACCESS_KEY = "ns_access";
+const REFRESH = "ns_refresh";
+
+export class ApiError extends Error {
+  status: number;
+  code?: string;
+  detail?: Record<string, unknown>;
+  constructor(status: number, message: string, code?: string, detail?: Record<string, unknown>) {
+    super(message);
+    this.status = status;
+    this.code = code;
+    this.detail = detail;
+  }
+}
+
+/** Fired on every 402 plan_limit so the upgrade popup opens wherever the request came from. */
+export const PLAN_LIMIT_EVENT = "ns:plan-limit";
+
+/** Fired when a signed in request gets a 401 that a refresh cannot fix, so the app signs the user out. */
+export const SESSION_EXPIRED_EVENT = "ns:session-expired";
+
+export type PlanLimitDetail = {
+  message: string;
+  kind?: string;
+  plan?: string;
+  upgrade_to?: string | null;
+  /** How many are still left: set for an early warning (chat messages running low) rather than a refusal. */
+  left?: number;
+  used?: number;
+  limit?: number;
+};
+
+export const tokens = {
+  get access() {
+    return platform().storage.get(ACCESS_KEY);
+  },
+  get refresh() {
+    return platform().storage.get(REFRESH);
+  },
+  set(access: string, refresh?: string) {
+    platform().storage.set(ACCESS_KEY, access);
+    if (refresh) platform().storage.set(REFRESH, refresh);
+  },
+  clear() {
+    platform().storage.remove(ACCESS_KEY);
+    platform().storage.remove(REFRESH);
+  },
+};
+
+export async function parseError(res: Response): Promise<ApiError> {
+  let message = res.statusText || "Something went wrong";
+  let code: string | undefined;
+  let extra: Record<string, unknown> | undefined;
+  try {
+    const body = await res.json();
+    const detail = body.detail;
+    if (typeof detail === "string") message = detail;
+    else if (Array.isArray(detail) && detail.length) {
+      // A request the server's field checks refused (FastAPI's 422 list): say which field and why, not "Unprocessable Entity".
+      const first = detail[0] as { loc?: (string | number)[]; msg?: string };
+      const field = (first.loc ?? []).filter((p) => p !== "body").join(" ");
+      if (first.msg) message = field ? `${field}: ${first.msg}` : first.msg;
+    } else if (detail?.message) {
+      message = detail.message;
+      code = detail.code;
+      extra = detail;
+    }
+  } catch {
+    /* non JSON */
+  }
+  if (res.status === 402 && code === "plan_limit") {
+    platform().emit(PLAN_LIMIT_EVENT, { ...extra, message } satisfies PlanLimitDetail);
+  }
+  return new ApiError(res.status, message, code, extra);
+}
+
+async function tryRefresh(): Promise<boolean> {
+  const refresh = tokens.refresh;
+  if (!refresh) return false;
+  const res = await platform().fetch(`${platform().baseUrl}/api/auth/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refresh_token: refresh }),
+  });
+  if (!res.ok) return false;
+  tokens.set((await res.json()).access_token);
+  return true;
+}
+
+async function request(path: string, init: RequestInit, retry: boolean): Promise<Response> {
+  const headers = new Headers(init.headers);
+  // FormData sets its own multipart Content-Type (with the boundary); everything else is JSON.
+  if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+  const signedIn = Boolean(tokens.access);
+  if (signedIn) headers.set("Authorization", `Bearer ${tokens.access}`);
+  const res = await platform().fetch(`${platform().baseUrl}${path}`, { ...init, headers });
+  if (res.status === 401 && retry && (await tryRefresh())) return request(path, init, false);
+  // Auth endpoints answer 401 for a wrong password and similar; only a dead session elsewhere signs out.
+  if (res.status === 401 && signedIn && retry && !path.startsWith("/api/auth/")) {
+    platform().emit(SESSION_EXPIRED_EVENT);
+  }
+  if (!res.ok) throw await parseError(res);
+  return res;
+}
+
+export async function api<T>(path: string, init: RequestInit = {}, retry = true): Promise<T> {
+  return (await (await request(path, init, retry)).json()) as T;
+}
+
+/** A binary answer (audio, a download) as a Blob. */
+export async function apiBlob(path: string, init: RequestInit = {}): Promise<Blob> {
+  return (await request(path, init, true)).blob();
+}
+
+/** A binary answer as raw bytes: what a native app writes to a file (it has no object URLs to download a Blob by). */
+export async function apiBytes(path: string, init: RequestInit = {}): Promise<ArrayBuffer> {
+  return (await request(path, init, true)).arrayBuffer();
+}
+
+/** Multipart upload to our API (files plus form fields). */
+export const postForm = <T>(path: string, form: FormData) => api<T>(path, { method: "POST", body: form });
+
+export const post = <T>(path: string, body?: unknown) =>
+  api<T>(path, { method: "POST", body: body === undefined ? undefined : JSON.stringify(body) });
+
+export const patch = <T>(path: string, body: unknown) => api<T>(path, { method: "PATCH", body: JSON.stringify(body) });
+
+export const put = <T>(path: string, body: unknown) => api<T>(path, { method: "PUT", body: JSON.stringify(body) });
+
+export const del = <T = { ok: true }>(path: string) => api<T>(path, { method: "DELETE" });
+
+/** Query string from an object, skipping empty values. */
+export function qs(params: Record<string, string | number | boolean | null | undefined>): string {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== null && v !== "") q.set(k, String(v));
+  const out = q.toString();
+  return out ? `?${out}` : "";
+}
+
+/** Direct upload to storage (R2, or the API's local disk store) through a presigned PUT. */
+const TYPES_BY_EXT: Record<string, string> = {
+  md: "text/markdown",
+  markdown: "text/markdown",
+  txt: "text/plain",
+  html: "text/html",
+  vtt: "text/vtt",
+  htm: "text/html",
+  pdf: "application/pdf",
+  mp3: "audio/mpeg",
+  m4a: "audio/mp4",
+  wav: "audio/wav",
+  webm: "audio/webm",
+  ogg: "audio/ogg",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+  gif: "image/gif",
+  svg: "image/svg+xml",
+  mp4: "video/mp4",
+};
+
+/** A file to upload: a browser File, or anything else with a name, type and size that fetch can send. */
+export type UploadSource = Blob & { name: string };
+
+/** Browsers leave File.type empty for some extensions (.md on Windows) and use vendor names for others. */
+function contentType(file: UploadSource): string {
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+  const base = file.type.split(";")[0];
+  if (base === "audio/x-m4a") return "audio/mp4";
+  if (base === "audio/x-wav") return "audio/wav";
+  return base || TYPES_BY_EXT[ext] || "application/octet-stream";
+}
+
+export async function uploadFile(file: UploadSource): Promise<{ upload_id: string; key: string }> {
+  const start = await post<{ upload_id: string; upload_url: string; headers: Record<string, string> }>(
+    "/api/storage/uploads",
+    { filename: file.name, content_type: contentType(file), size_bytes: file.size },
+  );
+  const put = await platform().fetch(start.upload_url, { method: "PUT", headers: start.headers, body: file });
+  if (!put.ok) throw new ApiError(put.status, "Upload to storage failed");
+  return post(`/api/storage/uploads/${start.upload_id}/complete`);
+}

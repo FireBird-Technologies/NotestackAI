@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { afterSignUp, safeNext } from "../api/auth";
+import { afterSignUp, safeNext } from "@notestack/shared/auth";
 import { AuthForm } from "../components/auth/AuthForm";
 import Logo from "../components/Logo";
 import SkyCanvas from "../components/SkyCanvas";

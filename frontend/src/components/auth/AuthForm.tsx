@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { authApi, type LoginResult, type Providers } from "../../api/auth";
-import { ApiError } from "../../api/client";
+import { authApi, type LoginResult, type Providers } from "@notestack/shared/auth";
+import { ApiError } from "@notestack/shared/client";
 import { useAuth } from "../../hooks/useAuth";
 
 /** Mirrors validate_password on the backend. */
@@ -35,6 +35,28 @@ function GoogleRedirectButton({ next }: { next: string }) {
         <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z" />
       </svg>
       Continue with Google
+    </a>
+  );
+}
+
+/** Sign in with Apple is offered only on Apple devices: Macs, iPhones and iPads (iPadOS reports itself as a Mac). */
+function onAppleDevice() {
+  if (typeof navigator === "undefined") return false;
+  const nav = navigator as Navigator & { userAgentData?: { platform?: string } };
+  const platform = nav.userAgentData?.platform || nav.platform || "";
+  return /mac|iphone|ipad|ipod/i.test(platform) || /iPhone|iPad|iPod|Macintosh/.test(nav.userAgent);
+}
+
+function AppleRedirectButton({ next }: { next: string }) {
+  return (
+    <a className="btn apple-redirect-btn" href={authApi.appleStartUrl(next)}>
+      <svg width="16" height="18" viewBox="0 0 814 1000" aria-hidden="true">
+        <path
+          fill="currentColor"
+          d="M788 341c-6 4-108 62-108 190 0 148 130 200 134 202-1 3-21 72-69 142-43 62-88 124-156 124s-86-40-165-40c-77 0-104 41-167 41s-106-58-156-129C43 788 0 670 0 558c0-180 117-275 232-275 61 0 112 40 150 40 37 0 94-43 164-43 26 0 122 3 185 93zM555 158c29-34 49-82 49-129 0-7-1-13-2-19-47 2-103 31-136 70-26 30-51 78-51 126 0 7 1 15 2 17 3 1 8 1 13 1 42 0 95-28 125-66z"
+        />
+      </svg>
+      Continue with Apple
     </a>
   );
 }
@@ -199,6 +221,7 @@ export function AuthForm({ next, startMode = "signin", onSignedIn, compact = fal
               {providers?.google === "redirect" && <GoogleRedirectButton next={next} />}
               {providers?.google === "popup" && <GoogleButton onCredential={onGoogle} />}
               {!providers && <div className="google-btn" />}
+              {providers?.apple === "redirect" && onAppleDevice() && <AppleRedirectButton next={next} />}
               <div className="auth-divider mono">
                 <span>or with email</span>
               </div>

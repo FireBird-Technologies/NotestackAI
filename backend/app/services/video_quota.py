@@ -77,7 +77,7 @@ def sync_video_quota(db: Session, workspace: Workspace) -> Subscription:
     return sub
 
 
-def _renews_by_stripe(sub: Subscription) -> bool:
+def _renews_by_provider(sub: Subscription) -> bool:
     start, end = _aware(sub.videos_period_start), _aware(sub.current_period_end)
     return bool(sub.provider_subscription_id and sub.status in LIVE and start and end
                 and end <= start + RENEWAL_WINDOW)
@@ -92,7 +92,7 @@ def resets_at(sub: Subscription) -> datetime | None:
     start = _aware(sub.videos_period_start)
     if not start or not monthly(sub):
         return None
-    return _aware(sub.current_period_end) if _renews_by_stripe(sub) else add_month(start)
+    return _aware(sub.current_period_end) if _renews_by_provider(sub) else add_month(start)
 
 
 def video_usage(db: Session, workspace: Workspace) -> dict:
@@ -117,7 +117,7 @@ def reset_due_video_periods(session_factory: Callable[[], Session] = SessionLoca
     with session_factory() as db:
         for sub in db.scalars(select(Subscription)):
             start = _aware(sub.videos_period_start)
-            if start is None or _renews_by_stripe(sub) or not monthly(sub):
+            if start is None or _renews_by_provider(sub) or not monthly(sub):
                 continue
             if add_month(start) <= now:
                 reset_videos(db, sub.workspace_id, now)

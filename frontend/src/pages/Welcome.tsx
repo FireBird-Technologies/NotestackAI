@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
-import { docsApi, jobsApi, notebooksApi, settingsApi, sourcesApi, type NotebookLmImportResult } from "../api/endpoints";
-import type { Job, Source } from "../api/types";
+import { docsApi, jobsApi, notebooksApi, settingsApi, sourcesApi, type NotebookLmImportResult } from "@notestack/shared/endpoints";
+import type { Job, Source } from "@notestack/shared/types";
 import { NotebookLmTransferButton } from "../components/NotebookLmTransferButton";
 import { CloseIcon, UploadIcon } from "../components/icons/Icons";
 import Logo from "../components/Logo";
@@ -21,7 +21,7 @@ import {
   pendingNotebookLmTransfer,
   reportNotebookLmTransferStatus,
 } from "../lib/notebooklm";
-import { classifyUrl } from "../lib/urlScrapability";
+import { classifyUrl } from "@notestack/shared/urlScrapability";
 import { PENDING_SOURCE_KEY } from "./Landing";
 
 type Step = "connect" | "indexing" | "goal" | "ready";

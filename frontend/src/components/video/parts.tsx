@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { VideoTemplate } from "../../api/types";
+import type { VideoTemplate } from "@notestack/shared/types";
 
 /** Portrait (9:16) video format. */
 export function PhoneIcon() {

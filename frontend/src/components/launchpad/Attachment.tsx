@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { ApiError } from "../../api/client";
-import { artifactsApi, launchpadApi, videoEditApi, videosApi } from "../../api/endpoints";
-import type { PostableArtifact } from "../../api/types";
+import { ApiError } from "@notestack/shared/client";
+import { artifactsApi, launchpadApi, videoEditApi, videosApi } from "@notestack/shared/endpoints";
+import type { PostableArtifact } from "@notestack/shared/types";
 import { ArrowRightIcon, DownloadIcon, FilmIcon, HeadphonesIcon, InfographicIcon, ReportIcon, SlidesIcon, SparkleIcon, UploadIcon } from "../icons/Icons";
 import { errorMessage, formatDate, Loading, Modal, Pager } from "../ui";
 import { finished, jobPercent } from "../video/jobState";
@@ -534,12 +534,20 @@ export function LibraryPicker({ onPick, onPickKit, onCreateKit, fill = false, on
   // Another kind or search starts on the first page.
   useEffect(() => setPage(0), [kind, q]);
 
+  // A new search: the loader until its items arrive, never the last ones meanwhile. (A reload of the same list, after
+  // a reschedule or delete, keeps it on screen.)
+  const searched = useRef(q);
   useEffect(() => {
     const t = setTimeout(() => {
+      if (searched.current !== q) {
+        searched.current = q;
+        setItems(null);
+      }
+      setError(null);
       load().catch((e) => setError(errorMessage(e)));
     }, 200);
     return () => clearTimeout(t);
-  }, [load]);
+  }, [load, q]);
 
   // Another page or kind: the loader until its items arrive, never the last ones meanwhile.
   const goTo = (p: number) => {

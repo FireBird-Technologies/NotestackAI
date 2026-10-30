@@ -1,9 +1,9 @@
 import { useState } from "react";
-import type { Artifact } from "../api/types";
+import type { Artifact } from "@notestack/shared/types";
 import { ViewButton } from "./cardActions";
 import { ShareDialog } from "./ShareDialog";
 import { DownloadIcon, MarkdownIcon, PdfIcon, ShareIcon } from "./icons/Icons";
-import { artifactsApi } from "../api/endpoints";
+import { artifactsApi } from "@notestack/shared/endpoints";
 import { reportMarkdown } from "./ReportView";
 import { FloatingMenu, useMenu } from "./SlideDeck";
 import { errorMessage } from "./ui";

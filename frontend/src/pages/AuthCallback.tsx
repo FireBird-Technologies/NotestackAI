@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { afterSignUp, authApi, safeNext } from "../api/auth";
+import { afterSignUp, authApi, safeNext } from "@notestack/shared/auth";
 import { useAuth } from "../hooks/useAuth";
 import { landingFor } from "../lib/landing";
 

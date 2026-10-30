@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { memoryApi } from "../api/endpoints";
-import type { MemoryNote } from "../api/types";
+import { memoryApi } from "@notestack/shared/endpoints";
+import type { MemoryNote } from "@notestack/shared/types";
 import { ConfirmButton, errorMessage } from "./ui";
 
 const EXAMPLES = [

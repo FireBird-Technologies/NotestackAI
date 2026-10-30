@@ -9,150 +9,43 @@ import {
   type RefObject,
 } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { artifactsApi, notebooksApi, topicsApi } from "../api/endpoints";
+import { artifactsApi, notebooksApi, topicsApi } from "@notestack/shared/endpoints";
 import { SourcesNav } from "./Sources";
-import type { Job, TopicDetail, TopicMap as TopicMapData, TopicNode } from "../api/types";
+import { layout, placeLabels, seeded, TALL, textBox, W, WIDE, type Canvas, type LabelWant, type P, type Rect } from "@notestack/shared/topicLayout";
+import type { Job, TopicDetail, TopicMap as TopicMapData, TopicNode } from "@notestack/shared/types";
 import { useMedia } from "../components/PaneResizer";
 import { Reader } from "../components/Reader";
 import { EmptyState, errorMessage, formatDate, JobProgress, Loading, PageHeader, Tabs } from "../components/ui";
 import { useJob } from "../hooks/useJob";
 import { playClick } from "../lib/sound";
 
-// Virtual canvas. The layout runs in open space and is then fitted into this box with a margin.
-const W = 1200;
-const H = 780;
-const PAD = 90;
-
-type P = { id: string; x: number; y: number; vx: number; vy: number; r: number; galaxy: number };
 type View = { x: number; y: number; w: number; h: number };
 type ColorMode = "recency" | "momentum";
 
-const HOME: View = { x: 0, y: 0, w: W, h: H };
 const PINS_KEY = "notestack.topicmap.pins";
+const LABEL_FONT = 12.5;
+const GALAXY_FONT = 11;
 
 type Pins = Record<string, { x: number; y: number }>;
 
-function readPins(ids: Set<string>): Pins {
+/** Moved stars are kept per canvas: a phone's tall map has its own places. */
+const pinsKey = (c: Canvas) => (c === TALL ? `${PINS_KEY}.tall` : PINS_KEY);
+
+function readPins(ids: Set<string>, c: Canvas): Pins {
   try {
-    const all = JSON.parse(localStorage.getItem(PINS_KEY) || "{}") as Pins;
+    const all = JSON.parse(localStorage.getItem(pinsKey(c)) || "{}") as Pins;
     return Object.fromEntries(Object.entries(all).filter(([id]) => ids.has(id)));
   } catch {
     return {};
   }
 }
 
-function writePins(pins: Pins) {
+function writePins(pins: Pins, c: Canvas) {
   try {
-    localStorage.setItem(PINS_KEY, JSON.stringify(pins));
+    localStorage.setItem(pinsKey(c), JSON.stringify(pins));
   } catch {
     // Storage blocked: positions just last for this visit.
   }
-}
-const MIN_W = W / 8;
-const MAX_W = W * 1.6;
-
-// Deterministic pseudo random, so the map looks the same on every visit.
-function seeded(n: number) {
-  const x = Math.sin(n * 12.9898) * 43758.5453;
-  return x - Math.floor(x);
-}
-
-/** Force layout with generous spacing: strong repulsion (room for labels), long constellation lines,
- * a pull toward each galaxy's centre so related topics cluster, then fitted to the canvas. */
-function layout(data: TopicMapData): Map<string, P> {
-  const maxCount = Math.max(1, ...data.nodes.map((n) => n.post_count));
-  const nodes: P[] = data.nodes.map((n, i) => {
-    const a = i * 2.39996;
-    const rad = 80 + Math.sqrt(i) * 70;
-    return {
-      id: n.id,
-      x: Math.cos(a) * rad,
-      y: Math.sin(a) * rad,
-      vx: 0,
-      vy: 0,
-      r: 5 + 20 * Math.sqrt(n.post_count / maxCount),
-      galaxy: n.galaxy,
-    };
-  });
-  const byId = new Map(nodes.map((n) => [n.id, n]));
-  const maxW = Math.max(1, ...data.edges.map((e) => e.weight));
-  const STEPS = 420;
-  for (let step = 0; step < STEPS; step++) {
-    const cool = 1 - step / STEPS;
-    for (let i = 0; i < nodes.length; i++) {
-      for (let j = i + 1; j < nodes.length; j++) {
-        const a = nodes[i];
-        const b = nodes[j];
-        let dx = a.x - b.x;
-        let dy = a.y - b.y;
-        let d2 = dx * dx + dy * dy;
-        if (d2 < 0.01) {
-          dx = 0.1;
-          dy = 0.1;
-          d2 = 0.02;
-        }
-        const minD = a.r + b.r + 90; // room for two labels side by side
-        const k = a.galaxy === b.galaxy ? 7000 : 11000; // other galaxies push harder, leaving voids between them
-        const f = (k / d2) * (d2 < minD * minD ? 3 : 1);
-        const d = Math.sqrt(d2);
-        a.vx += (dx / d) * f;
-        a.vy += (dy / d) * f;
-        b.vx -= (dx / d) * f;
-        b.vy -= (dy / d) * f;
-      }
-    }
-    for (const e of data.edges) {
-      const a = byId.get(e.source);
-      const b = byId.get(e.target);
-      if (!a || !b) continue;
-      const dx = b.x - a.x;
-      const dy = b.y - a.y;
-      const d = Math.sqrt(dx * dx + dy * dy) || 1;
-      const target = 190 - 70 * (e.weight / maxW);
-      const f = (d - target) * 0.012 * (0.4 + e.weight / maxW);
-      a.vx += (dx / d) * f;
-      a.vy += (dy / d) * f;
-      b.vx -= (dx / d) * f;
-      b.vy -= (dy / d) * f;
-    }
-    // Galaxy cohesion.
-    const centers = new Map<number, { x: number; y: number; n: number }>();
-    for (const n of nodes) {
-      const c = centers.get(n.galaxy) ?? { x: 0, y: 0, n: 0 };
-      c.x += n.x;
-      c.y += n.y;
-      c.n += 1;
-      centers.set(n.galaxy, c);
-    }
-    for (const n of nodes) {
-      const c = centers.get(n.galaxy)!;
-      if (c.n > 1) {
-        n.vx += (c.x / c.n - n.x) * 0.006;
-        n.vy += (c.y / c.n - n.y) * 0.006;
-      }
-      n.vx += -n.x * 0.0012; // gentle gravity toward the origin
-      n.vy += -n.y * 0.0012;
-      n.x += Math.max(-16, Math.min(16, n.vx)) * cool;
-      n.y += Math.max(-16, Math.min(16, n.vy)) * cool;
-      n.vx *= 0.6;
-      n.vy *= 0.6;
-    }
-  }
-  // Fit into the canvas with a margin, keeping proportions; never enlarge a small map past 1.4x.
-  const xs = nodes.map((n) => n.x);
-  const ys = nodes.map((n) => n.y);
-  const minX = Math.min(...xs);
-  const maxX = Math.max(...xs);
-  const minY = Math.min(...ys);
-  const maxY = Math.max(...ys);
-  const s = Math.min((W - PAD * 2) / Math.max(1, maxX - minX), (H - PAD * 2) / Math.max(1, maxY - minY), 1.4);
-  const ox = (W - (maxX - minX) * s) / 2 - minX * s;
-  const oy = (H - (maxY - minY) * s) / 2 - minY * s;
-  for (const n of nodes) {
-    n.x = n.x * s + ox;
-    n.y = n.y * s + oy;
-  }
-  return byId;
 }
 
 /** The part of `v` a box of this shape (height / width) shows. A box taller than the map (a phone) keeps the view's
@@ -168,10 +61,16 @@ function fitView(v: View, aspect: number): View {
   return { x: v.x, y: v.y + (v.h - h) / 2, w: v.w, h };
 }
 
-/** Wheel to zoom around the cursor, drag to pan, buttons and keys for the rest. */
-function useZoomPan(svgRef: RefObject<SVGSVGElement>) {
-  const [view, setView] = useState<View>(HOME);
-  const [aspect, setAspect] = useState(H / W); // the box's height / width, which can differ from the map's on phones
+/** Wheel to zoom around the cursor, drag to pan, buttons and keys for the rest, on a canvas of size `c`. */
+function useZoomPan(svgRef: RefObject<SVGSVGElement>, c: Canvas) {
+  const home: View = { x: 0, y: 0, w: c.w, h: c.h };
+  const minW = c.w / 8;
+  const maxW = c.w * 1.6;
+  const [view, setView] = useState<View>(home);
+  const [aspect, setAspect] = useState(c.h / c.w); // the box's height / width, which can differ from the map's
+  const [boxW, setBoxW] = useState(0); // the box's width on screen, for keeping labels a set size there
+  // Another canvas (a phone turned, a window resized past phone width): start over on the whole map.
+  useEffect(() => setView({ x: 0, y: 0, w: c.w, h: c.h }), [c]);
   const drag = useRef<{ px: number; py: number; view: View; moved: boolean } | null>(null);
 
   // Watches the box's shape. The map renders after its data loads, so this re-attaches whenever the element changes.
@@ -184,7 +83,10 @@ function useZoomPan(svgRef: RefObject<SVGSVGElement>) {
     if (!el) return;
     const measure = () => {
       const r = el.getBoundingClientRect();
-      if (r.width > 0) setAspect(r.height / r.width);
+      if (r.width > 0) {
+        setAspect(r.height / r.width);
+        setBoxW(r.width);
+      }
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -203,14 +105,14 @@ function useZoomPan(svgRef: RefObject<SVGSVGElement>) {
   );
 
   const scaleView = (v: View, factor: number, fx: number, fy: number): View => {
-    const w = Math.max(MIN_W, Math.min(MAX_W, v.w * factor));
-    const h = (w / W) * H;
+    const w = Math.max(minW, Math.min(maxW, v.w * factor));
+    const h = (w / c.w) * c.h;
     return { x: fx - ((fx - v.x) * w) / v.w, y: fy - ((fy - v.y) * h) / v.h, w, h };
   };
 
-  const zoomAt = useCallback((factor: number, cx?: number, cy?: number) => {
+  const zoomAt = (factor: number, cx?: number, cy?: number) => {
     setView((v) => scaleView(v, factor, cx ?? v.x + v.w / 2, cy ?? v.y + v.h / 2));
-  }, []);
+  };
 
   useEffect(() => {
     const el = svgRef.current;
@@ -251,16 +153,17 @@ function useZoomPan(svgRef: RefObject<SVGSVGElement>) {
     zoomAt(0.6, p.x, p.y);
   };
   const pan = (dx: number, dy: number) => setView((v) => ({ ...v, x: v.x + dx * v.w, y: v.y + dy * v.h }));
-  const reset = () => setView(HOME);
-  const focusOn = (x: number, y: number, width = W / 2) =>
+  const reset = () => setView(home);
+  const focusOn = (x: number, y: number, width = c.w / 2) =>
     setView(() => {
-      const w = Math.max(MIN_W, Math.min(W, width));
-      const h = (w / W) * H;
+      const w = Math.max(minW, Math.min(c.w, width));
+      const h = (w / c.w) * c.h;
       return { x: x - w / 2, y: y - h / 2, w, h };
     });
 
   return {
     view,
+    boxW,
     shown: fitView(view, aspect),
     toSvg,
     zoomAt,
@@ -307,25 +210,25 @@ function momentumText(m: number) {
   return m >= 1 ? `${m.toFixed(1)}x its usual share lately` : `${Math.round(m * 100)}% of its usual share lately`;
 }
 
-/** Deep field: faint background stars plus survey rings, drawn once. */
-function DeepField() {
+/** Deep field: faint background stars plus survey rings, drawn once per canvas. */
+function DeepField({ c }: { c: Canvas }) {
   const stars = useMemo(
     () =>
       Array.from({ length: 260 }, (_, i) => ({
-        x: seeded(i + 1) * W,
-        y: seeded(i + 1000) * H,
+        x: seeded(i + 1) * c.w,
+        y: seeded(i + 1000) * c.h,
         r: 0.3 + seeded(i + 2000) * 1.1,
         o: 0.15 + seeded(i + 3000) * 0.5,
       })),
-    [],
+    [c],
   );
   return (
     <g className="deep-field" aria-hidden="true">
       {[140, 260, 390, 520].map((r) => (
-        <circle key={r} cx={W / 2} cy={H / 2} r={r} className="survey-ring" />
+        <circle key={r} cx={c.w / 2} cy={c.h / 2} r={r} className="survey-ring" />
       ))}
-      <line x1={W / 2} y1={0} x2={W / 2} y2={H} className="survey-axis" />
-      <line x1={0} y1={H / 2} x2={W} y2={H / 2} className="survey-axis" />
+      <line x1={c.w / 2} y1={0} x2={c.w / 2} y2={c.h} className="survey-axis" />
+      <line x1={0} y1={c.h / 2} x2={c.w} y2={c.h / 2} className="survey-axis" />
       {stars.map((s, i) => (
         <circle key={i} cx={s.x} cy={s.y} r={s.r} fill="#ffffff" opacity={s.o} />
       ))}
@@ -337,6 +240,9 @@ export default function TopicMap() {
   const [data, setData] = useState<TopicMapData | null>(null);
   const [job, setJob] = useState<Job | null>(null);
   const [selected, setSelected] = useState<TopicDetail | null>(null);
+  // The topic being opened: its panel shows the loader, never the last topic, until it arrives (a later click wins).
+  const [opening, setOpening] = useState<string | null>(null);
+  const openingRef = useRef<string | null>(null);
   const [briefing, setBriefing] = useState(false);
   const [menu, setMenu] = useState(false);
   const [acting, setActing] = useState<string | null>(null);
@@ -346,8 +252,10 @@ export default function TopicMap() {
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
   const svgRef = useRef<SVGSVGElement>(null);
-  const { view, shown, toSvg, zoomAt, pan, reset, focusOn, handlers } = useZoomPan(svgRef);
   const phone = useMedia("(max-width: 699px)");
+  // Phones get the map stood upright (TALL), whole and filling the screen; wider screens the wide one.
+  const canvas = phone ? TALL : WIDE;
+  const { view, boxW, shown, toSvg, zoomAt, pan, reset, focusOn, handlers } = useZoomPan(svgRef, canvas);
   const [pins, setPins] = useState<Pins>({});
   const [dragging, setDragging] = useState(false);
   const justDragged = useRef(false);
@@ -360,17 +268,18 @@ export default function TopicMap() {
     if (j.status === "done") load();
   });
 
-  const positions = useMemo(() => (data?.nodes.length ? layout(data) : new Map<string, P>()), [data]);
+  const positions = useMemo(() => (data?.nodes.length ? layout(data, canvas) : new Map<string, P>()), [data, canvas]);
   const placed = useMemo(() => {
     const m = new Map<string, P>();
     positions.forEach((p, id) => m.set(id, pins[id] ? { ...p, ...pins[id] } : p));
     return m;
   }, [positions, pins]);
   useEffect(() => {
-    if (data) setPins(readPins(new Set(data.nodes.map((n) => n.id))));
-  }, [data]);
+    if (data) setPins(readPins(new Set(data.nodes.map((n) => n.id)), canvas));
+  }, [data, canvas]);
   useEffect(() => {
-    if (!dragging && data) writePins(pins);
+    if (!dragging && data) writePins(pins, canvas);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- written for the canvas they were read for
   }, [pins, dragging, data]);
   const byId = useMemo(() => new Map((data?.nodes ?? []).map((n) => [n.id, n])), [data]);
   const neighbors = useMemo(() => {
@@ -412,8 +321,10 @@ export default function TopicMap() {
 
   const focus = hover ?? selected?.id ?? null;
   const running = live && (live.status === "queued" || live.status === "running");
-  const scale = view.w / W; // keeps labels and strokes a constant size on screen
-  const zoomedIn = scale < 0.75;
+  // Canvas units per screen pixel: keeps labels and strokes a constant size on screen. A phone measures its box; wider
+  // screens keep the map's own measure.
+  const scale = phone && boxW ? shown.w / boxW : view.w / W;
+  const zoomedIn = view.w / canvas.w < 0.75;
   const hovered = hover ? byId.get(hover) : null;
 
   const rebuild = async (full: boolean) => {
@@ -432,7 +343,31 @@ export default function TopicMap() {
       const p = placed.get(id);
       if (p) focusOn(p.x, p.y);
     }
-    setSelected(await topicsApi.get(id));
+    openingRef.current = id;
+    setSelected(null);
+    setOpening(id);
+    try {
+      const detail = await topicsApi.get(id);
+      if (openingRef.current === id) setSelected(detail);
+    } catch (e) {
+      if (openingRef.current === id) setError(errorMessage(e));
+    } finally {
+      if (openingRef.current === id) setOpening(null);
+    }
+  };
+
+  /** Phones: the first tap lights a star as hovering does (and opens it); a tap on the lit star lets it go. */
+  const tapStar = (id: string) => {
+    // Lit by a tap, or opened from the briefing: either way this tap lets it go.
+    if ((hover ?? selected?.id ?? opening) === id) {
+      setHover(null);
+      openingRef.current = null;
+      setOpening(null);
+      setSelected(null);
+      return;
+    }
+    setHover(id);
+    void open(id);
   };
 
   const startDrag = (e: ReactPointerEvent, ids: string[]) => {
@@ -448,7 +383,7 @@ export default function TopicMap() {
       const dx = p.x - origin.x;
       const dy = p.y - origin.y;
       if (!moved) {
-        if (Math.hypot(dx, dy) < 4 * (v.w / W)) return;
+        if (Math.hypot(dx, dy) < 4 * (v.w / canvas.w)) return;
         moved = true;
         setDragging(true);
       }
@@ -485,7 +420,7 @@ export default function TopicMap() {
 
   const flyToGalaxy = (gid: number) => {
     const n = nebulae.find((g) => g.id === gid);
-    if (n) focusOn(n.cx, n.cy, Math.max(n.rx * 2.6, (n.ry * 2.6 * W) / H));
+    if (n) focusOn(n.cx, n.cy, Math.max(n.rx * 2.6, (n.ry * 2.6 * canvas.w) / canvas.h));
   };
 
   const starColor = (n: TopicNode) => {
@@ -497,6 +432,30 @@ export default function TopicMap() {
     mode === "momentum" ? (n.status === "rising" ? 1 : n.status === "dormant" ? 0.25 : 0.55) : 0.25 + 0.75 * n.recency;
 
   const galaxyCount = data ? data.galaxies.filter((g) => g.size > 1).length : 0;
+
+  // Phones: only the names that have room at this zoom, so none overlap or run off the map (placeLabels). The galaxy
+  // names go first; stars' names keep clear of them. Most important first: the focused star, its neighbours, the
+  // brightest, then the rest by posts.
+  const galaxyText = (name: string) => `${name.toUpperCase()} GALAXY`;
+  const spots = useMemo(() => {
+    if (!phone || !data) return null;
+    const blocked: Rect[] = nebulae.map((g) => {
+      const t = textBox(galaxyText(g.name), GALAXY_FONT, 3);
+      return { x: g.cx - (t.w * scale) / 2, y: g.cy - g.ry + 6 * scale, w: t.w * scale, h: t.h * scale };
+    });
+    const activeId = selected?.id;
+    const rank = (id: string, posts: number) =>
+      id === activeId || id === focus ? 4e6 : focus && neighbors.get(focus)?.has(id) ? 3e6 + posts : brightest.has(id) ? 2e6 + posts : posts;
+    const wants: LabelWant[] = data.nodes
+      .filter((n) => placed.has(n.id))
+      .sort((a, b) => rank(b.id, b.post_count) - rank(a.id, a.post_count))
+      .map((n) => {
+        const p = placed.get(n.id)!;
+        const count = zoomedIn || n.id === activeId;
+        return { id: n.id, x: p.x, y: p.y, r: p.r, text: count ? `${n.name}  ${n.post_count}` : n.name, must: n.id === activeId || n.id === focus };
+      });
+    return placeLabels(wants, { unit: scale, font: LABEL_FONT, canvas, blocked });
+  }, [phone, data, nebulae, placed, scale, selected, focus, neighbors, brightest, zoomedIn, canvas]);
 
   return (
     <div className="page-wrap">
@@ -556,7 +515,7 @@ export default function TopicMap() {
         />
       )}
       {data && data.nodes.length > 0 && (
-        <div className={`map-layout${selected || briefing ? "" : " map-full"}`}>
+        <div className={`map-layout${selected || opening || briefing ? "" : " map-full"}`}>
           <div className="card map-canvas">
             <div className="map-controls">
               <button className="icon-btn" onClick={() => zoomAt(0.75)} aria-label="Zoom in" title="Zoom in">
@@ -586,7 +545,9 @@ export default function TopicMap() {
                 </>
               ) : (
                 <span className="muted">
-                  {data.nodes.length} stars · {galaxyCount} galaxies · scroll to zoom, drag space to pan, drag stars or galaxies to move them
+                  {phone
+                    ? `${data.nodes.length} stars · ${galaxyCount} galaxies · pinch to zoom, drag to pan, tap a star to light it up, tap it again to let go`
+                    : `${data.nodes.length} stars · ${galaxyCount} galaxies · scroll to zoom, drag space to pan, drag stars or galaxies to move them`}
                 </span>
               )}
             </div>
@@ -622,7 +583,7 @@ export default function TopicMap() {
               aria-label="Topic constellation. Plus and minus zoom, arrow keys pan, 0 resets."
               tabIndex={0}
               className={`map-svg${dragging ? " dragging" : ""}`}
-              style={phone ? undefined : { aspectRatio: `${W} / ${H}` }} // phones: a taller box from CSS
+              style={{ aspectRatio: `${canvas.w} / ${canvas.h}` }}
               {...handlers}
               onKeyDown={(e) => {
                 const step = 0.12;
@@ -661,7 +622,7 @@ export default function TopicMap() {
                 </linearGradient>
               </defs>
 
-              <DeepField />
+              <DeepField c={canvas} />
 
               {nebulae.map((g) => (
                 <g
@@ -678,7 +639,7 @@ export default function TopicMap() {
                     y={g.cy - g.ry + 18 * scale}
                     textAnchor="middle"
                     className="galaxy-label"
-                    style={{ fontSize: 11 * scale, letterSpacing: 3 * scale }}
+                    style={{ fontSize: GALAXY_FONT * scale, letterSpacing: 3 * scale }}
                   >
                     {g.name.toUpperCase()} GALAXY
                   </text>
@@ -713,19 +674,26 @@ export default function TopicMap() {
                 const active = selected?.id === n.id;
                 const color = starColor(n);
                 const glow = starGlow(n);
-                const showLabel =
-                  zoomedIn || brightest.has(n.id) || n.post_count >= 3 || focus === n.id || active || Boolean(focus && neighbors.get(focus)?.has(n.id));
+                const spot = spots?.get(n.id);
+                const showLabel = spots
+                  ? Boolean(spot)
+                  : zoomedIn || brightest.has(n.id) || n.post_count >= 3 || focus === n.id || active || Boolean(focus && neighbors.get(focus)?.has(n.id));
                 const tail = mode === "momentum" && n.status === "rising" ? Math.min(90, 30 + n.momentum * 18) : 0;
                 return (
                   <g
                     key={n.id}
                     className="map-node"
                     opacity={dim ? 0.2 : 1}
-                    onMouseEnter={() => setHover(n.id)}
-                    onMouseLeave={() => setHover(null)}
+                    // Phones have no hover: a tap lights the star (and opens it) and a second tap lets it go.
+                    onMouseEnter={phone ? undefined : () => setHover(n.id)}
+                    onMouseLeave={phone ? undefined : () => setHover(null)}
                     onPointerDown={(e) => startDrag(e, [n.id])}
-                    onClick={() => !wasDrag() && open(n.id)}
-                    onDoubleClick={() => open(n.id, true)}
+                    onClick={() => {
+                      if (wasDrag()) return;
+                      if (phone) tapStar(n.id);
+                      else void open(n.id);
+                    }}
+                    onDoubleClick={phone ? undefined : () => open(n.id, true)}
                     tabIndex={0}
                     role="button"
                     aria-label={`${n.name}, ${n.post_count} posts, ${STATUS_LABEL[n.status]}`}
@@ -761,11 +729,12 @@ export default function TopicMap() {
                     {active && <circle cx={p.x} cy={p.y} r={p.r + 12} className="orbit-ring" strokeWidth={1.2 * scale} />}
                     {showLabel && (
                       <text
-                        x={p.x}
-                        y={p.y + p.r + 18 * scale}
-                        textAnchor="middle"
+                        x={spot ? spot.ax : p.x}
+                        // A spot gives the top; the baseline sits about a font's height under it.
+                        y={spot ? spot.top + LABEL_FONT * scale : p.y + p.r + 18 * scale}
+                        textAnchor={spot ? (spot.align === "left" ? "start" : spot.align === "right" ? "end" : "middle") : "middle"}
                         className="map-label"
-                        style={{ fontSize: 12.5 * scale, strokeWidth: 4 * scale }}
+                        style={{ fontSize: LABEL_FONT * scale, strokeWidth: 4 * scale }}
                       >
                         {n.name}
                         {(zoomedIn || active) && (
@@ -781,9 +750,10 @@ export default function TopicMap() {
             </svg>
           </div>
 
-          {(selected || briefing) && (
+          {(selected || opening || briefing) && (
           <aside className="card map-side">
-            {!selected && (
+            {opening && !selected && <Loading label="Opening the topic" />}
+            {!selected && !opening && (
               <>
                 <p className="eyebrow">Mission briefing</p>
                 <p className="muted small">
@@ -870,7 +840,11 @@ export default function TopicMap() {
 
             {selected && (
               <>
-                <button className="link-btn mono muted small" onClick={() => setSelected(null)}>
+                <button className="link-btn mono muted small" onClick={() => {
+                  openingRef.current = null;
+                  setSelected(null);
+                  setHover(null); // a phone's tapped star goes dark with it
+                }}>
                   {briefing ? "Back to briefing" : "Close"}
                 </button>
                 <div className="row between">

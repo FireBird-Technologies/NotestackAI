@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { videoTemplatesApi } from "../api/endpoints";
-import type { ExtractedTheme, TemplateGeneration, TemplatesResponse } from "../api/types";
+import { videoTemplatesApi } from "@notestack/shared/endpoints";
+import type { ExtractedTheme, TemplateGeneration, TemplatesResponse } from "@notestack/shared/types";
 import { ConfirmButton, EmptyState, errorMessage, formatDate, Loading, PageHeader, StatusPill, Tabs } from "../components/ui";
 import { usePoll } from "../hooks/usePoll";
 

@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
-import { blogPosts } from "../content/blogPosts";
-import { tools } from "../content/tools";
+import { blogPosts } from "@notestack/shared/content/blogPosts";
+import { tools } from "@notestack/shared/content/tools";
 import { MenuIcon } from "./icons/Icons";
 import Logo from "./Logo";
 import MenuSheet from "./MenuSheet";

@@ -1695,6 +1695,7 @@ select.input option {
      their longest entry, the status fits its pill, and the post text gets the rest */
   grid-template-columns: auto auto auto minmax(0, 1fr) auto;
   column-gap: 20px;
+  row-gap: 10px; /* each post is a card of its own */
 }
 
 .agenda-row > .mono,
@@ -1721,10 +1722,10 @@ select.input option {
   column-gap: 20px;
   align-items: center;
   width: 100%;
-  padding: 10px 4px;
-  border: none;
-  border-bottom: 1px solid var(--line);
-  background: transparent;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
   color: var(--text);
   font: inherit;
   text-align: left;
@@ -1732,6 +1733,7 @@ select.input option {
 }
 
 .agenda-row:hover {
+  border-color: var(--blue-20);
   background: var(--blue-05);
 }
 
@@ -1769,14 +1771,53 @@ select.input option {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  /* A phone's card, as in the app: when and the status on top, the platform and its kind, then the post */
   .agenda > li > .agenda-row,
   .agenda-row {
-    grid-template-columns: 1fr auto;
-    gap: 8px 12px;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "date date end"
+      "platform kind clicks"
+      "text text text";
+    gap: 8px 10px;
+    padding: 12px 14px;
+  }
+
+  .agenda-row > .mono {
+    grid-area: date;
+  }
+
+  .agenda-platform {
+    grid-area: platform;
+  }
+
+  .agenda-row .agenda-kind {
+    grid-area: kind;
+    justify-self: start;
+    min-width: 0;
+    padding: 1px 9px;
+    font-size: 0.72rem;
   }
 
   .agenda-text {
-    grid-column: 1 / -1;
+    grid-area: text;
+    color: var(--text-2);
+  }
+
+  /* The status beside the date, the click count (when there is one) beside the platform */
+  .agenda-end {
+    display: contents;
+  }
+
+  .agenda-end > :last-child {
+    grid-area: end;
+    justify-self: end;
+  }
+
+  .agenda-end > .mono:not(:last-child) {
+    grid-area: clicks;
+    justify-self: end;
+    white-space: nowrap;
   }
 }
 
@@ -3384,21 +3425,48 @@ select.input option {
   }
 }
 
-/* Phones: a tall map instead of a thin strip. The view crops the sides to fit (fitView in TopicMap.tsx). */
+/* Phones: the map stood upright (TALL in topicLayout), shown whole. The readout sits above it and the zoom buttons
+   and legend below, so nothing covers a star or a name. */
 @media (max-width: 699px) {
+  .map-canvas {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "hud hud"
+      "svg svg"
+      "controls legend";
+    gap: 10px;
+    padding: 10px;
+  }
+
   .map-canvas .map-svg {
+    grid-area: svg;
     width: 100%;
-    height: min(72vh, 620px);
+    height: auto;
     max-height: none;
-    aspect-ratio: auto;
+    border-radius: 12px;
   }
 
   .map-hud {
-    left: 10px;
-    top: 10px;
-    max-width: calc(100% - 76px);
+    grid-area: hud;
+    position: static;
+    max-width: none;
     padding: 8px 10px;
-    font-size: 0.66rem;
+    font-size: 0.7rem;
+  }
+
+  .map-controls {
+    grid-area: controls;
+    position: static;
+    justify-self: start;
+    grid-auto-flow: column;
+  }
+
+  .map-legend {
+    grid-area: legend;
+    position: static;
+    align-self: center;
+    max-width: none;
   }
 }
 
@@ -4370,6 +4438,15 @@ select.input,
   transform: translateX(3px);
 }
 
+/* Phones: no hover to reveal it as a link, so it is always underlined */
+@media (max-width: 699px) {
+  .lp-kit-link {
+    text-decoration: underline;
+    text-decoration-color: var(--white);
+    text-underline-offset: 4px;
+  }
+}
+
 /* Where a post came from (its Launch Kit): a quiet line, apart from the attachment */
 .lp-from-kit {
   margin: 0;
@@ -4964,7 +5041,15 @@ select.input,
 }
 
 /* Under the calendar: how many posts are coming up, and how to change one */
+/* The calendar card with its hint under it, outside the card */
+.lp-cal-col {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
 .lp-cal-foot {
+  padding: 0 6px;
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -4978,6 +5063,21 @@ select.input,
 
 .lp-cal-hint {
   color: var(--text-2);
+}
+
+/* Desktop: only the short hint under the calendar; phones keep the upcoming count and the full hint */
+@media (min-width: 721px) {
+  .lp-cal-count,
+  .lp-cal-hint-full,
+  .lp-cal-foot--agenda {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .lp-cal-hint-short {
+    display: none;
+  }
 }
 
 /* Editing a scheduled post: When and Account side by side, their labels and boxes on one line (the time zone note
@@ -5143,6 +5243,37 @@ details.map-legend[open] summary {
 }
 
 /* Sources: one smart input, files drop anywhere */
+/* Add a source: Link and Upload side by side, NotebookLM across the row below, square-cornered. */
+.tabs.source-methods {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  width: 100%;
+  border-radius: 18px;
+}
+
+.tabs.source-methods .tab {
+  justify-content: center;
+  padding: 5px 14px;
+  border-radius: 14px;
+  text-align: center;
+}
+
+.tabs.source-methods .tab:nth-child(3) {
+  grid-column: 1 / -1;
+}
+
+/* Desktop: all three on one row */
+@media (min-width: 721px) {
+  .tabs.source-methods {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .tabs.source-methods .tab:nth-child(3) {
+    grid-column: auto;
+  }
+}
+
 .source-method-panel {
   display: grid;
   gap: 12px;
@@ -5221,10 +5352,14 @@ details.map-legend[open] summary {
   font-size: 0.82rem;
 }
 
-.add-source--compact .add-smart .input,
-.add-source--compact .add-smart .btn.btn-small {
+.add-source--compact .add-smart .input {
   height: 44px;
   min-height: 44px;
+}
+
+.add-source--compact .add-smart .btn.btn-small {
+  height: 38px;
+  min-height: 38px;
 }
 
 .source-upload-drop {
@@ -5308,6 +5443,11 @@ details.map-legend[open] summary {
     height: 44px;
     min-height: 44px;
     flex-basis: auto;
+  }
+
+  .add-source--compact .add-smart .btn.btn-small {
+    height: 38px;
+    min-height: 38px;
   }
 }
 
@@ -8765,6 +8905,17 @@ a.rp-src-main:hover .rp-src-out {
   margin: 0;
 }
 
+/* Its close button, in the top right corner; the text keeps clear of it */
+.ig-info {
+  padding-right: 48px;
+}
+
+.ig-info-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
 .ig-viewer .ig-frame {
   border-radius: 6px;
 }
@@ -8846,7 +8997,8 @@ a.rp-src-main:hover .rp-src-out {
 
 .pub-signin .input,
 .pub-signin .btn,
-.pub-signin .google-redirect-btn {
+.pub-signin .google-redirect-btn,
+.pub-signin .apple-redirect-btn {
   height: 38px;
   min-height: 38px;
   font-size: 0.875rem;
@@ -12161,6 +12313,22 @@ body.nbv-resizing iframe {
   .nbv-studio-create .nbv-make {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  /* The Library tab with nothing in it: its note in the middle of the card */
+  .nbv-side.nbv-tab-panel.is-active:has(.nbv-library-empty) {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .nbv-side.nbv-tab-panel.is-active:has(.nbv-library-empty) > .stack {
+    flex: 1;
+  }
+
+  .nbv-library-empty {
+    margin: auto;
+    max-width: 30ch;
+    text-align: center;
+  }
 }
 
 /* Phones: the app's top bar (logo, the tab menu, the account button) stays above a notebook too, and the chat takes
@@ -13250,10 +13418,16 @@ body.nbv-resizing iframe {
     display: none;
   }
 
+  /* The kind picker spans the screen, lined up with the search box under it */
   .lib-filter-phone {
     display: block;
-    justify-self: start;
-    min-width: 200px;
+    justify-self: stretch;
+    width: 100%;
+  }
+
+  .lib-filter-phone .dropdown,
+  .lib-filter-phone .dropdown-btn {
+    width: 100%;
   }
 
   .lib-filter-phone .dropdown-btn {
@@ -13358,9 +13532,6 @@ body.nbv-resizing iframe {
     display: none;
   }
 
-  .lp-cal-foot {
-    margin-top: 10px;
-  }
 }
 
 /* Add voices: each way to make a voice is its own pill (no shared track, so wrapping on a phone stays tidy) */

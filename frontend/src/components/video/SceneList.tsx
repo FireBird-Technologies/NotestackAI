@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { videoEditApi } from "../../api/endpoints";
-import type { VideoScene } from "../../api/types";
+import { videoEditApi } from "@notestack/shared/endpoints";
+import type { VideoScene } from "@notestack/shared/types";
 import { ChevronIcon, FilmIcon, SparkleIcon, TrashIcon, UploadIcon } from "../icons/Icons";
 import { errorMessage, Modal } from "../ui";
 import type { PanelProps } from "./EditorPanels";

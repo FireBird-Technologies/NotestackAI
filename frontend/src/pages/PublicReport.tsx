@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
-import { publicApi } from "../api/endpoints";
-import type { Artifact, FlashcardData, PublicArtifactData, PublicAudioData, PublicMindMapData, PublicReportData, PublicSlidesData, PublicVideoData } from "../api/types";
+import { publicApi } from "@notestack/shared/endpoints";
+import type { Artifact, FlashcardData, PublicArtifactData, PublicAudioData, PublicMindMapData, PublicReportData, PublicSlidesData, PublicVideoData } from "@notestack/shared/types";
 import { MindMapExplorer } from "../components/MindMap";
 import { Transcript } from "../components/ArtifactCard";
 import { AudioPlayer } from "../components/AudioOverview";

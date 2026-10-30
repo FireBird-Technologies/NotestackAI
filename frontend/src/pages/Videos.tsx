@@ -1,46 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { videosApi } from "../api/endpoints";
-import type { VideoListItem, VideoQuota } from "../api/types";
+import { videosApi } from "@notestack/shared/endpoints";
+import type { VideoListItem, VideoQuota } from "@notestack/shared/types";
 import { TrashIcon } from "../components/icons/Icons";
 import { EmptyState, errorMessage, formatDate, Loading, Modal, Pager } from "../components/ui";
 import { useUpgrade } from "../hooks/useUpgrade";
 import { PostButton } from "../components/launchpad/PostButton";
+import { BUSY, shortUrl, statusOf } from "@notestack/shared/video";
 
 const PAGE = 10;
-
-const JOB_LABELS: Record<string, string> = {
-  regenerating: "Changing template",
-  voice_regenerating: "Changing voice",
-  language_regenerating: "Translating",
-  script_regenerating: "Refreshing script",
-};
-
-/** blog2video's status, as a label and a dot color. */
-function statusOf(v: VideoListItem): { label: string; tone: "done" | "ready" | "busy" | "review" | "failed" } {
-  const raw = v.b2v_status ?? "";
-  if (v.status === "failed" || raw === "failed" || raw === "error") return { label: "Failed", tone: "failed" };
-  // An edit job on a finished video (blog2video's status, kept on the artifact too). Before "Complete": a video
-  // rendered earlier keeps its MP4 link while it is being changed.
-  const job = JOB_LABELS[raw] ?? JOB_LABELS[v.status];
-  if (job) return { label: job, tone: "busy" };
-  if (raw === "done" || v.url) return { label: "Complete", tone: "done" };
-  if (raw === "generated" || v.status === "ready") return { label: "Generated", tone: "ready" };
-  if (raw === "awaiting_script_review") return { label: "Review script", tone: "review" };
-  if (raw === "awaiting_stock_footage_review") return { label: "Review footage", tone: "review" };
-  if (raw === "rendering" || v.status === "rendering") return { label: "Rendering", tone: "busy" };
-  return { label: "Generating", tone: "busy" };
-}
-
-function shortUrl(url: string | null | undefined): string | null {
-  if (!url) return null;
-  const s = url.replace(/^https?:\/\//, "");
-  return s.length > 34 ? `${s.slice(0, 34)}…` : s;
-}
-
-/** Video statuses that can still change on blog2video's side. */
-const BUSY = new Set(["generating", "pending", "rendering", "regenerating", "voice_regenerating", "language_regenerating",
-  "script_regenerating"]);
 
 export default function Videos() {
   const [videos, setVideos] = useState<VideoListItem[] | null>(null);
@@ -77,6 +45,7 @@ export default function Videos() {
   // Another page: the loader until its videos arrive, never the last page's meanwhile.
   const goTo = (p: number) => {
     setVideos(null);
+    setError(null); // the loader again, even after a page that failed
     setPage(p);
   };
 

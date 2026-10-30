@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
-import { notebooksApi } from "../api/endpoints";
-import type { AnswerFeedback as Feedback } from "../api/types";
+import { notebooksApi } from "@notestack/shared/endpoints";
+import type { AnswerFeedback as Feedback } from "@notestack/shared/types";
 
 const REASONS: { id: string; label: string }[] = [
   { id: "forgot_chat", label: "Forgot something we said" },

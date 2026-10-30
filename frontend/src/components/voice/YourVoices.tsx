@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { videoVoicesApi, voiceApi } from "../../api/endpoints";
-import type { VideoLibraryVoice, VideoSavedVoice, VideoVoicesResponse } from "../../api/types";
+import { videoVoicesApi, voiceApi } from "@notestack/shared/endpoints";
+import type { VideoLibraryVoice, VideoSavedVoice, VideoVoicesResponse } from "@notestack/shared/types";
 import { errorMessage, Loading } from "../ui";
 import { PlayButton, useAudio } from "../video/parts";
 

@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { videoEditApi, type StockClip } from "../../api/endpoints";
-import type { VideoAsset, VideoScene } from "../../api/types";
+import { videoEditApi, type StockClip } from "@notestack/shared/endpoints";
+import type { VideoAsset, VideoScene } from "@notestack/shared/types";
 import { CheckIcon } from "../icons/Icons";
 import { errorMessage, Loading, Modal } from "../ui";
 import type { PanelProps } from "./EditorPanels";

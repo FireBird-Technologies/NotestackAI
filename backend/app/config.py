@@ -41,6 +41,19 @@ class Settings(BaseSettings):
     # (server side code exchange). The redirect URI must be listed on the OAuth client.
     google_client_secret: str = ""
     google_redirect_uri: str = ""  # defaults to {api_url}/api/auth/google/callback
+    # The mobile apps' own Google OAuth clients (comma separated). Their native sign in usually mints tokens for the web
+    # client above; these are accepted too, in case a token names the app's own client.
+    google_ios_client_ids: str = ""
+    google_android_client_ids: str = ""
+
+    # Sign in with Apple. The iOS app signs in natively (its bundle ids are the token audience); the web uses the
+    # Services ID and the redirect flow. The .p8 key signs the client secret for the code exchange and revocation.
+    apple_team_id: str = ""
+    apple_key_id: str = ""
+    apple_private_key: str = ""  # the .p8 file's contents (newlines may be written as \n)
+    apple_bundle_ids: str = ""  # e.g. ai.notestack.app
+    apple_services_id: str = ""  # e.g. ai.notestack.web
+    apple_redirect_uri: str = ""  # defaults to {api_url}/api/auth/apple/callback
 
     # Email (Resend)
     email_provider: str = "console"  # resend | console
@@ -200,6 +213,13 @@ class Settings(BaseSettings):
     stripe_price_writer_annual: str = ""
     stripe_price_studio_monthly: str = ""
     stripe_price_studio_annual: str = ""
+    # In-app purchases (App Store, Google Play) through RevenueCat: its secret REST key, and the Authorization header
+    # value its webhook sends (set both in the RevenueCat dashboard).
+    revenuecat_secret_key: str = ""
+    revenuecat_webhook_auth: str = ""
+    # Local testing only: accept purchases from RevenueCat's Test Store (no Apple or Google account needed). Never on
+    # in production, where a Test Store purchase would be a free plan.
+    revenuecat_allow_test_store: bool = False
 
     @field_validator("run_worker_in_api", mode="before")
     @classmethod
@@ -238,6 +258,25 @@ class Settings(BaseSettings):
     @property
     def google_redirect_url(self) -> str:
         return self.google_redirect_uri or f"{self.api_url.rstrip('/')}/api/auth/google/callback"
+
+    @property
+    def google_audiences(self) -> list[str]:
+        """Every Google OAuth client whose ID tokens sign people in: the web client and the apps' own."""
+        ids = [self.google_client_id, *self.google_ios_client_ids.split(","), *self.google_android_client_ids.split(",")]
+        return [i.strip() for i in ids if i.strip()]
+
+    @property
+    def apple_bundle_id_list(self) -> list[str]:
+        return [i.strip() for i in self.apple_bundle_ids.split(",") if i.strip()]
+
+    @property
+    def apple_redirect_url(self) -> str:
+        return self.apple_redirect_uri or f"{self.api_url.rstrip('/')}/api/auth/apple/callback"
+
+    @property
+    def apple_configured(self) -> bool:
+        """The key is needed for both flows: the code exchange (and so revoking on account deletion) signs with it."""
+        return bool(self.apple_team_id and self.apple_key_id and self.apple_private_key)
 
     @property
     def cors_origin_list(self) -> list[str]:

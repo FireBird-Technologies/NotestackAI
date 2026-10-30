@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
-import { ApiError } from "../api/client";
-import type { Job } from "../api/types";
+import { ApiError } from "@notestack/shared/client";
+import type { Job } from "@notestack/shared/types";
 import { ChevronLeftIcon, ChevronRightIcon } from "./icons/Icons";
 
 export function errorMessage(e: unknown, fallback = "Something went wrong. Try again."): string {

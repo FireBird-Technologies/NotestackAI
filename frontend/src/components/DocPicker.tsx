@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { docsApi } from "../api/endpoints";
-import type { Doc } from "../api/types";
+import { docsApi } from "@notestack/shared/endpoints";
+import type { Doc } from "@notestack/shared/types";
 import { formatDate, Loading } from "./ui";
 
 /** Searchable checklist of posts. `single` turns it into a radio list. Pass `docs` to pick from those (a notebook's

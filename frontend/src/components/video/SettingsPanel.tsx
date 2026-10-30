@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
-import { videoEditApi, videoVoicesApi } from "../../api/endpoints";
-import type { VideoCatalog, VideoSavedVoice, VideoTemplate } from "../../api/types";
+import { videoEditApi, videoVoicesApi } from "@notestack/shared/endpoints";
+import type { VideoCatalog, VideoSavedVoice, VideoTemplate } from "@notestack/shared/types";
 import { Dropdown } from "../Dropdown";
 import { CheckIcon } from "../icons/Icons";
 import { Modal } from "../ui";

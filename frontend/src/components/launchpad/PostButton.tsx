@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { Artifact } from "../../api/types";
+import type { Artifact } from "@notestack/shared/types";
 import { ScheduleModal } from "../ScheduleModal";
 import { Modal } from "../ui";
 import { RocketIcon } from "../icons/Icons";

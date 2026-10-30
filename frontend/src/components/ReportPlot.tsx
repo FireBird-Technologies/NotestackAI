@@ -1,27 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import type { ReportBlock } from "../api/types";
+import type { ReportBlock } from "@notestack/shared/types";
+
+import { displayTitle, shortLabel, visibleValue } from "@notestack/shared/report";
 
 type PlotBlock = Extract<ReportBlock, { type: "plot" }>;
 
-const GENERIC_TITLES = new Set(["source data", "data", "plot", "chart"]);
 
-function displayTitle(block: PlotBlock) {
-  const title = block.title?.trim();
-  if (title && !GENERIC_TITLES.has(title.toLowerCase())) return title;
-  const category = block.x_label?.trim();
-  return category && category.toLowerCase() !== "category" ? `${category} comparison` : "Data comparison";
-}
 
-function shortLabel(label: string, limit = 36) {
-  const clean = label.replace(/\s+/g, " ").trim();
-  return clean.length > limit ? `${clean.slice(0, limit - 1).trimEnd()}…` : clean;
-}
 
-function visibleValue(point: PlotBlock["points"][number]) {
-  const supplied = point.display_value?.trim();
-  if (supplied && supplied.length <= 18) return supplied;
-  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 2, notation: Math.abs(point.value) >= 10_000 ? "compact" : "standard" }).format(point.value);
-}
 
 /** A deliberately small Plotly adapter: the server supplies normalized points, never Plotly code or arbitrary JSON. */
 export function ReportPlot({ block }: { block: PlotBlock }) {

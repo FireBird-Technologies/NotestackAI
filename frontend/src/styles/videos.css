@@ -647,8 +647,10 @@
 
 /* Generation progress: the steps as circles wired together in one row, each label under its circle */
 .vw-progress {
+  --step-gap: 14px; /* room between the steps, so their labels never run into each other */
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  column-gap: var(--step-gap);
   width: 100%;
   max-width: 760px; /* closer together, centred in the card */
   margin: 8px auto 0;
@@ -665,12 +667,12 @@
   text-align: center;
 }
 
-/* The wire from the previous circle to this one */
+/* The wire from the previous circle to this one (across the gap between the steps too) */
 .vw-progress li + li::before {
   content: "";
   position: absolute;
   top: 18px;
-  left: calc(-50% + 26px);
+  left: calc(-50% - var(--step-gap) + 26px);
   right: calc(50% + 26px);
   height: 2px;
   border-radius: 1px;

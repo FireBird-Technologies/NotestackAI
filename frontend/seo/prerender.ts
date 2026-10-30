@@ -1,10 +1,10 @@
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Plugin, ResolvedConfig } from "vite";
-import { blogPosts } from "../src/content/blogPosts";
-import { NOTEBOOKLM_ALT_FAQ, NOTEBOOKLM_ALT_META, NOTEBOOKLM_ALT_ROWS } from "../src/content/notebooklmAlternative";
-import type { BlogPost } from "../src/content/seoTypes";
-import { tools, toolsHub, type ToolDef } from "../src/content/tools";
+import { blogPosts } from "../../packages/shared/src/content/blogPosts";
+import { NOTEBOOKLM_ALT_FAQ, NOTEBOOKLM_ALT_META, NOTEBOOKLM_ALT_ROWS } from "../../packages/shared/src/content/notebooklmAlternative";
+import type { BlogPost } from "../../packages/shared/src/content/seoTypes";
+import { tools, toolsHub, type ToolDef } from "../../packages/shared/src/content/tools";
 
 /**
  * Writes a static HTML file per public route after `vite build`, so crawlers that do not run JavaScript still get the

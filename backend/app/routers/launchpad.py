@@ -599,19 +599,36 @@ STATE_TTL = timedelta(minutes=10)
 LINK_FIELDS = ("access_token", "refresh_token", "expires_in", "scope", "external_id", "handle", "avatar_url")
 
 
-def _launchpad_redirect(**params: str) -> RedirectResponse:
-    return RedirectResponse(f"{settings.frontend_url.rstrip('/')}/app/launchpad?{urlencode(params)}", 302)
+# The mobile app's own address for the end of the flow. Fixed here, never taken from the request, so the ticket
+# can only go to the web app or to the Notestack app.
+APP_LAUNCHPAD_URL = "notestack://launchpad"
+
+
+def _launchpad_redirect(client: str = "web", **params: str) -> RedirectResponse:
+    base = APP_LAUNCHPAD_URL if client == "app" else f"{settings.frontend_url.rstrip('/')}/app/launchpad"
+    return RedirectResponse(f"{base}?{urlencode(params)}", 302)
+
+
+def _client_of(state: str | None) -> str:
+    """Who started the flow (the web app or the mobile app), read from its signed state; the web when unknown."""
+    if not state:
+        return "web"
+    try:
+        return "app" if decode_token_full(state, expected_type="social_state").get("client") == "app" else "web"
+    except HTTPException:
+        return "web"
 
 
 @router.post("/social/{platform}/start")
-def oauth_start(platform: Literal["x", "linkedin"], ctx: Ctx = Depends(get_ctx)):
-    """Returns the provider URL. The SPA calls this with its bearer token, then navigates to `url`."""
+def oauth_start(platform: Literal["x", "linkedin"], client: Literal["web", "app"] = "web", ctx: Ctx = Depends(get_ctx)):
+    """Returns the provider URL. The SPA (or the mobile app, `client=app`) calls this with its bearer token, then opens
+    `url`; the callback sends the ticket back to whichever started it."""
     mod = x if platform == "x" else linkedin
     if not mod.configured():
         raise HTTPException(503, {"code": "not_configured",
                                   "message": f"Set {platform.upper()}_CLIENT_ID and {platform.upper()}_CLIENT_SECRET."})
     nonce = secrets.token_urlsafe(24)
-    payload = {"typ": "social_state", "nonce": nonce, "ws": str(ctx.workspace.id), "platform": platform}
+    payload = {"typ": "social_state", "nonce": nonce, "ws": str(ctx.workspace.id), "platform": platform, "client": client}
     if platform == "x":
         verifier, challenge = x.pkce_pair()
         payload["verifier"] = verifier
@@ -627,21 +644,22 @@ def oauth_start(platform: Literal["x", "linkedin"], ctx: Ctx = Depends(get_ctx))
 def oauth_callback(platform: Literal["x", "linkedin"], code: str | None = None, state: str | None = None,
                    error: str | None = None, db: Session = Depends(get_db)):
     label = PLATFORM_LABELS[platform]
+    client = _client_of(state)
     if error or not code or not state:
-        return _launchpad_redirect(error=f"{label} connection was cancelled.")
+        return _launchpad_redirect(client, error=f"{label} connection was cancelled.")
     try:
         saved = decode_token_full(state, expected_type="social_state")
     except HTTPException:
-        return _launchpad_redirect(error=f"{label} connection expired. Try again.")
+        return _launchpad_redirect(client, error=f"{label} connection expired. Try again.")
     if saved.get("platform") != platform:
-        return _launchpad_redirect(error=f"{label} connection failed.")
+        return _launchpad_redirect(client, error=f"{label} connection failed.")
     try:
         if platform == "x":
             info = x.exchange_code(code, saved["verifier"])
         else:
             info = linkedin.exchange_code(code)
     except Exception:
-        return _launchpad_redirect(error=f"{label} connection failed. Try again.")
+        return _launchpad_redirect(client, error=f"{label} connection failed. Try again.")
     # Do not link here: this request carries no session. The signed in SPA finishes the link, and only
     # for the workspace that started it, so a forwarded authorize link cannot attach someone's account
     # to another workspace.
@@ -650,7 +668,7 @@ def oauth_callback(platform: Literal["x", "linkedin"], code: str | None = None, 
     info = {k: info[k] for k in LINK_FIELDS if info.get(k) is not None}
     ticket = encode_signed({"typ": "social_link", "ws": saved["ws"], "platform": platform,
                             "data": encrypt(json.dumps(info))}, timedelta(minutes=10))
-    return _launchpad_redirect(link=ticket, platform=platform)
+    return _launchpad_redirect(client, link=ticket, platform=platform)
 
 
 class LinkIn(BaseModel):
