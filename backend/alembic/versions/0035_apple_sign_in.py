@@ -1,7 +1,7 @@
 """users.apple_id and users.apple_refresh_token: Sign in with Apple
 
-Revision ID: 0033_apple_sign_in
-Revises: 0032_plan_chat_messages
+Revision ID: 0035_apple_sign_in
+Revises: 0034_starter_annual_price
 Create Date: 2026-10-28
 """
 
@@ -9,8 +9,8 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision = "0033_apple_sign_in"
-down_revision = "0032_plan_chat_messages"
+revision = "0035_apple_sign_in"
+down_revision = "0034_starter_annual_price"
 branch_labels = None
 depends_on = None
 
