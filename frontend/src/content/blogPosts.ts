@@ -7,6 +7,105 @@ import type { BlogPost } from "./seoTypes";
 export const blogPosts: BlogPost[] = [
   ...missionPosts,
   {
+    slug: "built-on-the-blog2video-api",
+    title: "How Notestack Makes Video: Built on the Blog2Video API",
+    description:
+      "Notestack turns a writer's archive into video by calling the Blog2Video API. Here is how it works, what we had to build around it, and what to copy if you embed video in your own product.",
+    category: "Engineering",
+    publishedAt: "2026-11-01",
+    readTime: "6 min read",
+    heroEyebrow: "Under the hood",
+    heroTitle: "Notestack does not render video. Blog2Video does.",
+    heroDescription:
+      "A real example of embedding the Blog2Video API in a product, including the part most tutorials skip: who is allowed to see which video.",
+    primaryKeyword: "video api for platforms",
+    keywordVariant: "embed video generation in your product",
+    relatedPaths: ["/blogs/grounded-ai-for-writers", "/blogs/ai-tools-for-writers"],
+    sections: [
+      {
+        heading: "Disclosure first",
+        paragraphs: [
+          "Notestack and Blog2Video are both made by Firebird Technologies. This is a first party case study, not an independent review. What it offers is something an outside write up cannot: the actual shape of the integration, including the parts that took work.",
+        ],
+      },
+      {
+        heading: "What Notestack asks Blog2Video to do",
+        paragraphs: [
+          "Notestack is built around a writer's own archive. When a writer wants a video from a post, Notestack hands the text or the link to the [Blog2Video API](https://blog2video.app/api-docs), which writes the scenes, records the voiceover and renders the MP4. Notestack never runs a render pipeline of its own for video.",
+          "The call is the same one any developer would make: create a video with POST /api/v1/videos, poll its status, trigger the render, and read video_url when it is done. Everything else in the product, the template picker, the voice picker, the scene editing screens, sits on top of that.",
+        ],
+        bullets: [
+          "Create: a link, pasted text or a post from the workspace becomes a Blog2Video video.",
+          "Templates: Notestack lists the built-in catalog and the writer's custom templates, with poster images served from blog2video.app.",
+          "Voices and editing: voice choice and scene edits are forwarded to the Blog2Video API.",
+          "Status: Notestack polls until generation and rendering report done.",
+        ],
+      },
+      {
+        heading: "Why we did not build our own renderer",
+        paragraphs: [
+          "Notestack is a research and writing product. Rendering narrated video with templates, voices and layouts is a large separate problem, and Blog2Video already solves it. Embedding it let us keep working on what makes Notestack different.",
+          "The same logic applies to newsletter tools, Ghost and WordPress hosts, finance media companies and anyone building agents. If video is a feature of your product and not the product, call an API.",
+        ],
+      },
+      {
+        heading: "The part tutorials skip: one key, many users",
+        paragraphs: [
+          "Notestack calls the API with its own account key, so every video is charged to that account. Blog2Video's ownership checks stop at the account, which means anything made with that key can be listed and edited with it.",
+          "So Notestack checks ownership itself. Every route that takes a Blog2Video id first confirms the video, template or style belongs to the current workspace and returns a 404 otherwise, so another workspace's ids are never confirmed. Every create or edit body has its template, style and voice references checked before it is forwarded.",
+          "Notestack also tags videos with an external_user_id, which the API lets you filter on when listing, so a workspace's library is one filtered call.",
+        ],
+        callout: "If you embed the API in a multi-user product, ownership checks are your job. Build them first.",
+      },
+      {
+        heading: "Operational lessons worth copying",
+        paragraphs: [
+          "A few small decisions have paid for themselves.",
+        ],
+        bullets: [
+          "Keep the key on the backend only. It never reaches the browser or the logs.",
+          "Set explicit timeouts. Notestack waits up to 30 seconds on every call, because Blog2Video can take well over 10 seconds on creates, uploads and full project reads.",
+          "Alert on capacity. Notestack logs an error when the Blog2Video account has fewer than 20 videos left, so a plan limit never surprises a user.",
+          "Poll, do not wait. The API has no webhooks today, so status polling is part of the design.",
+        ],
+      },
+      {
+        heading: "Build the same thing",
+        paragraphs: [
+          "If you are adding video to a platform, start from the API overview and the finance and data publisher guide. The limits are stated plainly there: no avatars, no prompt generated footage, no webhooks.",
+          "Read [the Blog2Video API overview](https://blog2video.app/blogs/video-generation-api-for-publishers), then open the [API documentation](https://blog2video.app/api-docs) and make your first request.",
+        ],
+      },
+    ],
+    faq: [
+      {
+        question: "Is Notestack really built on the Blog2Video API?",
+        answer:
+          "Notestack's video features call the public Blog2Video API with Notestack's own account key. Notestack does not render video itself. Both products are made by Firebird Technologies.",
+      },
+      {
+        question: "How does Notestack stop one user seeing another user's videos?",
+        answer:
+          "Blog2Video checks ownership at the account level, so Notestack checks that every video, template and style id belongs to the current workspace before forwarding a request, and returns a 404 otherwise.",
+      },
+      {
+        question: "Does the Blog2Video API have webhooks?",
+        answer:
+          "Not today. Notestack polls the status endpoints until generation and rendering report done.",
+      },
+      {
+        question: "Can I use the Blog2Video API in my own product?",
+        answer:
+          "Yes. API access is on paid plans. Create a key, keep it on your server, and follow the quick start in the Blog2Video API documentation.",
+      },
+    ],
+    distributionPlan: [
+      { channel: "x", angle: "Thread: how Notestack makes video without a render pipeline, and the ownership check every embedder needs" },
+      { channel: "linkedin", angle: "Engineering note on embedding a video API in a multi-user product, with the lessons list" },
+      { channel: "newsletter", angle: "Short behind the scenes piece on why we built on our own API" },
+    ],
+  },
+  {
     slug: "turn-substack-archive-into-podcast",
     title: "How to Turn Your Substack Archive Into a Podcast Without Recording",
     description:
