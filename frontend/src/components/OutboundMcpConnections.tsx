@@ -292,7 +292,11 @@ export function OutboundMcpConnections() {
   useEffect(() => {
     // Load connections first so popular-app cards can immediately show which ones are already connected.
     outboundMcpApi.list().then(setConnections, (e) => setError(errorMessage(e)))
-      .then(() => outboundMcpApi.catalog()).then(setSuggestions, () => setSuggestions([]));
+      .then(() => outboundMcpApi.catalog()).then((items) => {
+        // setSuggestions(items);
+        // Temporarily hide the Canva and Slack MCP options from the frontend catalog.
+        setSuggestions(items.filter((item) => item.name !== "Canva" && item.name !== "Slack"));
+      }, () => setSuggestions([]));
     const params = new URLSearchParams(window.location.search);
     const oauthResult = params.get("mcp_oauth");
     if (oauthResult === "connected") setNotice("External app connected. Choose the tools Notestack may use.");
