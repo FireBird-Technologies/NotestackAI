@@ -1,9 +1,10 @@
 """User-facing control plane for outbound (NoteStack-as-client) MCP connections."""
 
+import hashlib
 import secrets
 import uuid
-from datetime import UTC, datetime
-from urllib.parse import parse_qs, urlencode, urlsplit
+from datetime import UTC, datetime, timedelta
+from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -12,7 +13,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.auth import Ctx, get_ctx
+from app.auth import Ctx, decode_token_full, encode_signed, get_ctx
 from app.config import settings
 from app.db import get_db
 from app.mcp_client.catalog import catalog_with_icons
@@ -39,6 +40,34 @@ from app.services.crypto import decrypt, encrypt
 
 router = APIRouter(prefix="/api/outbound-mcp", tags=["outbound-mcp"])
 OAUTH_STATE_COOKIE = "ns_outbound_mcp_state"
+OAUTH_LAUNCH_TTL = timedelta(minutes=10)
+
+
+def _oauth_state_cookie(state: str) -> str:
+    """Keep concurrent OAuth attempts from replacing each other's browser binding."""
+    return f"{OAUTH_STATE_COOKIE}_{hashlib.sha256(state.encode()).hexdigest()[:16]}"
+
+
+def _oauth_cookie_secure() -> bool:
+    """Match the callback scheme instead of assuming every non-development callback is HTTPS."""
+    return urlsplit(settings.outbound_mcp_oauth_callback_url).scheme == "https"
+
+
+def _oauth_launch_url(authorization_url: str, state: str) -> str:
+    """Put the cookie-setting hop on the same origin as the configured callback.
+
+    The SPA may be on another origin and browsers can discard cookies set by its fetch. A signed launch ticket lets
+    the browser visit the API as a top-level navigation before it leaves for the provider, without exposing an open
+    redirect or putting the user's Notestack bearer token in a URL.
+    """
+    callback = urlsplit(settings.outbound_mcp_oauth_callback_url)
+    if callback.scheme not in {"http", "https"} or not callback.netloc:
+        raise OAuthFlowError("The outbound MCP OAuth callback URI must be an absolute HTTP(S) URL.")
+    launch_path = f"{callback.path.rsplit('/', 1)[0]}/launch"
+    ticket = encode_signed({
+        "typ": "outbound_mcp_launch", "authorization_url": authorization_url, "state": state,
+    }, OAUTH_LAUNCH_TTL)
+    return urlunsplit((callback.scheme, callback.netloc, launch_path, urlencode({"ticket": ticket}), ""))
 
 
 @router.get("/oauth/client-metadata")
@@ -316,22 +345,47 @@ def oauth_start(connection_id: uuid.UUID, body: OAuthStart | None = None, ctx: C
     state = (parse_qs(urlsplit(authorization_url).query).get("state") or [None])[0]
     if not state:
         raise HTTPException(500, "The OAuth authorization URL did not contain state.")
-    response = JSONResponse({"authorization_url": authorization_url})
-    response.set_cookie(
-        OAUTH_STATE_COOKIE, state, max_age=600, path="/api/outbound-mcp/oauth", httponly=True,
-        secure=settings.env != "development", samesite="lax",
-    )
-    return response
+    try:
+        launch_url = _oauth_launch_url(authorization_url, state)
+    except OAuthFlowError as exc:
+        row.auth_status, row.status, row.last_error = "configuration_error", "error", str(exc)[:500]
+        ctx.db.commit()
+        raise HTTPException(500, str(exc)) from exc
+    return JSONResponse({"authorization_url": launch_url})
 
 
-def _oauth_redirect(result: str, message: str | None = None) -> RedirectResponse:
+def _oauth_redirect(result: str, message: str | None = None, state: str | None = None) -> RedirectResponse:
     query = {"mcp_oauth": result}
     if message:
         query["message"] = message[:240]
     response = RedirectResponse(
         f"{settings.frontend_url.rstrip('/')}/app/connector?{urlencode(query)}", status_code=302
     )
-    response.delete_cookie(OAUTH_STATE_COOKIE, path="/api/outbound-mcp/oauth")
+    if state:
+        response.delete_cookie(_oauth_state_cookie(state), path="/api/outbound-mcp/oauth",
+                               secure=_oauth_cookie_secure(), httponly=True, samesite="lax")
+    response.delete_cookie(OAUTH_STATE_COOKIE, path="/api/outbound-mcp/oauth",
+                           secure=_oauth_cookie_secure(), httponly=True, samesite="lax")  # old attempts
+    return response
+
+
+@router.get("/oauth/launch")
+def oauth_launch(ticket: str):
+    try:
+        saved = decode_token_full(ticket, expected_type="outbound_mcp_launch")
+    except HTTPException:
+        return _oauth_redirect("error", "This authorization request is invalid or expired.")
+    authorization_url = str(saved.get("authorization_url") or "")
+    state = str(saved.get("state") or "")
+    returned_state = (parse_qs(urlsplit(authorization_url).query).get("state") or [None])[0]
+    if not state or returned_state != state:
+        return _oauth_redirect("error", "This authorization request is invalid or expired.", state)
+    response = RedirectResponse(authorization_url, status_code=302, headers={"Referrer-Policy": "no-referrer"})
+    response.set_cookie(
+        _oauth_state_cookie(state), state, max_age=int(OAUTH_LAUNCH_TTL.total_seconds()),
+        path="/api/outbound-mcp/oauth", httponly=True,
+        secure=_oauth_cookie_secure(), samesite="lax",
+    )
     return response
 
 
@@ -339,12 +393,12 @@ def _oauth_redirect(result: str, message: str | None = None) -> RedirectResponse
 def oauth_callback(request: Request, code: str | None = None, state: str | None = None, error: str | None = None,
                    db: Session = Depends(get_db)):
     if error:
-        return _oauth_redirect("error", "Authorization was cancelled." if error == "access_denied" else error)
+        return _oauth_redirect("error", "Authorization was cancelled." if error == "access_denied" else error, state)
     if not code or not state:
-        return _oauth_redirect("error", "The OAuth callback was incomplete.")
-    cookie_state = request.cookies.get(OAUTH_STATE_COOKIE)
+        return _oauth_redirect("error", "The OAuth callback was incomplete.", state)
+    cookie_state = request.cookies.get(_oauth_state_cookie(state)) or request.cookies.get(OAUTH_STATE_COOKIE)
     if not cookie_state or not secrets.compare_digest(cookie_state, state):
-        return _oauth_redirect("error", "This authorization request is invalid or expired.")
+        return _oauth_redirect("error", "This authorization request is invalid or expired.", state)
     try:
         row = finish_authorization(db, state, code)
         grant = db.scalar(select(OutboundMcpGrant).where(OutboundMcpGrant.connection_id == row.id))
@@ -361,7 +415,7 @@ def oauth_callback(request: Request, code: str | None = None, state: str | None 
         row.last_checked_at = datetime.now(UTC)
         row.auth_status, row.status, row.last_error = "ready", "ready", None
         db.commit()
-        return _oauth_redirect("connected")
+        return _oauth_redirect("connected", state=state)
     except (OAuthFlowError, OutboundMcpError) as exc:
         db.rollback()
         if "row" in locals() and row:
@@ -380,7 +434,7 @@ def oauth_callback(request: Request, code: str | None = None, state: str | None 
                     )
                 row.status, row.last_error = "error", message[:500]
                 db.commit()
-        return _oauth_redirect("error", str(exc))
+        return _oauth_redirect("error", str(exc), state)
 
 
 @router.post("/connections/{connection_id}/revoke")
