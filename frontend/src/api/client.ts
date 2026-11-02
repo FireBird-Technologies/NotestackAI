@@ -96,6 +96,7 @@ async function tryRefresh(): Promise<boolean> {
   if (!refresh) return false;
   const res = await fetch(`${BASE}/api/auth/refresh`, {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ refresh_token: refresh }),
   });
@@ -112,7 +113,10 @@ async function request(path: string, init: RequestInit, retry: boolean): Promise
   }
   const signedIn = Boolean(tokens.access);
   if (signedIn) headers.set("Authorization", `Bearer ${tokens.access}`);
-  const res = await fetch(`${BASE}${path}`, { ...init, headers });
+  // OAuth start endpoints set a short-lived, HTTP-only state cookie on the API origin. In production the app and API
+  // are different origins, so Fetch otherwise ignores that Set-Cookie response and the returning callback cannot bind
+  // the authorization to the browser that started it.
+  const res = await fetch(`${BASE}${path}`, { ...init, credentials: "include", headers });
   if (res.status === 401 && retry && (await tryRefresh())) return request(path, init, false);
   // Auth endpoints answer 401 for a wrong password and similar; only a dead session elsewhere signs out.
   if (res.status === 401 && signedIn && retry && !path.startsWith("/api/auth/")) {
