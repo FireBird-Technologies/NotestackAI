@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { artifactsApi, notebooksApi } from "../api/endpoints";
@@ -6,7 +6,7 @@ import { ApiError } from "../api/client";
 import { streamSSE } from "../api/stream";
 import { createTypewriter } from "../lib/typewriter";
 import { NOTEBOOKLM_PANEL_OPENED_AT_MARKER, NOTEBOOKLM_PANEL_OPENED_EVENT } from "../lib/notebooklm";
-import type { AnswerFeedback as Feedback, Artifact, ChatAction, ChatArtifact, ChatPreset, ChatSummary, Citation, Job, MemoryChange, Notebook } from "../api/types";
+import type { AnswerFeedback as Feedback, Artifact, BackgroundStatus, ChatAction, ChatArtifact, ChatMessage, ChatPreset, ChatSummary, Citation, ExternalSource, ExternalWidget, Job, MemoryChange, Notebook } from "../api/types";
 import { AnswerFeedback } from "../components/AnswerFeedback";
 import { ArtifactCard, CitationList } from "../components/ArtifactCard";
 import ConnectorModal from "../components/ConnectorModal";
@@ -45,11 +45,34 @@ type Turn = {
   citations?: Citation[];
   status?: string;
   steps?: string[];
+  externalResearch?: boolean;
   saved?: MemoryChange[];
   topic?: string; // what the answer is about, named in the next-step suggestions under it
   askKey?: string; // the question this answer belongs to, while it is on screen: what the stream's updates look for
   action?: ChatAction; // a "create a quiz" answer: the settings dialog it opened, to open again
+  externalSources?: ExternalSource[];
+  externalWidgets?: ExternalWidget[];
+  backgroundStatus?: BackgroundStatus | null;
 };
+
+function messageTurn(message: ChatMessage): Turn {
+  const working = message.background_status?.state === "working";
+  return {
+    id: message.id,
+    feedback: message.feedback,
+    role: message.role,
+    text: message.text,
+    citations: message.citations,
+    steps: message.steps,
+    externalResearch: Boolean(message.external_sources?.length),
+    topic: message.topic,
+    action: message.action ?? undefined,
+    externalSources: message.external_sources,
+    externalWidgets: message.external_widgets,
+    backgroundStatus: message.background_status,
+    status: working ? message.background_status?.message : undefined,
+  };
+}
 
 /** What each artifact is called, and its icon, on the "Open settings" button under a create answer. */
 const ARTIFACT_NAMES: Record<ChatArtifact, string> = {
@@ -85,7 +108,20 @@ function streamingText(draft: string): string {
   return draft.replace(/ ?\[\d+\]/g, "").replace(/ ?\[\d*$/, "");
 }
 
+function researchStepsLabel(turn: Turn): string {
+  const count = turn.steps?.length ?? 0;
+  const unit = count === 1 ? "step" : "steps";
+  const connections = [...new Set((turn.externalSources ?? []).map((source) => source.connection))];
+  const countLabel = `${count} ${unit}`;
+  if (connections.length) return `Researching with ${connections.join(", ")} · ${countLabel}`;
+  if (turn.externalResearch) return `Researching with external tools · ${countLabel}`;
+  return `Researching the archive · ${countLabel}`;
+}
+
 const STARTERS = ["What are the strongest ideas across these posts?", "Where do I contradict myself?", "Which post is most worth updating, and why?"];
+const ExternalMcpApp = lazy(() => import("../components/ExternalMcpApp").then((module) => ({
+  default: module.ExternalMcpApp,
+})));
 const CHAT_RAIL_KEY = "ns_notebook_chat_rail";
 
 function readChatRailOpen(): boolean {
@@ -164,6 +200,14 @@ function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, onNeedP
 
   useEffect(() => {
     load();
+  }, [load]);
+
+  // Chat can create a Studio artifact as the first half of a compound action (for example, make flashcards and then
+  // copy those exact cards to Notion). Refresh the Library as soon as that server-side creation finishes.
+  useEffect(() => {
+    const refresh = () => void load().catch(() => undefined);
+    window.addEventListener("notestack-artifacts-changed", refresh);
+    return () => window.removeEventListener("notestack-artifacts-changed", refresh);
   }, [load]);
 
   // A video still being made (or rendering, or in an edit job): ask again now and then. The server checks it with
@@ -306,7 +350,7 @@ function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, onNeedP
         >
           <span className="nbv-make-connector-copy">
             <ConnectorIcon size={20} />
-            <strong>Connect your app</strong>
+            <strong>Connectors</strong>
           </span>
           <span className="nbv-connector-rotator" aria-hidden="true">
             <span className="nbv-connector-app-track">
@@ -386,7 +430,7 @@ function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, onNeedP
                                       initial={presets.slide_deck} onClose={onSlidesClose} onCreate={makeSlides} />}
       {cardsOpen && <FlashcardsDialog key={presetKey} notebookId={notebookId} chats={chats} currentChatId={currentChatId} busy={false}
                                       error={null} initial={presets.flashcards} onClose={onCardsClose} onCreate={makeCards} />}
-      {connectorOpen && <ConnectorModal onClose={() => setConnectorOpen(false)} />}
+      {connectorOpen && <ConnectorModal notebookId={notebookId} onClose={() => setConnectorOpen(false)} />}
       {mapOpen && <MindMapDialog key={presetKey} docs={docs} busy={false} error={null} initialFocus={presets.mind_map?.focus}
                                  onClose={onMapClose} onCreate={makeMap} />}
       {exploring && <MindMapExplorer artifact={exploring} onClose={() => setExploring(null)} />}
@@ -579,7 +623,7 @@ export default function NotebookView() {
     }
     // If the user selected another conversation while this request was running, ignore this older response.
     if (request !== chatLoad.current) return;
-    const history: Turn[] = msgs.map((m) => ({ id: m.id, feedback: m.feedback, role: m.role, text: m.text, citations: m.citations, topic: m.topic, action: m.action ?? undefined }));
+    const history: Turn[] = msgs.map(messageTurn);
     // Early chats saved the answer but not the opening user message. Their title is the original question,
     // so restore it in the transcript instead of showing an assistant answer with no visible prompt.
     if (history[0]?.role === "assistant") {
@@ -594,6 +638,34 @@ export default function NotebookView() {
     if (chatId && chatId !== shown.current) void openChat(chatId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId]);
+
+  const backgroundWorking = turns.some((turn) => turn.backgroundStatus?.state === "working");
+  useEffect(() => {
+    if (!chatId || !backgroundWorking) return;
+    let stopped = false;
+    let timer: number | undefined;
+    const refresh = async () => {
+      try {
+        const messages = await notebooksApi.messages(chatId);
+        if (stopped) return;
+        const updates = new Map(messages.map((message) => [message.id, messageTurn(message)]));
+        setTurns((current) => current.map((turn) => turn.id && updates.has(turn.id)
+          ? { ...turn, ...updates.get(turn.id)! }
+          : turn));
+      } catch {
+        // A transient refresh failure must not interrupt the conversation; the next poll retries.
+      } finally {
+        // Wait until this request finishes before scheduling another one. Overlapping polls can finish out of order
+        // and otherwise replace a completed message with an older "still working" snapshot.
+        if (!stopped) timer = window.setTimeout(refresh, 2000);
+      }
+    };
+    timer = window.setTimeout(refresh, 500);
+    return () => {
+      stopped = true;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [chatId, backgroundWorking]);
 
   const newChat = () => {
     chatLoad.current += 1;
@@ -684,7 +756,12 @@ export default function NotebookView() {
             }
             patchAnswer({ status: d.message as string });
           } else if (event === "step") {
-            patchAnswer((x) => ({ status: d.message as string, steps: [...(x.steps ?? []), d.message as string] }));
+            const kind = d.kind as string;
+            patchAnswer((x) => ({
+              status: d.message as string,
+              steps: [...(x.steps ?? []), d.message as string],
+              externalResearch: x.externalResearch || kind.startsWith("external"),
+            }));
           } else if (event === "delta") {
             draft += d.text as string;
             typer.setTarget(streamingText(draft));
@@ -698,7 +775,12 @@ export default function NotebookView() {
           } else if (event === "answer") {
             answered = d.text as string;
             const action = (d.action as ChatAction | null | undefined) ?? undefined;
-            const final = { id: d.message_id as string, text: answered, citations: d.citations as Citation[], status: undefined, topic: (d.topic as string | undefined) || "", action };
+            const backgroundStatus = (d.background_status as BackgroundStatus | null | undefined) ?? null;
+            const final = { id: d.message_id as string, text: answered, citations: d.citations as Citation[], status: backgroundStatus?.state === "working" ? backgroundStatus.message : undefined, backgroundStatus, topic: (d.topic as string | undefined) || "", action, externalSources: (d.external_sources as ExternalSource[] | undefined) ?? [], externalWidgets: (d.external_widgets as ExternalWidget[] | undefined) ?? [] };
+            if (Array.isArray(d.created_artifacts) && d.created_artifacts.length) {
+              window.dispatchEvent(new Event("notestack-artifacts-changed"));
+              if (phone) setDrawer("library");
+            }
             // "Create a quiz on pricing": its settings open now, while this is still the question on screen.
             if (action && latest() && chatLoad.current === sentIn) runAction(action);
             // Finish typing (the verified text, markers still hidden), then show it with its clickable citations.
@@ -1083,8 +1165,8 @@ export default function NotebookView() {
           {!loadingChatId && turns.map((t, i) => (
             <div key={i} className={`turn turn-${t.role}`}>
               {t.steps && t.steps.length > 0 && (
-                <details className="agent-steps mono">
-                  <summary>{t.status ? `${t.status}...` : `${t.steps.length} steps through the archive`}</summary>
+                <details className="agent-steps mono" open={Boolean(t.status)}>
+                  <summary>{t.status ? `${t.status}…` : researchStepsLabel(t)}</summary>
                   <ol>
                     {t.steps.map((s, j) => (
                       <li key={j}>{s}</li>
@@ -1100,6 +1182,18 @@ export default function NotebookView() {
                   <p className="turn-text">{t.text}</p>
                 ))}
               {t.citations && <CitationList citations={t.citations} onCite={cite} collapsible />}
+              {t.externalWidgets?.map((widget, j) => (
+                <Suspense key={`${widget.connection_id}:${widget.tool}:${j}`} fallback={
+                  <p className="external-widget-loading mono muted small">Loading {widget.connection} widget…</p>
+                }>
+                  <ExternalMcpApp widget={widget} onMessage={(message) => { void ask(message); }} />
+                </Suspense>
+              ))}
+              {t.externalSources && t.externalSources.length > 0 && (
+                <div className="external-sources mono small">
+                  External data: {t.externalSources.map((source) => `${source.connection} / ${source.tool}`).join(", ")}
+                </div>
+              )}
               {t.role === "assistant" && t.action && t.text && !t.status && (
                 <button type="button" className="nbv-open-action" onClick={() => runAction(t.action!)}>
                   {(() => {

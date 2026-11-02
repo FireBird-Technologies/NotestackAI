@@ -181,6 +181,24 @@ class Settings(BaseSettings):
     mcp_media_domains: str = ""  # extra https hosts a video may play from in the chat view, comma separated (e.g. a CDN)
     openai_apps_challenge: str = ""  # token OpenAI asks to be served at /.well-known/openai-apps-challenge to verify the domain
 
+    # MCP client: lets the research agent call selected tools on remote MCP servers. Connections and credentials are
+    # owned by one user inside one workspace; tool annotations are retained so write/destructive tools stay visible.
+    outbound_mcp_enabled: bool = True
+    outbound_mcp_allow_http: bool = False  # local development escape hatch; production should always use HTTPS
+    outbound_mcp_allowed_hosts: str = ""  # optional comma-separated exact host allowlist
+    outbound_mcp_connect_timeout_seconds: float = 15
+    outbound_mcp_call_timeout_seconds: float = 30
+    outbound_mcp_max_result_chars: int = 12_000
+    # OAuth for remote MCP servers. Google Workspace uses the app's GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET; that
+    # Web client must also list the outbound MCP callback and be enabled for an AI-powered agent in Google Cloud.
+    outbound_mcp_oauth_enabled: bool = True
+    outbound_mcp_oauth_callback_uri: str = ""  # defaults to {api_url}/api/outbound-mcp/oauth/callback
+    outbound_mcp_client_metadata_url: str = ""  # optional RFC 7591/CIMD client-id URL for compatible servers
+    # JSON list of pre-registered clients for servers without DCR/CIMD. Match exact issuer + resource, never hostname.
+    # [{"issuer":"https://auth.example","resource":"https://mcp.example/mcp","client_id":"...",
+    #   "client_secret":"...","default_scopes":["read"],"authorization_params":{"audience":"..."}}]
+    outbound_mcp_oauth_clients_json: str = ""
+
     # Billing (Stripe). With BILLING_ENABLED=false everyone gets Studio limits and checkout is off.
     billing_enabled: bool = False
     stripe_secret_key: str = Field(
@@ -218,6 +236,22 @@ class Settings(BaseSettings):
                 if value.startswith(prefix):
                     return "postgresql+psycopg://" + value[len(prefix):]
         return value
+
+    @property
+    def outbound_mcp_allowed_host_list(self) -> list[str]:
+        return [host.strip().lower() for host in self.outbound_mcp_allowed_hosts.split(",") if host.strip()]
+
+    @property
+    def outbound_mcp_oauth_callback_url(self) -> str:
+        return self.outbound_mcp_oauth_callback_uri or f"{self.api_url.rstrip('/')}/api/outbound-mcp/oauth/callback"
+
+    @property
+    def google_mcp_oauth_client_id(self) -> str:
+        return self.google_client_id
+
+    @property
+    def google_mcp_oauth_client_secret(self) -> str:
+        return self.google_client_secret
 
     @property
     def worker_in_api(self) -> bool:

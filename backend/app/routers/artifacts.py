@@ -74,7 +74,8 @@ class GenerateIn(BaseModel):
     question_types: list[Literal["multiple_choice", "multiple_select", "fill_blank", "short_answer"]] = Field(
         default_factory=lambda: ["multiple_choice", "multiple_select"], min_length=1)
     language: str | None = Field(None, max_length=40)
-    theme: str | None = Field(None, max_length=30)  # infographic: one of the looks (app.infographics.design.LOOKS); slide_deck: app.slides.themes
+    # infographic: app.infographics.design.LOOKS; slide deck: app.slides.themes
+    theme: str | None = Field(None, max_length=30)
     ig_style: str | None = Field(None, max_length=20)  # infographic: the layout to lean towards (design.STYLES), auto when empty
     # slide_deck: read on its own ("detailed") or shown behind a speaker ("presenter"), and how many slides
     deck_format: Literal["detailed", "presenter"] = "detailed"

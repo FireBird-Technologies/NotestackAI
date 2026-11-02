@@ -1,5 +1,5 @@
 fastapi==0.115.*
-uvicorn[standard]==0.32.*
+uvicorn[standard]==0.32.1
 sqlalchemy==2.0.*
 psycopg[binary]==3.2.*
 alembic==1.14.*
@@ -22,6 +22,7 @@ pypdf==5.*
 python-pptx==1.*
 stripe==13.*
 jinja2==3.*
+cryptography>=44,<51
 
 # Dev tools (tests, lint)
 pytest==8.*

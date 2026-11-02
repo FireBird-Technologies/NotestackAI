@@ -30,6 +30,8 @@ from tests.conftest import last_code
     ("https://docs.google.com/document/d/abc/edit", "warn", PUBLIC_SHARE_WARNING),
     ("https://drive.google.com/file/d/abc/view", "warn", GOOGLE_DRIVE_WARNING),
     ("https://youtu.be/abc", "warn", MAYBE_UNSCRAPABLE_WARNING),
+    ("https://www.instagram.com/p/abc/", "warn", MAYBE_UNSCRAPABLE_WARNING),
+    ("https://www.instagram.com/reel/abc/", "warn", MAYBE_UNSCRAPABLE_WARNING),
     ("https://ada.substack.com/p/on-pricing", "ok", None),
     ("", "ok", None),
 ])

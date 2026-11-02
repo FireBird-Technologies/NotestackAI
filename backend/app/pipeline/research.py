@@ -40,12 +40,15 @@ from app.llm.provider import fast_lm, main_lm, track_usage, triage_lm
 from app.llm.signatures import (
     ResearchArchive,
     ResearchArchiveWithMemory,
+    ResearchExternal,
     SplitQuestion,
     TriageMessage,
     TriageWithMemory,
 )
 from app.pipeline import writer
 from app.pipeline.create_intent import parse_create
+from app.pipeline.external_delivery import adapter_for_tools
+from app.pipeline.internal_artifact_tools import TRANSFERABLE_ARTIFACTS, start_from_chat
 from app.pipeline.prefetch import (
     DEEP_PER_POST,
     DEEP_TOP_K,
@@ -55,11 +58,68 @@ from app.pipeline.prefetch import (
     passages_of,
     prefetch,
 )
-from app.pipeline.trace import MEMORY_GIVES, ChatTrace, current_trace, probs_text
+from app.pipeline.trace import MEMORY_GIVES, ChatTrace, arguments_shape, current_trace, probs_text
 from app.services import jev
 
 _MARKER = re.compile(r"\[(\d+)\]")
+_HTTPS_URL = re.compile(r"https://[^\s)\]>]+")
+_ASKS_FOR_CREATED_LINK = re.compile(
+    r"\b(link|url|open)\b.*\b(this|that|the|these|those|created|made|destination|canva|notion|page|result)\b|"
+    r"\b(this|that|the|these|those|created|made|destination|canva|notion|page|result)\b.*\b(link|url)\b",
+    re.IGNORECASE,
+)
 log = logging.getLogger(__name__)
+tool_flow_log = logging.getLogger("notestack.tool_flow")
+
+
+def _append_external_resource_links(text: str, sources: list[dict]) -> str:
+    """Make write-tool resource links deterministic even when the model forgets to repeat them."""
+    missing: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for source in sources:
+        connection = str(source.get("connection") or "external tool")
+        for url in source.get("urls") or []:
+            if not isinstance(url, str) or url in text or url in seen:
+                continue
+            seen.add(url)
+            missing.append((connection, url))
+    if not missing:
+        return text
+
+    links: list[str] = []
+    for index, (connection, url) in enumerate(missing, start=1):
+        safe_connection = re.sub(r"[\[\]()]", "", connection).strip() or "external tool"
+        suffix = f" {index}" if len(missing) > 1 else ""
+        links.append(f"- [Open the result from {safe_connection}{suffix}]({url})")
+    return text.rstrip() + "\n\n" + "\n".join(links)
+
+
+def previous_created_link(question: str, history: list["Turn"]) -> str | None:
+    """A follow-up asking for a link we just returned should not run the external tool chooser again."""
+    if not _ASKS_FOR_CREATED_LINK.search(question):
+        return None
+    for turn in reversed(history):
+        if turn.role != "assistant":
+            continue
+        urls = _HTTPS_URL.findall(turn.text)
+        if urls:
+            return urls[-1].rstrip(".,;:'\"")
+    return None
+
+
+def previous_delivery_status(question: str, history: list["Turn"]) -> tuple[str, str, str | None] | None:
+    """Return the latest background delivery state for a follow-up asking for its destination link."""
+    if not _ASKS_FOR_CREATED_LINK.search(question):
+        return None
+    for turn in reversed(history):
+        status = turn.background_status if turn.role == "assistant" else None
+        if not isinstance(status, dict):
+            continue
+        state = str(status.get("state") or "").lower()
+        if state not in {"working", "done", "failed"}:
+            continue
+        return state, str(status.get("message") or "").strip(), status.get("url")
+    return None
 
 
 @dataclass
@@ -85,17 +145,22 @@ class ResearchResult:
     prompt_tokens: int = 0
     completion_tokens: int = 0
     steps: list[tuple[str, str]] = field(default_factory=list)
-    kind: str = "archive"  # archive | chitchat | about_app | off_topic | create
+    kind: str = "archive"  # archive | chitchat | about_app | off_topic | external_action | create
     question: str = ""  # the standalone question that was researched
     recall: dict = field(default_factory=dict)  # how recall behaved for this answer (saved with the message)
     topic: str = ""  # what the answer is about in a few words (from the writer), for the next-step suggestions
     action: dict | None = None  # kind create: {"artifact", "settings"}, the dialog the app opens with those settings
+    external_sources: list[dict] = field(default_factory=list)
+    external_widgets: list[dict] = field(default_factory=list)
+    created_artifacts: list[dict] = field(default_factory=list)
+    background_action: dict | None = None
 
 
 @dataclass
 class Turn:
     role: str  # user | assistant
     text: str
+    background_status: dict | None = None
 
 
 HISTORY_TURNS = 8
@@ -103,7 +168,6 @@ HISTORY_CHARS = 700  # per older message: half from the start, half from the end
 RECENT_TURNS = 2  # the newest messages (the last question and answer) are kept whole, up to RECENT_CHARS
 RECENT_CHARS = 4000  # safety ceiling for those, the same as the longest question a writer can send
 QUICK_STEPS = 4
-MAX_AGENT_TOOLS = 6  # seen live: with a seventh tool the model returns {} instead of its next step
 
 _CHITCHAT = SMALL_TALK  # greetings and thanks: the same pattern chat memory uses to decide what may be skipped
 _GREETING = re.compile(r"^\s*(hi|hey|hello|yo|hiya|good (morning|afternoon|evening))", re.IGNORECASE)
@@ -192,9 +256,19 @@ JEV_INTENT = {
         "examples": ["Create an audio overview of 10 minutes", "Make a slide deck on my pricing posts",
                      "Quiz me on this, hard questions", "Turn that into an infographic"],
     },
+    "external_action": {
+        "what": "Explicitly asks to use a connected external app or service, or to perform an action outside the "
+                "notebook: send an email, post a message, create or update something in another app, search an "
+                "external account, or run a named integration",
+        "not_for": "A general knowledge, coding, math or news question that does not ask to use an external app. "
+                   "Also not for Notestack's built-in audio, slides, video, report, infographic, quiz, flashcards "
+                   "or mind map unless the message explicitly assigns the work to a connected app",
+        "examples": ["Send an email to Sara", "Post this in Slack", "Create a page in Notion",
+                     "Use B2V to make a video", "Find my open issues in the connected tracker"],
+    },
     "off_topic": {
         "what": "General knowledge, coding, math, news, homework or tasks whose subject matches NONE of the post "
-                "titles in the notebook line",
+                "titles in the notebook line and that do not explicitly request a connected external app action",
         "not_for": "Anything that shares a subject with a post title, even loosely or in different words (spelling "
                    "variants, synonyms, a broader or narrower angle). When unsure, it is archive: a wasted search "
                    "costs less than a wrong brush off",
@@ -257,9 +331,121 @@ _CREATE = re.compile(
     r"|^\s*(please )?(quiz|test) me\b",
     re.IGNORECASE)
 
+_EXPLICIT_CREATE_VERB = re.compile(
+    r"\b(create|make|generate|build|produce|prepare|draft|design)\b|\bturn\b.{0,60}\binto\b",
+    re.IGNORECASE,
+)
+
+
+def names_external_app(message: str, aliases: set[str] | list[str]) -> str | None:
+    """The connected app named anywhere in a create request.
+
+    This deliberately does not enumerate phrases such as ``using Canva`` or ``in Canva``. Triage has already decided
+    that the message is a create/action request; an exact connected-app alias is therefore enough to route it to that
+    app's enabled capabilities instead of opening a built-in settings dialog.
+    """
+    if not asks_to_create(message):
+        return None
+    for alias in sorted(aliases, key=len, reverse=True):
+        if re.search(rf"(?<![\w-]){re.escape(alias)}(?![\w-])", message, re.IGNORECASE):
+            return alias
+    return None
+
 
 def asks_to_create(message: str) -> bool:
+    # "Give me the destination link for these flashcards" is a lookup of an earlier result, not a request to build
+    # another flashcard artifact. Keep explicit creation requests such as "create flashcards and give me the link".
+    if _ASKS_FOR_CREATED_LINK.search(message) and not _EXPLICIT_CREATE_VERB.search(message):
+        return False
     return bool(_CREATE.search(message))
+
+
+_ARTIFACT_PATTERNS = {
+    "audio_overview": re.compile(r"\b(?:audio\s+overviews?|podcasts?|audio)\b", re.IGNORECASE),
+    "slide_deck": re.compile(r"\b(?:slide\s*decks?|slides?|decks?|presentations?)\b", re.IGNORECASE),
+    "video": re.compile(r"\bvideos?\b", re.IGNORECASE),
+    "report": re.compile(r"\b(?:reports?|briefing\s+docs?|study\s+guides?)\b", re.IGNORECASE),
+    "infographic": re.compile(r"\binfographics?\b", re.IGNORECASE),
+    "flashcards": re.compile(r"\bflash\s*cards?\b", re.IGNORECASE),
+    "quiz": re.compile(r"\bquiz(?:zes)?\b|\btest\s+me\b", re.IGNORECASE),
+    "mind_map": re.compile(r"\b(?:mind\s+maps?|mind\s+constellations?|constellations?)\b", re.IGNORECASE),
+}
+_NOTEBOOK_ARTIFACT_SOURCE = re.compile(
+    r"\b(?:this|the|my|connected)\s+(?:notebook|posts?|sources?)\b|"
+    r"\bfrom\b.{0,50}\b(?:notebook|posts?|sources?)\b",
+    re.IGNORECASE,
+)
+
+
+def compound_artifact_request(message: str) -> str | None:
+    """A named Studio artifact in an external-action request. This is deterministic, not another Jev decision."""
+    making_from_notebook = asks_to_create(message) or bool(_NOTEBOOK_ARTIFACT_SOURCE.search(message))
+    if not making_from_notebook:
+        return None
+    return next((artifact for artifact, pattern in _ARTIFACT_PATTERNS.items() if pattern.search(message)), None)
+
+
+def _external_tool(tools: list, remote_name: str, connection_id: str | None = None):
+    suffix = "_" + remote_name.replace("-", "_")
+    expected = f"mcp_{connection_id.replace('-', '')[:8]}{suffix}" if connection_id else None
+    return next((tool for tool in tools
+                 if (name := str(getattr(tool, "name", getattr(tool, "__name__", "")))) == expected
+                 or (expected is None and name.endswith(suffix))), None)
+
+
+def compound_destination(named_app: str | None, destinations: list[dict]) -> dict | None:
+    """Select the named connection by alias, then select its delivery adapter by capabilities."""
+    if not named_app:
+        return None
+    wanted = named_app.lower()
+    for destination in destinations:
+        aliases = {str(value).lower() for value in destination.get("aliases") or []}
+        if wanted not in aliases:
+            continue
+        adapter = adapter_for_tools(set(destination.get("tools") or []))
+        if adapter:
+            return {**destination, "adapter": adapter.key, "placeholder": adapter.placeholder}
+    return None
+
+
+def _page_title(message: str, artifact: str) -> str:
+    quoted = re.search(r"\b(?:call(?:ed)?|name(?:d)?|title(?:d)?)\s+(?:the\s+design\s+|it\s+)?[\"'“‘]([^\"'”’]{1,200})[\"'”’]",
+                       message, re.IGNORECASE)
+    if quoted:
+        return quoted.group(1).strip()
+    plain = re.search(
+        r"\b(?:call(?:ed)?|name(?:d)?|title(?:d)?)(?:\s+the\s+design)?\s+(?:it\s+)?(?:as\s+)?(.{1,200}?)"
+        r"(?=\s+(?:and|then|with|using|in|on|put|add)\b|[,.!?]|$)",
+        message,
+        re.IGNORECASE,
+    )
+    return plain.group(1).strip(" \"'") if plain else f"NoteStack {artifact.replace('_', ' ').title()}"
+
+
+def _create_notion_placeholder(external_tools: list, external_sources: list, destination: dict,
+                               message: str, artifact: str) -> str:
+    tool = _external_tool(external_tools, "notion-create-pages", destination.get("connection_id"))
+    if tool is None:
+        raise RuntimeError("The enabled Notion connection does not provide create-pages.")
+    label = artifact.replace("_", " ")
+    result = tool(
+        pages=[{
+            "properties": {"title": _page_title(message, artifact)},
+            "content": (
+                f"NoteStack is creating the {label} from the connected notebook posts. "
+                "This page will be filled automatically when the artifact is ready."
+            ),
+        }],
+        creation_mode="draft",
+        allow_async=False,
+    )
+    for source in reversed(external_sources):
+        if getattr(source, "tool", "") == "notion-create-pages" and getattr(source, "urls", None):
+            return source.urls[-1]
+    urls = _HTTPS_URL.findall(str(result))
+    if not urls:
+        raise RuntimeError("Notion created no page URL.")
+    return urls[-1].rstrip(".,;:'\"}]")
 
 
 def answer_length_from_text(message: str) -> str | None:
@@ -285,6 +471,17 @@ _NOTEBOOK_WORDS = re.compile(r"\b(this|these|those|that|my|the|all|all of)\s+(po
 def refers_back(message: str) -> bool:
     """The message only makes sense with the conversation ("explain how to use it", "a brief intro of him")."""
     return bool(_REFERS.search(_NOTEBOOK_WORDS.sub(" ", message)))
+
+
+_NOTESTACK_NAME = re.compile(
+    r"\b(?:noetstack|notstack|netstack|notestack(?:\s*ai)?|note\s*stack(?:\s*ai)?)\b",
+    re.IGNORECASE,
+)
+
+
+def external_question(message: str) -> str:
+    """Resolve known product-name spellings before an external service performs literal text search."""
+    return _NOTESTACK_NAME.sub("NotestackAI", message)
 
 
 def _has_answer(history: list[Turn]) -> bool:
@@ -386,7 +583,7 @@ def _phrase_rules(route: Triage, message: str, history: list[Turn]) -> Triage:
     if route.kind == "off_topic" and _has_answer(history) and refers_back(message):
         route.notes.append("off_topic, but the message refers to the conversation (a follow up) -> archive")
         route.kind, route.reply = "archive", ""
-    if route.kind != "create" and asks_to_create(message):
+    if route.kind not in {"create", "external_action"} and asks_to_create(message):
         route.notes.append(f"{route.kind}, but the message asks to make something in so many words -> create")
         route.kind, route.reply = "create", ""
     asked = answer_length_from_text(message)
@@ -432,10 +629,12 @@ def triage_llm(message: str, history: list[Turn], notebook: str, mem: ChatMemory
         return Triage("archive", message, "deep", "",
                       notes=[f"triage model failed ({type(exc).__name__}) -> archive, deep"])
     notes: list[str] = []
-    kind = pred.kind if pred.kind in {"archive", "chitchat", "about_app", "off_topic", "create"} else "archive"
+    kind = pred.kind if pred.kind in {
+        "archive", "chitchat", "about_app", "off_topic", "external_action", "create"
+    } else "archive"
     question = (pred.standalone_question or "").strip() or message
     reply = strip_em_dashes((pred.reply or "").strip())
-    if kind not in ("archive", "create") and not reply:
+    if kind not in ("archive", "external_action", "create") and not reply:
         notes.append(f"model said {kind} but wrote no reply -> archive")
         kind = "archive"  # nothing to say without research: research it
     topic, memory = "", "none"
@@ -451,15 +650,13 @@ def notebook_brief(title: str, allowed: dict[str, str]) -> str:
     return f"Notebook: {title}. {len(allowed)} posts, including: " + "; ".join(titles)
 
 
-OFF_TOPIC_RETRIES = 2  # extra Jev looks, with every title and the openings, before a message is brushed off
+OFF_TOPIC_RETRIES = 1  # one fuller Jev look after the initial title-only decision
 RECHECK_OPENING_CHARS = 600  # per post: its first two paragraphs, cut here
 RECHECK_BUDGET_CHARS = 60_000  # all the openings together; posts past it are listed by title only
 RECHECK_TIMEOUT = 12.0  # the brief is far bigger than the first look's
 RECHECK_INSTRUCTIONS = (
     "A first look called this message off topic. Compare its subject with EVERY post title and opening below. "
     "If the subject appears in any of them, even loosely or in different words, it is archive",
-    "Two looks disagree on this message, so be strict: it is off_topic only if NO post title or opening below "
-    "touches its subject at all. Any overlap, a broader or narrower angle, or a doubt means archive",
 )
 
 
@@ -495,6 +692,10 @@ def recheck_off_topic(route: Triage, message: str, history: list[Turn], brief: s
         if a.choice == "off_topic" and a.confidence >= JEV_MIN_CONFIDENCE:
             route.notes.append(f"off_topic recheck {attempt}: still off_topic ({a.confidence:.2f})")
             continue
+        if a.choice == "external_action" and a.confidence >= JEV_MIN_CONFIDENCE:
+            route.notes.append(f"off_topic recheck {attempt}: external_action ({a.confidence:.2f})")
+            route.kind, route.reply = "external_action", ""
+            return route
         route.notes.append(f"off_topic recheck {attempt}: {a.choice} ({a.confidence:.2f}) -> archive")
         route.kind, route.reply = "archive", ""
         return route
@@ -742,13 +943,27 @@ def _retry_malformed_steps(agent, trace: ChatTrace, extract=None):
             if pred is not None:
                 return pred
         try:
-            return original(module, trajectory, **inputs)
+            pred = original(module, trajectory, **inputs)
+            if module is agent.react:
+                selected = getattr(pred, "next_tool_name", "(missing)")
+                argument_summary = arguments_shape(getattr(pred, "next_tool_args", None))
+                trace.step("decision", f"main model selected {selected}; args={argument_summary}")
+                tool_flow_log.info("AGENT TOOL DECISION chat=%s tool=%r args=%s",
+                                   trace.chat_id[:8] or "-", selected, argument_summary)
+            return pred
         except AdapterParseError as first:
             reply = " ".join(str(first.lm_response).split())[:160]
             log.warning("Malformed model reply, asking once more: %s", reply)
             trace.add("steps", f"! the model's reply was not in the expected shape: {reply!r}  ->  asking again once")
             try:
-                return original(module, trajectory, **inputs, config={"temperature": RETRY_TEMPERATURE})
+                pred = original(module, trajectory, **inputs, config={"temperature": RETRY_TEMPERATURE})
+                if module is agent.react:
+                    selected = getattr(pred, "next_tool_name", "(missing)")
+                    argument_summary = arguments_shape(getattr(pred, "next_tool_args", None))
+                    trace.step("decision", f"main model retry selected {selected}; args={argument_summary}")
+                    tool_flow_log.info("AGENT TOOL DECISION chat=%s retry=true tool=%r args=%s",
+                                       trace.chat_id[:8] or "-", selected, argument_summary)
+                return pred
             except AdapterParseError as second:
                 if module is agent.react:
                     trace.add("steps", "! still malformed: research stops here and the answer is written from "
@@ -793,7 +1008,7 @@ def _trace_triage(trace: ChatTrace, route: Triage) -> None:
     """The triage section of the log: every Jev answer with its confidence, then what our thresholds did to it."""
     trace.add("triage", f"engine   : {route.engine or 'unknown'}")
     if route.jev:
-        for qid in ("intent", "intent_retry1", "intent_retry2", "depth", "detail", "reuse", "memory", "topic"):
+        for qid in ("intent", "intent_retry1", "depth", "detail", "reuse", "memory", "topic"):
             a = route.jev.get(qid)
             if a:
                 trace.add("triage", f"{qid:<9}: {a['choice']:<22} confidence {a['confidence']:.2f}   "
@@ -830,12 +1045,23 @@ def research(
     trace: ChatTrace | None = None,
     on_delta: Callable[[str | None], None] | None = None,
     last_answer: LastAnswer | None = None,
+    external_tools: list[dspy.Tool] | None = None,
+    external_sources: list | None = None,
+    external_widgets: list | None = None,
+    external_aliases: set[str] | None = None,
+    external_destinations: list[dict] | None = None,
+    workspace_id=None,
+    notebook_id=None,
 ) -> ResearchResult:
     """on_delta gets the answer text as it is written (None = take back what was sent, a different path writes it).
     The returned text is the verified answer, which replaces whatever was streamed."""
     history = history or []
     trace = trace or current_trace() or ChatTrace()  # a throwaway one when research() is called on its own
-    if not allowed:
+    external_tools = external_tools or []
+    external_sources = external_sources if external_sources is not None else []
+    external_widgets = external_widgets if external_widgets is not None else []
+    external_destinations = external_destinations or []
+    if not allowed and not external_tools:
         trace.add("route", "NO POSTS: the notebook has none, so a fixed reply was sent and no model was called")
         return ResearchResult("This notebook has no posts yet. Add some sources first.", True, [], kind="chitchat")
 
@@ -846,6 +1072,50 @@ def research(
         if context_log_enabled():
             context_log.info("=== CHAT CONTEXT === message %r is small talk: canned reply, no model call", question)
         return ResearchResult(canned, False, [], kind="chitchat", question=question)
+
+    if delivery := previous_delivery_status(question, history):
+        state, detail, url = delivery
+        if state == "done" and url:
+            trace.add("route", "PREVIOUS DELIVERY: returned the completed external destination URL")
+            return ResearchResult(
+                f"Here is the external destination: [Open it]({url})",
+                False,
+                [],
+                kind="external_action",
+                question=question,
+                external_sources=[{"connection": "previous result", "tool": "conversation", "urls": [url]}],
+            )
+        if state == "working":
+            trace.add("route", "PREVIOUS DELIVERY: still working; did not create a duplicate artifact")
+            return ResearchResult(
+                "The external destination is still being created. I’ll update the previous message with its "
+                "destination link as soon as it finishes.",
+                False,
+                [],
+                kind="external_action",
+                question=question,
+            )
+        if state == "failed":
+            trace.add("route", "PREVIOUS DELIVERY: failed; did not create a duplicate artifact")
+            reason = detail or "The external destination could not be created."
+            return ResearchResult(
+                f"There is no external destination link because delivery failed: {reason}",
+                True,
+                [],
+                kind="external_action",
+                question=question,
+            )
+
+    if link := previous_created_link(question, history):
+        trace.add("route", "PREVIOUS LINK: returned the URL already saved in the conversation; no model or tool call")
+        return ResearchResult(
+            f"Here it is: [Open the created page]({link})",
+            False,
+            [],
+            kind="external_action",
+            question=question,
+            external_sources=[{"connection": "previous result", "tool": "conversation", "urls": [link]}],
+        )
 
     if on_step:
         on_step("think", "Reading the conversation")
@@ -862,7 +1132,135 @@ def research(
             except Exception:
                 logging.getLogger(__name__).warning("Posts sync failed before the off topic recheck", exc_info=True)
             route = recheck_off_topic(route, question, history, notebook_brief_full(notebook_title, allowed, corpus))
+    named_external_app = (
+        names_external_app(question, external_aliases or set())
+        if route.kind in {"create", "external_action"} and external_tools else None
+    )
+    external_only = (route.kind == "external_action" and bool(external_tools)) or bool(named_external_app)
+    if named_external_app:
+        # "generate a video using the blog2video plugin": the writer named a connected app, so its tools do the work
+        # instead of the built-in feature that would only open its settings. This must also skip archive prefetch and
+        # archive tools: the connected app, not a coincidental passage match, owns the request.
+        route.notes.append(
+            f"asks to make something, but names the connected app {named_external_app!r} -> external-only research"
+        )
+        route.kind, route.reply = "external_action", ""
+    requested_artifact = compound_artifact_request(question) if external_only else None
+    destination = compound_destination(named_external_app, external_destinations) if requested_artifact else None
+    # A deterministic chain is used only for destinations whose exact artifact handoff we implement. Other connected
+    # apps keep going through the external agent instead of being forced into a hard-coded integration.
+    compound_artifact = requested_artifact if destination else None
+    if compound_artifact and (workspace_id is None or notebook_id is None):
+        trace.add("route", "COMPOUND ACTION: cannot create the NoteStack artifact without workspace/notebook scope")
+        return ResearchResult(
+            "I could not create the NoteStack artifact because this notebook context was unavailable.",
+            True,
+            [],
+            kind="external_action",
+            question=question,
+        )
     _trace_triage(trace, route)
+    if compound_artifact in TRANSFERABLE_ARTIFACTS and destination:
+        adapter = str(destination["adapter"])
+        destination_name = str(destination.get("name") or named_external_app or "the connected app")
+        artifact_settings: dict = {}
+        parse_prompt_tokens = parse_completion_tokens = 0
+        try:
+            action, _reply, parse_prompt_tokens, parse_completion_tokens = parse_create(
+                question, conversation_text(history, limit=4),
+            )
+            if action and action.get("artifact") == compound_artifact:
+                artifact_settings = action.get("settings") or {}
+        except Exception:
+            logging.getLogger(__name__).warning(
+                "Could not parse settings for background %s; using Studio defaults", compound_artifact, exc_info=True,
+            )
+        page_url = None
+        if destination.get("placeholder"):
+            try:
+                page_url = _create_notion_placeholder(
+                    external_tools, external_sources, destination, question, compound_artifact,
+                )
+            except Exception:
+                logging.getLogger(__name__).exception("Could not create the destination Notion page")
+                return ResearchResult(
+                    f"I could not create the {destination_name} destination, so I did not start the background artifact.",
+                    True,
+                    [],
+                    kind="external_action",
+                    question=question,
+                )
+        try:
+            created = start_from_chat(
+                workspace_id, notebook_id, notebook_title, compound_artifact, artifact_settings,
+            )
+        except Exception:
+            logging.getLogger(__name__).exception("Could not start the background %s artifact", compound_artifact)
+            destination_text = (
+                f"The {destination_name} destination was created, but I could not start the NoteStack "
+                f"{compound_artifact.replace('_', ' ')}.\n\n"
+                f"- [Open it]({page_url})"
+                if page_url else
+                f"I could not start the NoteStack {compound_artifact.replace('_', ' ')}, so I did not create the "
+                f"{destination_name} destination."
+            )
+            return ResearchResult(
+                destination_text,
+                True,
+                [],
+                kind="external_action",
+                question=question,
+            )
+        label = compound_artifact.replace("_", " ")
+        detail = (
+            f"Created the {destination_name} destination; creating the NoteStack {label} in the background"
+            if page_url else
+            f"Creating the NoteStack {label}; {destination_name} delivery will follow automatically"
+        )
+        trace.add("route", "COMPOUND ACTION (BACKGROUND): " + detail)
+        used_external = [
+            {"connection": source.connection, "tool": source.tool,
+             **({"urls": list(source.urls)} if source.urls else {})}
+            for source in external_sources
+        ]
+        if page_url:
+            reply = (
+                f"The {destination_name} destination is ready. I’m creating the NoteStack {label} in the background "
+                "and will add its exact content there when it is ready. I’ll update this message too.\n\n"
+                f"- [Open it]({page_url})"
+            )
+        else:
+            artifact_url = created.get("url")
+            reply = (
+                f"I’m creating the NoteStack {label} from this notebook’s posts. When it is ready, I’ll create the "
+                f"{destination_name} destination from its exact content and update this message with the link."
+                + (f"\n\n- [Open the NoteStack {label}]({artifact_url})" if artifact_url else "")
+            )
+        return ResearchResult(
+            reply,
+            False,
+            [],
+            route.prompt_tokens + parse_prompt_tokens,
+            route.completion_tokens + parse_completion_tokens,
+            steps=[("external", detail)],
+            kind="external_action",
+            question=question,
+            recall={"route": _route_info(route), "triage_detail": _triage_detail(route)},
+            created_artifacts=[created],
+            background_action={
+                "kind": "artifact_to_external",
+                "artifact_id": created["id"],
+                "artifact_type": compound_artifact,
+                "artifact_url": created.get("url"),
+                "adapter": adapter,
+                "connection_id": destination.get("connection_id"),
+                "destination_name": destination_name,
+                **({"destination_url": page_url} if page_url else {}),
+                "title": _page_title(question, compound_artifact),
+                "question": question,
+            },
+            external_sources=used_external,
+        )
     if route.kind == "create":
         action, reply, p_tok, c_tok = None, "", 0, 0
         with trace.stage("parse-create"):
@@ -881,7 +1279,15 @@ def research(
         trace.add("route", "CREATE, but the request named nothing the app makes: the app help is sent instead")
         return ResearchResult(canned_reply("about_app", allowed), False, [], prompt, completion, kind="about_app",
                               question=question, recall=recall)
-    if route.kind != "archive":
+    if route.kind == "external_action" and not external_tools:
+        reply = ("Connect and enable an external app that can handle this action, then try again. "
+                 "I cannot perform it with notebook tools alone.")
+        trace.add("route", "EXTERNAL ACTION: no external tools are enabled, so the research agent was not started")
+        return ResearchResult(reply, True, [], route.prompt_tokens, route.completion_tokens,
+                              kind="external_action", question=question,
+                              recall={"route": _route_info(route), "triage_detail": _triage_detail(route),
+                                      "memory_loaded": chat_memory is not None})
+    if route.kind not in {"archive", "external_action"}:
         # App help is always the vetted template: a model would invent product facts.
         if context_log_enabled():
             context_log.info("=== CHAT CONTEXT === message %r triaged as %s: answered without the research agent",
@@ -897,9 +1303,19 @@ def research(
                               recall={"route": _route_info(route), "triage_detail": _triage_detail(route),
                                       "memory_loaded": chat_memory is not None})
 
-    trace.add("route", "ARCHIVE: the message needs the writer's posts, so the research agent runs")
-    with trace.stage("sync-posts(wait)"):
-        manifest = synced.result() or {}
+    trace.add("route", (f"COMPOUND ACTION: create a real NoteStack {compound_artifact} artifact first, then pass its "
+                        "exact content to the enabled external tool" if compound_artifact else
+                       "EXTERNAL ACTION: Jev selected a connected-app action, so only enabled external tools are "
+                        "given to the research agent" if external_only else
+                       "ARCHIVE: the message needs the writer's posts, so the research agent runs"))
+    if external_only:
+        # The sync was already started beside triage, but an external action needs no notebook context. Let it finish
+        # in the background instead of adding R2/post latency before the external tool can run.
+        manifest = {}
+        trace.add("context", "external action does not wait for the background posts sync")
+    else:
+        with trace.stage("sync-posts(wait)"):
+            manifest = synced.result() or {}
     steps: list[tuple[str, str]] = []
 
     def log(kind: str, detail: str) -> None:
@@ -907,6 +1323,9 @@ def research(
         trace.step(kind, detail)
         if on_step:
             on_step(kind, detail)
+
+    if external_only:
+        log("external", "Using enabled external tools")
 
     tools = ScopedTools(corpus, allowed, on_step=log)
     stream = _Stream(on_delta, trace) if settings.chat_stream_answers else None
@@ -920,13 +1339,23 @@ def research(
             log("think", "Recalling earlier in this chat")
     chat_tools = ChatTools(chat_memory.corpus, on_step=log) if chat_memory is not None and with_chat_tools else None
     budget = min(QUICK_STEPS, settings.research_max_steps) if route.depth == "quick" else settings.research_max_steps
-    tool_list = [tools.list_files, tools.search, tools.read]
-    if chat_tools:
-        tool_list += [chat_tools.list_chat_topics, chat_tools.search_chats, chat_tools.read_chat]
-    inputs = dict(question=route.question, conversation=conversation_text(history),
+    created_artifacts: list[dict] = []
+    if external_only:
+        # Jev decides only whether the notebook is relevant. Once it has ruled the notebook out, do not let the
+        # agent fall back to archive tools; the ReAct model chooses the matching enabled external tool.
+        tool_list = list(external_tools)
+    else:
+        tool_list = [tools.list_files, tools.search, tools.read] if allowed else []
+        if chat_tools:
+            tool_list += [chat_tools.list_chat_topics, chat_tools.search_chats, chat_tools.read_chat]
+        tool_list += external_tools
+    inputs = dict(question=external_question(route.question) if external_only else route.question,
+                  conversation=conversation_text(history),
                   archive_guide=archive_guide(tools), writer_profile=profile or "(none)", answer_length=route.detail,
                   prefetched="(none)")
-    if notes or chat_tools:
+    if external_only:
+        signature = ResearchExternal
+    elif notes or chat_tools:
         signature, inputs["chat_memory"] = ResearchArchiveWithMemory, notes or "(nothing filed yet)"
     else:
         signature = ResearchArchive
@@ -944,12 +1373,28 @@ def research(
                agent_completion: int = 0) -> ResearchResult:
         with trace.stage("verify"):
             text, cites = verify_citations(tools, answer, proposed_cites or [], chat_tools)
-        unsupported = bool(model_unsupported) or not cites
+        used_external = [
+            {
+                "connection": source.connection,
+                "tool": source.tool,
+                **({"urls": list(source.urls)} if getattr(source, "urls", None) else {}),
+            }
+            for source in external_sources
+        ]
+        used_widgets = [widget.as_dict() for widget in external_widgets]
+        unsupported = bool(model_unsupported) or (not cites and not used_external and not created_artifacts)
         refused = False
-        if not cites and not model_unsupported:
+        if not cites and not used_external and not model_unsupported and not created_artifacts:
             # The model answered without anything we could verify: do not pass it off as grounded.
-            text = "I could not find support for that in these posts, so I would rather not guess."
+            text = ("I could not complete that with the connected apps, so I would rather not guess."
+                    if external_only else
+                    "I could not find support for that in these posts, so I would rather not guess.")
             refused = True
+        text = _append_external_resource_links(text, used_external)
+        for artifact in created_artifacts:
+            url = str(artifact.get("url") or "")
+            if url and url not in text:
+                text = text.rstrip() + f"\n\n- [Open the {artifact.get('type', 'artifact')} in NoteStack]({url})"
         proposed = proposed_cites or []
         kept = {(c.path, c.line_start) for c in cites}
         dropped = [c for c in proposed if (c.path, c.line_start) not in kept]
@@ -976,10 +1421,13 @@ def research(
             prompt_tokens=agent_prompt + route.prompt_tokens + writer_prompt + extra_prompt,
             completion_tokens=agent_completion + route.completion_tokens + writer_completion + extra_completion,
             steps=steps,
-            kind="archive",
+            kind="external_action" if external_only else "archive",
             question=route.question,
             recall={**recall, "path": path},
             topic=(stream.topic if stream and not refused else ""),
+            external_sources=used_external,
+            external_widgets=used_widgets,
+            created_artifacts=list(created_artifacts),
         )
 
     # 1. Only reshape the previous answer ("make it shorter"): one streamed call over what it already cited.
@@ -1008,12 +1456,17 @@ def research(
     if earlier and refers_back(route.question):
         query = f"{route.question} {earlier}"
     deep = route.depth == "deep"
-    with trace.stage("prefetch"):
-        try:
-            pre = prefetch(corpus, allowed, manifest, query, *((DEEP_TOP_K, DEEP_PER_POST) if deep else ()))
-        except Exception:  # a ranking problem only costs the head start
-            logging.getLogger(__name__).warning("Prefetch failed", exc_info=True)
-            pre = None
+    pre = None
+    if not external_only:
+        with trace.stage("prefetch"):
+            try:
+                pre = prefetch(corpus, allowed, manifest, query, *((DEEP_TOP_K, DEEP_PER_POST) if deep else ()))
+            except Exception:  # a ranking problem only costs the head start
+                logging.getLogger(__name__).warning("Prefetch failed", exc_info=True)
+                pre = None
+    else:
+        trace.add("context", "archive prefetch skipped: Jev classified the request as an external action, "
+                  "so only enabled external tools are available")
     if pre is not None:
         inputs["prefetched"] = pre.text
         trace.add("context", f"prefetch: {len(pre.passages)} passage(s) from "
@@ -1029,7 +1482,9 @@ def research(
 
     if context_log_enabled():
         context_log.info(context_banner(chat_memory, route.topic, route.memory, inputs.get("chat_memory", "")))
-        context_log.info(describe_context(question, route, inputs, signature, [t.__name__ for t in tool_list],
+        context_log.info(describe_context(question, route, inputs, signature,
+                                          [getattr(t, "name", getattr(t, "__name__", type(t).__name__))
+                                           for t in tool_list],
                                           chat_memory, chat_tools is not None))
     if not settings.chat_memory_read:
         memory_line = "chat memory: OFF (CHAT_MEMORY_READ=false), so only the last messages of this chat are used"
@@ -1045,7 +1500,7 @@ def research(
     trace.add("context",
               f"signature: {signature.__name__} | model {getattr(lm, 'model', '?')} | "
               f"up to {budget} reasoning steps ({route.depth}) | answer length {route.detail}",
-              f"tools    : {', '.join(t.__name__ for t in tool_list)}",
+              f"tools    : {', '.join(getattr(t, 'name', getattr(t, '__name__', type(t).__name__)) for t in tool_list)}",
               f"question : {len(inputs['question'])} chars ("
               + ("the writer's raw message: Jev does not rewrite it" if route.engine == "jev"
                  else "rewritten as a standalone question by the triage model") + ")",
@@ -1054,10 +1509,16 @@ def research(
               f"{len(profile)} chars  [Postgres WorkspaceMemory]",
               f"archive guide: {len(inputs['archive_guide'])} chars  [built in code]",
               memory_line)
+    if external_tools:
+        definitions = [str(tool) for tool in external_tools]
+        trace.add("context", f"external definitions: {len(definitions)} tool(s), "
+                  f"{sum(len(item) for item in definitions)} compact characters",
+                  *[f"external[{index}]: {definition}" for index, definition in enumerate(definitions, start=1)])
 
     # 3. Overview: a question about the notebook as a whole (no subject to search for) is answered in one call from
     # the post list and the opening passage of the newest posts.
-    one_call = stream is not None and settings.chat_fast_path and route.detail != "in_depth" and chat_tools is None
+    one_call = (not external_only and stream is not None and settings.chat_fast_path
+                and route.detail != "in_depth" and chat_tools is None)
     if one_call and pre is not None and pre.overview:
         listing = tools.list_files()  # shows as the one step: scanning the archive
         listed = [(row.split("|")[1].strip(), row.split("|")[2].strip()) for row in listing.splitlines()
@@ -1099,6 +1560,7 @@ def research(
 
     # 5. A question about several separate subjects: research the parts at once, then write one answer.
     if (stream and settings.chat_parallel_parts and route.depth == "deep" and chat_tools is None
+            and not external_tools
             and looks_multipart(route.question)):
         with trace.stage("split"):
             parts, extra_prompt, extra_completion = split_question(route.question, history, trace)

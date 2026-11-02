@@ -30,7 +30,8 @@ def _serialize(ctx: Ctx) -> dict:
         "integrations": {"llm": bool(app_settings.llm_api_key), "elevenlabs": bool(app_settings.elevenlabs_api_key),
                          "x": bool(app_settings.x_client_id), "linkedin": bool(app_settings.linkedin_client_id),
                          "storage": "local" if app_settings.use_local_storage else "r2",
-                         "renderer": app_settings.renderer_url},
+                         "renderer": app_settings.renderer_url,
+                         "outbound_mcp": app_settings.outbound_mcp_enabled},
     }
 
 
