@@ -4,6 +4,7 @@ import { StatusBar } from "expo-status-bar";
 import { type ReactNode, useMemo, useState } from "react";
 import { Modal, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { Pressable } from "@/ui/pressable";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
 
@@ -11,20 +12,21 @@ import { SHARE_WHAT, ShareDialog } from "@/artifacts/card-dialogs";
 import { CloseIcon, CollapseIcon, ExpandIcon, LandscapeIcon, PortraitIcon, ShareIcon } from "@/ui/icons";
 import { colors, fonts, gutter, radius } from "@/ui/theme";
 import { pageStyles } from "@/ui/widgets";
+import { ZoomView } from "@/ui/zoom-view";
 
 export type Layout = "landscape" | "portrait";
 const PAGE = { landscape: { w: 2260, h: 1600 }, portrait: { w: 1600, h: 2260 } };
 
-/** The page's HTML zoomed to `width` points; `zoomable` lets a pinch enlarge it (full screen). No scripts run in it. */
-function pageDoc(html: string, width: number, layout: Layout, zoomable: boolean): string {
-  const viewport = zoomable ? "width=device-width,initial-scale=1,maximum-scale=6,user-scalable=yes" : "width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no";
+/** The page's HTML zoomed to `width` points. No scripts run in it. */
+function pageDoc(html: string, width: number, layout: Layout): string {
+  const viewport = "width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no";
   const head = `<meta name="viewport" content="${viewport}"><style>html{zoom:${width / PAGE[layout].w};-webkit-text-size-adjust:100%;text-size-adjust:100%}html,body{overflow:hidden}</style>`;
   return html.includes("<head>") ? html.replace("<head>", `<head>${head}`) : head + html;
 }
 
 /** The infographic's page (HTML from our own template, every word escaped), scaled to `width` (web: InfographicFrame). */
-export function InfographicFrame({ html, width, layout, zoomable = false }: { html: string; width: number; layout: Layout; zoomable?: boolean }) {
-  const source = useMemo(() => ({ html: pageDoc(html, width, layout, zoomable), baseUrl: "about:blank" }), [html, width, layout, zoomable]);
+export function InfographicFrame({ html, width, layout }: { html: string; width: number; layout: Layout }) {
+  const source = useMemo(() => ({ html: pageDoc(html, width, layout), baseUrl: "about:blank" }), [html, width, layout]);
   return (
     <View style={{ width, height: (width * PAGE[layout].h) / PAGE[layout].w }}>
       <WebView
@@ -32,13 +34,11 @@ export function InfographicFrame({ html, width, layout, zoomable = false }: { ht
         originWhitelist={["*"]}
         javaScriptEnabled={false}
         onShouldStartLoadWithRequest={(r) => r.url === "about:blank" || r.url.startsWith("data:")}
-        scrollEnabled={zoomable}
+        scrollEnabled={false}
         bounces={false}
         overScrollMode="never"
         showsHorizontalScrollIndicator={false}
         showsVerticalScrollIndicator={false}
-        setBuiltInZoomControls={zoomable}
-        setDisplayZoomControls={false}
         style={styles.web}
         containerStyle={styles.web}
       />
@@ -59,24 +59,28 @@ export function InfographicThumb({ artifact, onOpen }: { artifact: Artifact; onO
   );
 }
 
-/** The page full screen, as large as fits either way up, and pinch to look closer. */
+/** The page full screen, as large as fits either way up, and pinch to look closer (its own gesture root: a Modal). */
 function FullView({ html, layout, onClose }: { html: string; layout: Layout; onClose: () => void }) {
   const win = useWindowDimensions();
   const ratio = PAGE[layout].w / PAGE[layout].h;
   const width = Math.min(win.width, win.height * ratio);
   return (
     <Modal visible animationType="fade" presentationStyle="fullScreen" supportedOrientations={["portrait", "landscape"]} onRequestClose={onClose}>
-      <SafeAreaProvider>
-      <StatusBar hidden />
-      <View style={styles.full}>
-        <InfographicFrame html={html} width={width} layout={layout} zoomable />
-        <SafeAreaView edges={["top", "right"]} style={styles.fullExit} pointerEvents="box-none">
-          <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Exit full screen" style={styles.round}>
-            <CollapseIcon size={18} />
-          </Pressable>
-        </SafeAreaView>
-      </View>
-    </SafeAreaProvider>
+      <GestureHandlerRootView style={styles.root}>
+        <SafeAreaProvider>
+          <StatusBar hidden />
+          <View style={styles.full}>
+            <ZoomView>
+              <InfographicFrame html={html} width={width} layout={layout} />
+            </ZoomView>
+            <SafeAreaView edges={["top", "right"]} style={styles.fullExit} pointerEvents="box-none">
+              <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Exit full screen" style={styles.round}>
+                <CollapseIcon size={18} />
+              </Pressable>
+            </SafeAreaView>
+          </View>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
@@ -158,6 +162,8 @@ export function InfographicViewer({ artifact, visible, onClose, feedback, downlo
           ) : null}
           <View style={styles.stage} onLayout={(e) => setWidth(e.nativeEvent.layout.width - 2)}>
             {html && width > 0 ? <InfographicFrame key={layout} html={html} width={width} layout={layout} /> : null}
+            {/* A tap on the page opens it full screen, to pinch closer */}
+            {html ? <Pressable style={StyleSheet.absoluteFill} onPress={() => setFull(true)} accessibilityRole="button" accessibilityLabel="Open full screen" /> : null}
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -187,6 +193,7 @@ const styles = StyleSheet.create({
   eyebrow: { color: colors.blue, fontFamily: fonts.mono, fontSize: 12, letterSpacing: 2.5 },
   infoText: { color: colors.text, fontSize: 15, lineHeight: 22, marginBottom: 4 },
   stage: { borderRadius: radius.sm + 2, overflow: "hidden", borderWidth: 1, borderColor: colors.line },
+  root: { flex: 1 },
   full: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.black },
   fullExit: { position: "absolute", top: 0, right: 0, padding: gutter },
 });

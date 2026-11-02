@@ -9,6 +9,7 @@ import { SymbolView } from "expo-symbols";
 import { type ComponentRef, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { Pressable } from "@/ui/pressable";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
 
@@ -33,6 +34,7 @@ import {
 import { colors, fonts, gutter, radius } from "@/ui/theme";
 import { ErrorText } from "@/ui";
 import { confirm, Dialog, PillButton, PopMenu, pageStyles } from "@/ui/widgets";
+import { ZoomView } from "@/ui/zoom-view";
 
 /* The web's slide deck viewer (frontend/src/components/SlideDeck.tsx): every slide stacked, presenting, downloading,
    and editing the slides in place. */
@@ -49,10 +51,13 @@ const BRIDGE = `<script>window.addEventListener("message",function(e){var d=e.da
  * The slide's HTML at `width` points wide, and the editor when it is editable. The 1920-pixel slide is laid out at its
  * own size and scaled down whole, as the web's frame does: its text boxes sit at fixed places, so the text must not be
  * resized (iOS enlarges small text on its own unless told not to, and the lines then spill out of their boxes).
+ * `zoomable` lets a pinch enlarge the page itself: the WebView keeps every touch on Android, so only its own zoom can
+ * share them with typing in the text boxes.
  */
-function slideDoc(html: string, width: number, editable: boolean): string {
+function slideDoc(html: string, width: number, editable: boolean, zoomable: boolean): string {
+  const viewport = zoomable ? "minimum-scale=1,maximum-scale=5,user-scalable=yes" : "maximum-scale=1,user-scalable=no";
   const head =
-    `<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">` +
+    `<meta name="viewport" content="width=device-width,initial-scale=1,${viewport}">` +
     `<style>html,body{margin:0;padding:0;overflow:hidden;background:transparent;-webkit-text-size-adjust:100%;text-size-adjust:100%}` +
     `.slide{transform:scale(${width / SLIDE_W});transform-origin:0 0}</style>`;
   let doc = html.includes("<head>") ? html.replace("<head>", `<head>${head}`) : head + html;
@@ -64,17 +69,19 @@ function slideDoc(html: string, width: number, editable: boolean): string {
  * One slide (HTML from our own layout, every word escaped) in a WebView, scaled to `width` (web: SlideFrame). Scripts
  * run only with `onEdit`, for the slide editor; it never navigates anywhere.
  */
-function SlideView({ html, width, editing = false, removable: boxes, onEdit, onRemove }: {
+function SlideView({ html, width, editing = false, zoomable = false, removable: boxes, onEdit, onRemove }: {
   html: string;
   width: number;
   editing?: boolean;
+  /** Pinch to zoom the slide (the editor's one slide). */
+  zoomable?: boolean;
   removable?: string[];
   onEdit?: (field: string, text: string) => void;
   onRemove?: (field: string) => void;
 }) {
   const web = useRef<ComponentRef<typeof WebView>>(null);
   const withEditor = !!onEdit;
-  const source = useMemo(() => ({ html: slideDoc(html, width, withEditor), baseUrl: "about:blank" }), [html, width, withEditor]);
+  const source = useMemo(() => ({ html: slideDoc(html, width, withEditor, zoomable), baseUrl: "about:blank" }), [html, width, withEditor, zoomable]);
   const live = useRef({ editing, boxes: boxes ?? [], onEdit, onRemove });
   useEffect(() => {
     live.current = { editing, boxes: boxes ?? [], onEdit, onRemove };
@@ -115,11 +122,13 @@ function SlideView({ html, width, editing = false, removable: boxes, onEdit, onR
         javaScriptEnabled={withEditor}
         onMessage={withEditor ? onMessage : undefined}
         onShouldStartLoadWithRequest={(r) => r.url === "about:blank" || r.url.startsWith("data:")}
-        scrollEnabled={false}
+        scrollEnabled={zoomable}
         bounces={false}
         overScrollMode="never"
         showsHorizontalScrollIndicator={false}
         showsVerticalScrollIndicator={false}
+        setBuiltInZoomControls={zoomable}
+        setDisplayZoomControls={false}
         hideKeyboardAccessoryView
         style={styles.web}
         containerStyle={styles.web}
@@ -137,7 +146,6 @@ export function SlidePresenter({ pages, start = 0, light = false, onClose }: { p
   const [i, setI] = useState(Math.min(start, Math.max(pages.length - 1, 0)));
   const [idle, setIdle] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const touchX = useRef(0);
   const win = useWindowDimensions();
   const width = Math.min(win.width, (win.height * SLIDE_W) / SLIDE_H);
   const go = (to: number) => setI(Math.max(0, Math.min(pages.length - 1, to)));
@@ -153,30 +161,21 @@ export function SlidePresenter({ pages, start = 0, light = false, onClose }: { p
 
   return (
     <Modal visible animationType="fade" presentationStyle="fullScreen" supportedOrientations={["portrait", "landscape"]} onRequestClose={onClose}>
+      {/* A Modal is its own window on Android: the pinch needs its own gesture root. */}
+      <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
       <StatusBar hidden />
-      <View style={[styles.present, light && styles.presentLight]}>
-        <View style={{ width, height: (width * SLIDE_H) / SLIDE_W }}>
-          {pages.map((html, k) => (
-            <View key={k} style={[StyleSheet.absoluteFill, k !== i && styles.hidden]} pointerEvents="none">
-              <SlideView html={html} width={width} />
-            </View>
-          ))}
-        </View>
-        {/* Over the slide: a tap goes on, a swipe moves either way */}
-        <View
-          style={StyleSheet.absoluteFill}
-          accessibilityLabel={`Slide ${i + 1} of ${pages.length}`}
-          onTouchStart={(e) => {
-            touchX.current = e.nativeEvent.pageX;
-            wake();
-          }}
-          onTouchEnd={(e) => {
-            const dx = e.nativeEvent.pageX - touchX.current;
-            if (dx > 50) go(i - 1);
-            else if (dx < -50 || Math.abs(dx) < 10) go(i + 1);
-          }}
-        />
+      <View style={[styles.present, light && styles.presentLight]} onTouchStart={wake} accessibilityLabel={`Slide ${i + 1} of ${pages.length}`}>
+        {/* A tap goes on, a swipe moves either way; pinch to look closer (a new slide starts at normal size) */}
+        <ZoomView resetKey={i} onTap={() => go(i + 1)} onSwipe={(dir) => go(i + dir)}>
+          <View style={{ width, height: (width * SLIDE_H) / SLIDE_W }}>
+            {pages.map((html, k) => (
+              <View key={k} style={[StyleSheet.absoluteFill, k !== i && styles.hidden]}>
+                <SlideView html={html} width={width} />
+              </View>
+            ))}
+          </View>
+        </ZoomView>
         <SafeAreaView edges={["bottom"]} style={[styles.presentBar, idle && styles.hidden]} pointerEvents={idle ? "none" : "box-none"}>
           <View style={styles.presentBarRow}>
             <PillButton small title="Prev" disabled={i === 0} onPress={() => (go(i - 1), wake())} />
@@ -189,6 +188,7 @@ export function SlidePresenter({ pages, start = 0, light = false, onClose }: { p
         </SafeAreaView>
       </View>
     </SafeAreaProvider>
+    </GestureHandlerRootView>
     </Modal>
   );
 }
@@ -345,6 +345,75 @@ function AddSlide({ after, busy, full, onAdd }: { after: number; busy: boolean; 
 }
 
 /**
+ * One slide open on its own to edit, picked from the list in edit mode: its controls on top, then the slide as large as
+ * fits. Tap a text box to type in it; pinch to look closer and move about with two fingers. Done goes back to the list
+ * with the changes kept in the draft; Save keeps them for good.
+ */
+function SlideEditor({ k, count, html, slide, slots, fmt, version, busy, saving, dirty, error, onSave, onDone, onType, onChange, onMove, onDuplicate, onDelete }: {
+  k: number;
+  count: number;
+  html: string;
+  slide: EditSlide;
+  slots: string[];
+  fmt: DeckFmt;
+  version: number;
+  busy: boolean;
+  saving: boolean;
+  dirty: boolean;
+  error: string;
+  onSave: () => void;
+  onDone: () => void;
+  onType: (field: string, text: string) => void;
+  onChange: (next: EditSlide) => void;
+  onMove: (by: -1 | 1) => void;
+  onDuplicate: () => void;
+  onDelete: () => void;
+}) {
+  const win = useWindowDimensions();
+  const width = Math.min(win.width - gutter * 2, (win.height * 0.55 * SLIDE_W) / SLIDE_H);
+  return (
+    <Modal visible animationType="slide" presentationStyle="fullScreen" supportedOrientations={["portrait", "landscape"]} onRequestClose={onDone}>
+      {/* A Modal is its own window on Android: the pinch needs its own gesture root. */}
+      <GestureHandlerRootView style={styles.root}>
+        <SafeAreaProvider>
+          <SafeAreaView style={pageStyles.sheet} edges={["top", "bottom"]}>
+            <View style={styles.editorHead}>
+              <Text style={styles.editorTitle} accessibilityRole="header">
+                Slide {k + 1} of {count}
+              </Text>
+              <PillButton small variant="primary" title={saving ? "Saving..." : "Save"} busy={saving} disabled={busy || !dirty} onPress={onSave} />
+              <PillButton small title="Done" disabled={saving} onPress={onDone} />
+            </View>
+            <View style={styles.editorTools}>
+              <SlideTools k={k} count={count} slide={slide} slots={slots} fmt={fmt} busy={busy || saving} onChange={onChange} onMove={onMove} onDuplicate={onDuplicate} onDelete={onDelete} />
+              <Text style={styles.editorHint}>
+                Tap a text box to type. Pinch the slide to zoom in.{busy ? " Updating..." : ""}
+              </Text>
+              <ErrorText>{error}</ErrorText>
+            </View>
+            {/* At the top, so the keyboard doesn't cover the slide */}
+            <View style={[styles.editorStage, busy && styles.busy]}>
+              <View style={[styles.slide, styles.slideEditing, { width, height: (width * SLIDE_H) / SLIDE_W }]}>
+                <SlideView
+                  key={version}
+                  html={html}
+                  width={width - 2}
+                  editing={!busy}
+                  zoomable
+                  onEdit={onType}
+                  removable={removable(slide)}
+                  onRemove={(field) => onChange(removeField(slide, field))}
+                />
+              </View>
+            </View>
+          </SafeAreaView>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    </Modal>
+  );
+}
+
+/**
  * The deck in a full-screen popup (web: SlideDeckViewer): its actions along the top (edit, present, a larger preview,
  * download, the thumbs, more) and every slide below, one after another. A tap on a slide presents from it. The pencil
  * opens edit mode: every text on the slides is a framed text box to type in (with a remove button where the slide can
@@ -368,6 +437,7 @@ export function SlideDeckViewer({ artifact, visible, shareable, feedback, onClos
   const [presenting, setPresenting] = useState<number | null>(null);
   const [inView, setInView] = useState(0);
   const [draft, setDraft] = useState<Draft | null>(null); // edit mode when set
+  const [editingSlide, setEditingSlide] = useState<number | null>(null); // the slide open on its own to edit
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false); // the server is drawing the slides again
   const [saving, setSaving] = useState(false);
@@ -441,6 +511,7 @@ export function SlideDeckViewer({ artifact, visible, shareable, feedback, onClos
   };
   const leave = () => {
     setDraft(null);
+    setEditingSlide(null);
     setDirty(false);
     setBusy(false);
     setSaveError("");
@@ -543,7 +614,7 @@ export function SlideDeckViewer({ artifact, visible, shareable, feedback, onClos
           <Text style={styles.meta}>
             {pages.length} slides · {fmt === "presenter" ? "Presenter" : "Detailed"} · {theme}
             {c.source ? ` · from ${sourceSummary(c.source)}` : ""}
-            {editing ? ` · Editing: tap a text box to type${busy ? " · Updating..." : dirty ? " · Unsaved changes" : ""}` : ""}
+            {editing ? ` · Editing: tap a slide to edit it${busy ? " · Updating..." : dirty ? " · Unsaved changes" : ""}` : ""}
           </Text>
         ) : null}
         {saveError && !asking ? (
@@ -567,7 +638,6 @@ export function SlideDeckViewer({ artifact, visible, shareable, feedback, onClos
             {slideWidth > 0
               ? pages.map((html, k) => {
                   const s = slides[k];
-                  const e = draft?.slides[k];
                   return (
                     <View
                       key={k}
@@ -575,38 +645,16 @@ export function SlideDeckViewer({ artifact, visible, shareable, feedback, onClos
                       onLayout={(ev) => {
                         rows.current[k] = { y: ev.nativeEvent.layout.y, h: ev.nativeEvent.layout.height };
                       }}>
-                      {draft && e ? (
-                        <SlideTools
-                          k={k}
-                          count={draft.slides.length}
-                          slide={e}
-                          slots={draft.slots[k] ?? []}
-                          fmt={fmt}
-                          busy={busy || saving}
-                          onChange={(next) => change(k, next)}
-                          onMove={(by) => move(k, by)}
-                          onDuplicate={() => insert(k + 1, { ...JSON.parse(JSON.stringify(e)), variant: "" })}
-                          onDelete={() => void restructure(draft.slides.filter((_, i) => i !== k))}
-                        />
-                      ) : null}
                       <View style={[styles.slide, editing && styles.slideEditing]}>
-                        <SlideView
-                          key={version}
-                          html={html}
-                          width={slideWidth}
-                          editing={editing && !busy}
-                          onEdit={(field, text) => typed(k, field, text)}
-                          removable={e ? removable(e) : []}
-                          onRemove={(field) => e && change(k, removeField(e, field))}
+                        <SlideView key={version} html={html} width={slideWidth} />
+                        {/* Viewing, a tap presents from the slide; editing, it opens the slide on its own to edit */}
+                        <Pressable
+                          style={StyleSheet.absoluteFill}
+                          onPress={() => (editing ? setEditingSlide(k) : void present(k))}
+                          disabled={editing && busy}
+                          accessibilityRole="button"
+                          accessibilityLabel={`${editing ? "Edit" : "Present from"} slide ${k + 1}: ${s?.heading ?? ""}`}
                         />
-                        {editing ? null : (
-                          <Pressable
-                            style={StyleSheet.absoluteFill}
-                            onPress={() => void present(k)}
-                            accessibilityRole="button"
-                            accessibilityLabel={`Present from slide ${k + 1}: ${s?.heading ?? ""}`}
-                          />
-                        )}
                       </View>
                       {draft ? (
                         <AddSlide after={k} busy={busy || saving} full={draft.slides.length >= MAX_SLIDES} onAdd={(layout) => insert(k + 1, newSlide(layout, fmt))} />
@@ -621,6 +669,37 @@ export function SlideDeckViewer({ artifact, visible, shareable, feedback, onClos
 
       {presenting !== null ? (
         <SlidePresenter pages={pages} start={presenting} light={c.theme === "light-space"} onClose={() => setPresenting(null)} />
+      ) : null}
+      {draft && editingSlide !== null && draft.slides[editingSlide] && draft.pages[editingSlide] ? (
+        <SlideEditor
+          k={editingSlide}
+          count={draft.slides.length}
+          html={draft.pages[editingSlide]}
+          slide={draft.slides[editingSlide]}
+          slots={draft.slots[editingSlide] ?? []}
+          fmt={fmt}
+          version={version}
+          busy={busy}
+          saving={saving}
+          dirty={dirty}
+          error={asking ? "" : saveError}
+          onSave={() => void save()}
+          onDone={() => setEditingSlide(null)}
+          onType={(field, text) => typed(editingSlide, field, text)}
+          onChange={(next) => change(editingSlide, next)}
+          onMove={(by) => {
+            move(editingSlide, by);
+            setEditingSlide(editingSlide + by);
+          }}
+          onDuplicate={() => {
+            insert(editingSlide + 1, { ...JSON.parse(JSON.stringify(draft.slides[editingSlide])), variant: "" });
+            setEditingSlide(editingSlide + 1);
+          }}
+          onDelete={() => {
+            void restructure(draft.slides.filter((_, i) => i !== editingSlide));
+            setEditingSlide(null);
+          }}
+        />
       ) : null}
       <Dialog visible={asking !== null} title="Save changes?" onClose={() => !saving && setAsking(null)}>
         <Text style={pageStyles.body}>
@@ -663,6 +742,12 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   web: { flex: 1, backgroundColor: "transparent" },
   hidden: { opacity: 0 },
+  root: { flex: 1 },
+  editorHead: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: gutter * 1.25, paddingTop: 14, paddingBottom: 6 },
+  editorTitle: { flex: 1, color: colors.text, fontFamily: fonts.displayBold, fontSize: 20 },
+  editorTools: { gap: 6, paddingHorizontal: gutter * 1.25 },
+  editorHint: { color: colors.text2, fontSize: 14, lineHeight: 20 },
+  editorStage: { flex: 1, alignItems: "center", paddingTop: 12 },
   head: { flexDirection: "row", alignItems: "flex-start", gap: 12, paddingHorizontal: gutter * 1.25, paddingTop: 14 },
   title: { flex: 1, color: colors.text, fontFamily: fonts.displayBold, fontSize: 24, lineHeight: 30 },
   close: { paddingTop: 5 },

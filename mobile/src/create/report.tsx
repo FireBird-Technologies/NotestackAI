@@ -18,10 +18,13 @@ type Format = "document" | "interactive";
  * Create report (web: ReportDialog.tsx): step 1 picks the sources and the format (and, for a document, a template);
  * step 2 shows the instructions the writer will get, filled in from the template, for the user to edit.
  */
-export function ReportDialog({ notebook, chats, currentChatId, onCreate }: DialogProps) {
+export function ReportDialog({ notebook, chats, currentChatId, initial, onCreate }: DialogProps) {
   const [step, setStep] = useState<1 | 2>(1);
-  const [format, setFormat] = useState<Format>("interactive");
-  const [templateId, setTemplateId] = useState("briefing");
+  // Interactive by default; a document when the chat asked for one, or for one of the document templates.
+  const [format, setFormat] = useState<Format>(
+    initial?.format === "document" || (!initial?.format && initial?.template) ? "document" : "interactive",
+  );
+  const [templateId, setTemplateId] = useState(initial?.template ?? "briefing");
   const [sel, setSel] = useState<SourceSelection | null>(null);
   const [edited, setEdited] = useState<string | null>(null); // the user's own text: never replaced by a refill
   const catalog = useQuery({ queryKey: ["reports", "templates"], queryFn: reportsApi.templates, staleTime: 10 * 60_000 });
@@ -31,7 +34,13 @@ export function ReportDialog({ notebook, chats, currentChatId, onCreate }: Dialo
     format === "interactive"
       ? catalog.data?.interactive
       : (catalog.data?.templates.find((t) => t.id === templateId) ?? suggested?.find((t) => t.id === templateId));
-  const prefilled = useMemo(() => (template ? fillReportPrompt(template.prompt, "") : ""), [template]);
+  // The template says "the selected sources", or the topic asked for in the chat, with anything else asked for after it.
+  const about = initial?.about?.trim() ?? "";
+  const asked = initial?.instructions?.trim() ?? "";
+  const prefilled = useMemo(
+    () => (template ? [fillReportPrompt(template.prompt, about), asked].filter(Boolean).join("\n\n") : ""),
+    [template, about, asked],
+  );
   const text = edited ?? prefilled;
 
   // The suggested templates belong to the chosen sources: the posts when there are any, else the chats.

@@ -169,21 +169,31 @@ const TYPES_BY_EXT: Record<string, string> = {
 /** A file to upload: a browser File, or anything else with a name, type and size that fetch can send. */
 export type UploadSource = Blob & { name: string };
 
-/** Browsers leave File.type empty for some extensions (.md on Windows) and use vendor names for others. */
+/**
+ * A known extension decides the type: browsers leave File.type empty for some (.md on Windows), and phones report
+ * whatever the OS says (Android often application/octet-stream for .md and .vtt, iOS text/x-markdown, or no type at
+ * all), which the API's allow-list refuses. Otherwise the reported type, with vendor names normalized.
+ */
 function contentType(file: UploadSource): string {
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-  const base = file.type.split(";")[0];
+  if (TYPES_BY_EXT[ext]) return TYPES_BY_EXT[ext];
+  const base = (file.type ?? "").split(";")[0];
   if (base === "audio/x-m4a") return "audio/mp4";
   if (base === "audio/x-wav") return "audio/wav";
-  return base || TYPES_BY_EXT[ext] || "application/octet-stream";
+  if (base === "text/x-markdown") return "text/markdown";
+  return base || "application/octet-stream";
 }
 
 export async function uploadFile(file: UploadSource): Promise<{ upload_id: string; key: string }> {
+  const type = contentType(file);
   const start = await post<{ upload_id: string; upload_url: string; headers: Record<string, string> }>(
     "/api/storage/uploads",
-    { filename: file.name, content_type: contentType(file), size_bytes: file.size },
+    { filename: file.name, content_type: type, size_bytes: file.size },
   );
-  const put = await platform().fetch(start.upload_url, { method: "PUT", headers: start.headers, body: file });
+  // expo/fetch replaces Content-Type with a Blob body's own type, which breaks the presigned PUT (signed for `type`)
+  // whenever the phone reported something else or nothing. Raw bytes keep the signed header.
+  const body = file.type === type ? file : await file.arrayBuffer();
+  const put = await platform().fetch(start.upload_url, { method: "PUT", headers: start.headers, body });
   if (!put.ok) throw new ApiError(put.status, "Upload to storage failed");
   return post(`/api/storage/uploads/${start.upload_id}/complete`);
 }

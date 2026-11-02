@@ -6,6 +6,7 @@ import { Pressable } from "@/ui/pressable";
 import Animated, { FadeIn, FadeOut, SlideInUp, SlideOutUp } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { useAuth } from "@/account/auth";
 import { colors, fonts, gutter, radius } from "@/ui/theme";
 
 /** The web app's mobile menu (frontend/src/components/PublicChrome.tsx); each item is a screen in the app. */
@@ -19,17 +20,20 @@ const LINKS: { label: string; path: Href }[] = [
 const BAR_HEIGHT = 60;
 
 /**
- * The signed out screens' navbar, as on the web: the logo (back to the landing page) and a menu button that drops a
- * panel of links down from the bar. Render it last inside the screen so the panel sits above the content.
+ * The signed out screens' navbar, as on the web: the logo (home: the sign in page, or Notebooks when signed in) and a
+ * menu button that drops a panel of links down from the bar. `minimal` (sign in, sign up: they show the logo
+ * themselves) leaves just the menu button. Render it last inside the screen so the panel sits above the content.
  */
-export function PublicHeader() {
+export function PublicHeader({ minimal = false }: { minimal?: boolean }) {
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
 
-  // Back to the landing page: pops the screens above it, or replaces this one when it is not underneath.
+  // Signed out, back to sign in: pops the screens above it, or replaces this one when it is not underneath.
   const home = () => {
     setOpen(false);
-    router.dismissTo("/welcome");
+    if (user) router.navigate("/notebooks");
+    else router.dismissTo("/sign-in");
   };
   const visit = (path: Href) => {
     setOpen(false);
@@ -46,16 +50,18 @@ export function PublicHeader() {
 
       {/* Solid behind the status bar and the bar, so content scrolling underneath does not show through. */}
       <View style={[styles.top, { paddingTop: insets.top }, open && styles.topOpen]}>
-        <View style={styles.bar}>
-          <Pressable
-            onPress={home}
-            accessibilityRole="link"
-            accessibilityLabel="Notestack home"
-            hitSlop={8}
-            style={({ pressed }) => [styles.brand, pressed && styles.pressed]}>
-            <Image source={require("@/assets/images/logo.png")} style={styles.logo} accessibilityIgnoresInvertColors />
-            <Text style={styles.wordmark}>Notestack</Text>
-          </Pressable>
+        <View style={[styles.bar, minimal && styles.barMinimal]}>
+          {minimal ? null : (
+            <Pressable
+              onPress={home}
+              accessibilityRole="link"
+              accessibilityLabel="Notestack home"
+              hitSlop={8}
+              style={({ pressed }) => [styles.brand, pressed && styles.pressed]}>
+              <Image source={require("@/assets/images/logo.png")} style={styles.logo} accessibilityIgnoresInvertColors />
+              <Text style={styles.wordmark}>Notestack</Text>
+            </Pressable>
+          )}
           <Pressable
             onPress={() => setOpen((o) => !o)}
             accessibilityRole="button"
@@ -120,6 +126,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: gutter * 1.5,
   },
+  barMinimal: { justifyContent: "flex-end" },
   top: { backgroundColor: colors.black, borderBottomWidth: 1, borderBottomColor: colors.line },
   // The open menu panel draws its own bottom edge.
   topOpen: { borderBottomWidth: 0 },

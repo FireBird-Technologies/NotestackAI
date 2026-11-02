@@ -4,7 +4,7 @@ import type { Job, Source } from "@notestack/shared/types";
 import { classifyUrl, looksLikeArticle } from "@notestack/shared/urlScrapability";
 import { File } from "expo-file-system";
 import { useState } from "react";
-import { Alert, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Platform, StyleSheet, Text, TextInput, View } from "react-native";
 import { Pressable } from "@/ui/pressable";
 
 import { UploadIcon } from "@/ui/icons";
@@ -13,6 +13,38 @@ import { ErrorText } from "@/ui";
 import { CARD_RADIUS } from "@/ui/widgets";
 
 const FILE_TYPES = /\.(md|markdown|txt|vtt|html?|pdf)$/i;
+const EXT_BY_TYPE: Record<string, string> = {
+  "application/pdf": "pdf",
+  "text/plain": "txt",
+  "text/markdown": "md",
+  "text/x-markdown": "md",
+  "text/vtt": "vtt",
+  "text/html": "html",
+};
+
+/**
+ * The picked file as an upload, or null when it isn't a supported type. Android files picked through a provider
+ * (Drive, Downloads) have a URI ending in an id, not the file's name, so their reported type decides and the upload
+ * gets a name with the matching extension.
+ */
+function uploadable(f: File): UploadSource | null {
+  // expo-file-system's File is a Blob with a name, which is all the shared upload needs.
+  if (FILE_TYPES.test(f.name)) return f as unknown as UploadSource;
+  const type = (f.type ?? "").split(";")[0];
+  const ext = EXT_BY_TYPE[type];
+  if (!ext) return null;
+  return { name: `Document.${ext}`, type, size: f.size, arrayBuffer: () => f.arrayBuffer() } as unknown as UploadSource;
+}
+
+/**
+ * What the picker offers. Android tags .md and .vtt as application/octet-stream, so that must be offered there (the
+ * extension check below still turns away other such files); on iOS octet-stream means every file, so it names the
+ * markdown and VTT types instead.
+ */
+const PICK_TYPES =
+  Platform.OS === "android"
+    ? ["text/plain", "text/markdown", "text/x-markdown", "text/vtt", "text/html", "application/pdf", "application/octet-stream"]
+    : ["text/plain", "text/markdown", "text/vtt", "text/html", "application/pdf"];
 
 /** One box for everything: paste a link (feed or article is worked out for you) or add files. */
 export function AddSource({
@@ -74,33 +106,29 @@ export function AddSource({
   const upload = async () => {
     setError("");
     setNotice("");
-    const picked = await File.pickFileAsync({
-      multipleFiles: true,
-      mimeTypes: ["text/*", "application/pdf"],
-    }).catch(() => null);
+    const picked = await File.pickFileAsync({ multipleFiles: true, mimeTypes: PICK_TYPES }).catch(() => null);
     if (!picked || picked.canceled) return;
     const files = picked.result;
     setBusy(true);
-    let failed = 0;
+    let unsupported = false;
+    let failed = false;
     for (const f of files) {
-      if (!FILE_TYPES.test(f.name)) {
-        failed += 1;
+      const file = uploadable(f);
+      if (!file) {
+        unsupported = true;
         continue;
       }
       try {
-        // expo-file-system's File is a Blob with a name, which is all the shared upload needs.
-        const res = await sourcesApi.importFile(f as unknown as UploadSource, notebookId);
+        const res = await sourcesApi.importFile(file, notebookId);
         onAdded(res.source, res.job);
       } catch {
-        failed += 1;
+        failed = true;
       }
     }
     setBusy(false);
-    if (failed) {
-      setError(`${failed} of ${files.length} files could not be uploaded. Markdown, text, VTT, HTML or PDF files work.`);
-    } else {
-      setNotice(`${files.length} ${files.length === 1 ? "file" : "files"} uploading. They appear under Imported posts and files.`);
-    }
+    if (unsupported) setError("This file type is not supported.");
+    else if (failed) setError("This file could not be uploaded. Try again.");
+    else setNotice(`${files.length} ${files.length === 1 ? "file" : "files"} uploading. They appear under Imported posts and files.`);
   };
 
   const linkPanel = (

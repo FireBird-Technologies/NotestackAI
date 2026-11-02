@@ -5,8 +5,9 @@ import { useState } from "react";
 
 import { useAuth } from "@/account/auth";
 import { SocialButtons } from "@/account/social-buttons";
-import { Body, Button, ErrorText, Field, FormScreen, Title } from "@/ui";
+import { Brand, Button, ErrorText, Field, FormScreen } from "@/ui";
 
+/** The landing page when signed out: the logo and one line, then Google and the email sign in. */
 export default function SignIn() {
   const { complete } = useAuth();
   const [email, setEmail] = useState("");
@@ -27,8 +28,7 @@ export default function SignIn() {
 
   return (
     <FormScreen>
-      <Title>Welcome back</Title>
-      <Body muted>Sign in to your Notestack account.</Body>
+      <Brand />
       <SocialButtons mode="signin" />
       <Field
         label="Email"

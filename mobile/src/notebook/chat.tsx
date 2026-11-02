@@ -2,7 +2,7 @@ import { ApiError } from "@notestack/shared/client";
 import { notebooksApi } from "@notestack/shared/endpoints";
 import { STARTERS } from "@notestack/shared/notebook";
 import { streamSSE } from "@notestack/shared/stream";
-import type { AnswerFeedback as Feedback, ChatArtifact, Citation, Notebook } from "@notestack/shared/types";
+import type { AnswerFeedback as Feedback, ChatAction, ChatArtifact, ChatPreset, Citation, Notebook } from "@notestack/shared/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import { router } from "expo-router";
@@ -30,6 +30,7 @@ type Turn = {
   id?: string; // the saved message, once there is one: what a thumbs down is attached to
   feedback?: Feedback | null;
   topic?: string; // what the answer is about, named in the next-step suggestion under it
+  action?: ChatAction; // a "create a report" answer: the settings it opened, to open again
 };
 type ChatQuota = { used: number; limit: number; left: number };
 
@@ -64,6 +65,24 @@ function useSmoothText(text: string): string {
   return shown;
 }
 
+const ARTIFACT_NAMES: Record<ChatArtifact, string> = {
+  audio_overview: "audio overview", slide_deck: "slide deck", video: "video", report: "report",
+  infographic: "infographic", quiz: "quiz", flashcards: "flashcards", mind_map: "Mind Constellation",
+};
+
+/** Under a "create a report" answer: open those settings again (web: NotebookView's nbv-open-action). */
+function OpenAction({ action, onOpen }: { action: ChatAction; onOpen: (kind: ChatArtifact, preset?: ChatPreset) => void }) {
+  const icon = nextSteps().find((s) => s.kind === action.artifact)?.icon;
+  const label = `Open ${ARTIFACT_NAMES[action.artifact] ?? "the"} settings`;
+  return (
+    <Pressable onPress={() => onOpen(action.artifact, action.settings)} accessibilityRole="button" accessibilityLabel={label} style={({ pressed }) => [styles.openAction, pressed && styles.openActionOn]}>
+      {icon ? <Image source={icon} style={styles.openActionIcon} tintColor={colors.blue} /> : null}
+      <Text style={styles.openActionText}>{label}</Text>
+      <Text style={styles.openActionArrow}>→</Text>
+    </Pressable>
+  );
+}
+
 /** The notebook bar's height under the status bar, for keeping the ask bar above the keyboard. */
 const BAR_HEIGHT = 60;
 
@@ -76,7 +95,8 @@ export function ChatTab({ notebook, chatId, onStarted, onNextStep }: {
   chatId: string | null;
   onStarted: (id: string) => void;
   /** A next-step suggestion under the last answer was tapped: open that thing's settings. */
-  onNextStep: (kind: ChatArtifact) => void;
+  /** Open a make's settings: a suggestion (defaults), or a "create a report" answer (`preset`: what was asked for). */
+  onNextStep: (kind: ChatArtifact, preset?: ChatPreset) => void;
 }) {
   const queryClient = useQueryClient();
   const upgrade = useUpgrade();
@@ -128,6 +148,7 @@ export function ChatTab({ notebook, chatId, onStarted, onNextStep }: {
     let draft = "";
     let answered = false;
     let newChatId: string | null = null;
+    let action: ChatAction | undefined; // "create a report": its settings open once the stream is done
     try {
       await streamSSE(
         `/api/notebooks/${notebook.id}/chat`,
@@ -149,7 +170,8 @@ export function ChatTab({ notebook, chatId, onStarted, onNextStep }: {
             patch({ text: d.message as string, status: undefined });
           } else if (event === "answer") {
             answered = true;
-            patch({ text: d.text as string, citations: d.citations as Citation[], status: undefined });
+            action = (d.action as ChatAction | null | undefined) ?? undefined;
+            patch({ text: d.text as string, citations: d.citations as Citation[], status: undefined, action });
             const left = d.quota as ChatQuota | null | undefined;
             if (left !== undefined) setAnswerQuota(left);
           }
@@ -164,7 +186,9 @@ export function ChatTab({ notebook, chatId, onStarted, onNextStep }: {
         setQuestion(text);
         if (quota) setAnswerQuota({ used: quota.limit, limit: quota.limit, left: 0 });
       } else {
-        patch({ text: "Lost signal. Try again.", status: undefined });
+        if (__DEV__) console.warn("Chat stream failed", e);
+        // The answer already here stays; the stream only dropped after it.
+        if (!answered) patch({ text: "Lost signal. Try again.", status: undefined });
         setAnswerQuota(undefined);
       }
     } finally {
@@ -173,18 +197,26 @@ export function ChatTab({ notebook, chatId, onStarted, onNextStep }: {
       const saved = newChatId ?? chatId;
       if (saved) {
         // Load the saved messages, then swap the streamed turns for them.
-        await queryClient.fetchQuery({ queryKey: ["chat", saved, "messages"], queryFn: () => notebooksApi.messages(saved) });
+        const msgs = await queryClient
+          .fetchQuery({ queryKey: ["chat", saved, "messages"], queryFn: () => notebooksApi.messages(saved) })
+          .catch(() => []);
         await queryClient.invalidateQueries({ queryKey: ["notebook", notebook.id, "chats"] });
         if (newChatId && newChatId !== chatId) onStarted(newChatId);
-        setPending((t) => (t.some((x) => x.key === answerKey && x.citations) ? [] : t));
+        // The server answered even when the stream to here dropped first: the saved answer replaces "Lost signal".
+        const last = msgs.at(-1);
+        const savedAnswer = last?.role === "assistant" && msgs.at(-2)?.text === text ? last : undefined;
+        setPending((t) => (savedAnswer || t.some((x) => x.key === answerKey && x.citations) ? [] : t));
+        action ??= savedAnswer?.action ?? undefined;
       }
+      // "Create a report": its settings open now, as on the web (after the stream, so the switch can't cut it short).
+      if (action) onNextStep(action.artifact, action.settings);
     }
   };
 
   if (chatId && messages.isPending && !pending.length) return <Loading />;
 
   const turns: Turn[] = [
-    ...(messages.data ?? []).map((m) => ({ key: m.id, id: m.id, role: m.role, text: m.text, citations: m.citations, feedback: m.feedback, topic: m.topic })),
+    ...(messages.data ?? []).map((m) => ({ key: m.id, id: m.id, role: m.role, text: m.text, citations: m.citations, feedback: m.feedback, topic: m.topic, action: m.action ?? undefined })),
     ...pending,
   ];
   const off = busy || !posts || outOfChat;
@@ -235,7 +267,11 @@ export function ChatTab({ notebook, chatId, onStarted, onNextStep }: {
             keyboardDismissMode="interactive"
             keyboardShouldPersistTaps="handled"
             renderItem={({ item }) => (
-              <TurnView turn={item} next={item === lastAnswer && steps ? <NextStepPill steps={steps} onPick={onNextStep} /> : undefined} />
+              <TurnView
+                turn={item}
+                onOpen={onNextStep}
+                next={item === lastAnswer && steps && !item.action ? <NextStepPill steps={steps} onPick={onNextStep} /> : undefined}
+              />
             )}
           />
         )}
@@ -301,7 +337,7 @@ export function ChatTab({ notebook, chatId, onStarted, onNextStep }: {
  * One turn: the question on the right in blue; the answer full width with its citations, then copy and thumbs down
  * (and `next`, the last answer's suggested next step) under it.
  */
-function TurnView({ turn, next }: { turn: Turn; next?: ReactNode }) {
+function TurnView({ turn, next, onOpen }: { turn: Turn; next?: ReactNode; onOpen: (kind: ChatArtifact, preset?: ChatPreset) => void }) {
   const [open, setOpen] = useState(false);
   const text = useSmoothText(turn.text);
   if (turn.role === "user") {
@@ -361,6 +397,7 @@ function TurnView({ turn, next }: { turn: Turn; next?: ReactNode }) {
             : null}
         </View>
       ) : null}
+      {turn.action && turn.text && !turn.status ? <OpenAction action={turn.action} onOpen={onOpen} /> : null}
       {turn.id && turn.text && !turn.status ? <AnswerFeedback key={turn.id} messageId={turn.id} initial={turn.feedback} text={turn.text} extra={next} /> : null}
     </View>
   );
@@ -368,6 +405,23 @@ function TurnView({ turn, next }: { turn: Turn; next?: ReactNode }) {
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  openAction: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    height: 40,
+    paddingLeft: 14,
+    paddingRight: 16,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(33, 124, 255, 0.35)",
+    backgroundColor: "rgba(33, 124, 255, 0.05)",
+  },
+  openActionOn: { borderColor: "rgba(33, 124, 255, 0.6)", backgroundColor: "rgba(33, 124, 255, 0.1)" },
+  openActionIcon: { width: 16, height: 16 },
+  openActionText: { color: colors.text, fontSize: 15, fontWeight: "600" },
+  openActionArrow: { color: colors.text, fontSize: 15, opacity: 0.6 },
   card: {
     flex: 1,
     marginHorizontal: 10,

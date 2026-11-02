@@ -29,13 +29,13 @@ export const voicesQuery = { queryKey: ["video-voices"], queryFn: videoVoicesApi
 type Style = (typeof AUDIO_STYLES)[number]["id"];
 
 /** The audio overview settings (web: AudioOverview.tsx AudioOverviewDialog). */
-export function AudioDialog({ notebook, chats, currentChatId, onCreate }: DialogProps) {
+export function AudioDialog({ notebook, chats, currentChatId, initial, onCreate }: DialogProps) {
   const [sel, setSel] = useState<SourceSelection | null>(null);
-  const [style, setStyle] = useState<Style>("deep_dive");
-  const [hosts, setHosts] = useState<"1" | "2">("2");
-  const [minutes, setMinutes] = useState("6");
-  const [language, setLanguage] = useState("English");
-  const [focus, setFocus] = useState("");
+  const [style, setStyle] = useState<Style>(() => AUDIO_STYLES.find((s) => s.id === initial?.style)?.id ?? "deep_dive");
+  const [hosts, setHosts] = useState<"1" | "2">(initial?.hosts === "1" ? "1" : "2");
+  const [minutes, setMinutes] = useState(() => AUDIO_LENGTHS.find((l) => l.value === initial?.minutes)?.value ?? "6");
+  const [language, setLanguage] = useState(initial?.language ?? "English");
+  const [focus, setFocus] = useState(initial?.focus ?? "");
   const voices = useQuery(voicesQuery);
   const saved = voices.data?.saved ?? (voices.error ? [] : null);
   // The hosts' picks: chosen ones, else the first voice and a different second (never the same one twice).
@@ -191,13 +191,13 @@ type DeckFormat = (typeof DECK_FORMATS)[number]["id"];
 type DeckLength = (typeof DECK_LENGTHS)[number]["id"];
 
 /** The slide deck settings (web: SlideDeck.tsx SlideDeckDialog). */
-export function SlidesDialog({ notebook, chats, currentChatId, onCreate }: DialogProps) {
+export function SlidesDialog({ notebook, chats, currentChatId, initial, onCreate }: DialogProps) {
   const [sel, setSel] = useState<SourceSelection | null>(null);
-  const [theme, setTheme] = useState<string>("dark-space");
-  const [format, setFormat] = useState<DeckFormat>("detailed");
-  const [length, setLength] = useState<DeckLength>("default");
-  const [language, setLanguage] = useState("English");
-  const [prompt, setPrompt] = useState("");
+  const [theme, setTheme] = useState<string>(() => SLIDE_THEMES.find((t) => t.id === initial?.theme)?.id ?? "dark-space");
+  const [format, setFormat] = useState<DeckFormat>(() => DECK_FORMATS.find((f) => f.id === initial?.format)?.id ?? "detailed");
+  const [length, setLength] = useState<DeckLength>(() => DECK_LENGTHS.find((l) => l.id === initial?.length)?.id ?? "default");
+  const [language, setLanguage] = useState(initial?.language ?? "English");
+  const [prompt, setPrompt] = useState(initial?.prompt ?? "");
   return (
     <View style={createStyles.stack}>
       <View style={createStyles.field}>
@@ -248,11 +248,11 @@ export function SlidesDialog({ notebook, chats, currentChatId, onCreate }: Dialo
 }
 
 /** The infographic settings (web: Infographic.tsx InfographicDialog). */
-export function InfographicDialog({ notebook, chats, currentChatId, onCreate }: DialogProps) {
+export function InfographicDialog({ notebook, chats, currentChatId, initial, onCreate }: DialogProps) {
   const [sel, setSel] = useState<SourceSelection | null>(null);
-  const [theme, setTheme] = useState<string>("midnight");
-  const [style, setStyle] = useState<string>("auto");
-  const [prompt, setPrompt] = useState("");
+  const [theme, setTheme] = useState<string>(() => INFOGRAPHIC_THEMES.find((t) => t.id === initial?.theme)?.id ?? "midnight");
+  const [style, setStyle] = useState<string>(() => INFOGRAPHIC_STYLES.find((t) => t.id === initial?.style)?.id ?? "auto");
+  const [prompt, setPrompt] = useState((initial?.prompt ?? "").slice(0, 600));
   return (
     <View style={createStyles.stack}>
       <View style={createStyles.field}>

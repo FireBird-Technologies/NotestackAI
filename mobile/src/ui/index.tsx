@@ -1,3 +1,4 @@
+import { Image } from "expo-image";
 import * as WebBrowser from "expo-web-browser";
 import type { ReactNode } from "react";
 import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View, type TextInputProps } from "react-native";
@@ -5,9 +6,12 @@ import { Pressable } from "@/ui/pressable";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PUBLIC_HEADER_HEIGHT, PublicHeader } from "@/shell/public-header";
-import { colors, gutter, radius } from "@/ui/theme";
+import { colors, fonts, gutter, radius } from "@/ui/theme";
 
-/** A signed out form (sign in, sign up, reset): the public navbar on top, keyboard aware, scrollable on small phones. */
+/**
+ * A signed out form (sign in, sign up, reset): just the navbar's menu on top (the page shows the logo itself), keyboard
+ * aware, scrollable on small phones.
+ */
 export function FormScreen({ children }: { children: ReactNode }) {
   return (
     <View style={styles.fill}>
@@ -20,7 +24,19 @@ export function FormScreen({ children }: { children: ReactNode }) {
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
-      <PublicHeader />
+      <PublicHeader minimal />
+    </View>
+  );
+}
+
+/** The top of sign in and sign up: the logo and what Notestack is, in one line. */
+export function Brand() {
+  return (
+    <View style={styles.brand}>
+      <Image source={require("@/assets/images/logo.png")} style={styles.brandLogo} accessibilityLabel="Notestack" accessibilityIgnoresInvertColors />
+      <Text style={styles.brandLine} accessibilityRole="header">
+        Your knowledge, in orbit.
+      </Text>
     </View>
   );
 }
@@ -134,6 +150,9 @@ const styles = StyleSheet.create({
   form: { flexGrow: 1, justifyContent: "center", padding: gutter * 1.5, gap: gutter },
   page: { padding: gutter, gap: gutter },
   title: { color: colors.text, fontSize: 30, fontWeight: "700", letterSpacing: -0.5 },
+  brand: { alignItems: "center", gap: 20, paddingVertical: gutter },
+  brandLogo: { width: 76, height: 76, borderRadius: 20 },
+  brandLine: { color: colors.text, fontFamily: fonts.displayBold, fontSize: 26, lineHeight: 32, letterSpacing: -0.4, textAlign: "center" },
   body: { color: colors.text, fontSize: 16, lineHeight: 23 },
   muted: { color: colors.text2 },
   field: { gap: 6 },

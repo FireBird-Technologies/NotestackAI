@@ -21,7 +21,7 @@ export function openLink(href: string) {
   const path = href.replace(/^https?:\/\/(www\.)?notestack\.ai/, "").replace(/#.*$/, "") || "/";
   if (href.startsWith("/") || href !== path) {
     if (APP_PATHS.some((re) => re.test(path))) return router.navigate(path as Href);
-    if (path === "/") return router.navigate("/welcome");
+    if (path === "/") return router.navigate("/"); // sign in, or Notebooks when signed in (app/index.tsx)
     return void WebBrowser.openBrowserAsync(`${SITE}${path}`, { controlsColor: colors.blue });
   }
   void WebBrowser.openBrowserAsync(href, { controlsColor: colors.blue });

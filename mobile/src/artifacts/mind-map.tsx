@@ -25,7 +25,7 @@ import * as SecureStore from "expo-secure-store";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Modal, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Pressable } from "@/ui/pressable";
-import { GestureDetector, useExclusiveGestures, usePanGesture, usePinchGesture, useSimultaneousGestures, useTapGesture } from "react-native-gesture-handler";
+import { GestureDetector, GestureHandlerRootView, useExclusiveGestures, usePanGesture, usePinchGesture, useSimultaneousGestures, useTapGesture } from "react-native-gesture-handler";
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Circle, Defs, G, Line, Path, RadialGradient, Stop, Text as SvgText, TSpan } from "react-native-svg";
@@ -613,9 +613,12 @@ export function MindMapExplorer({ map, onClose, feedback, embedded = false, onEx
 export function MindMapScreen({ map, visible, onClose, feedback }: { map: MindMapSource; visible: boolean; onClose: () => void; feedback?: ReactNode }) {
   return (
     <Modal visible={visible} animationType="fade" presentationStyle="fullScreen" supportedOrientations={["portrait", "landscape"]} onRequestClose={onClose}>
-      <SafeAreaProvider>
-      {visible ? <MindMapExplorer map={map} onClose={onClose} feedback={feedback} /> : null}
-    </SafeAreaProvider>
+      {/* A Modal is its own window on Android, outside the app's gesture root: pinch and drag need one here. */}
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          {visible ? <MindMapExplorer map={map} onClose={onClose} feedback={feedback} /> : null}
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
     </Modal>
   );
 }

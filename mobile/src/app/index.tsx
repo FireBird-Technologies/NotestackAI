@@ -9,7 +9,7 @@ import { colors } from "@/ui/theme";
 import { Loading } from "@/ui";
 
 /**
- * The app's entry address. Signed out: sign up (the logo leads to the welcome screen). Signed in just now: where the
+ * The app's entry address. Signed out: sign in, the landing page. Signed in just now: where the
  * web lands (lib/landing.ts startPath: onboarding, else the last notebook). Opened with a saved session: Notebooks,
  * as the web's /app.
  */
@@ -26,7 +26,7 @@ export default function Index() {
     };
   }, [user, takeSignIn]);
 
-  if (!user) return <Redirect href="/sign-up" />;
+  if (!user) return <Redirect href="/sign-in" />;
   return (
     <View style={styles.fill}>
       <Starfield />

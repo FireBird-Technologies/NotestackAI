@@ -1,5 +1,5 @@
 import { artifactsApi, launchpadApi } from "@notestack/shared/endpoints";
-import type { Artifact, ArtifactType, ChatSummary, Notebook, SocialAccounts } from "@notestack/shared/types";
+import type { Artifact, ArtifactType, ChatPreset, ChatSummary, Notebook, SocialAccounts } from "@notestack/shared/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { Image, type ImageSource } from "expo-image";
@@ -64,6 +64,8 @@ export function CreateTab({
   onMake,
   onStarted,
   making,
+  presets,
+  presetKey,
   onMaking,
 }: {
   notebook: Notebook;
@@ -74,6 +76,9 @@ export function CreateTab({
   onStarted: () => void;
   /** Whose settings are open; held by the notebook screen, so a chat's next-step suggestion can open one too. */
   making: Kind | null;
+  /** What the chat asked for, per make: its sheet's settings start there. `presetKey` changes on every open from the chat. */
+  presets: Partial<Record<Kind, ChatPreset>>;
+  presetKey: number;
   onMaking: (kind: Kind | null) => void;
 }) {
   const queryClient = useQueryClient();
@@ -141,9 +146,11 @@ export function CreateTab({
           <Sheet key={type} visible={making === type} title={title} onClose={() => setMaking(null)} onDismissed={dismissed}>
             {making === type ? (
               <Dialog
+                key={presetKey}
                 notebook={notebook}
                 chats={chats}
                 currentChatId={chatId}
+                initial={presets[type]}
                 onClose={() => setMaking(null)}
                 onCreate={(body: CreateBody) => start(STARTING_LABEL[type], () => generate({ notebook_id: notebook.id, ...body, type }))}
               />
@@ -154,7 +161,9 @@ export function CreateTab({
       <Sheet visible={making === "video"} title="New video" onClose={() => setMaking(null)} onDismissed={dismissed}>
         {making === "video" ? (
           <VideoDialog
+            key={presetKey}
             notebook={notebook}
+            initial={presets.video}
             onCreate={(created) => {
               // The video's screen opens as the sheet goes and waits there; the Library shows the same request starting.
               const id = trackNewVideo(created);

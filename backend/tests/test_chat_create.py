@@ -116,6 +116,9 @@ def test_a_short_video_on_a_named_template(templates):
         "Opening the video settings: Overview (usually under a minute), Newspaper template. "
         "Check them and press Generate.")
     assert ci.snap("video", _raw(template="stick man"))["template"] == "whiteboard"
+    # One word for a two-word name, as people type it
+    assert ci.snap("video", _raw(template="stickman"))["template"] == "whiteboard"
+    assert ci.snap("video", _raw(template="Stick-Man template"))["template"] == "whiteboard"
 
 
 def test_an_unknown_template_is_not_claimed(templates):

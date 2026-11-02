@@ -1,6 +1,6 @@
 import { CARD_LEVELS, QUIZ_LEVELS, QUIZ_TYPES } from "@notestack/shared/create-options";
 import type { GenerateBody } from "@notestack/shared/endpoints";
-import type { ChatSummary, Notebook, QuizQuestionType } from "@notestack/shared/types";
+import type { ChatPreset, ChatSummary, Notebook, QuizQuestionType } from "@notestack/shared/types";
 import { SymbolView } from "expo-symbols";
 import { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
@@ -15,15 +15,20 @@ export type DialogProps = {
   notebook: Notebook;
   chats: ChatSummary[];
   currentChatId: string | null;
+  /** What the chat asked for ("a hard quiz on pricing"): the settings start there (web: each dialog's `initial`). */
+  initial?: ChatPreset;
   onClose: () => void;
   onCreate: (body: CreateBody) => void;
 };
 
 /** The quiz settings (web: Quiz.tsx QuizDialog): difficulty and question types, then what it is made from and its focus. */
-export function QuizDialog({ notebook, chats, currentChatId, onCreate }: DialogProps) {
+export function QuizDialog({ notebook, chats, currentChatId, initial, onCreate }: DialogProps) {
   const [sel, setSel] = useState<SourceSelection | null>(null);
-  const [level, setLevel] = useState<(typeof QUIZ_LEVELS)[number]["id"]>("medium");
-  const [types, setTypes] = useState<Set<QuizQuestionType>>(() => new Set(["multiple_choice"]));
+  const [level, setLevel] = useState<(typeof QUIZ_LEVELS)[number]["id"]>(() => QUIZ_LEVELS.find((l) => l.id === initial?.level)?.id ?? "medium");
+  const [types, setTypes] = useState<Set<QuizQuestionType>>(() => {
+    const asked = QUIZ_TYPES.map((t) => t.id).filter((t) => initial?.types?.includes(t));
+    return new Set(asked.length ? asked : ["multiple_choice"]);
+  });
   const toggleType = (t: QuizQuestionType) =>
     setTypes((cur) => {
       const next = new Set(cur);
@@ -58,6 +63,7 @@ export function QuizDialog({ notebook, chats, currentChatId, onCreate }: DialogP
         docs={notebook.documents}
         chats={chats}
         currentChatId={currentChatId}
+        initialCustom={initial?.focus}
         preselectChat
         largeSelection
         what="quiz"
@@ -76,9 +82,9 @@ export function QuizDialog({ notebook, chats, currentChatId, onCreate }: DialogP
 }
 
 /** The flashcard settings (web: Flashcards.tsx FlashcardsDialog): how hard, then the source and focus. */
-export function FlashcardsDialog({ notebook, chats, currentChatId, onCreate }: DialogProps) {
+export function FlashcardsDialog({ notebook, chats, currentChatId, initial, onCreate }: DialogProps) {
   const [sel, setSel] = useState<SourceSelection | null>(null);
-  const [level, setLevel] = useState<(typeof CARD_LEVELS)[number]["id"]>("medium");
+  const [level, setLevel] = useState<(typeof CARD_LEVELS)[number]["id"]>(() => CARD_LEVELS.find((l) => l.id === initial?.level)?.id ?? "medium");
   return (
     <View style={createStyles.stack}>
       <View style={createStyles.field}>
@@ -90,6 +96,7 @@ export function FlashcardsDialog({ notebook, chats, currentChatId, onCreate }: D
         docs={notebook.documents}
         chats={chats}
         currentChatId={currentChatId}
+        initialCustom={initial?.focus}
         preselectChat
         largeSelection
         what="flashcard set"
@@ -108,10 +115,10 @@ export function FlashcardsDialog({ notebook, chats, currentChatId, onCreate }: D
 }
 
 /** The Mind Constellation settings (web: MindMap.tsx MindMapDialog): the posts to chart and what it centres on. */
-export function MindMapDialog({ notebook, onClose, onCreate }: DialogProps) {
+export function MindMapDialog({ notebook, initial, onClose, onCreate }: DialogProps) {
   const docs = notebook.documents;
   const [picked, setPicked] = useState<Set<string>>(() => new Set(docs.map((d) => d.id)));
-  const [focus, setFocus] = useState("");
+  const [focus, setFocus] = useState(initial?.focus ?? "");
   const [open, setOpen] = useState(false);
   const all = picked.size === docs.length;
   const toggle = (id: string) =>

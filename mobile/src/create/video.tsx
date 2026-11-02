@@ -2,6 +2,7 @@ import { docsApi, notebooksApi, videosApi } from "@notestack/shared/endpoints";
 import { VIDEO_DEFAULTS } from "@notestack/shared/notebook";
 import type {
   Artifact,
+  ChatPreset,
   Notebook,
   VideoCreateBody,
   VideoFocusSource,
@@ -66,9 +67,11 @@ function Steps({ step }: { step: number }) {
  * The three-step video wizard (web: VideoCreateForm in a modal): 1 what it is made from, its topic and style; 2 the
  * template and colours; 3 the language and voice. Generate hands the request to `onCreate`, which starts it.
  */
-export function VideoDialog({ notebook, onCreate }: {
+export function VideoDialog({ notebook, initial, onCreate }: {
   /** Opened from a notebook: it starts from that notebook. On its own (Videos → New video): the whole archive. */
   notebook?: Notebook;
+  /** What the chat asked for ("a newspaper video, deep dive"): the wizard starts there (web: VideoCreateForm initial). */
+  initial?: ChatPreset;
   /** Generate was pressed: the create request, on its way. The video's screen opens at once and waits for it. */
   onCreate: (created: Promise<Artifact>) => void;
 }) {
@@ -88,12 +91,19 @@ export function VideoDialog({ notebook, onCreate }: {
   const [choosingPost, setChoosingPost] = useState(false);
   const [topics, setTopics] = useState<{ key: string; list: VideoFocusTopic[] } | null>(null);
   const [focus, setFocus] = useState<VideoFocusTopic | null>(null);
-  const [custom, setCustom] = useState("");
+  const [custom, setCustom] = useState(initial?.focus ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [limitHit, setLimitHit] = useState(false);
-  const [form, setForm] = useState<VideoOptions>(VIDEO_DEFAULTS);
+  const [form, setForm] = useState<VideoOptions>(() => ({
+    ...VIDEO_DEFAULTS,
+    aspect_ratio: initial?.aspect_ratio === "portrait" ? "portrait" : VIDEO_DEFAULTS.aspect_ratio,
+    content_language: initial?.content_language ?? VIDEO_DEFAULTS.content_language,
+    voice_gender: initial?.voice_gender === "male" ? "male" : initial?.voice_gender === "none" ? "none" : VIDEO_DEFAULTS.voice_gender,
+    voice_accent: initial?.voice_accent === "british" ? "british" : VIDEO_DEFAULTS.voice_accent,
+  }));
   const [templatePicked, setTemplatePicked] = useState(false);
+  const [stylePicked, setStylePicked] = useState(false);
   const [voicePicked, setVoicePicked] = useState(false);
   const set = (patch: Partial<VideoOptions>) => setForm((f) => ({ ...f, ...patch }));
   // The template and voice lists scroll in boxes of their own (as the web's), sized from a measured row: about 2.8
@@ -103,22 +113,42 @@ export function VideoDialog({ notebook, onCreate }: {
   const templateBox = useRef<ComponentRef<typeof ScrollView>>(null);
   const scrolledTo = useRef(false);
 
-  // The catalog's first pick: a random built-in template and the first house style, unless the user chose already.
+  // The catalog's first pick: the template, style and voice the chat asked for, else a random built-in template, the
+  // first house style and the first voice, unless the user chose already.
   const [randomAt] = useState(() => Math.random());
   const templates = catalog.data?.templates ?? [];
-  const defaultTemplate = templates[Math.floor(randomAt * templates.length)];
+  // The template asked for: its id, else one whose name has every word asked for ("newspaper template": Newspaper).
+  const words = (initial?.template_name ?? "").toLowerCase().replace(/\b(template|style|look|theme)s?\b/g, "")
+    .split(/[^a-z0-9]+/).filter((w) => w.length > 1);
+  const askedTemplate = templates.find((t) => t.id === initial?.template)
+    ?? (words.length ? templates.find((t) => words.every((w) => t.name.toLowerCase().includes(w))) : undefined);
+  const defaultTemplate = askedTemplate ?? templates[Math.floor(randomAt * templates.length)];
   const listed = catalog.data?.video_styles ?? [];
   const houseStyles = listed.some((s) => s.kind === "house");
   const styleList: VideoStyleItem[] = houseStyles ? listed : [{ id: "auto", name: "Auto", kind: "builtin" }, ...listed];
+  // The style asked for: Overview is short, Deep dive long.
+  const styleName = initial?.video_style === "deep_dive" ? "deep dive" : initial?.video_style === "overview" ? "overview" : null;
+  const askedStyle = styleName ? styleList.find((s) => (s.name ?? "").toLowerCase() === styleName) : undefined;
   const saved = voices.data?.saved ?? (voices.error ? [] : null);
   const builtIn = (saved ?? []).filter((v) => v.source !== "notestack");
-  // What is sent: the user's picks, else the catalog's and the voices' first ones.
+  // The first built-in voice, or the first of the gender (and accent) asked for in the chat.
+  const wantGender = initial?.voice_gender;
+  const wantAccent = initial?.voice_accent;
+  const firstVoice = wantGender || wantAccent
+    ? builtIn.find((v) => (!wantGender || (v.gender === "male" ? "male" : "female") === wantGender)
+        && (!wantAccent || (v.accent === "british" ? "british" : "american") === wantAccent))
+    : builtIn[0];
+  // What is sent: the user's picks, else the defaults above.
   const options: VideoOptions = {
     ...form,
     ...(!templatePicked && defaultTemplate ? templateFields(defaultTemplate) : {}),
-    ...(houseStyles && !styleList.some((s) => s.id === form.video_style) ? { video_style: styleList[0].id } : {}),
-    ...(!voicePicked && builtIn[0] && form.voice_gender !== "none"
-      ? { custom_voice_id: builtIn[0].voice_id, voice_gender: builtIn[0].gender === "male" ? "male" : "female", voice_accent: builtIn[0].accent === "british" ? "british" : "american" }
+    ...(!stylePicked && askedStyle
+      ? { video_style: askedStyle.id }
+      : houseStyles && !styleList.some((s) => s.id === form.video_style)
+        ? { video_style: styleList[0].id }
+        : {}),
+    ...(!voicePicked && firstVoice && form.voice_gender !== "none"
+      ? { custom_voice_id: firstVoice.voice_id, voice_gender: firstVoice.gender === "male" ? "male" : "female", voice_accent: firstVoice.accent === "british" ? "british" : "american" }
       : {}),
   };
 
@@ -280,7 +310,7 @@ export function VideoDialog({ notebook, onCreate }: {
                 {styleList.map((s) => {
                   const on = options.video_style === s.id;
                   return (
-                    <Pressable key={s.id} onPress={() => set({ video_style: s.id })} accessibilityRole="button" accessibilityState={{ selected: on }} style={[styles.chip, on && styles.chipOn]}>
+                    <Pressable key={s.id} onPress={() => (setStylePicked(true), set({ video_style: s.id }))} accessibilityRole="button" accessibilityState={{ selected: on }} style={[styles.chip, on && styles.chipOn]}>
                       <Text style={[styles.chipText, on && styles.chipTextOn]}>
                         {s.name}
                         {s.kind === "custom" ? " (yours)" : ""}

@@ -46,7 +46,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   android: {
     package: APP_ID,
     adaptiveIcon: {
-      backgroundColor: "#000000",
+      backgroundColor: "#ffffff",
       foregroundImage: "./assets/images/android-icon-foreground.png",
       backgroundImage: "./assets/images/android-icon-background.png",
       monochromeImage: "./assets/images/android-icon-monochrome.png",
@@ -69,8 +69,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       "expo-splash-screen",
       {
         backgroundColor: "#000000",
+        // The navbar's logo tile on black, held until the saved session is checked (app/_layout.tsx).
         image: "./assets/images/splash-icon.png",
-        imageWidth: 76,
+        imageWidth: 120,
       },
     ],
     ["expo-build-properties", { android: { usesCleartextTraffic: IS_DEV } }],

@@ -2,9 +2,9 @@ import { type AudioPlayer, createAudioPlayer, setAudioModeAsync } from "expo-aud
 import * as SecureStore from "expo-secure-store";
 
 /**
- * The web's click (frontend/src/lib/sound.ts): one soft sonar ping on every button press, very quiet. The web
- * synthesizes it with Web Audio; here it is the same sound rendered to assets/sounds/click.wav. It can be turned off
- * in Settings (kept on this phone).
+ * The web's click (frontend/src/lib/sound.ts): one soft sonar ping on every button press. The web synthesizes it with
+ * Web Audio; here it is the same sound rendered to assets/sounds/click.wav, louder than the web's (a phone's speaker
+ * is small and the web's level was hard to hear). It can be turned off in Settings (kept on this phone).
  */
 
 const KEY = "ns_click_sounds";
@@ -50,11 +50,10 @@ export function playClick(): void {
   const player = players[next++ % POOL];
   if (!player) return;
   try {
-    // Back to the start first (a used player sits at its end), then play.
-    player.seekTo(0).then(
-      () => player.play(),
-      () => player.play(),
-    );
+    // Back to the start (a used player sits at its end), then play: sent together, the player runs them in order.
+    // Waiting on the seek first left Android's player silent.
+    void player.seekTo(0).catch(() => undefined);
+    player.play();
   } catch {
     // audio is decoration only
   }

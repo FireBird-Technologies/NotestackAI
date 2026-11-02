@@ -5,7 +5,7 @@ import { useState } from "react";
 
 import { useAuth } from "@/account/auth";
 import { SocialButtons } from "@/account/social-buttons";
-import { Body, Button, ErrorText, Field, FormScreen, Notice, Title } from "@/ui";
+import { Brand, Button, ErrorText, Field, FormScreen, Notice, Title } from "@/ui";
 
 const MIN_PASSWORD = 8;
 
@@ -97,8 +97,7 @@ export default function SignUp() {
 
   return (
     <FormScreen>
-      <Title>Create your account</Title>
-      <Body muted>Your archive, ready to ask.</Body>
+      <Brand />
       <SocialButtons mode="signup" />
       <Field label="Name" value={name} onChangeText={setName} autoComplete="name" textContentType="name" />
       <Field

@@ -1,9 +1,9 @@
 import { notebooksApi } from "@notestack/shared/endpoints";
-import type { Artifact } from "@notestack/shared/types";
+import type { Artifact, ChatPreset } from "@notestack/shared/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { Keyboard, Platform, StyleSheet, View } from "react-native";
 
 import { isMaking } from "@/artifacts/artifact-card";
 import { prefetchFocus, prefetchSuggestions, useArtifactLimits } from "@/create/fields";
@@ -32,6 +32,10 @@ export default function NotebookScreen() {
   const [makeError, setMakeError] = useState("");
   // The Create tab's open settings sheet; a next-step suggestion under an answer opens one from the Chat tab.
   const [making, setMaking] = useState<Kind | null>(null);
+  // What the chat asked for, per make ("a hard quiz"): that sheet's settings start there. Bumped on every open, so a
+  // sheet opened again starts afresh from these settings (web: NotebookView presets / presetKey).
+  const [presets, setPresets] = useState<Partial<Record<Kind, ChatPreset>>>({});
+  const [presetKey, setPresetKey] = useState(0);
 
   const limits = useArtifactLimits();
   const notebook = useQuery({ queryKey: ["notebook", id], queryFn: () => notebooksApi.get(id) });
@@ -135,9 +139,16 @@ export default function NotebookScreen() {
           notebook={nb}
           chatId={chatId}
           onStarted={(started) => setSelected(started)}
-          onNextStep={(kind) => {
+          onNextStep={(kind, preset) => {
+            setPresets((p) => ({ ...p, [kind]: preset }));
+            setPresetKey((k) => k + 1);
             setTab("create");
-            setMaking(kind);
+            // iOS presents nothing from a hidden view (the Create tab is display: none until this switch lands) or while
+            // the keyboard is still going: the sheet opens once the tab is showing.
+            if (Platform.OS === "ios") {
+              Keyboard.dismiss();
+              setTimeout(() => setMaking(kind), 350);
+            } else setMaking(kind);
           }}
         />
       </View>
@@ -147,7 +158,13 @@ export default function NotebookScreen() {
           chats={chats.data}
           chatId={chatId}
           making={making}
-          onMaking={setMaking}
+          presets={presets}
+          presetKey={presetKey}
+          onMaking={(kind) => {
+            // Opened from its own tile: the plain settings, not what an earlier chat asked for.
+            if (kind) setPresets((p) => ({ ...p, [kind]: undefined }));
+            setMaking(kind);
+          }}
           onMake={(label, request) => void make(label, request)}
           onStarted={() => setTab("library")}
         />
