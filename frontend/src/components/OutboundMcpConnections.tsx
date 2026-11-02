@@ -293,8 +293,8 @@ export function OutboundMcpConnections() {
     // Load connections first so popular-app cards can immediately show which ones are already connected.
     outboundMcpApi.list().then(setConnections, (e) => setError(errorMessage(e)))
       .then(() => outboundMcpApi.catalog()).then((items) => {
-        // Temporarily hide the Slack MCP option from the frontend catalog.
-        setSuggestions(items.filter((item) => item.name !== "Slack"));
+        // Temporarily hide these MCP options from the frontend catalog.
+        setSuggestions(items.filter((item) => !["Slack", "Canva"].includes(item.name)));
       }, () => setSuggestions([]));
     const params = new URLSearchParams(window.location.search);
     const oauthResult = params.get("mcp_oauth");
