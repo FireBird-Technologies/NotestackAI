@@ -117,6 +117,31 @@ def current_trace() -> "ChatTrace | None":
     return _current.get()
 
 
-def probs_text(probabilities: dict[str, float], limit: int = 5) -> str:
-    top = sorted(probabilities.items(), key=lambda kv: kv[1], reverse=True)[:limit]
+def probs_text(probabilities: dict[str, float], limit: int | None = None) -> str:
+    ordered = sorted(probabilities.items(), key=lambda kv: kv[1], reverse=True)
+    top = ordered[:limit] if limit is not None else ordered
     return "  ".join(f"{name} {p:.2f}" for name, p in top)
+
+
+def value_shape(value) -> str:
+    """Log the shape and size of tool data without logging private argument or result values."""
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "boolean"
+    if isinstance(value, int | float):
+        return "number"
+    if isinstance(value, str):
+        return f"string[{len(value)} chars]"
+    if isinstance(value, bytes):
+        return f"bytes[{len(value)}]"
+    if isinstance(value, list | tuple):
+        kinds = list(dict.fromkeys(value_shape(item).split("[", 1)[0] for item in value))
+        return f"list[{len(value)}]" + (f"<{','.join(kinds)}>" if kinds else "")
+    if isinstance(value, dict):
+        return "object{" + ",".join(f"{key}:{value_shape(child)}" for key, child in value.items()) + "}"
+    return type(value).__name__
+
+
+def arguments_shape(arguments: dict | None) -> str:
+    return value_shape(arguments or {})

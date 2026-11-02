@@ -903,19 +903,17 @@ def test_the_recheck_brief_has_every_title_and_the_first_two_paragraphs(tmp_path
 
 def test_a_recheck_that_finds_the_subject_sends_it_to_research(monkeypatch, tmp_path):
     res, seen, t = _recheck(monkeypatch, tmp_path, ("archive", 0.8))
-    assert res is None and len(seen) == 2  # research started after one recheck; the second was not needed
+    assert res is None and len(seen) == 2
     assert "Raise prices once a year" in seen[1][0]["notebook"]
     assert "intent_retry1" in t.sections["triage"] or "recheck 1" in "".join(t.sections["triage"])
 
 
-def test_two_rechecks_that_agree_keep_it_off_topic(monkeypatch, tmp_path):
-    res, seen, _ = _recheck(monkeypatch, tmp_path, ("off_topic", 0.9), ("off_topic", 0.8))
-    assert len(seen) == 3 and res.kind == "off_topic" and "I only answer from the posts" in res.text
+def test_one_recheck_that_agrees_keeps_it_off_topic(monkeypatch, tmp_path):
+    res, seen, _ = _recheck(monkeypatch, tmp_path, ("off_topic", 0.9))
+    assert len(seen) == 2 and res.kind == "off_topic" and "I only answer from the posts" in res.text
 
 
-def test_the_second_recheck_can_still_save_it_and_an_unsure_one_researches(monkeypatch, tmp_path):
-    res, seen, _ = _recheck(monkeypatch, tmp_path, ("off_topic", 0.9), ("archive", 0.7))
-    assert res is None and len(seen) == 3
+def test_an_unsure_recheck_researches(monkeypatch, tmp_path):
     res, seen, _ = _recheck(monkeypatch, tmp_path, ("off_topic", 0.3))  # below the confidence cutoff
     assert res is None and len(seen) == 2
 

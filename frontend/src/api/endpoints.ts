@@ -19,7 +19,10 @@ import type {
   McpGrant,
   McpRequest,
   Notebook,
+  NotebookConnector,
   NotebookSummary,
+  OutboundMcpConnection,
+  OutboundMcpSuggestion,
   WorkspaceChat,
   Page,
   Platform,
@@ -139,6 +142,9 @@ export const notebooksApi = {
   landing: () => api<{ onboarded: boolean; notebook_id: string | null }>("/api/notebooks/landing"),
   fromTopic: (topicId: string) => post<{ id: string; title: string }>(`/api/notebooks/from-topic/${topicId}`),
   update: (id: string, body: { title?: string; description?: string }) => patch(`/api/notebooks/${id}`, body),
+  connectors: (id: string) => api<NotebookConnector[]>(`/api/notebooks/${id}/connectors`),
+  updateConnector: (id: string, connectionId: string, enabled: boolean) =>
+    patch<NotebookConnector>(`/api/notebooks/${id}/connectors/${connectionId}`, { enabled }),
   remove: (id: string) => del(`/api/notebooks/${id}`),
   addDocs: (id: string, document_ids: string[]) =>
     post<{ added: number }>(`/api/notebooks/${id}/documents`, { document_ids }),
@@ -353,6 +359,21 @@ export const settingsApi = {
   usage: () => api<Usage>("/api/settings/usage"),
   /** How many posts a generated thing can read (set by the server's ARTIFACT_MAX_POSTS settings). */
   limits: () => api<{ posts: number; selectable_posts: number }>("/api/settings/limits"),
+};
+
+export const outboundMcpApi = {
+  list: () => api<OutboundMcpConnection[]>("/api/outbound-mcp/connections"),
+  catalog: () => api<OutboundMcpSuggestion[]>("/api/outbound-mcp/catalog"),
+  create: (body: { name: string; server_url: string; bearer_token?: string }) =>
+    post<OutboundMcpConnection>("/api/outbound-mcp/connections", body),
+  update: (id: string, body: { enabled?: boolean; enabled_tools?: string[] }) =>
+    patch<OutboundMcpConnection>(`/api/outbound-mcp/connections/${id}`, body),
+  refresh: (id: string) => post<OutboundMcpConnection>(`/api/outbound-mcp/connections/${id}/refresh`),
+  startOAuth: (id: string, scopes?: string[]) => post<{ authorization_url: string }>(
+    `/api/outbound-mcp/connections/${id}/oauth/start`, scopes ? { scopes } : {},
+  ),
+  revokeOAuth: (id: string) => post<OutboundMcpConnection>(`/api/outbound-mcp/connections/${id}/revoke`),
+  remove: (id: string) => del<{ ok: true }>(`/api/outbound-mcp/connections/${id}`),
 };
 
 export const memoryApi = {

@@ -22,6 +22,7 @@ from app.chat_memory.tools import is_chat_path
 from app.config import settings
 from app.corpus import Corpus
 from app.llm.provider import provider_name
+from app.mcp_client.tools import load_external_tools, widget_is_displayable
 from app.models import (
     Artifact,
     B2VVideo,
@@ -33,6 +34,8 @@ from app.models import (
     MessageFeedback,
     Notebook,
     NotebookDocument,
+    NotebookMcpConnection,
+    OutboundMcpConnection,
     Source,
     Topic,
 )
@@ -65,6 +68,10 @@ class NotebookPatch(BaseModel):
 
 class DocumentsIn(BaseModel):
     document_ids: list[uuid.UUID]
+
+
+class NotebookConnectorPatch(BaseModel):
+    enabled: bool
 
 
 class ChatIn(BaseModel):
@@ -275,6 +282,68 @@ def patch_notebook(notebook_id: uuid.UUID, body: NotebookPatch, ctx: Ctx = Depen
     return {"id": str(nb.id), "title": visible_notebook_title(nb.title), "description": nb.description}
 
 
+def _notebook_connector_out(row: OutboundMcpConnection, override: bool | None) -> dict:
+    available = bool(row.enabled and row.status == "ready" and row.enabled_tools)
+    return {
+        "id": str(row.id),
+        "name": row.name,
+        "provider": row.provider,
+        "account_label": row.account_label,
+        "notebook_enabled": override is not False,
+        "available": available,
+        "tool_count": len(row.enabled_tools or []),
+        "status": row.status,
+        "auth_status": row.auth_status,
+    }
+
+
+@router.get("/{notebook_id}/connectors")
+def list_notebook_connectors(notebook_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
+    """Connected external services and their effective switch for this notebook.
+
+    This intentionally returns compact connection metadata instead of every tool schema; the notebook menu should be
+    fast even when a service such as Notion exposes dozens of tools.
+    """
+    nb = _get(ctx, notebook_id)
+    rows = ctx.db.execute(
+        select(OutboundMcpConnection, NotebookMcpConnection.enabled)
+        .outerjoin(
+            NotebookMcpConnection,
+            (NotebookMcpConnection.connection_id == OutboundMcpConnection.id)
+            & (NotebookMcpConnection.notebook_id == nb.id),
+        )
+        .where(
+            OutboundMcpConnection.workspace_id == ctx.workspace.id,
+            OutboundMcpConnection.user_id == ctx.user.id,
+            OutboundMcpConnection.deleted_at.is_(None),
+        )
+        .order_by(OutboundMcpConnection.created_at)
+    ).all()
+    return [_notebook_connector_out(row, override) for row, override in rows]
+
+
+@router.patch("/{notebook_id}/connectors/{connection_id}")
+def patch_notebook_connector(notebook_id: uuid.UUID, connection_id: uuid.UUID,
+                             body: NotebookConnectorPatch, ctx: Ctx = Depends(get_ctx)):
+    nb = _get(ctx, notebook_id)
+    connection = ctx.db.scalar(select(OutboundMcpConnection).where(
+        OutboundMcpConnection.id == connection_id,
+        OutboundMcpConnection.workspace_id == ctx.workspace.id,
+        OutboundMcpConnection.user_id == ctx.user.id,
+        OutboundMcpConnection.deleted_at.is_(None),
+    ))
+    if not connection:
+        raise HTTPException(404, "MCP connection not found")
+    setting = ctx.db.get(NotebookMcpConnection, (nb.id, connection.id))
+    if setting:
+        setting.enabled = body.enabled
+    else:
+        setting = NotebookMcpConnection(notebook_id=nb.id, connection_id=connection.id, enabled=body.enabled)
+        ctx.db.add(setting)
+    ctx.db.commit()
+    return _notebook_connector_out(connection, setting.enabled)
+
+
 @router.delete("/{notebook_id}")
 def delete_notebook(notebook_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
     nb = _get(ctx, notebook_id)
@@ -372,6 +441,14 @@ def chat_messages(chat_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
                  for c in sorted(m.citations, key=lambda c: c.marker)]
         out.append({"id": str(m.id), "role": m.role, "text": m.content, "citations": cites,
                     "feedback": _feedback_out(fb.get(m.id)), "topic": (m.recall_json or {}).get("topic") or "",
+                    "external_sources": (m.recall_json or {}).get("external_sources") or [],
+                    "external_widgets": [
+                        widget for widget in ((m.recall_json or {}).get("external_widgets") or [])
+                        if widget_is_displayable(widget.get("result") if isinstance(widget, dict) else None)
+                    ],
+                    "created_artifacts": (m.recall_json or {}).get("created_artifacts") or [],
+                    "background_status": (m.recall_json or {}).get("background_status"),
+                    "steps": _saved_step_messages(m.recall_json),
                     # A "create a quiz" answer: the dialog and settings it opened, so the chat can open them again.
                     "action": (m.recall_json or {}).get("action")})
     return out
@@ -463,8 +540,44 @@ def _sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
 
-_STEP_LABEL = {"list": "Scanning the archive", "search": "Searching for", "read": "Reading", "think": "",
-               "recall": "Remembering"}
+_STEP_LABEL = {
+    "list": "Scanning the archive", "search": "Searching for", "read": "Reading", "think": "",
+    "recall": "Remembering", "external": "", "external_connect": "Connecting to",
+    "external_call": "Calling", "external_result": "Received data from", "external_error": "Call failed:",
+}
+
+
+def _step_message(kind: str, detail: str) -> str:
+    return f"{_STEP_LABEL.get(kind, kind)} {detail}".strip()
+
+
+def _saved_step_messages(recall: dict | None) -> list[str]:
+    """Return the same human-readable steps after a saved chat is reopened."""
+    data = recall or {}
+    saved = data.get("steps") or []
+    messages = [
+        _step_message(str(step.get("kind") or ""), str(step.get("detail") or ""))
+        for step in saved
+        if isinstance(step, dict) and (step.get("kind") or step.get("detail"))
+    ]
+    # External connect/call/result events used to be streamed without being added to recall_json. Fill only those
+    # missing events from the recorded sources, keeping every step that was saved at the time.
+    sources = [source for source in (data.get("external_sources") or []) if isinstance(source, dict)]
+    if not sources:
+        return messages
+    connected: set[str] = set()
+    for source in sources:
+        connection = str(source.get("connection") or "External tool")
+        tool = str(source.get("tool") or "tool")
+        if connection not in connected:
+            connect = f"Connecting to {connection}"
+            if connect not in messages:
+                messages.append(connect)
+            connected.add(connection)
+        for message in (f"Calling {connection} / {tool}", f"Received data from {connection} / {tool}"):
+            if message not in messages:
+                messages.append(message)
+    return messages
 
 
 def answer_cache_key(notebook_id: uuid.UUID, question: str, docs: list[Document], profile: str) -> str:
@@ -578,13 +691,14 @@ async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)
                             body.retry_message_id, chat_row.id)
         chat_row.updated_at = datetime.now(UTC)  # keeps the history list newest first
         trace.chat_id = str(chat_row.id)
-        yield _sse("status", {"chat_id": str(chat_row.id), "message": "Opening the archive"})
+        yield _sse("status", {"chat_id": str(chat_row.id), "message": "Preparing research"})
         # Memory: the chat so far (before this message), oldest first, capped to the last few turns.
         with trace.stage("db-history+notes"):
             prior = db.scalars(
                 select(Message).where(Message.chat_id == chat_row.id).order_by(Message.created_at.desc()).limit(8)
             ).all()
-            history = [Turn(m.role, m.content) for m in reversed(prior)]
+            history = [Turn(m.role, m.content, (m.recall_json or {}).get("background_status"))
+                       for m in reversed(prior)]
             facts = list_facts(db, ctx.workspace.id)
             profile = profile_text(facts)
         # Chat memory (topic summaries and exact quotes from earlier in this notebook's chats), loaded here so the
@@ -605,9 +719,11 @@ async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)
         by_path = {d.path: d for d in docs}
         corpus = Corpus(ctx.workspace.id)
         last_answer = _last_answer(db, prior)
+        external_bundle = load_external_tools(ctx.workspace.id, ctx.user.id, db, notebook_id=nb.id)
         # A message that refers back to the conversation ("explain how to use it") is never a cached repeat.
         cache_key = (answer_cache_key(nb.id, body.question, docs, profile)
-                     if settings.chat_answer_cache_days > 0 and docs and not refers_back(body.question)
+                     if settings.chat_answer_cache_days > 0 and docs and not external_bundle.tools
+                     and not refers_back(body.question)
                      else None)
         lookup_key = None if retrying else cache_key  # a retry researches again: it never takes a cached answer
         user_msg = Message(chat_id=chat_row.id, role="user", content=body.question)
@@ -626,9 +742,13 @@ async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)
 
         loop = asyncio.get_running_loop()
         steps: asyncio.Queue = asyncio.Queue()
+        observed_steps: list[tuple[str, str]] = []
 
         def on_step(kind: str, detail: str) -> None:
+            observed_steps.append((kind, detail))
             loop.call_soon_threadsafe(steps.put_nowait, (kind, detail))
+
+        external_bundle.on_step = on_step
 
         def on_delta(text: str | None) -> None:
             loop.call_soon_threadsafe(steps.put_nowait, ("delta", text) if text is not None else ("reset", ""))
@@ -649,6 +769,13 @@ async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)
             task = asyncio.create_task(asyncio.to_thread(
                 research, corpus, allowed, body.question, on_step, history, nb.title, profile,
                 on_delta=on_delta, last_answer=last_answer,
+                external_tools=external_bundle.tools,
+                external_sources=external_bundle.sources,
+                external_widgets=external_bundle.widgets,
+                external_aliases=external_bundle.aliases,
+                external_destinations=[destination.as_dict() for destination in external_bundle.destinations],
+                workspace_id=ctx.workspace.id,
+                notebook_id=nb.id,
                 **({"chat_memory": chat_memory} if chat_memory is not None else {})))
             await asyncio.sleep(0)  # let the research thread start before the commit below holds this loop
             with trace.stage("save-question(while research runs)"):
@@ -665,7 +792,7 @@ async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)
                 elif kind == "reset":
                     yield _sse("reset", {})
                 else:
-                    yield _sse("step", {"kind": kind, "message": f"{_STEP_LABEL.get(kind, kind)} {detail}".strip()})
+                    yield _sse("step", {"kind": kind, "message": _step_message(kind, detail)})
             try:
                 result = task.result()
             except Exception:
@@ -676,11 +803,20 @@ async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)
 
         save_started = time.perf_counter()
         cacheable = result.kind == "archive" and not result.unsupported and bool(result.citations)
+        initial_background = ({
+            "state": "working",
+            "message": "Creating the NoteStack artifact in the background",
+        } if result.background_action else None)
         msg = Message(chat_id=chat_row.id, role="assistant", content=result.text,
                       cache_key=cache_key if cacheable else None,
                       recall_json={**result.recall, "kind": result.kind, "unsupported": result.unsupported,
                                    "topic": result.topic,
-                                   "steps": [{"kind": k, "detail": d} for k, d in result.steps],
+                                   "external_sources": result.external_sources,
+                                   "external_widgets": result.external_widgets,
+                                   "created_artifacts": result.created_artifacts,
+                                   "background_status": initial_background,
+                                   "steps": [{"kind": k, "detail": d}
+                                             for k, d in (observed_steps or result.steps)],
                                    "timings_ms": {name: round(took) for name, took in trace.stages},
                                    **({"first_delta_ms": round(trace.marks["first-delta"])}
                                       if "first-delta" in trace.marks else {})})
@@ -702,7 +838,29 @@ async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)
         db.commit()
         trace.add("save", f"assistant message saved to Postgres with {len(citations)} citation row(s) and recall_json "
                           "(triage choices, memory notes shown, steps, timings)")
-        if result.kind in ("chitchat", "create"):
+        if result.background_action:
+            background_job = create_job(
+                db,
+                ctx.workspace.id,
+                "compound_action",
+                {
+                    **result.background_action,
+                    "message_id": str(msg.id),
+                    "notebook_id": str(nb.id),
+                    "user_id": str(ctx.user.id),
+                },
+                max_attempts=2,
+            )
+            msg.recall_json = {
+                **(msg.recall_json or {}),
+                "background_status": {
+                    **(initial_background or {}),
+                    "job_id": str(background_job.id),
+                },
+            }
+            db.commit()
+            trace.add("save", "background compound action queued: it will run after the artifact is ready")
+        if result.kind in ("chitchat", "create") or result.background_action:
             trace.add("save", f"chat-memory filing job: not queued ({result.kind} is not filed)")
         else:
             try:
@@ -734,6 +892,10 @@ async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)
             "citations": citations,
             "topic": result.topic,  # what the answer is about, for the next-step suggestions
             "action": result.action,  # a create request: the dialog to open, with its settings
+            "external_sources": result.external_sources,
+            "external_widgets": result.external_widgets,
+            "created_artifacts": result.created_artifacts,
+            "background_status": (msg.recall_json or {}).get("background_status"),
             # How many questions the plan has left ({used, limit, left}), or None when chat is unlimited.
             "quota": chat_quota(db, ctx.workspace) if plan.chat_messages >= 0 else None,
         })

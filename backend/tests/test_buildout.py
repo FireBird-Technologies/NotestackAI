@@ -1606,6 +1606,27 @@ def test_jev_triage_routes_off_topic_without_llm(monkeypatch, tmp_path):
     assert "pricing" in seen["state"]["conversation"]
 
 
+def test_jev_triage_has_a_first_class_external_action(monkeypatch):
+    from app.config import settings
+    from app.pipeline import research as r
+    from app.services import jev
+
+    monkeypatch.setattr(settings, "typesafe_api_key", "sk-test")
+    seen = {}
+
+    def decide(state, questions, timeout=6.0):
+        seen.update(state=state, questions=questions)
+        return {"intent": jev.Choice("external_action", 0.94, {}),
+                "depth": jev.Choice("quick", 0.8, {})}
+
+    monkeypatch.setattr(jev, "decide", decide)
+    route = r.triage("Send an email to Sara", [], "Notebook: Work")
+
+    assert route.kind == "external_action"
+    assert route.question == "Send an email to Sara"
+    assert "external_action" in seen["questions"]["intent"]["criteria"]
+
+
 def test_jev_low_confidence_or_failure_still_researches(monkeypatch, tmp_path):
     from app.config import settings
     from app.pipeline import research as r
@@ -1949,6 +1970,7 @@ def test_thumbs_feedback_is_saved_with_the_recall_trace(client, auth, run_jobs, 
 
     shown = client.get(f"/api/notebooks/chats/{chat_id}/messages", headers=auth).json()
     assert shown[-1]["feedback"]["rating"] == "down" and shown[0]["feedback"] is None
+    assert shown[-1]["steps"] == ["Searching for pricing"]
 
     rows = client.get("/api/notebooks/feedback/export?rating=down", headers=auth).json()
     assert len(rows) == 1
@@ -1961,6 +1983,28 @@ def test_thumbs_feedback_is_saved_with_the_recall_trace(client, auth, run_jobs, 
     assert client.get("/api/notebooks/feedback/export", headers=auth).json() == []
     user_msg = shown[0]["id"]
     assert client.put(f"/api/notebooks/messages/{user_msg}/feedback", json={"rating": "up"}, headers=auth).status_code == 404
+
+
+def test_old_external_answers_reconstruct_their_research_steps():
+    from app.routers import notebooks as nbr
+
+    assert nbr._saved_step_messages({
+        "external_sources": [{"connection": "Linear", "tool": "list_issues"}],
+    }) == [
+        "Connecting to Linear",
+        "Calling Linear / list_issues",
+        "Received data from Linear / list_issues",
+    ]
+
+    assert nbr._saved_step_messages({
+        "steps": [{"kind": "external", "detail": "Using enabled external tools"}],
+        "external_sources": [{"connection": "Linear", "tool": "list_issues"}],
+    }) == [
+        "Using enabled external tools",
+        "Connecting to Linear",
+        "Calling Linear / list_issues",
+        "Received data from Linear / list_issues",
+    ]
 
 
 def _quiz_output(path):

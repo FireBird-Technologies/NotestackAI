@@ -35,7 +35,7 @@ const GOOGLE_DRIVE_RULE = { domain: "drive.google.com", pathPrefixes: ["/file/d/
 const ADULT_KEYWORDS = ["porn", "xxx", "xvideos", "xnxx", "onlyfans", "redtube", "xhamster", "adult", "nsfw", "sex"];
 
 // Might not be readable: allowed with a warning.
-const WARN_DOMAINS = ["youtube.com", "youtu.be", "m.youtube.com", "tiktok.com"];
+const WARN_DOMAINS = ["youtube.com", "youtu.be", "m.youtube.com", "tiktok.com", "instagram.com"];
 
 export const BLOCKED_MESSAGE = "This site can't be added as a source.";
 export const SOCIAL_BLOCKED_MESSAGE = "Social media home pages and feeds can't be added. Paste a link to a specific post instead.";
@@ -72,7 +72,12 @@ export function classifyUrl(s: string): UrlClassification {
   }
   if (SOCIAL_DOMAINS.some((d) => matches(host, d))) {
     const main = path.replace(/\/+$/, "");
-    return main === "" || SOCIAL_LANDING_PATHS.includes(main) ? { kind: "blocked", message: SOCIAL_BLOCKED_MESSAGE } : { kind: "ok" };
+    if (main === "" || SOCIAL_LANDING_PATHS.includes(main)) {
+      return { kind: "blocked", message: SOCIAL_BLOCKED_MESSAGE };
+    }
+    return WARN_DOMAINS.some((d) => matches(host, d))
+      ? { kind: "warn", message: MAYBE_UNSCRAPABLE_WARNING }
+      : { kind: "ok" };
   }
   if (matches(host, GOOGLE_DRIVE_RULE.domain) && GOOGLE_DRIVE_RULE.pathPrefixes.some((p) => path.startsWith(p))) {
     return { kind: "warn", message: GOOGLE_DRIVE_WARNING };

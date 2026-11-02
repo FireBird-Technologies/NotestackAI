@@ -19,6 +19,7 @@ from app.routers import (
     mcp_oauth,
     memory,
     notebooks,
+    outbound_mcp,
     reports,
     resurface,
     share,
@@ -128,7 +129,7 @@ def openai_apps_challenge():
 # video_templates (custom templates) is switched off: users pick only from the built-in templates.
 for r in (auth, billing, storage, sources, notebooks, artifacts, jobs, unsubscribe, topics, voice, resurface,
           launchpad, videos, video_edit, video_voices, video_styles, settings_router, memory, support, reports, share,
-          mcp_oauth):
+          mcp_oauth, outbound_mcp):
     app.include_router(r.router)
 app.include_router(sources.documents_router)
 app.include_router(launchpad.links_router)

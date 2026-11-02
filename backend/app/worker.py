@@ -47,7 +47,7 @@ from app.models import (
     Workspace,
     WorkspaceMember,
 )
-from app.pipeline import flashcards, generate, infographic, launchkit, media, quiz, report, slides
+from app.pipeline import compound_action, flashcards, generate, infographic, launchkit, media, quiz, report, slides
 from app.pipeline.generate import NothingToDo
 from app.pipeline.ingest import FeedNotFound, UnreadableFile, entry_from_upload, extract_article, ingest_source, store_entries
 from app.pipeline.memory import learn_from_message
@@ -326,12 +326,18 @@ def handle_publish_post(db: Session, job: Job):
                 else f"Post {item.status}" if item else "Post deleted")
 
 
+def handle_compound_action(db: Session, job: Job):
+    result, message = compound_action.complete(db, job)
+    return Done(result, message)
+
+
 HANDLERS: dict[str, Callable[[Session, Job], object]] = {
     "ingest": handle_ingest,
     "import_url": handle_import_url,
     "import_upload": handle_import_upload,
     "topics": handle_topics,
     "publish_post": handle_publish_post,
+    "compound_action": handle_compound_action,
     "ideas": handle_ideas,
     "report_templates": handle_report_templates,
     "memory_update": handle_memory,

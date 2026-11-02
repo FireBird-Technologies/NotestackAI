@@ -32,7 +32,18 @@ from app.models.content import (
     WorkspaceMemory,
 )
 from app.models.email import EmailVerificationCode, UpdateEmail, UpdateEmailSend, VerificationPurpose
-from app.models.mcp import McpAuthRequest, McpClient, McpGrant, McpWidgetState
+from app.models.mcp import (
+    McpAuthRequest,
+    McpClient,
+    McpGrant,
+    McpWidgetState,
+    NotebookMcpConnection,
+    OutboundMcpAudit,
+    OutboundMcpAuthAttempt,
+    OutboundMcpConnection,
+    OutboundMcpGrant,
+    OutboundMcpOAuthClient,
+)
 from app.models.support import SupportConversation, SupportMessage
 from app.models.user import AuthProvider, BillingEvent, PlanRecord, Subscription, User, Workspace, WorkspaceMember
 
@@ -41,6 +52,12 @@ __all__ = [
     "McpClient",
     "McpGrant",
     "McpWidgetState",
+    "NotebookMcpConnection",
+    "OutboundMcpAudit",
+    "OutboundMcpAuthAttempt",
+    "OutboundMcpConnection",
+    "OutboundMcpGrant",
+    "OutboundMcpOAuthClient",
     "SupportConversation",
     "SupportMessage",
     "Artifact",

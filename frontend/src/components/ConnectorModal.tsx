@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Modal } from "./ui";
+import { NotebookConnectorsPanel } from "./NotebookConnectors";
+import { Modal, Tabs } from "./ui";
 
 const MCP_SERVER_URL = "https://api.notestack.ai/mcp";
 
@@ -121,11 +122,27 @@ export function ConnectorSetup({ showOAuthNote = true, compact = false }: { show
   );
 }
 
-/** Notebook-local launcher: keep setup close to the notebook without navigating away from it. */
-export default function ConnectorModal({ onClose }: { onClose: () => void }) {
+type NotebookTab = "apps" | "tools";
+
+/** Notebook-local launcher: setup and this notebook's external tools in one dialog, without leaving it. */
+export default function ConnectorModal({ onClose, notebookId }: { onClose: () => void; notebookId?: string }) {
+  const [tab, setTab] = useState<NotebookTab>("apps");
   return (
-    <Modal title="Connect to Notestack" onClose={onClose} wide>
-      <ConnectorSetup compact />
+    <Modal title="Connectors" onClose={onClose} wide>
+      {notebookId && (
+        <Tabs<NotebookTab>
+          label="Connector sections"
+          className="nbv-connector-tabs"
+          value={tab}
+          onChange={setTab}
+          tabs={[
+            { id: "apps", label: "Connect Notestack" },
+            { id: "tools", label: "External tools" },
+          ]}
+        />
+      )}
+      {(tab === "apps" || !notebookId) && <ConnectorSetup compact />}
+      {notebookId && tab === "tools" && <NotebookConnectorsPanel notebookId={notebookId} />}
     </Modal>
   );
 }
