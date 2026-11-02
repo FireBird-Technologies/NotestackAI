@@ -92,7 +92,11 @@ export default function AppShell() {
   const isActive = (to: string, also?: string[]) =>
     location.pathname === to || location.pathname.startsWith(`${to}/`) || !!also?.some((p) => location.pathname.startsWith(p));
   // The phone top bar names the tab you are on
-  const current = [...NAV, { to: "/app/connector", label: "Connector" }, { to: "/app/settings", label: "Settings" }]
+  const current = [
+    ...NAV,
+    { to: "/app/connector", label: "Connector" },
+    { to: "/app/settings", label: "Settings" },
+  ]
     .find((n) => isActive(n.to, "also" in n ? n.also : undefined));
 
   return (

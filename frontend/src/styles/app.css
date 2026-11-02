@@ -1399,6 +1399,28 @@ button.side-link {
   gap: 2px;
 }
 
+.external-widget {
+  margin: 14px 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel);
+}
+
+.external-widget iframe {
+  display: block;
+  width: 100%;
+  min-height: 180px;
+  border: 0;
+  background: transparent;
+  transition: height 160ms ease;
+}
+
+.external-widget-loading,
+.external-widget-error {
+  margin: 12px 0;
+}
+
 /* ---------- Landing: flare, shimmer, arrivals, demo video ---------- */
 
 /* A soft light rides along the horizon; small glints twinkle where it passes. */
