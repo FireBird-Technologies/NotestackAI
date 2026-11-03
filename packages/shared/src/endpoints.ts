@@ -104,12 +104,17 @@ export type NotebookLmImportResult = {
   artifacts_updated: number;
 };
 
+/** The largest file importable as a post (the API's MAX_SOURCE_FILE_BYTES). */
+export const MAX_SOURCE_FILE_BYTES = 10 * 1024 * 1024;
+export const MAX_SOURCE_FILE_LABEL = "10 MB";
+
 export const sourcesApi = {
   list: () => api<Source[]>("/api/sources"),
   // notebookId: added from inside a notebook, so the posts join it.
   connect: (url: string, notebookId?: string) => post<SourceJob>("/api/sources", { url, notebook_id: notebookId }),
   importUrl: (url: string, notebookId?: string) => post<SourceJob>("/api/sources/url", { url, notebook_id: notebookId }),
   importFile: async (file: UploadSource, notebookId?: string) => {
+    if (file.size > MAX_SOURCE_FILE_BYTES) throw new Error(`${file.name} is over ${MAX_SOURCE_FILE_LABEL}. Files can be up to ${MAX_SOURCE_FILE_LABEL}.`);
     const { upload_id } = await uploadFile(file);
     return post<SourceJob>("/api/sources/upload", { upload_id, notebook_id: notebookId });
   },

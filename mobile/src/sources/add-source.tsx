@@ -1,7 +1,9 @@
 import { ApiError, type UploadSource } from "@notestack/shared/client";
-import { sourcesApi } from "@notestack/shared/endpoints";
+import { MAX_SOURCE_FILE_BYTES, MAX_SOURCE_FILE_LABEL, settingsApi, sourcesApi } from "@notestack/shared/endpoints";
 import type { Job, Source } from "@notestack/shared/types";
 import { classifyUrl, looksLikeArticle } from "@notestack/shared/urlScrapability";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import * as DocumentPicker from "expo-document-picker";
 import { File } from "expo-file-system";
 import { useState } from "react";
 import { Alert, Platform, StyleSheet, Text, TextInput, View } from "react-native";
@@ -23,17 +25,17 @@ const EXT_BY_TYPE: Record<string, string> = {
 };
 
 /**
- * The picked file as an upload, or null when it isn't a supported type. Android files picked through a provider
- * (Drive, Downloads) have a URI ending in an id, not the file's name, so their reported type decides and the upload
- * gets a name with the matching extension.
+ * The picked file as an upload under its real name, or null when it isn't a supported type. The picker gives each file's
+ * own name (Android's Downloads and Drive hand over only an id otherwise, and the server tells uploads apart by name, so
+ * they replaced one another). A name with no extension takes one from its reported type. The type is left for the
+ * shared upload to work out from the name, so it always sends the bytes read here.
  */
-function uploadable(f: File): UploadSource | null {
-  // expo-file-system's File is a Blob with a name, which is all the shared upload needs.
-  if (FILE_TYPES.test(f.name)) return f as unknown as UploadSource;
-  const type = (f.type ?? "").split(";")[0];
-  const ext = EXT_BY_TYPE[type];
-  if (!ext) return null;
-  return { name: `Document.${ext}`, type, size: f.size, arrayBuffer: () => f.arrayBuffer() } as unknown as UploadSource;
+function uploadable(asset: DocumentPicker.DocumentPickerAsset): UploadSource | null {
+  const type = (asset.mimeType ?? "").split(";")[0];
+  const ext = FILE_TYPES.test(asset.name) ? "" : EXT_BY_TYPE[type];
+  if (!FILE_TYPES.test(asset.name) && !ext) return null;
+  const name = ext ? `${asset.name.replace(/\.$/, "")}.${ext}` : asset.name;
+  return { name, type: "", size: asset.size ?? 0, arrayBuffer: () => new File(asset.uri).arrayBuffer() } as unknown as UploadSource;
 }
 
 /**
@@ -46,8 +48,8 @@ const PICK_TYPES =
     ? ["text/plain", "text/markdown", "text/x-markdown", "text/vtt", "text/html", "application/pdf", "application/octet-stream"]
     : ["text/plain", "text/markdown", "text/vtt", "text/html", "application/pdf"];
 
-/** A file picked to upload, waiting in the list until Upload is pressed. */
-type Picked = { key: string; name: string; size: number; upload: UploadSource };
+/** A file picked to upload, waiting in the list until Upload is pressed. `key` spots the same file picked again. */
+type Picked = { uri: string; key: string; name: string; size: number; upload: UploadSource };
 
 const sizeLabel = (bytes: number) => (bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`);
 
@@ -85,6 +87,11 @@ export function AddSource({
   const [notice, setNotice] = useState("");
   // Files picked so far: more can be added, any removed, and Upload sends them all (web: Welcome's file list).
   const [files, setFiles] = useState<Picked[]>([]);
+  // Each file becomes a post: the list stops at the posts the plan still has room for (null: no limit, or not loaded).
+  const queryClient = useQueryClient();
+  const usage = useQuery({ queryKey: ["settings", "usage"], queryFn: settingsApi.usage });
+  const limit = usage.data?.limits.indexed_posts ?? -1;
+  const room = limit < 0 ? null : Math.max(0, limit - (usage.data?.used.indexed_posts ?? 0));
   const link = value.trim();
   const mode = override ?? (looksLikeArticle(value) ? "url" : "feed");
   const verdict = classifyUrl(value);
@@ -125,20 +132,36 @@ export function AddSource({
   const pick = async () => {
     setError("");
     setNotice("");
-    const picked = await File.pickFileAsync({ multipleFiles: true, mimeTypes: PICK_TYPES }).catch(() => null);
+    const picked = await DocumentPicker.getDocumentAsync({ multiple: true, type: PICK_TYPES, copyToCacheDirectory: true }).catch(() => null);
     if (!picked || picked.canceled) return;
     const fresh: Picked[] = [];
     let unsupported = false;
-    for (const f of picked.result) {
-      const upload = uploadable(f);
+    const large: string[] = [];
+    for (const asset of picked.assets) {
+      const upload = uploadable(asset);
       if (!upload) {
         unsupported = true;
         continue;
       }
-      fresh.push({ key: `${upload.name}-${f.size}`, name: upload.name, size: f.size, upload });
+      const size = asset.size ?? upload.size;
+      if (size > MAX_SOURCE_FILE_BYTES) {
+        large.push(upload.name);
+        continue;
+      }
+      const key = `${upload.name}-${size}`;
+      if (!fresh.some((x) => x.key === key)) fresh.push({ uri: asset.uri, key, name: upload.name, size, upload });
     }
-    if (unsupported) setError("This file type is not supported.");
-    setFiles((list) => [...list, ...fresh.filter((x) => !list.some((y) => y.key === x.key))]);
+    const merged = [...files, ...fresh.filter((x) => !files.some((y) => y.key === x.key))];
+    if (room !== null && merged.length > room) {
+      setError(
+        room === 0
+          ? "Your plan's posts are all used. Upgrade to add more."
+          : `Your plan has room for ${room} ${room === 1 ? "file" : "files"}, so only the first ${room} were kept.`,
+      );
+    } else if (large.length) {
+      setError(`${large.length === 1 ? large[0] : `${large.length} files`} ${large.length === 1 ? "is" : "are"} over ${MAX_SOURCE_FILE_LABEL}. Files can be up to ${MAX_SOURCE_FILE_LABEL}.`);
+    } else if (unsupported) setError("This file type is not supported.");
+    setFiles(room === null ? merged : merged.slice(0, room));
   };
 
   /** Send every file in the list, one after another; the screen hears about them once all are in. */
@@ -162,6 +185,7 @@ export function AddSource({
     if (failed.length) setError(`${failed.length} ${failed.length === 1 ? "file" : "files"} could not be uploaded. Try again.`);
     else setNotice(`${done.length} ${done.length === 1 ? "file" : "files"} uploading. They appear under Imported posts and files.`);
     done.forEach((d) => onAdded(d.source, d.job));
+    if (done.length) void queryClient.invalidateQueries({ queryKey: ["settings", "usage"] });
   };
 
   const linkPanel = (
@@ -239,18 +263,19 @@ export function AddSource({
       <Pressable onPress={pick} disabled={busy} accessibilityRole="button" style={({ pressed }) => [styles.drop, roomy && styles.dropRoomy, (busy || pressed) && styles.off]}>
         <UploadIcon size={22} color={colors.blue} />
         <Text style={styles.dropTitle}>{files.length ? "Add more files" : "Choose files"}</Text>
-        <Text style={styles.dropHint}>Markdown · text · VTT · HTML · PDF</Text>
+        <Text style={styles.dropHint}>{`Markdown · text · VTT · HTML · PDF · up to ${MAX_SOURCE_FILE_LABEL} each`}</Text>
+        {room !== null ? <Text style={styles.dropHint}>{`Room for ${room} ${room === 1 ? "file" : "files"} on your plan`}</Text> : null}
       </Pressable>
       {files.length > 0 ? (
         <View style={styles.fileList}>
           {files.map((f) => (
-            <View key={f.key} style={styles.fileRow}>
+            <View key={f.uri} style={styles.fileRow}>
               <Text style={styles.fileName} numberOfLines={1} ellipsizeMode="middle">
                 {f.name}
               </Text>
-              <Text style={styles.fileSize}>{sizeLabel(f.size)}</Text>
+              {f.size ? <Text style={styles.fileSize}>{sizeLabel(f.size)}</Text> : null}
               <Pressable
-                onPress={() => setFiles((list) => list.filter((x) => x.key !== f.key))}
+                onPress={() => setFiles((list) => list.filter((x) => x.uri !== f.uri))}
                 disabled={busy}
                 hitSlop={10}
                 accessibilityRole="button"

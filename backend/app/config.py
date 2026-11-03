@@ -76,6 +76,8 @@ class Settings(BaseSettings):
     r2_prefix: str = ""
     r2_presign_ttl_seconds: int = 3600
     max_upload_bytes: int = 300 * 1024 * 1024
+    # A file imported as a post (Markdown, text, VTT, HTML, PDF): larger ones are refused before indexing.
+    max_source_file_bytes: int = 10 * 1024 * 1024
 
     # Posts an infographic reads, and a report that is not built from themes (REPORT_PLANNER below). A quiz or flashcard set reads up to that many straight from the posts; with more (no limit
     # on how many are picked) it reads a small sample of the ideas already extracted from them, so its size does not grow.

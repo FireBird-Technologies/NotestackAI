@@ -203,10 +203,11 @@ export function MindMapExplorer({
       send({ layout: { sheetH: embedded ? 0 : sheetShut, embedded, warp } });
   }, [ready, sheetShut, embedded, warp]);
   useEffect(() => {
-    // The page starts every map at its centre and says so ({ focused: -1 }), so the sheet follows.
-    if (ready && placed.length) send({ scene });
+    // The page starts every map at its centre and says so ({ focused: -1 }), so the sheet follows. Not before the stage
+    // is measured: the first layout (0 by 0) is laid out wide, and an upright phone's would replace it mid flight.
+    if (ready && placed.length && size.w > 0) send({ scene });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, scene]);
+  }, [ready, scene, size.w > 0]);
 
   /** Fly to a star (the centre shows everything): from the trail, the chips, Back to, and the buttons. */
   const focus = (id: string) => {

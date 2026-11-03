@@ -35,6 +35,10 @@ export const MIND_MAP_PAGE = `<!doctype html>
   var flight = null;
   var glows = [], core = null;
   var queued = false;
+  // Each label's opacity as drawn: it eases towards shown or hidden, so the declutter fades labels rather than popping them.
+  var labelA = [], lastDraw = 0, settling = false;
+  // Text is set at one size and scaled, so a label grows smoothly instead of stepping between whole font sizes.
+  var BASE = 40;
 
   function send(msg) { if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify(msg)); }
   function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
@@ -127,7 +131,7 @@ export const MIND_MAP_PAGE = `<!doctype html>
     flight = {
       x0: cam.x, y0: cam.y, l0: Math.log(cam.s),
       x1: to.x, y1: to.y, l1: Math.log(to.s),
-      start: performance.now(),
+      start: 0, // set on the flight's first frame, so a late first frame does not skip ahead
       dur: ms || clamp(620 + 260 * trip, 700, 1150),
       focusing: !!focusing,
     };
@@ -152,10 +156,11 @@ export const MIND_MAP_PAGE = `<!doctype html>
   function tick() {
     if (queued) return;
     queued = true;
-    requestAnimationFrame(function () {
+    requestAnimationFrame(function (now) {
       queued = false;
       if (flight) {
-        var t = clamp((performance.now() - flight.start) / flight.dur, 0, 1);
+        if (!flight.start) flight.start = now;
+        var t = clamp((now - flight.start) / flight.dur, 0, 1);
         var e = ease(t);
         cam.x = flight.x0 + (flight.x1 - flight.x0) * e;
         cam.y = flight.y0 + (flight.y1 - flight.y0) * e;
@@ -164,7 +169,7 @@ export const MIND_MAP_PAGE = `<!doctype html>
         if (t >= 1) { if (flight.focusing) focusT = 1; flight = null; }
       }
       draw();
-      if (flight) tick();
+      if (flight || settling) tick();
     });
   }
   /* A finger took the camera: stop flying, and let the focus land where it was heading. */
@@ -174,6 +179,10 @@ export const MIND_MAP_PAGE = `<!doctype html>
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, W, H);
     if (!S || !toF || !W) return;
+    var clock = performance.now();
+    var dt = lastDraw ? Math.min(clock - lastDraw, 50) : 16;
+    lastDraw = clock;
+    settling = false;
     var C = S.consts, stars = S.stars, s = cam.s, f0 = fit();
     var z = s / f0;
     var levelOp = [1, 1, ramp(z, 1.25, 1.8), ramp(z, 3.6, 5)];
@@ -185,6 +194,21 @@ export const MIND_MAP_PAGE = `<!doctype html>
     var flowOf = function (i) { return from.flow * from.mask[i] * (1 - t) + to.flow * to.mask[i] * t; };
     var focusedness = function (i) { return (to.idx === i ? t : 0) + (from.idx === i ? 1 - t : 0); };
     var labelPx = function (level) { return C.LABEL_PX[level] * Math.pow(s, 0.3) * (level === 0 ? 0.82 : 1); };
+    // A line of text at size px, drawn at BASE and scaled. Outline: the dark stroke behind it, as wide as w (in px).
+    var words = function (str, x, y, px, weight, outline, spacing) {
+      var k = px / BASE;
+      if (k <= 0) return;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.scale(k, k);
+      ctx.font = weight + " " + BASE + "px 'Space Grotesk', system-ui, sans-serif";
+      if ("letterSpacing" in ctx) ctx.letterSpacing = (spacing || 0) * BASE + "px";
+      if (outline) {
+        ctx.lineWidth = outline / k;
+        ctx.strokeText(str, 0, 0);
+      } else ctx.fillText(str, 0, 0);
+      ctx.restore();
+    };
     var glowAt = function (g, x, y, r, alpha) {
       if (alpha < 0.005 || r <= 0) return;
       ctx.save();
@@ -272,6 +296,14 @@ export const MIND_MAP_PAGE = `<!doctype html>
       if (c.i === to.idx || free) kept.push(b);
       else hidden[c.i] = true;
     });
+    var step = 1 - Math.exp(-dt / 110);
+    stars.forEach(function (p, i) {
+      var want = hidden[i] ? 0 : 1;
+      if (labelA[i] === undefined) labelA[i] = want;
+      labelA[i] += (want - labelA[i]) * step;
+      if (Math.abs(want - labelA[i]) < 0.01) labelA[i] = want;
+      else settling = true;
+    });
 
     // Stars, deepest first, so the outer stars' labels stay on top.
     ctx.textAlign = "center";
@@ -316,30 +348,27 @@ export const MIND_MAP_PAGE = `<!doctype html>
         ctx.globalAlpha = clamp(op * (more / Math.max(p.kids, 1)), 0, 1);
         ctx.fillStyle = "#8fbaff";
         ctx.textAlign = "left";
-        ctx.font = "500 " + fs * 0.7 + "px 'Space Grotesk', system-ui, sans-serif";
-        ctx.fillText("+" + p.kids, x + r * 1.1, y - r * 1.1);
+        words("+" + p.kids, x + r * 1.1, y - r * 1.1, fs * 0.7, "500");
         ctx.textAlign = "center";
       }
       var labelY = y + r * 1.35 + fs * 1.15;
-      if (!hidden[i]) {
-        ctx.font = (p.level <= 1 ? "700 " : "500 ") + fs + "px 'Space Grotesk', system-ui, sans-serif";
-        if ("letterSpacing" in ctx) ctx.letterSpacing = p.level === 0 ? fs * 0.14 + "px" : "0px";
-        ctx.globalAlpha = clamp(op, 0, 1);
+      var la = labelA[i] === undefined ? 1 : labelA[i];
+      if (la > 0.01) {
+        var weight = p.level <= 1 ? "700" : "500";
+        var spacing = p.level === 0 ? 0.14 : 0;
+        ctx.globalAlpha = clamp(op * la, 0, 1);
         ctx.strokeStyle = "#000";
-        ctx.lineWidth = fs * 0.22;
-        p.lines.forEach(function (l, n) { ctx.strokeText(l, x, labelY + n * fs * 1.12); });
-        ctx.globalAlpha = clamp(op * (p.level === 3 ? 0.88 : 1), 0, 1);
+        p.lines.forEach(function (l, n) { words(l, x, labelY + n * fs * 1.12, fs, weight, fs * 0.22, spacing); });
+        ctx.globalAlpha = clamp(op * la * (p.level === 3 ? 0.88 : 1), 0, 1);
         ctx.fillStyle = "#fff";
-        p.lines.forEach(function (l, n) { ctx.fillText(l, x, labelY + n * fs * 1.12); });
-        if ("letterSpacing" in ctx) ctx.letterSpacing = "0px";
+        p.lines.forEach(function (l, n) { words(l, x, labelY + n * fs * 1.12, fs, weight, 0, spacing); });
       }
       var noteOp = p.notes.length ? ramp(z, 6, 8) : 0;
       if (noteOp > 0.05) {
         var ns = Math.min(fs * 0.82, 3.4 * s);
-        ctx.font = "500 " + ns + "px 'Space Grotesk', system-ui, sans-serif";
         ctx.globalAlpha = clamp(0.78 * op * noteOp, 0, 1);
         ctx.fillStyle = "#fff";
-        p.notes.forEach(function (l, n) { ctx.fillText(l, x, labelY + p.lines.length * fs * 1.12 + ns * (0.8 + n * 1.2)); });
+        p.notes.forEach(function (l, n) { words(l, x, labelY + p.lines.length * fs * 1.12 + ns * (0.8 + n * 1.2), ns, "500"); });
       }
     }
     ctx.globalAlpha = 1;
@@ -433,6 +462,7 @@ export const MIND_MAP_PAGE = `<!doctype html>
     }
     if (msg.scene) {
       S = msg.scene;
+      labelA = [];
       makeGradients();
       var all = focusState(-1);
       fromF = all;

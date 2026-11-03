@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
-import { docsApi, jobsApi, notebooksApi, settingsApi, sourcesApi, type NotebookLmImportResult } from "@notestack/shared/endpoints";
+import { docsApi, jobsApi, MAX_SOURCE_FILE_BYTES, MAX_SOURCE_FILE_LABEL, notebooksApi, settingsApi, sourcesApi, type NotebookLmImportResult } from "@notestack/shared/endpoints";
 import type { Job, Source } from "@notestack/shared/types";
 import { NotebookLmTransferButton } from "../components/NotebookLmTransferButton";
 import { CloseIcon, UploadIcon } from "../components/icons/Icons";
@@ -40,6 +40,14 @@ const FILE_ACCEPT = ".md,.markdown,.txt,.vtt,.html,.htm,.pdf,text/vtt,text/markd
 const EXAMPLES = ["yourblog.com", "yourname.substack.com", "medium.com/@you"];
 
 export const ONBOARDED_KEY = "ns_onboarded";
+
+const tooLargeMessage = (names: string[]) =>
+  `${names.slice(0, 3).join(", ")}${names.length > 3 ? " and others" : ""} ${names.length === 1 ? "is" : "are"} over ${MAX_SOURCE_FILE_LABEL}. Files can be up to ${MAX_SOURCE_FILE_LABEL}.`;
+
+const fileRoomMessage = (room: number) =>
+  room === 0
+    ? "Your plan's posts are all used. Upgrade to add more."
+    : `Your plan has room for ${room} ${room === 1 ? "file" : "files"}, so only the first ${room} were kept. Upgrade to add more.`;
 const NOTEBOOKLM_GUIDE_KEY = "ns_notebooklm_guide_open";
 const NOTEBOOKLM_RETURN_PATH = "/welcome?notebooklm=import";
 
@@ -112,6 +120,8 @@ export default function Welcome() {
   const [notebookLmLaunchMessage, setNotebookLmLaunchMessage] = useState<string | null>(null);
   const notebookLmImportStarted = useRef(false);
   const autoStarted = useRef(false);
+  // Posts the plan still has room for: null when it has no limit (or usage hasn't loaded; the server still refuses).
+  const [fileRoom, setFileRoom] = useState<number | null>(null);
 
   const live = useJob(job, async (j) => {
     if (j.status !== "done") return;
@@ -166,9 +176,28 @@ export default function Welcome() {
   };
 
   const addFiles = (list: FileList | null) => {
-    const picked = Array.from(list ?? []);
-    if (picked.length) setFiles((cur) => [...cur, ...picked.filter((f) => !cur.some((c) => c.name === f.name && c.size === f.size))]);
+    const all = Array.from(list ?? []);
+    if (!all.length) return;
+    const large = all.filter((f) => f.size > MAX_SOURCE_FILE_BYTES);
+    const picked = all.filter((f) => f.size <= MAX_SOURCE_FILE_BYTES);
+    const merged = [...files, ...picked.filter((f) => !files.some((c) => c.name === f.name && c.size === f.size))];
+    // Each file becomes a post, so the list stops at the posts the plan still has room for.
+    if (fileRoom !== null && merged.length > fileRoom) {
+      setError(fileRoomMessage(fileRoom));
+      setFiles(merged.slice(0, fileRoom));
+    } else {
+      setError(large.length ? tooLargeMessage(large.map((f) => f.name)) : null);
+      setFiles(merged);
+    }
   };
+
+  useEffect(() => {
+    if (!user) return;
+    settingsApi
+      .usage()
+      .then((u) => setFileRoom(u.limits.indexed_posts < 0 ? null : Math.max(0, u.limits.indexed_posts - u.used.indexed_posts)))
+      .catch(() => undefined);
+  }, [user]);
 
   // A URL pasted on the landing page starts connecting straight away: its warning was confirmed there, but a link that
   // can't be added stops here.
@@ -566,7 +595,7 @@ export default function Welcome() {
                 <p className="muted small">
                   {mode === "feed" && "Substack, Ghost, WordPress, Medium or anything with a feed. We find the feed, pull in your archive and keep it in sync."}
                   {mode === "url" && "Any single article on the web. Add more later from Sources."}
-                  {mode === "file" && "Markdown, text, VTT transcripts, HTML or PDF: drafts, exports and posts that never had a feed. Add as many as you like."}
+                  {mode === "file" && `Markdown, text, VTT transcripts, HTML or PDF: drafts, exports and posts that never had a feed. ${fileRoom === null ? "Add as many as you like." : `Your plan has room for ${fileRoom} ${fileRoom === 1 ? "file" : "files"}.`}`}
                 </p>
                 <form onSubmit={submit} className="welcome-form">
                   {mode === "file" ? (
@@ -595,7 +624,7 @@ export default function Welcome() {
                       />
                       <UploadIcon size={28} />
                   <strong>Drop files here or click to choose</strong>
-                      <span className="mono muted small">.md · .txt · .html · .pdf</span>
+                      <span className="mono muted small">.md · .txt · .html · .pdf · up to {MAX_SOURCE_FILE_LABEL} each</span>
                     </label>
                   ) : (
                     <input

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { NavLink, useSearchParams } from "react-router-dom";
-import { docsApi, jobsApi, settingsApi, sourcesApi, type NotebookLmImportResult } from "@notestack/shared/endpoints";
+import { docsApi, jobsApi, MAX_SOURCE_FILE_BYTES, MAX_SOURCE_FILE_LABEL, settingsApi, sourcesApi, type NotebookLmImportResult } from "@notestack/shared/endpoints";
 import { looksLikeArticle } from "@notestack/shared/urlScrapability";
 import type { Doc, Job, Source } from "@notestack/shared/types";
 import { NotebookLmTransferButton } from "../components/NotebookLmTransferButton";
@@ -98,17 +98,19 @@ export function isDocumentFile(f: File): boolean {
 /** What to say after an upload: how many failed, naming files that are not documents at all. */
 export function uploadError(files: File[], failed: number): string | null {
   if (!failed) return null;
-  const skipped = files.filter((f) => !isDocumentFile(f)).map((f) => f.name);
-  const why = skipped.length
-    ? ` ${skipped.slice(0, 3).join(", ")}${skipped.length > 3 ? " and others" : ""} ${skipped.length === 1 ? "isn't a" : "aren't"} supported (Markdown, text, VTT, HTML or PDF).`
-    : "";
+  const names = (list: File[]) => `${list.slice(0, 3).map((f) => f.name).join(", ")}${list.length > 3 ? " and others" : ""}`;
+  const skipped = files.filter((f) => !isDocumentFile(f));
+  const large = files.filter((f) => isDocumentFile(f) && f.size > MAX_SOURCE_FILE_BYTES);
+  const why =
+    (skipped.length ? ` ${names(skipped)} ${skipped.length === 1 ? "isn't a" : "aren't"} supported (Markdown, text, VTT, HTML or PDF).` : "") +
+    (large.length ? ` ${names(large)} ${large.length === 1 ? "is" : "are"} over ${MAX_SOURCE_FILE_LABEL}, the largest file you can add.` : "");
   return `${failed} of ${files.length} files could not be uploaded.${why}`;
 }
 
 export async function importFiles(files: File[], onAdded: (source: Source, job: Job) => void, notebookId?: string): Promise<number> {
   let failed = 0;
   for (const f of files) {
-    if (!isDocumentFile(f)) {
+    if (!isDocumentFile(f) || f.size > MAX_SOURCE_FILE_BYTES) {
       failed += 1;
       continue;
     }

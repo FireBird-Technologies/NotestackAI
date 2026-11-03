@@ -342,7 +342,12 @@ export function ChatTab({ notebook, chatId, onStarted, onNextStep, onNeedPosts }
  * (and `next`, the last answer's suggested next step) under it.
  */
 /** A citation's post, opened over the notebook. A chat citation has no post to open. */
-const openCitation = (c: Citation) => c.document_id && router.push({ pathname: "/notebooks/post/[id]", params: { id: c.document_id } });
+const openCitation = (c: Citation) =>
+  c.document_id &&
+  router.push({
+    pathname: "/notebooks/post/[id]",
+    params: { id: c.document_id, start: String(c.line_start), end: String(c.line_end) },
+  });
 
 function TurnView({ turn, next, onOpen }: { turn: Turn; next?: ReactNode; onOpen: (kind: ChatArtifact, preset?: ChatPreset) => void }) {
   const [open, setOpen] = useState(false);
