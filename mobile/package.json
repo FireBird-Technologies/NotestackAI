@@ -9,7 +9,6 @@
     "@notestack/shared": "file:../packages/shared",
     "@react-native-community/slider": "5.2.1",
     "@react-native-google-signin/google-signin": "^16.1.5",
-    "@shopify/react-native-skia": "2.14.0",
     "@tanstack/react-query": "^5.104.5",
     "expo": "~58.0.17",
     "expo-apple-authentication": "~58.0.2",
