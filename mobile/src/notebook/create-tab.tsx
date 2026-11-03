@@ -67,6 +67,7 @@ export function CreateTab({
   presets,
   presetKey,
   onMaking,
+  onNeedPosts,
 }: {
   notebook: Notebook;
   chats: ChatSummary[];
@@ -80,6 +81,8 @@ export function CreateTab({
   presets: Partial<Record<Kind, ChatPreset>>;
   presetKey: number;
   onMaking: (kind: Kind | null) => void;
+  /** The notebook has no posts yet: open the add-sources sheet instead of a make's settings (web: StudioPanel's gate). */
+  onNeedPosts: () => void;
 }) {
   const queryClient = useQueryClient();
   const setMaking = onMaking;
@@ -101,6 +104,7 @@ export function CreateTab({
   const [launching, setLaunching] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const off = notebook.documents.length === 0;
+  const open = (kind: Kind) => (off ? onNeedPosts() : setMaking(kind));
   const accounts = useQuery({ queryKey: ["launchpad", "accounts"], queryFn: launchpadApi.accounts, enabled: launching });
 
   return (
@@ -108,10 +112,9 @@ export function CreateTab({
       <View style={styles.card}>
         <Text style={styles.label}>CREATE</Text>
         <Pressable
-          disabled={off}
-          onPress={() => setMaking("mind_map")}
+          onPress={() => open("mind_map")}
           accessibilityRole="button"
-          style={({ pressed }) => [styles.tile, styles.stars, off && styles.off, pressed && styles.pressed]}>
+          style={({ pressed }) => [styles.tile, styles.stars, pressed && styles.pressed]}>
           <View style={styles.starsText}>
             <Text style={styles.starsTitle}>Mind Constellation</Text>
             <Text style={styles.starsSub}>Explore your posts as stars</Text>
@@ -119,7 +122,7 @@ export function CreateTab({
           <Image source={require("@/assets/images/create/stars.png")} style={styles.starsArt} tintColor="#cfe0ff" />
         </Pressable>
         {MAKES.map((m) => (
-          <Tile key={m.type} icon={m.icon} label={m.label} disabled={off} onPress={() => setMaking(m.type)} />
+          <Tile key={m.type} icon={m.icon} label={m.label} onPress={() => open(m.type)} />
         ))}
         <Tile icon={require("@/assets/images/create/rocket.png")} label="Launch" onPress={() => setLaunching(true)} />
         <Pressable
@@ -198,13 +201,9 @@ async function generate(body: Parameters<typeof artifactsApi.generate>[0]): Prom
   }
 }
 
-function Tile({ icon, label, disabled, onPress }: { icon: ImageSource; label: string; disabled?: boolean; onPress: () => void }) {
+function Tile({ icon, label, onPress }: { icon: ImageSource; label: string; onPress: () => void }) {
   return (
-    <Pressable
-      disabled={disabled}
-      onPress={onPress}
-      accessibilityRole="button"
-      style={({ pressed }) => [styles.tile, disabled && styles.off, pressed && styles.pressed]}>
+    <Pressable onPress={onPress} accessibilityRole="button" style={({ pressed }) => [styles.tile, pressed && styles.pressed]}>
       <Image source={icon} style={styles.icon} tintColor={colors.text} />
       <Text style={styles.tileText}>{label}</Text>
     </Pressable>
@@ -256,6 +255,5 @@ const styles = StyleSheet.create({
   appLogo: { width: 30, height: 30, borderRadius: 8, backgroundColor: colors.white, alignItems: "center", justifyContent: "center" },
   appImage: { width: 18, height: 18 },
   appName: { color: colors.text2, fontSize: 16 },
-  off: { opacity: 0.45 },
   pressed: { opacity: 0.7 },
 });

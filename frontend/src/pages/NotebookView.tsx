@@ -1142,6 +1142,7 @@ export default function NotebookView() {
           onSubmit={(e: FormEvent) => {
             e.preventDefault();
             if (outOfChat) openChatLimit(); // Enter or the send button once the free questions are used
+            else if (!nb.documents.length) setAdding(true); // nothing to ask yet: connect a source first
             else void ask(q);
           }}
           className="inline-form nbv-ask"
@@ -1150,10 +1151,10 @@ export default function NotebookView() {
             className="input"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            // Out of free questions the field stays clickable (read only, not disabled, which would swallow the click)
-            // and opens the upgrade popup instead of taking text.
-            readOnly={outOfChat}
-            onClick={outOfChat ? openChatLimit : undefined}
+            // Out of free questions, or with no posts yet, the field stays clickable (read only, not disabled, which
+            // would swallow the click): it opens the upgrade popup, or the Connect a source modal, instead of taking text.
+            readOnly={outOfChat || !nb.documents.length}
+            onClick={outOfChat ? openChatLimit : !nb.documents.length ? () => setAdding(true) : undefined}
             placeholder={
               outOfChat
                 ? "You have used all your free chat messages"
@@ -1162,7 +1163,7 @@ export default function NotebookView() {
                   : "Add posts to start asking"
             }
             aria-label="Ask your notebook"
-            disabled={!nb.documents.length || Boolean(loadingChatId)}
+            disabled={Boolean(loadingChatId)}
           />
           <button
             className="btn btn-primary nbv-send"

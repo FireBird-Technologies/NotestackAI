@@ -1,17 +1,29 @@
+import type { Citation } from "@notestack/shared/types";
 import { Fragment } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { colors, fonts } from "@/ui/theme";
 
-/** **bold**, *italic*, `code` and [n] citation markers inside one line. */
-function Inline({ text }: { text: string }) {
+type Cite = { citations?: Citation[]; onCite?: (c: Citation) => void };
+
+/** **bold**, *italic*, `code` and [n] citation markers inside one line. A marker opens its citation, as on the web. */
+function Inline({ text, citations, onCite }: { text: string } & Cite) {
   const parts = text.split(/(\*\*[^*]+\*\*|\*[^*\s][^*]*\*|`[^`]+`|\[\d+\])/g);
   return (
     <>
       {parts.map((p, i) => {
         if (!p) return null;
         if (p.startsWith("**") && p.endsWith("**")) return <Text key={i} style={styles.bold}>{p.slice(2, -2)}</Text>;
-        if (/^\[\d+\]$/.test(p)) return <Text key={i} style={styles.marker}>{p}</Text>;
+        if (/^\[\d+\]$/.test(p)) {
+          const c = citations?.find((x) => x.marker === Number(p.slice(1, -1)));
+          return c && onCite ? (
+            <Text key={i} style={styles.marker} onPress={() => onCite(c)} accessibilityRole="button" accessibilityLabel={`Source ${c.marker}: ${c.title}`}>
+              {p}
+            </Text>
+          ) : (
+            <Text key={i} style={styles.marker}>{p}</Text>
+          );
+        }
         if (p.startsWith("`") && p.endsWith("`")) return <Text key={i} style={styles.code}>{p.slice(1, -1)}</Text>;
         if (p.length > 2 && p.startsWith("*") && p.endsWith("*")) return <Text key={i} style={styles.italic}>{p.slice(1, -1)}</Text>;
         return <Fragment key={i}>{p}</Fragment>;
@@ -21,7 +33,7 @@ function Inline({ text }: { text: string }) {
 }
 
 /** An answer's Markdown, as the web shows it (components/Markdown.tsx): headings, paragraphs and lists. */
-export function AnswerText({ text }: { text: string }) {
+export function AnswerText({ text, citations, onCite }: { text: string } & Cite) {
   const blocks = text.trim().split(/\n{2,}/);
   return (
     <View style={styles.wrap}>
@@ -31,7 +43,7 @@ export function AnswerText({ text }: { text: string }) {
         if (heading && lines.length === 1) {
           return (
             <Text key={b} style={styles.heading} selectable>
-              <Inline text={lines[0].slice(heading[0].length)} />
+              <Inline citations={citations} onCite={onCite} text={lines[0].slice(heading[0].length)} />
             </Text>
           );
         }
@@ -45,7 +57,7 @@ export function AnswerText({ text }: { text: string }) {
                   <View key={i} style={styles.item}>
                     <Text style={styles.bullet}>{bullet}</Text>
                     <Text style={[styles.text, styles.itemText]} selectable>
-                      <Inline text={l.slice(m[0].length)} />
+                      <Inline citations={citations} onCite={onCite} text={l.slice(m[0].length)} />
                     </Text>
                   </View>
                 );
@@ -58,7 +70,7 @@ export function AnswerText({ text }: { text: string }) {
             {lines.map((l, i) => (
               <Fragment key={i}>
                 {i > 0 ? "\n" : null}
-                <Inline text={l.replace(/^#{1,6}\s+/, "")} />
+                <Inline citations={citations} onCite={onCite} text={l.replace(/^#{1,6}\s+/, "")} />
               </Fragment>
             ))}
           </Text>

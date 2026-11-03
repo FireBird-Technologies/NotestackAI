@@ -90,13 +90,15 @@ const BAR_HEIGHT = 60;
  * The Chat tab (web: NotebookView's chat pane): the open chat's turns, or the telescope and starter questions, the Free
  * plan's chat limit, and the ask bar. `chatId` null is a new chat; the first answer names it through `onStarted`.
  */
-export function ChatTab({ notebook, chatId, onStarted, onNextStep }: {
+export function ChatTab({ notebook, chatId, onStarted, onNextStep, onNeedPosts }: {
   notebook: Notebook;
   chatId: string | null;
   onStarted: (id: string) => void;
   /** A next-step suggestion under the last answer was tapped: open that thing's settings. */
   /** Open a make's settings: a suggestion (defaults), or a "create a report" answer (`preset`: what was asked for). */
   onNextStep: (kind: ChatArtifact, preset?: ChatPreset) => void;
+  /** No posts yet: a tap on the box opens the add-sources sheet (web: the read-only field's click). */
+  onNeedPosts: () => void;
 }) {
   const queryClient = useQueryClient();
   const upgrade = useUpgrade();
@@ -327,6 +329,8 @@ export function ChatTab({ notebook, chatId, onStarted, onNextStep }: {
               <SymbolView name={{ ios: "arrow.up", android: "arrow_upward" }} size={20} weight="semibold" tintColor={colors.white} />
             )}
           </Pressable>
+          {/* A field that can't be typed in takes no taps of its own: this catches them, to add posts first. */}
+          {!posts ? <Pressable onPress={onNeedPosts} accessibilityRole="button" accessibilityLabel="Add posts to start asking" style={StyleSheet.absoluteFill} /> : null}
         </View>
       </View>
     </KeyboardAvoidingView>
@@ -337,6 +341,9 @@ export function ChatTab({ notebook, chatId, onStarted, onNextStep }: {
  * One turn: the question on the right in blue; the answer full width with its citations, then copy and thumbs down
  * (and `next`, the last answer's suggested next step) under it.
  */
+/** A citation's post, opened over the notebook. A chat citation has no post to open. */
+const openCitation = (c: Citation) => c.document_id && router.push({ pathname: "/notebooks/post/[id]", params: { id: c.document_id } });
+
 function TurnView({ turn, next, onOpen }: { turn: Turn; next?: ReactNode; onOpen: (kind: ChatArtifact, preset?: ChatPreset) => void }) {
   const [open, setOpen] = useState(false);
   const text = useSmoothText(turn.text);
@@ -358,7 +365,7 @@ function TurnView({ turn, next, onOpen }: { turn: Turn; next?: ReactNode; onOpen
           <Text style={styles.status}>{turn.status}...</Text>
         </View>
       ) : null}
-      {text ? <AnswerText text={text} /> : null}
+      {text ? <AnswerText text={text} citations={sources} onCite={openCitation} /> : null}
       {sources.length > 0 ? (
         <View style={styles.sources}>
           <Pressable onPress={() => setOpen((o) => !o)} accessibilityRole="button" accessibilityLabel={`Citations, ${sources.length}`} accessibilityState={{ expanded: open }} style={styles.sourcesHead}>
@@ -377,7 +384,7 @@ function TurnView({ turn, next, onOpen }: { turn: Turn; next?: ReactNode; onOpen
                 <Pressable
                   key={`${c.marker}-${c.path}-${c.line_start}`}
                   disabled={!c.document_id}
-                  onPress={() => c.document_id && router.push({ pathname: "/notebooks/post/[id]", params: { id: c.document_id } })}
+                  onPress={() => openCitation(c)}
                   style={({ pressed }) => [styles.source, pressed && styles.pressed]}>
                   <Text style={styles.sourceMarker}>[{c.marker}]</Text>
                   <View style={styles.sourceText}>

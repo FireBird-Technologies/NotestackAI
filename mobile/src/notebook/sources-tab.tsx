@@ -24,6 +24,8 @@ export function SourcesTab({
   onNewChat,
   onChatRemoved,
   onPostsChanged,
+  adding,
+  onAdding,
 }: {
   notebook: Notebook;
   chats: ChatSummary[];
@@ -32,11 +34,13 @@ export function SourcesTab({
   onNewChat: () => void;
   onChatRemoved: (id: string) => void;
   onPostsChanged: () => void;
+  /** The add-sources sheet: held by the notebook screen, so an empty notebook's Create tiles and chat box open it too. */
+  adding: boolean;
+  onAdding: (open: boolean) => void;
 }) {
   const groups = useMemo(() => groupChats(chats), [chats]);
   // Today's chats start open, as on the web.
   const [open, setOpen] = useState<string[]>(["Today"]);
-  const [adding, setAdding] = useState(false);
   // Sources connected from the sheet: their imports, followed until done, when the notebook reloads with the new posts.
   const [imports, setImports] = useState<Job[]>([]);
   const changed = useRef(onPostsChanged);
@@ -132,7 +136,7 @@ export function SourcesTab({
         })}
       </Section>
 
-      <Section title="Posts" aside={<PillButton small title="Add & modify" onPress={() => setAdding(true)} />}>
+      <Section title="Posts" aside={<PillButton small title="Add & modify" onPress={() => onAdding(true)} />}>
         {posts > 0 ? (
           <Text style={pageStyles.body}>
             {posts} {posts === 1 ? "post is" : "posts are"} connected to this notebook.
@@ -145,7 +149,7 @@ export function SourcesTab({
         ))}
       </Section>
 
-      <Sheet visible={adding} title={notebook.is_archive ? "Connect a source" : `Add to ${notebook.title}`} onClose={() => setAdding(false)}>
+      <Sheet visible={adding} title={notebook.is_archive ? "Connect a source" : `Add to ${notebook.title}`} onClose={() => onAdding(false)}>
         <Text style={pageStyles.body}>
           {notebook.is_archive
             ? "This archive already contains all your posts. Posts from a new source join it automatically."
@@ -156,7 +160,7 @@ export function SourcesTab({
           notebookId={notebook.is_archive ? undefined : notebook.id}
           onAdded={(_, job) => {
             setImports((cur) => [...cur, job]);
-            setAdding(false);
+            onAdding(false);
           }}
         />
         <PostsManager notebook={notebook} readOnly={notebook.is_archive} onChanged={onPostsChanged} />

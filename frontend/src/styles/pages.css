@@ -2052,7 +2052,7 @@ select.input option {
 .welcome-wrap {
   position: relative;
   z-index: 1;
-  width: min(720px, 100%);
+  width: min(880px, 100%);
   margin: 0 auto;
   padding: 32px var(--gutter) 64px;
   display: grid;
@@ -2068,47 +2068,6 @@ select.input option {
   align-items: center;
 }
 
-.welcome-steps {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-  font-size: 0.75rem;
-  color: var(--text-3);
-}
-
-.welcome-steps li {
-  display: grid;
-  gap: 8px;
-}
-
-.welcome-step-num {
-  margin-right: 8px;
-  color: var(--blue);
-}
-
-.welcome-dot {
-  height: 3px;
-  border-radius: 999px;
-  background: var(--line-strong);
-  transition: background 0.3s, box-shadow 0.3s;
-}
-
-.welcome-steps li.done .welcome-dot {
-  background: var(--blue-60);
-}
-
-.welcome-steps li.current {
-  color: var(--white);
-}
-
-.welcome-steps li.current .welcome-dot {
-  background: var(--blue);
-  box-shadow: var(--glow-sm);
-}
-
 .welcome-card {
   display: grid;
   gap: 18px;
@@ -2122,6 +2081,33 @@ select.input option {
 .welcome-card h1 {
   font-size: clamp(1.8rem, 5vw, 2.6rem);
   line-height: 1.1;
+}
+
+/* The connect step's greeting: the card's largest line, centred over the question. */
+.welcome-hello {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.9rem, 5vw, 2.6rem);
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: center;
+}
+
+.welcome-hello span {
+  color: var(--blue);
+}
+
+.welcome-name {
+  display: grid;
+  gap: 14px;
+}
+
+.welcome-card .welcome-center {
+  text-align: center;
+}
+
+.welcome-hello + h1 {
+  font-size: clamp(1.4rem, 3.6vw, 1.9rem);
 }
 
 @keyframes welcome-in {
@@ -2384,46 +2370,6 @@ select.input option {
     grid-column: 2;
     justify-self: start;
   }
-}
-
-.goal-grid {
-  display: grid;
-  gap: 10px;
-}
-
-@media (min-width: 640px) {
-  .goal-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-.goal {
-  display: grid;
-  gap: 8px;
-  align-content: start;
-  padding: 18px;
-  border-radius: var(--radius);
-  border: 1px solid var(--line-strong);
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
-}
-
-.goal:hover {
-  border-color: var(--blue-60);
-}
-
-.goal.on {
-  border-color: var(--blue);
-  background: var(--blue-10);
-  box-shadow: var(--glow-md);
-}
-
-.goal .muted {
-  font-size: 0.85rem;
 }
 
 @media (prefers-reduced-motion: reduce) {

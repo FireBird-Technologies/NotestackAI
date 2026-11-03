@@ -212,11 +212,12 @@ export function Dialog({ visible, title, onClose, children }: { visible: boolean
 }
 
 /** A signed-in page: the night sky behind a scrolling column (as Sources and Library). */
-export function Page({ children, refresh }: { children: ReactNode; refresh?: React.ReactElement }) {
+export function Page({ children, refresh, fill }: { children: ReactNode; refresh?: React.ReactElement; fill?: boolean }) {
   return (
     <View style={pageStyles.fill}>
       <Starfield />
-      <ScrollView contentContainerStyle={pageStyles.column} keyboardShouldPersistTaps="handled" refreshControl={refresh}>
+      {/* `fill`: the column is at least the screen's height, so a child with flex: 1 can centre itself in it. */}
+      <ScrollView contentContainerStyle={[pageStyles.column, fill && pageStyles.grow]} keyboardShouldPersistTaps="handled" refreshControl={refresh}>
         {children}
       </ScrollView>
     </View>
@@ -424,6 +425,7 @@ export const pageStyles = StyleSheet.create({
   dialogBody: { gap: 14, paddingHorizontal: 20, paddingBottom: 20 },
   fill: { flex: 1, backgroundColor: colors.black },
   column: { padding: gutter * 1.25, paddingBottom: gutter * 3, gap: 14 },
+  grow: { flexGrow: 1 },
   head: { gap: 10, marginBottom: 4 },
   eyebrow: { color: colors.blue, fontFamily: fonts.mono, fontSize: 12.5, letterSpacing: 3, textTransform: "uppercase" },
   title: { color: colors.text, fontFamily: fonts.displayBold, fontSize: 28, lineHeight: 34, letterSpacing: -0.4 },

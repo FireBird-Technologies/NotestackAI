@@ -22,13 +22,29 @@ import {
 } from "@notestack/shared/mindLayout";
 import type { MindNode } from "@notestack/shared/types";
 import * as SecureStore from "expo-secure-store";
+import { SpaceGrotesk_500Medium, SpaceGrotesk_700Bold } from "@expo-google-fonts/space-grotesk";
+import {
+  Canvas,
+  createPicture,
+  PaintStyle,
+  Picture,
+  type SkCanvas,
+  type SkFont,
+  Skia,
+  type SkPaint,
+  type SkPathEffect,
+  type SkShader,
+  StrokeJoin,
+  TileMode,
+  useFont,
+} from "@shopify/react-native-skia";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Modal, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Pressable } from "@/ui/pressable";
 import { GestureDetector, GestureHandlerRootView, useExclusiveGestures, usePanGesture, usePinchGesture, useSimultaneousGestures, useTapGesture } from "react-native-gesture-handler";
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import { Easing, useDerivedValue, useSharedValue, withTiming } from "react-native-reanimated";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
-import Svg, { Circle, Defs, G, Line, Path, RadialGradient, Stop, Text as SvgText, TSpan } from "react-native-svg";
+import Svg, { Circle, Path } from "react-native-svg";
 import { scheduleOnRN } from "react-native-worklets";
 
 import { ChevronIcon, ExpandIcon } from "@/ui/icons";
@@ -39,9 +55,9 @@ import { colors, fonts, radius } from "@/ui/theme";
    does on the web. Pinch to zoom, drag to move, tap a star to fly to it, double-tap to dive in. The details of the star in
    view sit in a sheet under the map; the shape (Orbit, Spiral, Figure, Cluster) is remembered per map.
 
-   Drawing: the map is drawn sharp, on screen, for a settled camera. While a finger or a flight moves the camera, that
-   drawing is moved and scaled to follow it, and drawn sharp again once it settles. The drawing is twice the screen each
-   way, so moving it never shows an empty edge. */
+   Drawing: Skia draws the map on the GPU for every frame, from the live camera, on the UI thread. So it is sharp at
+   every step of a move, nothing re-renders while it moves, and it needs one screen-sized surface, not a bitmap per
+   redraw (the old SVG drawing ran low-memory phones out of memory). */
 
 /** The map's own data: an artifact, or a report's block (its id seeds the layout). */
 export type MindMapSource = { id: string; title: string; root: MindNode };
@@ -82,191 +98,261 @@ function frame(placed: Placed[], p: Placed, w: number, h: number): Cam {
   return { x: (minX + maxX) / 2, y: (minY + maxY) / 2, s };
 }
 
-/** The constellation drawn for one camera, in a box of 2w x 2h whose middle is the screen's middle. */
-function Drawing({ placed, edges, extent, shape, cam, w, h, fit, focusId }: {
-  placed: Placed[];
-  edges: { a: Placed; b: Placed; to: Placed; faint?: boolean }[];
-  extent: number;
-  shape: Shape;
-  cam: Cam;
-  w: number;
-  h: number;
-  fit: number;
-  focusId: string;
-}) {
-  const s = cam.s;
-  const z = s / fit;
-  const levelOp = [1, 1, ramp(z, 1.25, 1.8), ramp(z, 3.6, 5)];
-  const sx = (x: number) => w + (x - cam.x) * s;
-  const sy = (y: number) => h + (y - cam.y) * s;
-  const byId = new Map(placed.map((p) => [p.node.id, p]));
-  const focused = byId.get(focusId) ?? placed[0];
-  const lineage = new Set<string>();
-  for (let c: Placed | null = focused; c; c = c.parent) lineage.add(c.node.id);
-  const inFocus = (p: Placed) => {
-    if (focusId === "root" || focused.level === 0 || lineage.has(p.node.id)) return true;
-    for (let c: Placed | null = p; c; c = c.parent) if (c === focused) return true;
-    return false;
+/** The constellation as plain data the drawing worklet can read (a star's `parent` cannot cross to the UI thread). */
+type Star = { x: number; y: number; level: number; branch: number; color: string; kids: number; text: string; lines: string[]; notes: string[] };
+type Scene = { stars: Star[]; edges: { a: number; b: number; to: number; faint: boolean }[]; extent: number; orbit: boolean };
+/** Who is in focus: 1 per star in the focused star's family (all 1 at the centre), the focused star, and whether lines flow. */
+type FocusState = { mask: number[]; idx: number; flow: number };
+
+function sceneOf(placed: Placed[], edges: { a: Placed; b: Placed; to: Placed; faint?: boolean }[], extent: number, shape: Shape): Scene {
+  const index = new Map(placed.map((p, i) => [p, i]));
+  return {
+    stars: placed.map((p) => {
+      const text = p.level === 0 ? p.node.label.toUpperCase() : p.node.label;
+      return {
+        x: p.x,
+        y: p.y,
+        level: p.level,
+        branch: p.branch,
+        color: accentOf(p),
+        kids: p.node.children.length,
+        text,
+        lines: wrap(text, p.level >= 2 ? 16 : 14, 3),
+        notes: p.level === 3 && p.node.note ? wrap(p.node.note, 30, 5) : [],
+      };
+    }),
+    edges: edges.map((e) => ({ a: index.get(e.a)!, b: index.get(e.b)!, to: index.get(e.to)!, faint: !!e.faint })),
+    extent,
+    orbit: shape === "orbit",
   };
-  const onCanvas = (x: number, y: number, r: number) => x + r > 0 && x - r < w * 2 && y + r > 0 && y - r < h * 2;
-  const labelPx = (level: number) => LABEL_PX[level] * Math.pow(s, 0.3);
+}
+
+/** Focus on one star: it, everything it descends from and everything orbiting it stay bright; the rest dims. */
+function focusState(placed: Placed[], id: string): FocusState {
+  const idx = placed.findIndex((p) => p.node.id === id);
+  const focused = placed[idx];
+  if (!focused || focused.level === 0) return { mask: placed.map(() => 1), idx: -1, flow: 0 };
+  const lineage = new Set<Placed>();
+  for (let c: Placed | null = focused; c; c = c.parent) lineage.add(c);
+  const mask = placed.map((p) => {
+    if (lineage.has(p)) return 1;
+    for (let c: Placed | null = p; c; c = c.parent) if (c === focused) return 1;
+    return 0;
+  });
+  return { mask, idx, flow: 1 };
+}
+
+/** The paints, gradients and dashes, made once and reused for every frame. Glow `i` is ACCENTS[i]; the last is CORE. */
+type Kit = { paint: SkPaint; glow: SkShader[]; core: SkShader; flowDash: SkPathEffect; ringDash: SkPathEffect; medium: SkFont; bold: SkFont };
+
+function makeKit(medium: SkFont, bold: SkFont): Kit {
+  const tint = (c: string, a: number) => {
+    const v = Skia.Color(c);
+    v[3] = a;
+    return v;
+  };
+  const zero = { x: 0, y: 0 };
+  const paint = Skia.Paint();
+  paint.setAntiAlias(true);
+  return {
+    paint,
+    glow: [...ACCENTS, CORE].map((c) => Skia.Shader.MakeRadialGradient(zero, 1, [tint(c, 0.95), tint(c, 0.4), tint(c, 0)], [0, 0.3, 1], TileMode.Clamp)),
+    core: Skia.Shader.MakeRadialGradient(zero, 1, [tint("#fff", 1), tint("#dbe8ff", 1), tint("#7aa7ff", 0.9), tint("#217cff", 0)], [0, 0.3, 0.65, 1], TileMode.Clamp),
+    flowDash: Skia.PathEffect.MakeDash([6, 4]),
+    ringDash: Skia.PathEffect.MakeDash([2, 6]),
+    medium,
+    bold,
+  };
+}
+
+/**
+ * The constellation for the live camera (centre cx, cy and scale s), drawn on the UI thread every frame, so it is sharp
+ * at every step of a move. `t` blends the focus from `from` to `to` as the camera flies. Opacity goes on each paint,
+ * never on a group, so nothing is drawn offscreen.
+ */
+function drawMap(canvas: SkCanvas, scene: Scene, kit: Kit, w: number, h: number, cx: number, cy: number, s: number, fit: number, from: FocusState, to: FocusState, t: number) {
+  "worklet";
+  const paint = kit.paint;
+  const stars = scene.stars;
+  const ramp01 = (v: number, a: number, b: number) => Math.max(0, Math.min(1, (v - a) / (b - a)));
+  const z = s / fit;
+  const levelOp = [1, 1, ramp01(z, 1.25, 1.8), ramp01(z, 3.6, 5)];
+  const sx = (x: number) => w / 2 + (x - cx) * s;
+  const sy = (y: number) => h / 2 + (y - cy) * s;
+  const onCanvas = (x: number, y: number, r: number) => x + r > 0 && x - r < w && y + r > 0 && y - r < h;
+  const focusOf = (i: number) => from.mask[i] + (to.mask[i] - from.mask[i]) * t;
+  const flowOf = (i: number) => from.flow * from.mask[i] * (1 - t) + to.flow * to.mask[i] * t;
+  const focusedness = (i: number) => (to.idx === i ? t : 0) + (from.idx === i ? 1 - t : 0);
+  const labelPx = (level: number) => LABEL_PX[level] * Math.pow(s, 0.3) * (level === 0 ? 0.82 : 1);
+
+  const fill = (color: string, alpha: number) => {
+    paint.setShader(null);
+    paint.setPathEffect(null);
+    paint.setStyle(PaintStyle.Fill);
+    paint.setColor(Skia.Color(color));
+    paint.setAlphaf(Math.max(0, Math.min(1, alpha)));
+  };
+  const stroke = (color: string, alpha: number, width: number, dash: SkPathEffect | null = null) => {
+    fill(color, alpha);
+    paint.setStyle(PaintStyle.Stroke);
+    paint.setStrokeWidth(width);
+    paint.setPathEffect(dash);
+  };
+  /** A soft radial glow: the shader is made once at radius 1, so it is scaled into place. */
+  const glow = (shader: SkShader, x: number, y: number, r: number, alpha: number) => {
+    if (alpha < 0.005 || r <= 0) return;
+    fill("#fff", alpha);
+    paint.setShader(shader);
+    canvas.save();
+    canvas.translate(x, y);
+    canvas.scale(r, r);
+    canvas.drawCircle(0, 0, 1, paint);
+    canvas.restore();
+    paint.setShader(null);
+  };
+  /** Text centred on x, its baseline at y; the centre's name is spaced out. */
+  const centred = (text: string, x: number, y: number, font: SkFont, spacing: number) => {
+    if (!spacing) {
+      canvas.drawText(text, x - font.measureText(text).width / 2, y, paint, font);
+      return;
+    }
+    const widths = text.split("").map((ch) => font.measureText(ch).width);
+    let left = x - (widths.reduce((a, b) => a + b, 0) + spacing * (text.length - 1)) / 2;
+    text.split("").forEach((ch, i) => {
+      canvas.drawText(ch, left, y, paint, font);
+      left += widths[i] + spacing;
+    });
+  };
+
+  // A sky of faint stars, fixed to the screen.
+  for (const st of SKY) {
+    fill(st.blue ? "#a9c8ff" : "#fff", st.o);
+    canvas.drawCircle(st.x * w + st.r, st.y * h + st.r, st.r, paint);
+  }
+
+  // Nebula: a soft cloud behind the whole map and each theme.
+  glow(kit.glow[ACCENTS.length], sx(0), sy(0), scene.extent * 1.7 * s, 0.22);
+  stars.forEach((p, i) => {
+    const r = TOPIC_ORBIT * 2.3 * s;
+    if (p.level === 1 && onCanvas(sx(p.x), sy(p.y), r)) glow(kit.glow[p.branch % ACCENTS.length], sx(p.x), sy(p.y), r, 0.1 + 0.2 * focusOf(i));
+  });
+
+  // Orbits (the Orbit shape).
+  if (scene.orbit) {
+    stars.forEach((p, i) => {
+      if (!p.kids || p.level > 2) return;
+      const r = (p.level === 0 ? scene.extent : p.level === 1 ? TOPIC_ORBIT : DETAIL_ORBIT) * s;
+      const op = levelOp[p.level + 1] * (0.3 + 0.7 * focusOf(i)) * 0.3;
+      if (op < 0.01 || !onCanvas(sx(p.x), sy(p.y), r)) return;
+      stroke(p.level === 0 ? "#8fbaff" : p.color, op, 1);
+      canvas.drawCircle(sx(p.x), sy(p.y), r, paint);
+    });
+  }
+
+  // Constellation lines: those into the focused family flow (dashed).
+  for (const e of scene.edges) {
+    const end = stars[e.to];
+    const lo = levelOp[end.level];
+    if (lo <= 0.03) continue;
+    const f = focusOf(e.to);
+    const flow = flowOf(e.to);
+    const op = lo * (0.16 + 0.44 * f + 0.3 * flow) * (e.faint ? 0.4 : 1);
+    stroke(end.color, op, 1 + 0.4 * flow, flow > 0.5 ? kit.flowDash : null);
+    canvas.drawLine(sx(stars[e.a].x), sy(stars[e.a].y), sx(stars[e.b].x), sy(stars[e.b].y), paint);
+  }
 
   // Declutter, as the web: a bigger or more central star claims its label's space; one that would overlap is hidden.
-  const hidden = new Set<string>();
-  const kept: { x1: number; x2: number; y1: number; y2: number }[] = [];
-  placed
-    .filter((p) => levelOp[p.level] * (inFocus(p) ? 1 : 0.28) >= 0.3)
-    .map((p) => {
-      const fs = labelPx(p.level) * (p.level === 0 ? 0.82 : 1);
-      const text = p.level === 0 ? p.node.label.toUpperCase() : p.node.label;
-      const bw = Math.min(text.length, p.level >= 2 ? 16 : 14) * fs * 0.58;
-      const top = sy(p.y) + RADIUS[p.level] * s * 1.35;
-      return { p, box: { x1: sx(p.x) - bw / 2, x2: sx(p.x) + bw / 2, y1: top, y2: top + fs * 1.3 } };
-    })
-    .sort((a, b) => a.p.level - b.p.level || (a.box.x1 + a.box.x2 - 2 * w) ** 2 + (a.box.y1 + a.box.y2 - 2 * h) ** 2 - ((b.box.x1 + b.box.x2 - 2 * w) ** 2 + (b.box.y1 + b.box.y2 - 2 * h) ** 2))
-    .forEach(({ p, box }) => {
-      if (p.node.id === focusId || kept.every((k) => !(box.x1 < k.x2 && box.x2 > k.x1 && box.y1 < k.y2 && box.y2 > k.y1))) kept.push(box);
-      else hidden.add(p.node.id);
-    });
+  const hidden: boolean[] = [];
+  const kept: number[][] = [];
+  const claims: { i: number; level: number; d: number; box: number[] }[] = [];
+  stars.forEach((p, i) => {
+    if (levelOp[p.level] * (0.28 + 0.72 * focusOf(i)) < 0.3) return;
+    const fs = labelPx(p.level);
+    const bw = Math.min(p.text.length, p.level >= 2 ? 16 : 14) * fs * 0.58;
+    const top = sy(p.y) + RADIUS[p.level] * s * 1.35;
+    const box = [sx(p.x) - bw / 2, sx(p.x) + bw / 2, top, top + fs * 1.3];
+    claims.push({ i, level: p.level, d: (box[0] + box[1] - w) ** 2 + (box[2] + box[3] - h) ** 2, box });
+  });
+  claims.sort((a, b) => a.level - b.level || a.d - b.d);
+  for (const c of claims) {
+    const [x1, x2, y1, y2] = c.box;
+    if (c.i === to.idx || kept.every((k) => !(x1 < k[1] && x2 > k[0] && y1 < k[3] && y2 > k[2]))) kept.push(c.box);
+    else hidden[c.i] = true;
+  }
 
-  return (
-    <Svg width={w * 2} height={h * 2}>
-      <Defs>
-        <RadialGradient id="mm-core" cx="50%" cy="50%" r="50%">
-          <Stop offset="0" stopColor="#fff" />
-          <Stop offset="0.3" stopColor="#dbe8ff" />
-          <Stop offset="0.65" stopColor="#7aa7ff" stopOpacity={0.9} />
-          <Stop offset="1" stopColor="#217cff" stopOpacity={0} />
-        </RadialGradient>
-        {[...ACCENTS, CORE].map((c, i) => (
-          <RadialGradient key={i} id={`mm-g${i}`} cx="50%" cy="50%" r="50%">
-            <Stop offset="0" stopColor={c} stopOpacity={0.95} />
-            <Stop offset="0.3" stopColor={c} stopOpacity={0.4} />
-            <Stop offset="1" stopColor={c} stopOpacity={0} />
-          </RadialGradient>
-        ))}
-      </Defs>
-      {/* nebula: a soft cloud behind the whole map and each theme */}
-      <Circle cx={sx(0)} cy={sy(0)} r={extent * 1.7 * s} fill="url(#mm-g7)" opacity={0.22} />
-      {placed
-        .filter((p) => p.level === 1 && onCanvas(sx(p.x), sy(p.y), TOPIC_ORBIT * 2.3 * s))
-        .map((p) => (
-          <Circle key={`n${p.node.id}`} cx={sx(p.x)} cy={sy(p.y)} r={TOPIC_ORBIT * 2.3 * s} fill={`url(#mm-g${p.branch % ACCENTS.length})`} opacity={inFocus(p) ? 0.3 : 0.1} />
-        ))}
-      {/* orbits (the Orbit shape) */}
-      {shape === "orbit"
-        ? placed
-            .filter((p) => p.node.children.length)
-            .map((p) => {
-              const r = (p.level === 0 ? extent : p.level === 1 ? TOPIC_ORBIT : DETAIL_ORBIT) * s;
-              const op = levelOp[p.level + 1] * (inFocus(p) ? 1 : 0.3) * 0.3;
-              if (op < 0.01 || !onCanvas(sx(p.x), sy(p.y), r)) return null;
-              return <Circle key={`o${p.node.id}`} cx={sx(p.x)} cy={sy(p.y)} r={r} fill="none" stroke={p.level === 0 ? "#8fbaff" : accentOf(p)} strokeWidth={1} opacity={op} />;
-            })
-        : null}
-      {/* constellation lines */}
-      {edges
-        .filter((e) => levelOp[e.to.level] > 0.03)
-        .map((e) => {
-          const live = inFocus(e.to);
-          const flowing = live && focusId !== "root";
-          return (
-            <Line
-              key={`l${e.a.node.id}-${e.b.node.id}`}
-              x1={sx(e.a.x)}
-              y1={sy(e.a.y)}
-              x2={sx(e.b.x)}
-              y2={sy(e.b.y)}
-              stroke={accentOf(e.to)}
-              strokeWidth={flowing ? 1.4 : 1}
-              strokeDasharray={flowing ? "6 4" : undefined}
-              opacity={levelOp[e.to.level] * (flowing ? 0.9 : live ? 0.6 : 0.16) * (e.faint ? 0.4 : 1)}
-            />
-          );
-        })}
-      {/* deepest first, so the outer stars' labels stay on top */}
-      {[...placed].reverse().map((p) => {
-        const op = levelOp[p.level] * (inFocus(p) ? 1 : 0.28);
-        const x = sx(p.x);
-        const y = sy(p.y);
-        const r = RADIUS[p.level] * s;
-        if (op < 0.02 || !onCanvas(x, y, Math.max(r * 4, 120))) return null;
-        const fs = labelPx(p.level) * (p.level === 0 ? 0.82 : 1);
-        const lines = wrap(p.level === 0 ? p.node.label.toUpperCase() : p.node.label, p.level >= 2 ? 16 : 14, 3);
-        const more = p.node.children.length * (1 - (p.level < 3 ? levelOp[p.level + 1] : 1));
-        const noteOp = p.level === 3 && p.node.note ? ramp(z, 6, 8) : 0;
-        const c = accentOf(p);
-        const isFocus = p.node.id === focusId;
-        const spike = r * (p.level === 0 ? 4.6 : p.level === 1 ? 3.2 : 3);
-        const labelY = y + r * 1.35 + fs * 1.15;
-        const label = (stroke: boolean) => (
-          <SvgText
-            textAnchor="middle"
-            fontSize={fs}
-            fontFamily={fonts.displayMedium}
-            fontWeight={p.level <= 1 ? "600" : "500"}
-            letterSpacing={p.level === 0 ? fs * 0.14 : 0}
-            fill={p.level === 3 ? "rgba(255,255,255,0.88)" : "#fff"}
-            stroke={stroke ? "#000" : undefined}
-            strokeWidth={stroke ? fs * 0.22 : 0}
-            strokeLinejoin="round">
-            {lines.map((l, i) => (
-              <TSpan key={i} x={x} y={labelY + i * fs * 1.12}>
-                {l}
-              </TSpan>
-            ))}
-          </SvgText>
-        );
-        return (
-          <G key={p.node.id} opacity={op}>
-            <Circle cx={x} cy={y} r={r * (p.level === 0 ? 4 : 3.4)} fill={`url(#mm-g${p.level === 0 ? 7 : p.branch % ACCENTS.length})`} opacity={0.8} />
-            {p.level < 2 ? <Path d={`M${x - spike} ${y}H${x + spike}M${x} ${y - spike}V${y + spike}`} stroke="#fff" strokeWidth={0.9} strokeOpacity={0.38} /> : null}
-            {p.level === 0 ? (
-              <>
-                <Circle cx={x} cy={y} r={r * 1.75} fill="none" stroke="#bcd6ff" strokeOpacity={0.5} strokeDasharray="2 6" />
-                <Circle cx={x} cy={y} r={r * 2.4} fill="none" stroke="#bcd6ff" strokeOpacity={0.3} strokeDasharray="2 6" />
-                <Circle cx={x} cy={y} r={r} fill="url(#mm-core)" />
-                <Circle cx={x} cy={y} r={r * 0.38} fill="#fff" />
-              </>
-            ) : (
-              <>
-                <Circle
-                  cx={x}
-                  cy={y}
-                  r={r}
-                  fill={isFocus ? "#fff" : p.level === 1 ? c : p.level === 2 ? "#1c3f86" : "#fff"}
-                  stroke={isFocus ? "#8fbaff" : p.level === 1 ? "rgba(255,255,255,0.7)" : p.level === 2 ? c : "none"}
-                  strokeWidth={isFocus ? 3 : p.level === 2 ? 1.8 : 1.5}
-                />
-                <Circle cx={x} cy={y} r={r * 0.42} fill={p.level === 2 && !isFocus ? c : "#fff"} />
-              </>
-            )}
-            {isFocus ? <Circle cx={x} cy={y} r={r * 2.3} fill="none" stroke={c} strokeWidth={1.5} /> : null}
-            {more > 0.2 && p.level > 0 ? (
-              <SvgText x={x + r * 1.1} y={y - r * 1.1} fontSize={fs * 0.7} fill="#8fbaff" opacity={more / Math.max(p.node.children.length, 1)}>
-                +{p.node.children.length}
-              </SvgText>
-            ) : null}
-            {!hidden.has(p.node.id) ? (
-              <>
-                {label(true)}
-                {label(false)}
-              </>
-            ) : null}
-            {noteOp > 0.05 ? (
-              <SvgText textAnchor="middle" fontSize={Math.min(fs * 0.82, 3.4 * s)} fill="rgba(255,255,255,0.78)" opacity={noteOp}>
-                {wrap(p.node.note, 30, 5).map((l, i) => (
-                  <TSpan key={i} x={x} y={labelY + lines.length * fs * 1.12 + Math.min(fs * 0.82, 3.4 * s) * (0.8 + i * 1.2)}>
-                    {l}
-                  </TSpan>
-                ))}
-              </SvgText>
-            ) : null}
-          </G>
-        );
-      })}
-    </Svg>
-  );
+  // Stars, deepest first, so the outer stars' labels stay on top.
+  for (let i = stars.length - 1; i >= 0; i--) {
+    const p = stars[i];
+    const op = levelOp[p.level] * (0.28 + 0.72 * focusOf(i));
+    const x = sx(p.x);
+    const y = sy(p.y);
+    const r = RADIUS[p.level] * s;
+    if (op < 0.02 || !onCanvas(x, y, Math.max(r * 4, 120))) continue;
+    const fs = labelPx(p.level);
+    const ff = focusedness(i);
+    glow(kit.glow[p.level === 0 ? ACCENTS.length : p.branch % ACCENTS.length], x, y, r * (p.level === 0 ? 4 : 3.4), 0.8 * op);
+    if (p.level < 2) {
+      const spike = r * (p.level === 0 ? 4.6 : 3.2);
+      stroke("#fff", 0.38 * op, 0.9);
+      canvas.drawLine(x - spike, y, x + spike, y, paint);
+      canvas.drawLine(x, y - spike, x, y + spike, paint);
+    }
+    if (p.level === 0) {
+      stroke("#bcd6ff", 0.5 * op, 1, kit.ringDash);
+      canvas.drawCircle(x, y, r * 1.75, paint);
+      stroke("#bcd6ff", 0.3 * op, 1, kit.ringDash);
+      canvas.drawCircle(x, y, r * 2.4, paint);
+      glow(kit.core, x, y, r, op);
+      fill("#fff", op);
+      canvas.drawCircle(x, y, r * 0.38, paint);
+    } else {
+      // The plain star, and over it the focused look, faded by how focused it is (so a change of focus blends).
+      fill(p.level === 1 ? p.color : p.level === 2 ? "#1c3f86" : "#fff", op);
+      canvas.drawCircle(x, y, r, paint);
+      if (p.level < 3) {
+        stroke(p.level === 1 ? "#fff" : p.color, op * (1 - ff) * (p.level === 1 ? 0.7 : 1), p.level === 2 ? 1.8 : 1.5);
+        canvas.drawCircle(x, y, r, paint);
+      }
+      if (ff > 0) {
+        fill("#fff", op * ff);
+        canvas.drawCircle(x, y, r, paint);
+        stroke("#8fbaff", op * ff, 3);
+        canvas.drawCircle(x, y, r, paint);
+        stroke(p.color, op * ff, 1.5);
+        canvas.drawCircle(x, y, r * 2.3, paint);
+      }
+      fill(p.level === 2 ? p.color : "#fff", op * (p.level === 2 ? 1 - ff : 1));
+      canvas.drawCircle(x, y, r * 0.42, paint);
+      if (p.level === 2 && ff > 0) {
+        fill("#fff", op * ff);
+        canvas.drawCircle(x, y, r * 0.42, paint);
+      }
+    }
+    const more = p.kids * (1 - (p.level < 3 ? levelOp[p.level + 1] : 1));
+    if (more > 0.2 && p.level > 0) {
+      kit.medium.setSize(fs * 0.7);
+      fill("#8fbaff", op * (more / Math.max(p.kids, 1)));
+      canvas.drawText(`+${p.kids}`, x + r * 1.1, y - r * 1.1, paint, kit.medium);
+    }
+    const labelY = y + r * 1.35 + fs * 1.15;
+    if (!hidden[i]) {
+      const font = p.level <= 1 ? kit.bold : kit.medium;
+      font.setSize(fs);
+      const spacing = p.level === 0 ? fs * 0.14 : 0;
+      stroke("#000", op, fs * 0.22);
+      paint.setStrokeJoin(StrokeJoin.Round);
+      p.lines.forEach((l, k) => centred(l, x, labelY + k * fs * 1.12, font, spacing));
+      fill("#fff", op * (p.level === 3 ? 0.88 : 1));
+      p.lines.forEach((l, k) => centred(l, x, labelY + k * fs * 1.12, font, spacing));
+    }
+    const noteOp = p.notes.length ? ramp01(z, 6, 8) : 0;
+    if (noteOp > 0.05) {
+      const ns = Math.min(fs * 0.82, 3.4 * s);
+      kit.medium.setSize(ns);
+      fill("#fff", 0.78 * op * noteOp);
+      p.notes.forEach((l, k) => centred(l, x, labelY + p.lines.length * fs * 1.12 + ns * (0.8 + k * 1.2), kit.medium, 0));
+    }
+  }
 }
 
 /**
@@ -293,51 +379,76 @@ export function MindMapExplorer({ map, onClose, feedback, embedded = false, onEx
   );
   const byId = useMemo(() => new Map(placed.map((p) => [p.node.id, p])), [placed]);
   const [focusId, setFocusId] = useState("root");
-  const [cam, setCam] = useState<Cam>({ x: 0, y: 0, s: 0.1 });
   const [sheetOpen, setSheetOpen] = useState(false);
   // The details sheet's height as drawn, shut and now: it grows by the system bar's height on Android, so the zoom
   // buttons and the map's frame go by what it measures rather than a set number.
   const [sheetShut, setSheetShut] = useState(96);
   const [sheetNow, setSheetNow] = useState(96);
   const [cite, setCite] = useState<Cited | null>(null);
-  // The live camera (the settled one is `cam`): its centre, and its scale as a log, so a zoom moves evenly.
+  // The camera, drawn live: its centre, and its scale as a log, so a zoom moves evenly.
   const lx = useSharedValue(0);
   const ly = useSharedValue(0);
   const ls = useSharedValue(Math.log(0.1));
+  // The focus as drawn: from the last one to the new one, blended by focusT as the camera flies.
+  const fromF = useSharedValue<FocusState>({ mask: [], idx: -1, flow: 0 });
+  const toF = useSharedValue<FocusState>({ mask: [], idx: -1, flow: 0 });
+  const focusT = useSharedValue(1);
   const entered = useRef(false);
   // The map is framed above the details sheet's heading.
   const boxH = Math.max(1, size.h - (embedded ? 0 : sheetShut + 24));
   const fit = useMemo(() => (placed.length && size.w ? frame(placed, placed[0], size.w, boxH).s : 1), [placed, size.w, boxH]);
   const minS = fit * 0.5;
 
-  const settle = () => setCam({ x: lx.get(), y: ly.get(), s: Math.exp(ls.get()) });
-  // The settled camera is drawn sharp; the drawing follows the live one until it settles.
-  const follow = useAnimatedStyle(() => {
-    const s = Math.exp(ls.get());
-    return {
-      transform: [{ translateX: (cam.x - lx.get()) * s }, { translateY: (cam.y - ly.get()) * s }, { scale: s / cam.s }],
-    };
-  });
+  const scene = useMemo(() => sceneOf(placed, edges, extent, shape), [placed, edges, extent, shape]);
+  const fitS = useSharedValue(fit);
+  useEffect(() => fitS.set(fit), [fit, fitS]);
+  // A new layout (a new shape): every star is new, so the focus starts at the centre.
+  useEffect(() => {
+    const all = focusState(placed, "root");
+    fromF.set(all);
+    toF.set(all);
+    focusT.set(1);
+  }, [placed, fromF, toF, focusT]);
 
-  /** Fly the camera (eased; the scale moves geometrically, so the zoom feels even), then draw it sharp. */
-  const flyTo = (to: Cam, ms = 950) => {
-    const cfg = { duration: ms, easing: Easing.inOut(Easing.cubic) };
+  const medium = useFont(SpaceGrotesk_500Medium, 14);
+  const bold = useFont(SpaceGrotesk_700Bold, 14);
+  const kit = useMemo(() => (medium && bold ? makeKit(medium, bold) : null), [medium, bold]);
+  const { w: cw, h: ch } = size;
+  const picture = useDerivedValue(
+    () =>
+      createPicture((canvas) => {
+        if (kit && fromF.get().mask.length === scene.stars.length && toF.get().mask.length === scene.stars.length) {
+          drawMap(canvas, scene, kit, cw, ch, lx.get(), ly.get(), Math.exp(ls.get()), fitS.get(), fromF.get(), toF.get(), focusT.get());
+        }
+      }),
+    [scene, kit, cw, ch],
+  );
+
+  /**
+   * Fly the camera: pan and zoom together on one gentle curve (a soft start, a long easy landing), the zoom moving
+   * geometrically so it feels even. Longer trips take a little longer. A new flight takes over from wherever the camera is.
+   */
+  const flyTo = (to: Cam, ms?: number) => {
+    const s0 = Math.exp(ls.get());
+    const trip = Math.abs(Math.log(to.s) - Math.log(s0)) + Math.min(2, (Math.hypot(to.x - lx.get(), to.y - ly.get()) * Math.min(s0, to.s)) / Math.max(size.w, 1));
+    const cfg = { duration: ms ?? clamp(620 + 260 * trip, 700, 1150), easing: Easing.bezier(0.45, 0, 0.2, 1) };
     // The frame sits a little above the middle, clear of the details sheet.
     const dy = embedded ? 0 : (size.h - boxH) / 2 / to.s;
     lx.set(withTiming(to.x, cfg));
     ly.set(withTiming(to.y + dy, cfg));
-    ls.set(
-      withTiming(Math.log(to.s), cfg, (done) => {
-        "worklet";
-        if (done) scheduleOnRN(settle);
-      }),
-    );
+    ls.set(withTiming(Math.log(to.s), cfg));
+    return cfg;
   };
   const focus = (id: string, ms?: number) => {
     const p = byId.get(id) ?? placed[0];
     if (!p) return;
     setFocusId(p.level === 0 ? "root" : id);
-    flyTo(frame(placed, p, size.w, boxH), ms);
+    const cfg = flyTo(frame(placed, p, size.w, boxH), ms);
+    // The dimming and the focus ring blend across with the flight, rather than switching at once.
+    fromF.set(toF.get());
+    toF.set(focusState(placed, p.level === 0 ? "root" : id));
+    focusT.set(0);
+    focusT.set(withTiming(1, cfg));
   };
 
   // Warp in: from far out, fly to the whole constellation.
@@ -350,7 +461,6 @@ export function MindMapExplorer({ map, onClose, feedback, embedded = false, onEx
     lx.set(end.x);
     ly.set(end.y + dy);
     ls.set(Math.log(start.s));
-    setCam({ x: end.x, y: end.y + dy, s: start.s });
     if (warp) flyTo(end, 1400);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [placed.length, size.w, size.h]);
@@ -361,8 +471,7 @@ export function MindMapExplorer({ map, onClose, feedback, embedded = false, onEx
     if (tallSeen.current === tall) return;
     tallSeen.current = tall;
     if (!entered.current || !placed.length) return;
-    setFocusId("root");
-    flyTo(frame(placed, placed[0], size.w, boxH), 600);
+    focus("root", 600);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tall]);
 
@@ -372,7 +481,7 @@ export function MindMapExplorer({ map, onClose, feedback, embedded = false, onEx
     if (shapeSeen.current === shape) return;
     shapeSeen.current = shape;
     setFocusId("root");
-    if (placed.length) flyTo(frame(placed, placed[0], size.w, boxH), 900);
+    if (placed.length) flyTo(frame(placed, placed[0], size.w, boxH));
     try {
       SecureStore.setItem(storeKey(map.id), shape);
     } catch {
@@ -400,7 +509,9 @@ export function MindMapExplorer({ map, onClose, feedback, embedded = false, onEx
       const d = Math.hypot(size.w / 2 + (p.x - lx.get()) * s - tx, size.h / 2 + (p.y - ly.get()) * s - ty);
       if (d < Math.max(RADIUS[p.level] * s * 2, 22) && d < bestD) [best, bestD] = [p, d];
     }
-    if (best) focus(best.node.id);
+    if (!best) return;
+    // The star already in focus, tapped again: let it go, and pull back out to the whole constellation.
+    focus(best.node.id === focusId ? "root" : best.node.id);
   };
 
   const pan = usePanGesture({
@@ -410,10 +521,6 @@ export function MindMapExplorer({ map, onClose, feedback, embedded = false, onEx
       const s = Math.exp(ls.get());
       lx.set(lx.get() - e.changeX / s);
       ly.set(ly.get() - e.changeY / s);
-    },
-    onDeactivate: () => {
-      "worklet";
-      scheduleOnRN(settle);
     },
   });
   const pinch = usePinchGesture({
@@ -428,10 +535,6 @@ export function MindMapExplorer({ map, onClose, feedback, embedded = false, onEx
       lx.set(wx - (e.focalX - size.w / 2) / s);
       ly.set(wy - (e.focalY - size.h / 2) / s);
       ls.set(Math.log(s));
-    },
-    onDeactivate: () => {
-      "worklet";
-      scheduleOnRN(settle);
     },
   });
   // Taps run here, on the JS side: embedded, either opens the map full screen.
@@ -460,17 +563,12 @@ export function MindMapExplorer({ map, onClose, feedback, embedded = false, onEx
 
   return (
     <View style={[styles.stage, embedded && styles.embedded]} onLayout={(e) => setSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
-      <View style={StyleSheet.absoluteFill} pointerEvents="none">
-        {SKY.map((st, i) => (
-          <View key={i} style={[styles.sky, { left: `${st.x * 100}%`, top: `${st.y * 100}%`, width: st.r * 2, height: st.r * 2, borderRadius: st.r, opacity: st.o, backgroundColor: st.blue ? "#a9c8ff" : "#fff" }]} />
-        ))}
-      </View>
       <GestureDetector gesture={gestures}>
         <View style={StyleSheet.absoluteFill} collapsable={false}>
           {size.w > 0 ? (
-            <Animated.View style={[{ position: "absolute", left: -size.w / 2, top: -size.h / 2, width: size.w * 2, height: size.h * 2 }, follow]} pointerEvents="none">
-              <Drawing placed={placed} edges={edges} extent={extent} shape={shape} cam={cam} w={size.w} h={size.h} fit={fit} focusId={focusId} />
-            </Animated.View>
+            <Canvas style={StyleSheet.absoluteFill} pointerEvents="none">
+              <Picture picture={picture} />
+            </Canvas>
           ) : null}
         </View>
       </GestureDetector>
@@ -626,7 +724,6 @@ export function MindMapScreen({ map, visible, onClose, feedback }: { map: MindMa
 const styles = StyleSheet.create({
   stage: { flex: 1, overflow: "hidden", backgroundColor: "#04060c" },
   embedded: { flex: 0, height: 340, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line },
-  sky: { position: "absolute" },
   corner: { position: "absolute", top: 10, right: 10 },
   top: { position: "absolute", left: 0, right: 0, top: 0, paddingHorizontal: 12, gap: 8 },
   topRow: { flexDirection: "row", alignItems: "center", gap: 6, paddingTop: 6 },

@@ -36,6 +36,8 @@ export default function NotebookScreen() {
   // sheet opened again starts afresh from these settings (web: NotebookView presets / presetKey).
   const [presets, setPresets] = useState<Partial<Record<Kind, ChatPreset>>>({});
   const [presetKey, setPresetKey] = useState(0);
+  // The add-sources sheet (in the Sources tab): an empty notebook's Create tiles and chat box open it too.
+  const [adding, setAdding] = useState(false);
 
   const limits = useArtifactLimits();
   const notebook = useQuery({ queryKey: ["notebook", id], queryFn: () => notebooksApi.get(id) });
@@ -111,6 +113,16 @@ export default function NotebookScreen() {
     }
   };
 
+  /** Nothing to work from yet: show Sources and slide its add-sources sheet up, as the web opens Connect a source. */
+  const needPosts = () => {
+    setTab("sources");
+    // iOS presents nothing from a hidden tab (Sources is display: none until this switch lands) or while the keyboard goes.
+    if (Platform.OS === "ios") {
+      Keyboard.dismiss();
+      setTimeout(() => setAdding(true), 350);
+    } else setAdding(true);
+  };
+
   const nb = notebook.data;
   return (
     <View style={styles.screen}>
@@ -131,6 +143,8 @@ export default function NotebookScreen() {
             void chats.refetch();
           }}
           onPostsChanged={() => void queryClient.invalidateQueries({ queryKey: ["notebook", id] })}
+          adding={adding}
+          onAdding={setAdding}
         />
       </View>
       <View style={[styles.fill, tab !== "chat" && styles.hidden]}>
@@ -139,6 +153,7 @@ export default function NotebookScreen() {
           notebook={nb}
           chatId={chatId}
           onStarted={(started) => setSelected(started)}
+          onNeedPosts={needPosts}
           onNextStep={(kind, preset) => {
             setPresets((p) => ({ ...p, [kind]: preset }));
             setPresetKey((k) => k + 1);
@@ -167,6 +182,7 @@ export default function NotebookScreen() {
           }}
           onMake={(label, request) => void make(label, request)}
           onStarted={() => setTab("library")}
+          onNeedPosts={needPosts}
         />
       </View>
       <View style={[styles.fill, tab !== "library" && styles.hidden]}>

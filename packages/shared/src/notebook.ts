@@ -1,7 +1,17 @@
-import type { ChatSummary, VideoOptions } from "./types";
+import type { ChatSummary, Doc, VideoOptions } from "./types";
 
 /** The questions offered in an empty notebook chat. */
 export const STARTERS = ["What are the strongest ideas across these posts?", "Where do I contradict myself?", "Which post is most worth updating, and why?"];
+
+/**
+ * Onboarding's first notebook, named after what came in: a lone post's own title, else the blog or site it came from,
+ * else a plain name. The writer can change it before the notebook opens.
+ */
+export function firstNotebookName(docs: Pick<Doc, "title" | "source_title">[], sourceTitle?: string | null): string {
+  const sources = new Set(docs.map((d) => d.source_title?.trim()).filter(Boolean));
+  const name = docs.length === 1 ? docs[0].title : sources.size === 1 ? [...sources][0] : sourceTitle;
+  return name?.trim().slice(0, 80) || "My notebook";
+}
 
 /** Chats under date headings: Today, Yesterday, the last week, the last month, then by month. Newest first. */
 export function groupChats(chats: ChatSummary[]): { label: string; items: ChatSummary[] }[] {
