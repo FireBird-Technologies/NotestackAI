@@ -275,7 +275,8 @@ export function SourcesMenu({
   const posts = useMemo(
     () =>
       [...docs]
-        .sort((a, b) => (Date.parse(b.added_at ?? "") || 0) - (Date.parse(a.added_at ?? "") || 0))
+        // Indexed posts first (the ones that can be picked), each group newest first.
+        .sort((a, b) => Number(!!a.locked) - Number(!!b.locked) || (Date.parse(b.added_at ?? "") || 0) - (Date.parse(a.added_at ?? "") || 0))
         .filter((d) => !needle || d.title.toLowerCase().includes(needle) || (d.source_title ?? "").toLowerCase().includes(needle)),
     [docs, needle],
   );

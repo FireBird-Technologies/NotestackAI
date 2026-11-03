@@ -27,7 +27,8 @@ export default function NewNotebook() {
   });
   const visible = useMemo(() => {
     const q = filter.trim().toLowerCase();
-    const items = posts.data?.items ?? [];
+    // Indexed posts first (the ones that can be picked), in the order the server sent them (newest first).
+    const items = [...(posts.data?.items ?? [])].sort((a, b) => Number(!!a.locked) - Number(!!b.locked));
     return q ? items.filter((d) => d.title.toLowerCase().includes(q)) : items;
   }, [posts.data, filter]);
 
