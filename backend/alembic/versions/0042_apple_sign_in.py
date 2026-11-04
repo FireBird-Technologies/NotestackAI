@@ -1,7 +1,7 @@
 """users.apple_id and users.apple_refresh_token: Sign in with Apple
 
-Revision ID: 0035_apple_sign_in
-Revises: 0034_starter_annual_price, 0041_auto_enable_read_tools
+Revision ID: 0042_apple_sign_in
+Revises: 0041_auto_enable_read_tools
 Create Date: 2026-10-28
 """
 
@@ -9,8 +9,8 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision = "0035_apple_sign_in"
-down_revision = ("0034_starter_annual_price", "0041_auto_enable_read_tools")
+revision = "0042_apple_sign_in"
+down_revision = "0041_auto_enable_read_tools"
 branch_labels = None
 depends_on = None
 
