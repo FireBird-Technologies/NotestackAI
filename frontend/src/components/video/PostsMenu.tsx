@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import type { ChatSummary, Doc } from "../../api/types";
+import type { ChatSummary, Doc } from "@notestack/shared/types";
 import { ChevronIcon } from "../icons/Icons";
 import { formatDate } from "../ui";
 

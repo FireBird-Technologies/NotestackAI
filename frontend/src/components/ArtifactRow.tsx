@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { artifactsApi, videosApi } from "../api/endpoints";
-import type { Artifact, Citation } from "../api/types";
+import { artifactsApi, videosApi } from "@notestack/shared/endpoints";
+import type { Artifact, Citation } from "@notestack/shared/types";
 import { useJob } from "../hooks/useJob";
 import { Body } from "./ArtifactCard";
 import { SlideDeckViewer } from "./SlideDeck";

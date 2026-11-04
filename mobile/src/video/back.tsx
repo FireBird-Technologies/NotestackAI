@@ -1,0 +1,27 @@
+import { router } from "expo-router";
+import { StyleSheet, Text } from "react-native";
+import { Pressable } from "@/ui/pressable";
+
+import { ArrowLeftIcon } from "@/ui/icons";
+import { colors } from "@/ui/theme";
+
+/** "← Back", as the web's video pages: where you came from, else `fallback` (opened from a notebook or a link, there
+ * is no screen behind it in this stack). */
+export function BackLink({ fallback = "/library" }: { fallback?: "/library" | "/launchpad" }) {
+  return (
+    <Pressable
+      onPress={() => (router.canGoBack() ? router.back() : router.replace(fallback))}
+      hitSlop={10}
+      accessibilityRole="button"
+      accessibilityLabel="Back"
+      style={styles.back}>
+      <ArrowLeftIcon size={16} color={colors.text2} />
+      <Text style={styles.text}>Back</Text>
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  back: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", paddingVertical: 4 },
+  text: { color: colors.text2, fontSize: 15 },
+});

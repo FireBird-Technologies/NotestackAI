@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { notebooksApi } from "../api/endpoints";
-import type { NotebookConnector } from "../api/types";
+import { notebooksApi } from "@notestack/shared/endpoints";
+import type { NotebookConnector } from "@notestack/shared/types";
 import { errorMessage, Loading } from "./ui";
 
 const pendingLoads = new Map<string, Promise<NotebookConnector[]>>();

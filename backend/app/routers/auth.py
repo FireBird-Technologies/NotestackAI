@@ -1,9 +1,11 @@
+import json
 import logging
 import secrets
 from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
 
 import httpx
+import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from google.auth.transport import requests as google_requests
@@ -23,7 +25,9 @@ from app.auth import (
 from app.config import settings
 from app.db import get_db
 from app.models import AuthProvider, User, VerificationPurpose
+from app.services import apple_auth as apple
 from app.services import auth_identity as ident
+from app.services.crypto import decrypt, encrypt
 from app.services import email_verification as ev
 from app.services.email import email_service
 
@@ -95,13 +99,17 @@ def google_login(body: GoogleIn, db: Session = Depends(get_db)):
     if not settings.google_client_id:
         raise HTTPException(503, "Google sign in is not configured")
     try:
+        # The web's popup and the apps' native sign in both send an ID token: minted for the web client, or for an
+        # app's own client. Checked against all of them (the signature, issuer and expiry are checked here).
         info = google_id_token.verify_oauth2_token(
-            body.credential, google_requests.Request(), settings.google_client_id,
-            clock_skew_in_seconds=GOOGLE_CLOCK_SKEW_SECONDS,
+            body.credential, google_requests.Request(), None, clock_skew_in_seconds=GOOGLE_CLOCK_SKEW_SECONDS,
         )
     except ValueError as exc:
         log.warning("Google credential rejected: %s", exc)
         raise HTTPException(401, "Invalid Google credential") from exc
+    if info.get("aud") not in settings.google_audiences:
+        log.warning("Google credential rejected: audience %s is not one of ours", info.get("aud"))
+        raise HTTPException(401, "Invalid Google credential")
     if not info.get("email_verified"):
         raise HTTPException(401, "Google email is not verified")
     try:
@@ -122,10 +130,15 @@ def _safe_next(path: str | None) -> str:
 
 @router.get("/providers")
 def providers():
-    """Which Google flow the auth page should render: 'redirect', 'popup', or null when off."""
-    if not settings.google_client_id:
-        return {"google": None}
-    return {"google": "redirect" if settings.google_client_secret else "popup"}
+    """Which sign in buttons the auth pages show. Google: 'redirect', 'popup', or null when off. Apple: 'native' when
+    the iOS app can sign in with it, 'redirect' when the web can too, or null when off."""
+    google = None if not settings.google_client_id else "redirect" if settings.google_client_secret else "popup"
+    apple = None
+    if settings.apple_configured and settings.apple_services_id:
+        apple = "redirect"
+    elif settings.apple_configured and settings.apple_bundle_id_list:
+        apple = "native"
+    return {"google": google, "apple": apple}
 
 
 # Google redirect flow (authorization code, exchanged server side)
@@ -139,17 +152,17 @@ STATE_COOKIE = "ns_oauth_state"
 STATE_TTL = timedelta(minutes=10)
 
 
-def _frontend(path: str, **fragment: str) -> RedirectResponse:
+def _frontend(path: str, cookie_path: str = "/api/auth/google", **fragment: str) -> RedirectResponse:
     url = f"{settings.frontend_url.rstrip('/')}{path}"
     if fragment:
         url += "#" + urlencode(fragment)
     response = RedirectResponse(url, status_code=302)
-    response.delete_cookie(STATE_COOKIE, path="/api/auth/google")
+    response.delete_cookie(STATE_COOKIE, path=cookie_path)
     return response
 
 
-def _auth_error(message: str) -> RedirectResponse:
-    return _frontend("/auth", error=message)
+def _auth_error(message: str, cookie_path: str = "/api/auth/google") -> RedirectResponse:
+    return _frontend("/auth", cookie_path=cookie_path, error=message)
 
 
 def exchange_google_code(code: str) -> dict:
@@ -242,6 +255,126 @@ def google_callback(
     ticket = create_login_ticket(resolved.user.id, resolved.user.token_version, resolved.created)
     # Fragment, not query: it never reaches servers or referrers, and the ticket dies in 60s.
     return _frontend("/auth/callback", ticket=ticket, next=saved["next"])
+
+
+# Sign in with Apple: natively in the iOS app (POST /apple), or the redirect flow on the web (/apple/start, then Apple
+# form-posts to /apple/callback). Same accounts either way.
+
+APPLE_COOKIE_PATH = "/api/auth/apple"
+
+
+def _keep_apple_token(user: User, code: str | None, client_id: str, redirect_uri: str | None = None) -> None:
+    """Trade the sign in's code for Apple's refresh token, kept (encrypted, with the client it belongs to) so deleting
+    the account can revoke it. Signing in never waits on its success."""
+    if not code:
+        return
+    token = apple.exchange_code(code, client_id, redirect_uri)
+    if token:
+        user.apple_refresh_token = encrypt(json.dumps({"client_id": client_id, "token": token}))
+
+
+class AppleIn(BaseModel):
+    identity_token: str
+    authorization_code: str | None = None
+    # Apple gives the app the name (never in the token), and only on the first sign in.
+    name: str | None = None
+
+
+@router.post("/apple")
+def apple_login(body: AppleIn, db: Session = Depends(get_db)):
+    if not (settings.apple_configured and settings.apple_bundle_id_list):
+        raise HTTPException(503, "Apple sign in is not configured")
+    try:
+        info = apple.verify_identity_token(body.identity_token, settings.apple_bundle_id_list)
+    except apple.AppleTokenError as exc:
+        log.warning("Apple identity token rejected: %s", exc)
+        raise HTTPException(401, "Invalid Apple sign in") from exc
+    try:
+        resolved = ident.resolve_or_create_apple_user(
+            db, apple_id=info.sub, email=info.email, name=(body.name or "").strip()[:200] or None
+        )
+    except ident.IdentityError as exc:
+        raise _err(exc) from exc
+    # The token's audience is the app's bundle id: the code belongs to that client.
+    audience = jwt.decode(body.identity_token, options={"verify_signature": False}).get("aud")
+    _keep_apple_token(resolved.user, body.authorization_code, str(audience))
+    return _finalize_login(db, resolved.user, resolved.created)
+
+
+@router.get("/apple/start")
+def apple_start(next: str | None = None):
+    if not (settings.apple_configured and settings.apple_services_id):
+        return _auth_error("Apple sign in is not configured.", APPLE_COOKIE_PATH)
+    nonce = secrets.token_urlsafe(24)
+    state = encode_signed({"typ": "oauth_state", "nonce": nonce, "next": _safe_next(next)}, STATE_TTL)
+    params = {
+        "client_id": settings.apple_services_id,
+        "redirect_uri": settings.apple_redirect_url,
+        "response_type": "code id_token",
+        "response_mode": "form_post",
+        "scope": "name email",
+        "state": state,
+        "nonce": nonce,
+    }
+    response = RedirectResponse(f"{apple.APPLE_AUTHORIZE_URL}?{urlencode(params)}", status_code=302)
+    # Binds the state to this browser. Apple comes back with a cross-site POST, which only carries a SameSite=None
+    # cookie (and that must be Secure: the Apple flow runs over https, never on plain local http).
+    response.set_cookie(
+        STATE_COOKIE,
+        nonce,
+        max_age=int(STATE_TTL.total_seconds()),
+        path=APPLE_COOKIE_PATH,
+        httponly=True,
+        secure=True,
+        samesite="none",
+    )
+    return response
+
+
+@router.post("/apple/callback")
+async def apple_callback(request: Request, db: Session = Depends(get_db)):
+    form = await request.form()
+    error = form.get("error")
+    if error:
+        return _auth_error(
+            "Apple sign in was cancelled." if error == "user_cancelled_authorize" else "Apple sign in failed.", APPLE_COOKIE_PATH
+        )
+    code, state, id_token = form.get("code"), form.get("state"), form.get("id_token")
+    if not (isinstance(code, str) and isinstance(state, str) and isinstance(id_token, str)):
+        return _auth_error("Apple sign in failed. Try again.", APPLE_COOKIE_PATH)
+    try:
+        saved = decode_token_full(state, expected_type="oauth_state")
+    except HTTPException:
+        return _auth_error("Apple sign in expired. Try again.", APPLE_COOKIE_PATH)
+    cookie = request.cookies.get(STATE_COOKIE)
+    if not cookie or not secrets.compare_digest(cookie, saved.get("nonce", "")):
+        return _auth_error("Apple sign in expired. Try again.", APPLE_COOKIE_PATH)
+    try:
+        info = apple.verify_identity_token(id_token, [settings.apple_services_id], nonce=saved["nonce"])
+    except apple.AppleTokenError as exc:
+        log.warning("Apple sign in failed: %s", exc)
+        return _auth_error("Apple sign in failed. Try again.", APPLE_COOKIE_PATH)
+    # The name comes once, on the first sign in, as JSON beside the token: {"name": {"firstName", "lastName"}}.
+    name = None
+    raw_user = form.get("user")
+    if isinstance(raw_user, str):
+        try:
+            parts = json.loads(raw_user).get("name") or {}
+            name = " ".join(p for p in (parts.get("firstName"), parts.get("lastName")) if p).strip()[:200] or None
+        except (ValueError, AttributeError):
+            name = None
+    try:
+        resolved = ident.resolve_or_create_apple_user(db, apple_id=info.sub, email=info.email, name=name)
+    except ident.IdentityError as exc:
+        db.rollback()
+        return _auth_error(exc.message, APPLE_COOKIE_PATH)
+    _keep_apple_token(resolved.user, code, settings.apple_services_id, settings.apple_redirect_url)
+    _record_login(db, resolved.user, resolved.created)
+    ticket = create_login_ticket(resolved.user.id, resolved.user.token_version, resolved.created)
+    # 303: the browser follows this form POST with a GET to the app.
+    response = _frontend("/auth/callback", cookie_path=APPLE_COOKIE_PATH, ticket=ticket, next=saved["next"])
+    response.status_code = 303
+    return response
 
 
 class TicketIn(BaseModel):
@@ -425,6 +558,20 @@ def logout(user: User = Depends(get_current_user), db: Session = Depends(get_db)
 
 @router.post("/delete-account")
 def delete_account(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # An Apple account: revoke our access to the person's Apple ID too (App Store 5.1.1(v)). Best effort: the account
+    # is deleted either way.
+    if user.auth_provider == AuthProvider.APPLE and user.apple_refresh_token:
+        try:
+            kept = json.loads(decrypt(user.apple_refresh_token) or "{}")
+            if kept.get("token") and kept.get("client_id"):
+                apple.revoke(kept["token"], kept["client_id"])
+        except ValueError:
+            log.warning("Apple refresh token for user %s could not be read", user.id)
+        user.apple_refresh_token = None
+    # The paid plan ends with the account: Stripe and Google Play are cancelled, and the workspace drops to Free.
+    from app.services.billing import end_subscriptions
+
+    end_subscriptions(db, user)
     ident.soft_delete(db, user)
     db.commit()
     return {"ok": True}

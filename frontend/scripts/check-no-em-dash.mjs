@@ -12,6 +12,7 @@ const walk = (dir) => {
 };
 walk("src");
 walk("public");
+walk("../packages/shared/src"); // copy shared with the mobile app
 if (bad.length) {
   console.error("Em dashes found in:\n" + bad.join("\n"));
   process.exit(1);

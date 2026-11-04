@@ -1,11 +1,11 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { videoEditApi, type LayoutInfo, type LayoutSchema } from "../../api/endpoints";
+import { videoEditApi, type LayoutInfo, type LayoutSchema } from "@notestack/shared/endpoints";
 import type {
   VideoCatalog,
   VideoJobState,
   VideoProjectData,
   VideoScene,
-} from "../../api/types";
+} from "@notestack/shared/types";
 import { ChevronIcon, TrashIcon } from "../icons/Icons";
 import { ErrorText, errorMessage } from "../ui";
 import { DeleteAssetModal, RemoveMediaModal } from "./SceneMedia";

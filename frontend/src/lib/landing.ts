@@ -1,4 +1,4 @@
-import { notebooksApi, sourcesApi } from "../api/endpoints";
+import { notebooksApi, sourcesApi } from "@notestack/shared/endpoints";
 import { PENDING_SOURCE_KEY } from "../pages/Landing";
 import { ONBOARDED_KEY } from "../pages/Welcome";
 

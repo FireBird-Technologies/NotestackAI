@@ -1,5 +1,5 @@
-import { notebooksApi } from "../../api/endpoints";
-import type { Doc, NotebookSummary } from "../../api/types";
+import { notebooksApi } from "@notestack/shared/endpoints";
+import type { Doc, NotebookSummary } from "@notestack/shared/types";
 
 /** The video wizard's step 1 lists, kept for the browser session (until a full reload) so re-opening the wizard
  * shows them at once. Readers show what is cached, then refresh in the background through the loaders below. */

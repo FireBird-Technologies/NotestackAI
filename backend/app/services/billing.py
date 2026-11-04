@@ -4,6 +4,7 @@ Stripe goes in create_checkout_url, create_portal_url and the webhook route; eve
 (meters, nudges, subscription bookkeeping, 402 payloads) is provider agnostic.
 """
 
+import logging
 from datetime import UTC, datetime
 
 from sqlalchemy import func, select
@@ -15,7 +16,12 @@ from app.services.plans import PLANS, Plan, effective_plan, next_plan, plan_dict
 from app.services.usage import month_usage
 from app.services.video_quota import sync_video_quota, video_usage
 
+log = logging.getLogger(__name__)
+
 CYCLES = {"monthly", "annual"}
+STORES = {"app_store", "play_store", "test_store"}  # in-app purchase providers (services/revenuecat.py); the rest is Stripe
+LIVE = {"active", "trialing", "past_due"}
+STORE_NAMES = {"app_store": "the App Store", "play_store": "Google Play", "test_store": "RevenueCat's Test Store"}
 LOW_FUEL = 0.8  # meters at or above this share of the allowance start nudging
 
 METERS = {
@@ -154,6 +160,9 @@ def billing_status(db: Session, workspace: Workspace) -> dict:
         "next_plan": upgrade.id if upgrade else None,
         "can_upgrade": can_upgrade,
         "has_billing_account": bool(sub and sub.provider_customer_id),
+        # Who bills the paid plan: "stripe" (managed on the web), "app_store" or "play_store" (managed on the phone).
+        "billed_by": billed_by(sub),
+        "store_customer_id": str(workspace.id),  # RevenueCat's customer id in the apps (services/revenuecat.py)
         "period_end": sub.current_period_end.isoformat() if sub and sub.current_period_end else None,
         "meters": meters,
         "more_meters": _more_meters(db, workspace, plan, used),
@@ -161,6 +170,25 @@ def billing_status(db: Session, workspace: Workspace) -> dict:
         "videos_resets_at": videos["resets_at"],
         "nudges": build_nudges(db, workspace, plan, meters, can_upgrade),
     }
+
+
+def billed_by(sub: Subscription | None) -> str | None:
+    """The provider of a paid plan that is still running, else None."""
+    return sub.provider if sub and sub.status in LIVE and sub.plan != "free" else None
+
+
+def store_billed(db: Session, workspace: Workspace) -> str | None:
+    """'app_store' / 'play_store' when the plan is billed through a store: the web can't change or cancel it."""
+    sub = db.query(Subscription).filter_by(workspace_id=workspace.id).one_or_none()
+    by = billed_by(sub)
+    return by if by in STORES else None
+
+
+def held_by_other(sub: Subscription | None, provider: str) -> bool:
+    """A workspace has one plan. A paid plan from another provider wins over this provider's update, so a Stripe
+    webhook never undoes an App Store plan (or the reverse); the buyer is told where the plan is billed instead."""
+    by = billed_by(sub)
+    return by is not None and by != provider
 
 
 def apply_subscription(db: Session, workspace_id, *, plan: str, status: str, provider: str = "stripe",
@@ -186,6 +214,31 @@ def apply_subscription(db: Session, workspace_id, *, plan: str, status: str, pro
     if workspace and effective_plan(db, workspace).indexed_posts != before:
         resync_sources(db, workspace_id)
     return sub
+
+
+def end_subscriptions(db: Session, user: User) -> None:
+    """Account deletion: every workspace the person owns drops to Free now. Stripe is cancelled at once and Google
+    Play stops renewing (best effort, logged on failure); an App Store subscription can only be cancelled by the
+    person, which the delete warning says. A deleted account is never upgraded again by a late renewal."""
+    for workspace in db.scalars(select(Workspace).where(Workspace.owner_id == user.id)):
+        sub = db.query(Subscription).filter_by(workspace_id=workspace.id).one_or_none()
+        if not sub:
+            continue
+        by = billed_by(sub)
+        if by == "stripe" and sub.provider_subscription_id and settings.stripe_secret_key:
+            from app.services import stripe_billing
+
+            stripe_billing.cancel_now(sub.provider_subscription_id)
+        elif by == "play_store" and settings.revenuecat_secret_key:
+            from app.services import revenuecat
+
+            try:
+                revenuecat.cancel_play(str(workspace.id))
+            except Exception:  # noqa: BLE001 - the account is deleted whatever the store says
+                log.exception("play cancel for workspace %s failed", workspace.id)
+        sub.plan, sub.status, sub.current_period_end = "free", "canceled", datetime.now(UTC)
+        db.commit()
+        sync_video_quota(db, workspace)
 
 
 def resync_sources(db: Session, workspace_id) -> None:

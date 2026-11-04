@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
-import { docsApi, jobsApi, notebooksApi, settingsApi, sourcesApi, type NotebookLmImportResult } from "../api/endpoints";
-import type { Job, Source } from "../api/types";
+import { docsApi, jobsApi, MAX_SOURCE_FILE_BYTES, MAX_SOURCE_FILE_LABEL, notebooksApi, settingsApi, sourcesApi, type NotebookLmImportResult } from "@notestack/shared/endpoints";
+import type { Job, Source } from "@notestack/shared/types";
 import { NotebookLmTransferButton } from "../components/NotebookLmTransferButton";
 import { CloseIcon, UploadIcon } from "../components/icons/Icons";
 import Logo from "../components/Logo";
@@ -21,11 +21,11 @@ import {
   pendingNotebookLmTransfer,
   reportNotebookLmTransferStatus,
 } from "../lib/notebooklm";
-import { classifyUrl } from "../lib/urlScrapability";
+import { firstNotebookName } from "@notestack/shared/notebook";
+import { classifyUrl } from "@notestack/shared/urlScrapability";
 import { PENDING_SOURCE_KEY } from "./Landing";
 
-type Step = "connect" | "indexing" | "goal" | "ready";
-type Goal = "ask" | "audio" | "launch";
+type Step = "connect" | "indexing";
 type Mode = "feed" | "url" | "file" | "notebooklm";
 
 const MODES: { id: Mode; label: string }[] = [
@@ -39,13 +39,15 @@ const FILE_ACCEPT = ".md,.markdown,.txt,.vtt,.html,.htm,.pdf,text/vtt,text/markd
 
 const EXAMPLES = ["yourblog.com", "yourname.substack.com", "medium.com/@you"];
 
-const GOALS: { id: Goal; title: string; body: string }[] = [
-  { id: "ask", title: "Ask my archive", body: "Chat with everything you have written. Every answer cites the lines it came from." },
-  { id: "audio", title: "Hear it as a podcast", body: "Two hosts talk through your best posts, grounded in your words." },
-  { id: "launch", title: "Launch my next post", body: "Threads, LinkedIn, Notes, SEO and quote cards, in your voice." },
-];
-
 export const ONBOARDED_KEY = "ns_onboarded";
+
+const tooLargeMessage = (names: string[]) =>
+  `${names.slice(0, 3).join(", ")}${names.length > 3 ? " and others" : ""} ${names.length === 1 ? "is" : "are"} over ${MAX_SOURCE_FILE_LABEL}. Files can be up to ${MAX_SOURCE_FILE_LABEL}.`;
+
+const fileRoomMessage = (room: number) =>
+  room === 0
+    ? "Your plan's posts are all used. Upgrade to add more."
+    : `Your plan has room for ${room} ${room === 1 ? "file" : "files"}, so only the first ${room} were kept. Upgrade to add more.`;
 const NOTEBOOKLM_GUIDE_KEY = "ns_notebooklm_guide_open";
 const NOTEBOOKLM_RETURN_PATH = "/welcome?notebooklm=import";
 
@@ -85,7 +87,7 @@ async function waitForJobs(ids: string[]): Promise<void> {
   }
 }
 
-/** First run: connect a blog, import an article or upload files, watch it index, pick what to do first, land somewhere useful. */
+/** First run: connect a blog, import an article or upload files, watch it index, then land in a new notebook holding those posts. */
 export default function Welcome() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
@@ -101,8 +103,15 @@ export default function Welcome() {
   const [error, setError] = useState<string | null>(null);
   const [source, setSource] = useState<Source | null>(null);
   const [job, setJob] = useState<Job | null>(null);
-  const [goal, setGoal] = useState<Goal | null>(null);
   const [posts, setPosts] = useState(0);
+  // Every post is in (or the NotebookLM import finished): the notebook can be named and opened.
+  const [ready, setReady] = useState(false);
+  // The posts that came in, and the new notebook's name: filled in from them, the writer's to change.
+  const [docIds, setDocIds] = useState<string[]>([]);
+  const [name, setName] = useState("");
+  const sourceTitle = useRef<string | null>(null);
+  const [opening, setOpening] = useState(false);
+  const opened = useRef(false);
   const [extensionInstalled, setExtensionInstalled] = useState(isNotebookLmExtensionInstalled);
   const [waitingForStoreReturn, setWaitingForStoreReturn] = useState(false);
   const [notebookLmImportState, setNotebookLmImportState] = useState<"idle" | "reading" | "importing" | "done" | "limit" | "error">("idle");
@@ -111,13 +120,17 @@ export default function Welcome() {
   const [notebookLmLaunchMessage, setNotebookLmLaunchMessage] = useState<string | null>(null);
   const notebookLmImportStarted = useRef(false);
   const autoStarted = useRef(false);
+  // Posts the plan still has room for: null when it has no limit (or usage hasn't loaded; the server still refuses).
+  const [fileRoom, setFileRoom] = useState<number | null>(null);
 
   const live = useJob(job, async (j) => {
     if (j.status !== "done") return;
     await waitForJobs(earlierJobs.current);
-    const list = await docsApi.list({ limit: 1 });
+    const list = await docsApi.list({ limit: 5000 });
     setPosts(list.total);
-    setStep((s) => (s === "indexing" ? "goal" : s === "goal" ? "goal" : "ready"));
+    setDocIds(list.items.map((d) => d.id));
+    setName(firstNotebookName(list.items, sourceTitle.current));
+    setReady(true);
   });
 
   const { check, modal } = useSourceUrlCheck();
@@ -163,9 +176,28 @@ export default function Welcome() {
   };
 
   const addFiles = (list: FileList | null) => {
-    const picked = Array.from(list ?? []);
-    if (picked.length) setFiles((cur) => [...cur, ...picked.filter((f) => !cur.some((c) => c.name === f.name && c.size === f.size))]);
+    const all = Array.from(list ?? []);
+    if (!all.length) return;
+    const large = all.filter((f) => f.size > MAX_SOURCE_FILE_BYTES);
+    const picked = all.filter((f) => f.size <= MAX_SOURCE_FILE_BYTES);
+    const merged = [...files, ...picked.filter((f) => !files.some((c) => c.name === f.name && c.size === f.size))];
+    // Each file becomes a post, so the list stops at the posts the plan still has room for.
+    if (fileRoom !== null && merged.length > fileRoom) {
+      setError(fileRoomMessage(fileRoom));
+      setFiles(merged.slice(0, fileRoom));
+    } else {
+      setError(large.length ? tooLargeMessage(large.map((f) => f.name)) : null);
+      setFiles(merged);
+    }
   };
+
+  useEffect(() => {
+    if (!user) return;
+    settingsApi
+      .usage()
+      .then((u) => setFileRoom(u.limits.indexed_posts < 0 ? null : Math.max(0, u.limits.indexed_posts - u.used.indexed_posts)))
+      .catch(() => undefined);
+  }, [user]);
 
   // A URL pasted on the landing page starts connecting straight away: its warning was confirmed there, but a link that
   // can't be added stops here.
@@ -302,20 +334,21 @@ export default function Welcome() {
         if (!active) return;
         setNotebookLmImportResult(imported);
         setNotebookLmImportState("done");
-        const list = await docsApi.list({ limit: 1 }).catch(() => null);
+        const list = await docsApi.list({ limit: 5000 }).catch(() => null);
         if (!active) return;
-        if (list) setPosts(list.total);
+        if (list) {
+          setPosts(list.total);
+          setDocIds(list.items.map((d) => d.id));
+          setName(firstNotebookName(list.items, "NotebookLM"));
+        }
         try {
           sessionStorage.removeItem(NOTEBOOKLM_GUIDE_KEY);
         } catch {
           /* ignore */
         }
-        // A transfer launched during onboarding always stays in onboarding. Once indexing finishes, continue to
-        // Step 3 even when the plan imported only part of the selection.
-        continueTimer = window.setTimeout(() => {
-          setStep("goal");
-          navigate("/welcome", { replace: true });
-        }, 1100);
+        // A transfer launched during onboarding always stays in onboarding. Once indexing finishes, its notebook
+        // opens, even when the plan imported only part of the selection.
+        continueTimer = window.setTimeout(() => setReady(true), 1100);
       } catch (e) {
         if (!active) return;
         setNotebookLmImportState("error");
@@ -334,9 +367,6 @@ export default function Welcome() {
     };
   }, [user, returningFromNotebookLm, navigate]);
 
-  if (loading) return <div className="boot"><div className="orbit-loader"><span /></div></div>;
-  if (!user) return <Navigate to="/auth?mode=signup" replace />;
-
   const notebookLmIndexing = notebookLmImportState !== "idle";
   const indexingDone = live?.status === "done" || notebookLmImportState === "done";
   const indexingFailed = live?.status === "failed" || notebookLmImportState === "error";
@@ -347,6 +377,40 @@ export default function Welcome() {
     ? notebookLmImportResult.eligible - notebookLmImportResult.skipped_plan
     : Number(live?.result?.available ?? posts);
   const found = notebookLmImportResult?.eligible ?? Number(live?.result?.found ?? posts);
+
+  /** The All posts notebook: where a skipped (or empty) onboarding ends, to add sources from there. */
+  const toArchive = async () => {
+    try {
+      navigate(`/app/notebooks/${(await notebooksApi.archive()).id}`, { replace: true });
+    } catch {
+      navigate("/app/notebooks", { replace: true });
+    }
+  };
+
+  /** A new notebook, under the name in the box, holding every post that came in; opened in place of onboarding. */
+  const openNotebook = async () => {
+    if (opened.current || !name.trim()) return;
+    opened.current = true;
+    setOpening(true);
+    markOnboarded();
+    if (docIds.length === 0) return toArchive();
+    try {
+      const nb = await notebooksApi.create(name.trim(), docIds);
+      navigate(`/app/notebooks/${nb.id}`, { replace: true });
+    } catch {
+      navigate("/app/notebooks", { replace: true });
+    }
+  };
+
+  const skip = () => {
+    opened.current = true;
+    markOnboarded();
+    void toArchive();
+  };
+
+  if (loading) return <div className="boot"><div className="orbit-loader"><span /></div></div>;
+  if (!user) return <Navigate to="/auth?mode=signup" replace />;
+
   const notebookLmLockedNotice = capped && notebookLmImportResult ? (
     <div className="welcome-cap">
       <div>
@@ -385,31 +449,7 @@ export default function Welcome() {
       </button>
     </div>
   ) : null;
-  const lockedNotice = notebookLmLockedNotice ?? standardLockedNotice;
   const first = (user.name ?? user.email).split(/[ @]/)[0];
-
-  /** The All posts notebook: where a skipped (or empty) onboarding ends, to add sources from there. */
-  const toArchive = async () => {
-    try {
-      navigate(`/app/notebooks/${(await notebooksApi.archive()).id}`, { replace: true });
-    } catch {
-      navigate("/app/notebooks", { replace: true });
-    }
-  };
-
-  const finish = async (chosen: Goal | null) => {
-    markOnboarded();
-    if (!chosen || posts === 0) return toArchive();
-    if (chosen === "launch") return navigate("/app/launchpad/kits", { replace: true });
-    setBusy(true);
-    try {
-      const docs = await docsApi.list({ limit: 5000 });
-      const nb = await notebooksApi.create(source?.title ? `${source.title} archive` : "My archive", docs.items.map((d) => d.id));
-      navigate(chosen === "audio" ? `/app/notebooks/${nb.id}?studio=audio` : `/app/notebooks/${nb.id}`, { replace: true });
-    } catch {
-      navigate("/app/notebooks", { replace: true });
-    }
-  };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -459,7 +499,27 @@ export default function Welcome() {
     navigate("/welcome", { replace: true });
   };
 
-  const stepIndex = { connect: 0, indexing: 1, goal: 2, ready: 3 }[step];
+
+  /** Indexed: the new notebook's name, filled in and changeable, and the button that opens it. */
+  const nameForm = (
+    <form
+      className="welcome-name"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void openNotebook();
+      }}
+    >
+      <label className="field">
+        <span>Notebook name</span>
+        <input className="input" value={name} maxLength={120} onChange={(e) => setName(e.target.value)} autoFocus />
+      </label>
+      <div className="row end">
+        <button type="submit" className="btn btn-primary" disabled={opening || !name.trim()}>
+          {opening ? "Opening…" : "Open my notebook"}
+        </button>
+      </div>
+    </form>
+  );
 
   return (
     <div className="page welcome">
@@ -467,27 +527,18 @@ export default function Welcome() {
       <main className="welcome-wrap">
         <div className="welcome-top">
           <Logo size={36} />
-          <button className="link-btn mono" onClick={() => finish(null)}>
+          <button className="link-btn mono" onClick={skip}>
             Skip for now
           </button>
         </div>
-        <ol className="welcome-steps mono" aria-label="Onboarding progress">
-          {["Connect", "Index", "Choose", "Launch"].map((label, i) => (
-            <li key={label} className={i < stepIndex ? "done" : i === stepIndex ? "current" : ""}>
-              <span className="welcome-dot" />
-              <span>
-                <span className="welcome-step-num">{i + 1}</span>
-                {label}
-              </span>
-            </li>
-          ))}
-        </ol>
 
         {step === "connect" && (
           <section className="card welcome-card">
-            <p className="eyebrow">Welcome aboard, {first}</p>
-            <h1>Where does your writing live?</h1>
-            <p className="muted">Bring it in however suits you. We turn it into a research notebook you can question, hear and launch from.</p>
+            <p className="welcome-hello">
+              Welcome aboard, <span>{first}</span>
+            </p>
+            <h1 className="welcome-center">Where does your writing live?</h1>
+            <p className="muted welcome-center">Bring it in however suits you. We turn it into a research notebook you can question, hear and launch from.</p>
             <Tabs<Mode>
               tabs={MODES}
               value={mode}
@@ -544,7 +595,7 @@ export default function Welcome() {
                 <p className="muted small">
                   {mode === "feed" && "Substack, Ghost, WordPress, Medium or anything with a feed. We find the feed, pull in your archive and keep it in sync."}
                   {mode === "url" && "Any single article on the web. Add more later from Sources."}
-                  {mode === "file" && "Markdown, text, VTT transcripts, HTML or PDF: drafts, exports and posts that never had a feed. Add as many as you like."}
+                  {mode === "file" && `Markdown, text, VTT transcripts, HTML or PDF: drafts, exports and posts that never had a feed. ${fileRoom === null ? "Add as many as you like." : `Your plan has room for ${fileRoom} ${fileRoom === 1 ? "file" : "files"}.`}`}
                 </p>
                 <form onSubmit={submit} className="welcome-form">
                   {mode === "file" ? (
@@ -573,7 +624,7 @@ export default function Welcome() {
                       />
                       <UploadIcon size={28} />
                   <strong>Drop files here or click to choose</strong>
-                      <span className="mono muted small">.md · .txt · .html · .pdf</span>
+                      <span className="mono muted small">.md · .txt · .html · .pdf · up to {MAX_SOURCE_FILE_LABEL} each</span>
                     </label>
                   ) : (
                     <input
@@ -648,7 +699,7 @@ export default function Welcome() {
                       <small>
                         {notebookLmImportState === "reading" && "Reading the transfer from your extension…"}
                         {notebookLmImportState === "importing" && (notebookLmLimitWarning ?? "Adding the notebooks to your searchable archive…")}
-                        {notebookLmImportState === "done" && "Opening the Choose step…"}
+                        {notebookLmImportState === "done" && "Name your notebook below."}
                         {notebookLmImportState === "limit" && NOTEBOOKLM_PLAN_LIMIT_REACHED}
                         {notebookLmImportState === "error" && (error ?? "The transfer could not be completed.")}
                       </small>
@@ -659,6 +710,7 @@ export default function Welcome() {
                   </li>
                 </ol>
                 {notebookLmLockedNotice}
+                {notebookLmImportState === "done" && ready && nameForm}
                 <div className="row">
                   {notebookLmImportState === "limit" ? (
                     <button className="btn btn-primary" onClick={backToNotebookLmSteps}>Back</button>
@@ -667,17 +719,7 @@ export default function Welcome() {
                       <button className="btn btn-primary" onClick={backToNotebookLmSteps}>Back to transfer steps</button>
                       <Link className="btn" to="/app/sources">Add content another way</Link>
                     </>
-                  ) : notebookLmImportState === "done" ? (
-                    <button
-                      className="btn btn-primary"
-                      onClick={() => {
-                        setStep("goal");
-                        navigate("/welcome", { replace: true });
-                      }}
-                    >
-                      Continue to Choose
-                    </button>
-                  ) : (
+                  ) : notebookLmImportState === "done" ? null : (
                     <button className="btn" onClick={backToNotebookLmSteps}>Back</button>
                   )}
                 </div>
@@ -694,59 +736,17 @@ export default function Welcome() {
                     <Link className="btn" to="/app/sources">Add posts another way</Link>
                   </div>
                 ) : (
-                  <>
-                    <p className="muted">This takes a minute for big archives. While it runs, tell us what you want to do first.</p>
-                    <button className="btn btn-primary" onClick={() => setStep("goal")}>Continue</button>
-                  </>
+                  ready ? (
+                    nameForm
+                  ) : (
+                    <p className="muted">This takes a minute for big archives. Then name your notebook and open it.</p>
+                  )
                 )}
               </>
             )}
           </section>
         )}
 
-        {step === "goal" && (
-          <section className="card welcome-card">
-            <p className="eyebrow">{indexingDone ? (capped ? `${available} of ${found} posts indexed` : `${posts} posts indexed`) : "Still indexing in the background"}</p>
-            <h1>What should we launch first?</h1>
-            {lockedNotice}
-            <div className="goal-grid">
-              {GOALS.map((g) => (
-                <button key={g.id} type="button" className={`goal${goal === g.id ? " on" : ""}`} onClick={() => setGoal(g.id)} aria-pressed={goal === g.id}>
-                  <strong>{g.title}</strong>
-                  <span className="muted">{g.body}</span>
-                </button>
-              ))}
-            </div>
-            {live && !indexingDone && !indexingFailed && <JobProgress job={live} compact />}
-            <div className="row end">
-              <button className="btn btn-primary" disabled={!goal || busy} onClick={() => setStep("ready")}>
-                Next
-              </button>
-            </div>
-          </section>
-        )}
-
-        {step === "ready" && (
-          <section className="card welcome-card">
-            <p className="eyebrow">Pre-flight check complete</p>
-            <h1>{indexingDone ? `${capped ? available : posts} posts are in orbit` : "Almost there"}</h1>
-            {!indexingDone && live && <JobProgress job={live} />}
-            {lockedNotice}
-            <p className="muted">
-              {goal === "ask" && "We will put your whole archive in a notebook so you can start asking right away."}
-              {goal === "audio" && "We will put your archive in a notebook with the audio studio ready."}
-              {goal === "launch" && "Pick a post and we will build its Launch Kit."}
-            </p>
-            <div className="row end">
-              <button className="btn" onClick={() => finish(null)}>
-                Open All posts
-              </button>
-              <button className="btn btn-primary" disabled={!indexingDone || busy} onClick={() => finish(goal)}>
-                {busy ? "Preparing..." : indexingDone ? "Launch" : "Waiting for posts..."}
-              </button>
-            </div>
-          </section>
-        )}
       </main>
     </div>
   );

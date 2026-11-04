@@ -1,6 +1,6 @@
 import type { Plugin } from "vite";
-import { blogPosts } from "../src/content/blogPosts";
-import { tools } from "../src/content/tools";
+import { blogPosts } from "../../packages/shared/src/content/blogPosts";
+import { tools } from "../../packages/shared/src/content/tools";
 
 /**
  * sitemap.xml and robots.txt, generated from src/content/blogPosts.ts on every build (and served live

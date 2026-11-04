@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { videosApi, videoVoicesApi } from "../api/endpoints";
+import { videosApi, videoVoicesApi } from "@notestack/shared/endpoints";
+import { FALLBACK_COLORS, VIDEO_DEFAULTS } from "@notestack/shared/notebook";
 import { prefetchVoicePreviews, voicePreviewUrl } from "../components/voice/YourVoices";
-import { ApiError } from "../api/client";
+import { ApiError } from "@notestack/shared/client";
 import type {
   ChatPreset,
   VideoCatalog,
@@ -16,9 +17,10 @@ import type {
   VideoStyleItem,
   VideoTemplate,
   VideoVoicesResponse,
-} from "../api/types";
+} from "@notestack/shared/types";
 import { Dropdown } from "../components/Dropdown";
 import { CheckIcon, SparkleIcon, ArrowLeftIcon } from "../components/icons/Icons";
+import { MakingVideo } from "../components/video/MakingVideo";
 import { ErrorText, errorMessage, Loading, Modal, PageHeader } from "../components/ui";
 import { OPEN_SUPPORT_EVENT } from "../components/support/SupportWidget";
 import { SourcePicker, type VideoSource } from "../components/video/SourcePicker";
@@ -26,7 +28,6 @@ import { loadArchiveId, sourceCache } from "../components/video/sourceCache";
 import { PlayButton, TemplateThumb, useAudio } from "../components/video/parts";
 import { useUpgrade } from "../hooks/useUpgrade";
 
-const FALLBACK_COLORS = { accent_color: "#7c3aed", bg_color: "#ffffff", text_color: "#000000" };
 
 /** A template and the colours it was designed with. */
 const templateFields = (t: VideoTemplate) => ({
@@ -112,18 +113,11 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
   }
 
   const [form, setForm] = useState<VideoOptions>({
-    stock_footage_enabled: true,
+    ...VIDEO_DEFAULTS,
     aspect_ratio: initial?.aspect_ratio === "portrait" ? "portrait" : "landscape",
-    video_length: "medium", // no length picker: the server sets it from a house style
-    logo_position: "bottom_right",
-    logo_opacity: 0.9,
-    template: "default",
-    video_style: "auto",
-    ...FALLBACK_COLORS,
     content_language: initial?.content_language ?? null,
     voice_gender: initial?.voice_gender === "male" ? "male" : initial?.voice_gender === "none" ? "none" : "female",
     voice_accent: initial?.voice_accent === "british" ? "british" : "american",
-    bgm_volume: 0.1,
   });
   const set = (patch: Partial<VideoOptions>) => setForm((f) => ({ ...f, ...patch }));
   const gridBox = useRef<HTMLDivElement>(null);
@@ -274,10 +268,10 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
       setLimitHit(true);
       return;
     }
+    const from = sourceFields();
+    if (!from) return;
     setBusy(true);
     try {
-      const from = sourceFields();
-      if (!from) return;
       // The notebook it is made in, so the notebook lists it: the notebook picked, or the one the wizard was opened from.
       const notebook = source?.kind === "notebook" ? source.id : startNotebook;
       const a = await videosApi.create({ ...options(), ...from, ...focusFields(), ...(notebook ? { notebook_id: notebook } : {}) });
@@ -332,6 +326,16 @@ export function VideoCreateForm({ startNotebook = null, startDoc = null, inModal
             <button type="button" className="btn btn-primary" onClick={() => openUpgrade()}>Upgrade</button>
           </div>
         </section>
+      </div>
+    );
+  }
+
+  // Generate clicked: the video is shown being made at once (step 1) while the server accepts it; its editor follows.
+  if (busy) {
+    return (
+      <div className={inModal ? "vw-in-modal" : "page-wrap"}>
+        {!inModal && <PageHeader eyebrow="Videos" title="New video" />}
+        <MakingVideo step={1} />
       </div>
     );
   }

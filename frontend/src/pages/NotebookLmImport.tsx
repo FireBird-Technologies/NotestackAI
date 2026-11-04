@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { notebooksApi, settingsApi, sourcesApi, type NotebookLmImportResult } from "../api/endpoints";
+import { notebooksApi, settingsApi, sourcesApi, type NotebookLmImportResult } from "@notestack/shared/endpoints";
 import Logo from "../components/Logo";
 import SkyCanvas from "../components/SkyCanvas";
 import { errorMessage } from "../components/ui";

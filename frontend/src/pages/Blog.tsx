@@ -2,8 +2,7 @@ import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import SkyCanvas from "../components/SkyCanvas";
 import { PublicFooter, PublicNav } from "../components/PublicChrome";
-import { blogPosts, getPost } from "../content/blogPosts";
-import type { BlogPost, Mission } from "../content/seoTypes";
+import { blogPosts, formatPostDate as fmtDate, getPost, missionNumber, missionOf } from "@notestack/shared/content/blogPosts";
 import "../styles/blog.css";
 
 export function useMeta(title: string, description: string, canonical?: string) {
@@ -29,18 +28,6 @@ export function useMeta(title: string, description: string, canonical?: string) 
     });
   }, [title, description, canonical]);
 }
-
-const fmtDate = (d: string) =>
-  new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" });
-
-/** Posts are numbered as missions in publishing order: the oldest post is Mission 01. */
-const missionNumber = (post: BlogPost) => {
-  const ordered = [...blogPosts].sort((a, b) => a.publishedAt.localeCompare(b.publishedAt));
-  return String(ordered.findIndex((p) => p.slug === post.slug) + 1).padStart(2, "0");
-};
-
-const missionOf = (post: BlogPost): Mission =>
-  post.mission ?? { question: post.title.endsWith("?") ? post.title : `${post.heroTitle}?`, answer: post.description };
 
 const INLINE = /(\[[^\]]+\]\([^)\s]+\))|(\*\*[^*]+\*\*)/g;
 

@@ -130,7 +130,7 @@ def _google_redirect(client, monkeypatch, claims: dict, next_path="/app/notebook
 
     monkeypatch.setattr(settings, "google_client_id", "cid")
     monkeypatch.setattr(settings, "google_client_secret", "secret")
-    assert client.get("/api/auth/providers").json() == {"google": "redirect"}
+    assert client.get("/api/auth/providers").json() == {"google": "redirect", "apple": None}
 
     r = client.get("/api/auth/google/start", params={"next": next_path}, follow_redirects=False)
     assert r.status_code == 302

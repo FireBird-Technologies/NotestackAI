@@ -5,7 +5,8 @@ import FeatureShowcase from "../components/FeatureShowcase";
 import PricingTiers from "../components/PricingTiers";
 import "../styles/showcase.css";
 import { PublicFooter, PublicNav } from "../components/PublicChrome";
-import { blogPosts } from "../content/blogPosts";
+import { blogPosts } from "@notestack/shared/content/blogPosts";
+import { FEATURES, STEPS, type FeatureLabel } from "@notestack/shared/content/marketing";
 import { useAuth } from "../hooks/useAuth";
 import { SourceUrlHint, useSourceUrlCheck } from "../components/SourceUrlCheck";
 import {
@@ -24,62 +25,17 @@ export const PENDING_SOURCE_KEY = "ns_pending_source";
 // Bump after re-rendering public/demo.mp4 so browsers and the CDN fetch the new file.
 const DEMO_VERSION = 5;
 
-const FEATURES = [
-  {
-    icon: TelescopeIcon,
-    label: "Research chat",
-    title: "Ask your archive anything",
-    body: "Every answer cites the exact passage it came from. If you never wrote it, Notestack says so.",
-  },
-  {
-    icon: ConstellationIcon,
-    label: "Mind Constellation",
-    title: "Fly through your ideas",
-    body: "Open a notebook as a galaxy of topics. Switch the shape, dive in and see the posts behind every star.",
-  },
-  {
-    icon: SignalIcon,
-    label: "Audio overview",
-    title: "Two hosts, your ideas",
-    body: "Turn a post or a whole notebook into a natural two host conversation, voiced by ElevenLabs.",
-  },
-  {
-    icon: LaunchWindowIcon,
-    label: "Video",
-    title: "Narrated videos you can edit",
-    body: "Pick a post and a template, then edit every scene with a live preview. Landscape for YouTube, vertical for Reels.",
-  },
-  {
-    icon: RocketIcon,
-    label: "Launch Kit",
-    title: "One post, every platform",
-    body: "Threads, LinkedIn, Substack Notes, hooks, quote cards and an SEO pack in one click.",
-  },
-  {
-    icon: HelmetIcon,
-    label: "Voices",
-    title: "Sounds like you",
-    body: "Notestack learns your tone from your posts, and you can describe, pick or clone a voice for narration.",
-  },
-  {
-    icon: OrbitIcon,
-    label: "Memory",
-    title: "Remembers who you write for",
-    body: "Short notes about your audience and style, learned from your chats and yours to edit anytime.",
-  },
-  {
-    icon: LaunchpadIcon,
-    label: "Launchpad",
-    title: "Schedule the countdown",
-    body: "Plan every launch on one calendar and resurface evergreen posts when they matter again.",
-  },
-];
-
-const STEPS = [
-  { n: "01", title: "Point it at your writing", body: "Any blog, newsletter or site URL, or upload markdown, text, HTML and PDF files." },
-  { n: "02", title: "Watch them come into orbit", body: "Posts are cleaned, indexed and embedded in minutes." },
-  { n: "03", title: "Launch", body: "Ask, listen, render and publish, all grounded in what you wrote." },
-];
+/** Each feature's icon, by its label in the shared copy. */
+const FEATURE_ICONS: Record<FeatureLabel, typeof TelescopeIcon> = {
+  "Research chat": TelescopeIcon,
+  "Mind Constellation": ConstellationIcon,
+  "Audio overview": SignalIcon,
+  Video: LaunchWindowIcon,
+  "Launch Kit": RocketIcon,
+  Voices: HelmetIcon,
+  Memory: OrbitIcon,
+  Launchpad: LaunchpadIcon,
+};
 
 /** The narrated demo. Browsers only autoplay muted, so a button turns the captain's log on. */
 function DemoVideo() {
@@ -261,7 +217,9 @@ export default function Landing() {
             <p className="eyebrow">What you get</p>
             <h2 className="section-title">Everything your writing can become</h2>
             <div className="feature-grid">
-              {FEATURES.map(({ icon: Icon, label, title, body }, i) => (
+              {FEATURES.map(({ label, title, body }, i) => {
+                const Icon = FEATURE_ICONS[label];
+                return (
                 <article key={label} className="card feature arrive" style={{ ["--i" as string]: i % 3 }}>
                   <div className="feature-label">
                     <Icon />
@@ -270,7 +228,8 @@ export default function Landing() {
                   <h3>{title}</h3>
                   <p className="muted">{body}</p>
                 </article>
-              ))}
+                );
+              })}
             </div>
           </div>
         </section>

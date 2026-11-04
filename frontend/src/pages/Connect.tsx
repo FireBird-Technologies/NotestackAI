@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
-import { mcpApi } from "../api/endpoints";
-import type { McpRequest } from "../api/types";
+import { mcpApi } from "@notestack/shared/endpoints";
+import type { McpRequest } from "@notestack/shared/types";
 import Logo from "../components/Logo";
 import SkyCanvas from "../components/SkyCanvas";
 import { errorMessage } from "../components/ui";

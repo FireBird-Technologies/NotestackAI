@@ -1,8 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { PLAN_LIMIT_EVENT, type PlanLimitDetail } from "../api/client";
-import { billingApi, type BillingCycle } from "../api/endpoints";
-import type { BillingStatus, Nudge } from "../api/types";
+import { PLAN_LIMIT_EVENT, type PlanLimitDetail } from "@notestack/shared/client";
+import { billingApi, type BillingCycle } from "@notestack/shared/endpoints";
+import type { BillingStatus, Nudge } from "@notestack/shared/types";
 import { errorMessage } from "../components/ui";
 import { ONBOARDED_KEY } from "../pages/Welcome";
 

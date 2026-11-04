@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { voiceApi } from "../api/endpoints";
-import type { Job, VoiceDesignInput, VoiceDesignPreview, VoiceState } from "../api/types";
+import { voiceApi } from "@notestack/shared/endpoints";
+import type { Job, VoiceDesignInput, VoiceDesignPreview, VoiceState } from "@notestack/shared/types";
 import { YourVoices } from "../components/voice/YourVoices";
 import { Dropdown } from "../components/Dropdown";
 import { ConfirmButton, errorMessage, JobProgress, Loading, Modal, Tabs } from "../components/ui";

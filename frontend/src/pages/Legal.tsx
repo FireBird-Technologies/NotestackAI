@@ -52,7 +52,7 @@ export function PrivacyPolicy() {
         <h3>Account information</h3>
         <p>
           When you create an account, we collect your name, email address, authentication details, subscription plan, and
-          preferences. If you sign in with Google, we may also receive your Google profile image.
+          preferences. If you sign in with Google, we may also receive your Google profile image. If you sign in with Apple, we receive your name (the first time only) and either your email address or a private relay address from Apple that forwards to it.
         </p>
         <h3>User content</h3>
         <p>

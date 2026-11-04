@@ -3,7 +3,7 @@ import SkyCanvas from "../components/SkyCanvas";
 import { PublicFooter, PublicNav } from "../components/PublicChrome";
 import { useMeta } from "./Blog";
 import "../styles/blog.css";
-import { NOTEBOOKLM_ALT_FAQ as FAQ, NOTEBOOKLM_ALT_META, NOTEBOOKLM_ALT_ROWS as ROWS } from "../content/notebooklmAlternative";
+import { NOTEBOOKLM_ALT_FAQ as FAQ, NOTEBOOKLM_ALT_META, NOTEBOOKLM_ALT_ROWS as ROWS } from "@notestack/shared/content/notebooklmAlternative";
 
 /** Comparison landing page: "Notestack vs NotebookLM". The /blogs/notebooklm-alternatives listicle owns the plural
  * "notebooklm alternatives" query (590/mo US, KD 0, Sep 2026) and links here, so the two do not compete. */

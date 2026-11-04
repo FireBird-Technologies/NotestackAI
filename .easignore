@@ -1,0 +1,32 @@
+# What EAS Build uploads for the mobile app. This replaces .gitignore for EAS, so it repeats the parts that matter:
+# the app builds from mobile/ plus packages/shared (a file: dependency); everything else stays home.
+
+# Secrets and local settings (the build reads its env from eas.json and EAS)
+.env
+.env.*
+!.env.example
+
+# Other apps and assets in the repo
+/backend/
+/frontend/
+/renderer/
+/marketing/
+/deploy/
+/docs/
+/docs-local/
+/reports/
+/openai-plugin/
+/browser-extension/
+/.github/
+/Dockerfile
+/docker-compose.yml
+
+# Installed and generated files (EAS installs and prebuilds on its own machines)
+node_modules/
+dist/
+mobile/.expo/
+mobile/android/
+mobile/ios/
+mobile/expo-env.d.ts
+.storage/
+*.db

@@ -7,8 +7,8 @@ import {
 } from "@modelcontextprotocol/ext-apps/app-bridge";
 import type { CallToolResult } from "@modelcontextprotocol/client";
 
-import { ApiError, api } from "../api/client";
-import type { ExternalWidget } from "../api/types";
+import { ApiError, api } from "@notestack/shared/client";
+import type { ExternalWidget } from "@notestack/shared/types";
 
 type WidgetResource = {
   resource_uri: string;

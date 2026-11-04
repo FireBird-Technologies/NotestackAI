@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
-import { artifactsApi } from "../api/endpoints";
-import type { Artifact } from "../api/types";
+import { artifactsApi } from "@notestack/shared/endpoints";
+import type { Artifact } from "@notestack/shared/types";
 import { ArtifactCard } from "../components/ArtifactCard";
 import { AudioOverviewCard } from "../components/AudioOverview";
 import { MindMapExplorer } from "../components/MindMap";
