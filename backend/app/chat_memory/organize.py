@@ -198,7 +198,7 @@ def _resolve(raw: str, known: dict[str, str], plan: Plan) -> str | None:
 # Answers that were not about the writer's posts: the question was turned down, answered from the app's help text, or
 # was small talk. They say nothing about the posts, and filing them adds a topic every later message has to be weighed
 # against. `kind` is saved with every answer (recall_json) by the chat endpoint.
-NOT_ABOUT_THE_POSTS = {"off_topic", "about_app", "chitchat", "error"}  # error: the "please send that again" reply
+NOT_ABOUT_THE_POSTS = {"off_topic", "external_action", "about_app", "chitchat", "error"}  # error: retry reply
 
 
 def is_off_topic(r: Round) -> bool:

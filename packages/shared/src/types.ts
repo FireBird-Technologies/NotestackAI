@@ -105,6 +105,86 @@ export type ChatMessage = {
   topic?: string;
   /** A "create a quiz" answer: the dialog it opened and the settings it opened with. */
   action?: ChatAction | null;
+  external_sources?: ExternalSource[];
+  external_widgets?: ExternalWidget[];
+  created_artifacts?: CreatedChatArtifact[];
+  /** A background artifact-to-app delivery that can outlive the chat request. */
+  background_status?: BackgroundStatus | null;
+  /** Human-readable research steps saved with an assistant answer. */
+  steps?: string[];
+};
+
+export type BackgroundStatus = {
+  state: "working" | "done" | "failed";
+  message: string;
+  job_id?: string;
+  url?: string;
+};
+
+export type ExternalSource = { connection: string; tool: string; urls?: string[] };
+export type CreatedChatArtifact = { id: string; type: string; status: string; url?: string; title?: string };
+
+export type ExternalWidget = {
+  connection_id: string;
+  connection: string;
+  tool: string;
+  arguments: Record<string, unknown>;
+  resource_uri: string;
+  result: {
+    content?: unknown[];
+    structuredContent?: unknown;
+    isError?: boolean;
+    _meta?: Record<string, unknown>;
+  };
+};
+
+export type OutboundMcpTool = {
+  name: string;
+  description: string;
+  input_schema: Record<string, unknown>;
+  read_only: boolean;
+  destructive: boolean;
+  usable: boolean;
+};
+
+export type OutboundMcpSuggestion = {
+  name: string;
+  description: string;
+  server_url: string;
+  icon_url: string;
+};
+
+export type OutboundMcpConnection = {
+  id: string;
+  name: string;
+  server_url: string;
+  auth_type: "none" | "bearer" | "oauth";
+  has_token: boolean;
+  provider: string | null;
+  /** Logo fetched when the server was connected, as a data: URI. */
+  icon_url: string | null;
+  auth_status: "not_required" | "authorization_required" | "ready" | "reconnect_required" | "configuration_error";
+  account_label: string | null;
+  granted_scopes: string[];
+  enabled: boolean;
+  enabled_tools: string[];
+  discovered_tools: OutboundMcpTool[];
+  status: "ready" | "error";
+  last_error: string | null;
+  last_checked_at: string | null;
+};
+
+export type NotebookConnector = {
+  id: string;
+  name: string;
+  provider: string | null;
+  account_label: string | null;
+  /** The notebook preference. Globally unavailable connections remain listed but cannot be used. */
+  notebook_enabled: boolean;
+  available: boolean;
+  tool_count: number;
+  status: "ready" | "error";
+  auth_status: OutboundMcpConnection["auth_status"];
 };
 
 export type ChatArtifact = "audio_overview" | "slide_deck" | "video" | "report" | "infographic" | "quiz" | "flashcards" | "mind_map";
@@ -503,7 +583,8 @@ export type Settings = {
   plan: Plan;
   billing_enabled: boolean;
   usage: Usage;
-  integrations: { llm: boolean; elevenlabs: boolean; x: boolean; linkedin: boolean; storage: string; renderer: string };
+  integrations: { llm: boolean; elevenlabs: boolean; x: boolean; linkedin: boolean; storage: string; renderer: string;
+                  outbound_mcp: boolean };
 };
 
 export type MemoryNote = { key: string; value: string; source: "user" | "auto"; updated_at: string | null };

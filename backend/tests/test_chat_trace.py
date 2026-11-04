@@ -25,7 +25,8 @@ def _jev(monkeypatch, **answers):
 
 def test_the_trace_shows_every_jev_answer_and_what_a_threshold_changed(monkeypatch):
     _jev(monkeypatch,
-         intent=jev.Choice("archive", 0.91, {"archive": 0.91, "off_topic": 0.09}),
+         intent=jev.Choice("archive", 0.91, {"archive": 0.91, "off_topic": 0.05, "external_action": 0.02,
+                                             "create": 0.01, "chitchat": 0.005, "about_app": 0.005}),
          depth=jev.Choice("deep", 0.77, {"deep": 0.77, "quick": 0.23}),
          memory=jev.Choice("replay", 0.41, {"replay": 0.41, "compose": 0.39, "lookup": 0.2}),
          topic=jev.Choice("evals", 0.3, {"evals": 0.3, "none": 0.7}))
@@ -40,6 +41,7 @@ def test_the_trace_shows_every_jev_answer_and_what_a_threshold_changed(monkeypat
     r._trace_triage(trace, route)
     text = trace.render()
     assert "engine   : jev" in text
+    assert "about_app 0.01" in text  # every probability is logged, including the least likely choice
     assert "memory   : replay" in text and "confidence 0.41" in text and "compose 0.39" in text
     assert "overrides: memory 'replay' confidence 0.41" in text
     assert "FINAL    : kind=archive depth=deep memory=lookup topic=- detail=standard reuse=new_research" in text
@@ -75,7 +77,8 @@ def test_each_path_says_which_one_ran(monkeypatch, tmp_path):
     r.research(corpus, allowed, "thanks!", trace=t)
     assert "SMALL TALK" in t.render() and "no model, Jev call or R2 read" in t.render()
     t = ChatTrace()
-    monkeypatch.setattr(r, "triage", lambda *a: r.Triage("off_topic", "q", "quick", "", engine="jev"))
+    # This test covers the terminal off-topic path, not Jev's separate archive-relevance recheck.
+    monkeypatch.setattr(r, "triage", lambda *a: r.Triage("off_topic", "q", "quick", ""))
     r.research(corpus, allowed, "what is the capital of France?", trace=t)
     out = t.render()
     assert "OFF_TOPIC: triage decided this needs no research" in out and "a fixed template" in out
@@ -119,6 +122,40 @@ def test_the_archive_trace_lists_what_the_agent_was_given(monkeypatch, tmp_path)
     assert "could not find support" not in text  # unsupported=True: the model's own "not covered" answer is kept
     assert "search" in text and "[posts, local disk cache]" in text
     assert "[TIMING]  triage" in text and "sync-posts" in text and "agent" in text and "verify" in text
+
+
+def test_external_trace_lists_every_compact_definition(monkeypatch, tmp_path):
+    from app.corpus import Corpus
+    from app.mcp_client.tools import CompactExternalTool
+
+    @contextmanager
+    def no_usage(_lm):
+        yield SimpleNamespace(prompt_tokens=0, completion_tokens=0)
+
+    def fake_react(_signature, tools, max_iters):
+        assert len(tools) == 1 and max_iters == 4
+        return lambda **_inputs: SimpleNamespace(answer="not run", citations=[], unsupported=True)
+
+    tool = CompactExternalTool(
+        lambda **kwargs: kwargs,
+        name="slack_send_message",
+        desc="Write-capable Slack tool. Send a message.",
+        args={"channel": {"type": "string"}, "message": {"type": "string"}},
+        required_args={"channel", "message"},
+    )
+    monkeypatch.setattr(r.dspy, "ReAct", fake_react)
+    monkeypatch.setattr(r, "main_lm", lambda: SimpleNamespace(model="glm-test"))
+    monkeypatch.setattr(r, "track_usage", no_usage)
+    monkeypatch.setattr(r, "triage", lambda *a: r.Triage("external_action", "send it", "quick", "", engine="jev"))
+    corpus = Corpus(uuid.uuid4(), cache_dir=str(tmp_path))
+    monkeypatch.setattr(corpus, "sync", lambda *a, **k: {})
+    trace = ChatTrace()
+
+    r.research(corpus, {"a.md": "On Pricing"}, "send it", trace=trace, external_tools=[tool])
+
+    rendered = trace.render()
+    assert "external definitions: 1 tool(s)" in rendered
+    assert "slack_send_message" in rendered and "channel!:string" in rendered and "message!:string" in rendered
 
 
 def test_the_chat_endpoint_writes_one_trace_block_per_message(client, monkeypatch, caplog):
@@ -229,7 +266,9 @@ def test_a_malformed_step_is_asked_again_once_with_a_different_request():
     agent = r._retry_malformed_steps(_real_react(react, lambda **kw: dspy.Prediction(answer="ok")), trace)
     assert agent(question="q").answer == "ok"
     assert configs == [None, {"temperature": r.RETRY_TEMPERATURE}]  # the retry is not the cached request
-    assert "not in the expected shape" in trace.render() and "asking again once" in trace.render()
+    rendered = trace.render()
+    assert "not in the expected shape" in rendered and "asking again once" in rendered
+    assert "main model retry selected finish; args=object{}" in rendered
 
 
 def test_a_step_that_stays_malformed_ends_the_research_but_still_answers():

@@ -5,6 +5,7 @@ research agent's wiring. No model and no network.
 The scenario used throughout is the one the feature exists for: a chat about evals and benchmarks, a long detour about
 Obama's birthday, and then a follow up that only makes sense against the evals topic."""
 
+import json
 import re
 import uuid
 from contextlib import contextmanager
@@ -12,6 +13,7 @@ from types import SimpleNamespace
 
 import dspy
 import pytest
+from sqlalchemy import select
 
 from app.chat_memory import files, organize, search
 from app.chat_memory.context import ChatMemory, build_context, load_chat_memory, topic_question, topics_digest
@@ -19,7 +21,9 @@ from app.chat_memory.files import Quote, Topic
 from app.chat_memory.tools import ChatTools, is_chat_path
 from app.config import settings
 from app.corpus import Corpus, CorpusError
-from app.llm.signatures import FileCitation, ResearchArchive, ResearchArchiveWithMemory
+from app.llm.signatures import FileCitation, ResearchArchive, ResearchArchiveWithMemory, ResearchExternal
+from app.models import Artifact, Job, Message, User
+from app.pipeline import compound_action
 from app.pipeline import research as r
 from app.services import jev
 from tests.test_chat_memory import (  # noqa: F401  (world is a fixture)
@@ -348,11 +352,12 @@ def agent(monkeypatch, tmp_path):
 
     monkeypatch.setattr(r, "track_usage", usage)
 
-    def run(question, mem, memory, topic):
-        monkeypatch.setattr(r, "triage", lambda *a: r.Triage("archive", question, "quick", "", topic=topic,
+    def run(question, mem, memory, topic, external_tools=None, kind="archive", external_aliases=None):
+        monkeypatch.setattr(r, "triage", lambda *a: r.Triage(kind, question, "quick", "", topic=topic,
                                                              memory=memory))
         corpus = Corpus(uuid.uuid4(), store=MemoryStore(), cache_dir=str(tmp_path / "posts"))
-        return r.research(corpus, {"sources/a.md": "On Pricing"}, question, history=[], chat_memory=mem)
+        return r.research(corpus, {"sources/a.md": "On Pricing"}, question, history=[], chat_memory=mem,
+                          external_tools=external_tools, external_aliases=external_aliases)
 
     return run
 
@@ -367,7 +372,6 @@ def test_replay_gives_the_agent_the_chat_tools_and_a_verifiable_chat_citation(wo
     built = FakeReAct.built[0]
     assert built.signature is ResearchArchiveWithMemory
     assert {"list_files", "search", "read", "list_chat_topics", "search_chats", "read_chat"} == set(built.tools)
-    assert len(built.tools) <= r.MAX_AGENT_TOOLS  # seen live: a seventh tool makes the model reply {}
     assert "Exact words kept" in built.inputs["chat_memory"]
     assert len(out.citations) == 1 and out.citations[0].path == path and not out.unsupported
     assert out.citations[0].quote and out.text == "Earlier I said X was best [1]."
@@ -378,6 +382,502 @@ def test_without_memory_the_agent_is_built_exactly_as_before(world, monkeypatch,
     built = FakeReAct.built[0]
     assert built.signature is ResearchArchive and built.tools == ["list_files", "search", "read"]
     assert "chat_memory" not in built.inputs and out.unsupported  # no citation, so no claim of support
+
+
+def test_agent_receives_every_enabled_external_tool(world, monkeypatch, agent):
+    external = []
+    for index in range(10):
+        def tool():
+            return "external"
+
+        tool.__name__ = f"external_{index}"
+        external.append(tool)
+
+    agent("use every external tool", None, "none", "", external)
+    built = FakeReAct.built[0]
+    assert built.tools == ["list_files", "search", "read", *[f"external_{i}" for i in range(10)]]
+
+
+def test_external_action_gets_only_external_tools(world, monkeypatch, agent):
+    def github_search(query: str):
+        return query
+
+    def github_get_file(owner: str, repo: str, path: str):
+        return f"{owner}/{repo}/{path}"
+
+    monkeypatch.setattr(r, "prefetch", lambda *a, **kw: (_ for _ in ()).throw(
+        AssertionError("external-only questions must not search the archive")))
+    agent("get my public GitHub repos", None, "none", "", [github_search, github_get_file], kind="external_action")
+    built = FakeReAct.built[0]
+    assert built.signature is ResearchExternal
+    assert built.tools == ["github_search", "github_get_file"]
+    assert not {"list_files", "search", "read"}.intersection(built.tools)
+
+
+def test_flashcards_then_notion_starts_background_chain_without_waiting_for_agent(world, monkeypatch, tmp_path):
+    created = {
+        "id": str(uuid.uuid4()), "type": "flashcards", "status": "pending",
+        "url": "http://localhost:5173/app/artifacts/cards-1",
+    }
+    monkeypatch.setattr(r, "triage", lambda *a: r.Triage(
+        "external_action", "create flashcards from the posts and put them in Notion", "quick", "",
+    ))
+    monkeypatch.setattr(r, "start_from_chat", lambda *a, **kw: created)
+    monkeypatch.setattr(r, "parse_create", lambda *a, **kw: (
+        {"artifact": "flashcards", "settings": {}}, "", 0, 0,
+    ))
+    monkeypatch.setattr(r.dspy, "ReAct", lambda *a, **kw: (_ for _ in ()).throw(
+        AssertionError("the request thread must not start the external agent")))
+
+    def mcp_test_notion_create_pages(**_kwargs):
+        return "https://notion.example/flashcards"
+
+    def mcp_test_notion_update_page(**_kwargs):
+        return "updated"
+
+    corpus = Corpus(uuid.uuid4(), store=MemoryStore(), cache_dir=str(tmp_path / "compound-posts"))
+    out = r.research(
+        corpus,
+        {"sources/a.md": "Post"},
+        "create a set of flashcards from the connected posts and create a Notion page with them",
+        external_tools=[mcp_test_notion_create_pages, mcp_test_notion_update_page],
+        external_aliases={"notion"},
+        external_destinations=[{
+            "connection_id": None,
+            "name": "Notion",
+            "provider": "notion",
+            "aliases": ["notion"],
+            "tools": ["notion-create-pages", "notion-update-page"],
+        }],
+        workspace_id=world.ws.id,
+        notebook_id=world.nb.id,
+        notebook_title="Study",
+    )
+
+    assert out.created_artifacts == [created]
+    assert out.background_action == {
+        "kind": "artifact_to_external", "artifact_id": created["id"],
+        "artifact_type": "flashcards",
+        "artifact_url": created["url"],
+        "adapter": "notion_page",
+        "connection_id": None,
+        "destination_name": "Notion",
+        "destination_url": "https://notion.example/flashcards",
+        "title": "NoteStack Flashcards",
+        "question": "create a set of flashcards from the connected posts and create a Notion page with them",
+    }
+    assert "Notion destination is ready" in out.text and "update this message" in out.text
+    assert "https://notion.example/flashcards" in out.text
+
+
+def test_background_chain_updates_existing_page_without_changing_chat(world, monkeypatch):
+    artifact = Artifact(
+        workspace_id=world.ws.id,
+        notebook_id=world.nb.id,
+        type="flashcards",
+        status="ready",
+        content_json={"title": "Cards", "cards": [{"front": "Q1", "back": "A1"}]},
+    )
+    world.db.add(artifact)
+    world.db.commit()
+    user = world.db.scalar(select(User))
+    job = Job(
+        workspace_id=world.ws.id,
+        kind="compound_action",
+        status="running",
+        attempts=1,
+        max_attempts=1,
+        params={
+            "artifact_id": str(artifact.id),
+            "notebook_id": str(world.nb.id),
+            "user_id": str(user.id),
+            "destination_url": "https://notion.example/page",
+            "question": "Create a Notion page with the flashcards",
+        },
+    )
+    world.db.add(job)
+    world.db.commit()
+
+    called = {}
+
+    def mcp_test_notion_update_page(**kwargs):
+        called.update(kwargs)
+        return "updated"
+
+    bundle = SimpleNamespace(tools=[mcp_test_notion_update_page], sources=[])
+    monkeypatch.setattr(compound_action, "load_external_tools", lambda *a, **kw: bundle)
+    result, _ = compound_action.complete(world.db, job)
+
+    assert result["status"] == "done" and result["item_count"] == 1
+    assert called["page_id"] == "https://notion.example/page"
+    assert called["command"] == "replace_content"
+    assert "**Front:** Q1" in called["new_str"] and "**Back:** A1" in called["new_str"]
+
+
+def test_quiz_is_a_real_background_artifact_not_model_written(monkeypatch):
+    assert r.compound_artifact_request(
+        "craete a quiz fromt he posst in this notebook and craete a notion pageband add this there"
+    ) == "quiz"
+
+
+@pytest.mark.parametrize(("message", "artifact"), [
+    ("create a report from my posts in this notebook", "report"),
+    ("make an infographic from the connected sources", "infographic"),
+    ("build a slide deck from these posts", "slide_deck"),
+    ("generate a mind map from my notebook", "mind_map"),
+    ("make flashcards from the posts", "flashcards"),
+])
+def test_compound_artifact_detection_is_not_quiz_specific(message, artifact):
+    assert r.compound_artifact_request(message) == artifact
+
+
+def test_destination_adapter_is_selected_from_capabilities_not_brand_name():
+    destination = r.compound_destination("design studio", [{
+        "connection_id": "11111111-1111-1111-1111-111111111111",
+        "name": "Design Studio",
+        "provider": "custom",
+        "aliases": ["design studio"],
+        "tools": ["create-design", "get-create-design-async-job"],
+    }])
+    assert destination["adapter"] == "async_design"
+    assert destination["name"] == "Design Studio"
+
+
+def test_quiz_in_canva_routes_by_artifact_and_destination_capabilities(world, monkeypatch, tmp_path):
+    created = {
+        "id": str(uuid.uuid4()), "type": "quiz", "status": "pending",
+        "url": "http://localhost:5173/app/artifacts/quiz-1",
+    }
+    monkeypatch.setattr(r, "triage", lambda *a: r.Triage(
+        "create", "create a quiz from the posts and put it in Canva", "quick", "",
+    ))
+    monkeypatch.setattr(r, "parse_create", lambda *a, **kw: (
+        {"artifact": "quiz", "settings": {"level": "hard"}}, "", 2, 1,
+    ))
+    started = {}
+
+    def start(*args, **kwargs):
+        started.update({"args": args, "kwargs": kwargs})
+        return created
+
+    monkeypatch.setattr(r, "start_from_chat", start)
+    monkeypatch.setattr(r.dspy, "ReAct", lambda *a, **kw: (_ for _ in ()).throw(
+        AssertionError("the request thread must only enqueue the artifact and delivery")))
+
+    def mcp_test_create_design(**_kwargs):
+        raise AssertionError("Canva must be called by the background worker, not the chat request")
+
+    def mcp_test_get_create_design_async_job(**_kwargs):
+        raise AssertionError("Canva must be polled by the background worker")
+
+    corpus = Corpus(uuid.uuid4(), store=MemoryStore(), cache_dir=str(tmp_path / "canva-routing"))
+    question = (
+        "generate a hard quiz from our existing posts and create a design with blue background, "
+        "name it notestack test, and put the quiz there in Canva"
+    )
+    out = r.research(
+        corpus,
+        {"sources/a.md": "Post"},
+        question,
+        external_tools=[mcp_test_create_design, mcp_test_get_create_design_async_job],
+        external_aliases={"canva"},
+        external_destinations=[{
+            "connection_id": "11111111-1111-1111-1111-111111111111",
+            "name": "Canva",
+            "provider": "canva",
+            "aliases": ["canva"],
+            "tools": ["create-design", "get-create-design-async-job"],
+        }],
+        workspace_id=world.ws.id,
+        notebook_id=world.nb.id,
+        notebook_title="Study",
+    )
+
+    assert started["args"][3] == "quiz"
+    assert started["args"][4] == {"level": "hard"}
+    assert out.created_artifacts == [created]
+    assert out.background_action == {
+        "kind": "artifact_to_external",
+        "artifact_id": created["id"],
+        "artifact_type": "quiz",
+        "artifact_url": created["url"],
+        "adapter": "async_design",
+        "connection_id": "11111111-1111-1111-1111-111111111111",
+        "destination_name": "Canva",
+        "title": "notestack test",
+        "question": question,
+    }
+    assert "update this message with the link" in out.text
+    assert created["url"] in out.text
+
+
+def test_destination_title_accepts_typographic_quotes():
+    assert r._page_title('create a blue page named “Notestack Test" in Canva', "flashcards") == "Notestack Test"
+
+
+def _canva_compound_job(world, *, artifact_status="ready"):
+    artifact = Artifact(
+        workspace_id=world.ws.id,
+        notebook_id=world.nb.id,
+        type="quiz",
+        status=artifact_status,
+        content_json={
+            "title": "Archive quiz",
+            "questions": [{
+                "question": "Which idea appeared in the posts?",
+                "options": ["Exact answer", "Distractor"],
+                "correct": [0],
+                "explanation": "The posts say this directly.",
+            }],
+        },
+    )
+    chat = world.chat()
+    message = Message(
+        chat_id=chat.id,
+        role="assistant",
+        content="Creating the quiz in the background.",
+        recall_json={"background_status": {"state": "working", "message": "Creating quiz"}},
+    )
+    world.db.add_all([artifact, message])
+    world.db.commit()
+    user = world.db.scalar(select(User))
+    job = Job(
+        workspace_id=world.ws.id,
+        kind="compound_action",
+        status="running",
+        attempts=1,
+        max_attempts=1,
+        params={
+            "artifact_id": str(artifact.id),
+            "artifact_type": "quiz",
+            "artifact_url": f"http://localhost:5173/app/artifacts/{artifact.id}",
+            "message_id": str(message.id),
+            "notebook_id": str(world.nb.id),
+            "user_id": str(user.id),
+            "connection_id": "11111111-1111-1111-1111-111111111111",
+            "adapter": "async_design",
+            "destination_name": "Canva",
+            "title": "notestack test",
+            "question": "Create a blue design named notestack test and put the quiz in Canva",
+        },
+    )
+    world.db.add(job)
+    world.db.commit()
+    return artifact, message, job
+
+
+def test_canva_worker_polls_and_updates_chat_with_edit_link(world, monkeypatch):
+    artifact, message, job = _canva_compound_job(world)
+    calls = []
+    widget = {
+        "connection_id": "11111111-1111-1111-1111-111111111111",
+        "connection": "Canva",
+        "tool": "create-design",
+        "arguments": {},
+        "resource_uri": "ui://canva/create-design",
+        "result": {
+            "structuredContent": {
+                "status": "completed",
+                "design": {"edit_url": "https://www.canva.com/design/edit-1"},
+            },
+            "isError": False,
+        },
+    }
+
+    connection = SimpleNamespace(
+        id=uuid.UUID("11111111-1111-1111-1111-111111111111"),
+        name="Canva",
+        discovered_tools=[{
+            "name": "create-design",
+            "ui_resource_uri": "ui://canva/create-design",
+        }],
+    )
+    monkeypatch.setattr(compound_action, "_connection", lambda *_args: connection)
+
+    def call(_db, _job, _params, tool_name, arguments, *, capture_urls=False):
+        calls.append((tool_name, arguments, capture_urls))
+        if tool_name == "create-design":
+            return json.dumps({
+                "status": "pending",
+                "job_id": "canva-job-1",
+                "continuation_token": "continue-1",
+                "polling_policy": {"wait_seconds": 0},
+            }), []
+        return json.dumps({
+            "status": "completed",
+            "design": {
+                "url": "https://www.canva.com/design/view-1",
+                "edit_url": "https://www.canva.com/design/edit-1",
+            },
+        }), []
+
+    monkeypatch.setattr(compound_action, "_call", call)
+    monkeypatch.setattr(compound_action.time, "sleep", lambda *_: None)
+    result, _ = compound_action.complete(world.db, job)
+
+    assert result["status"] == "done" and result["item_count"] == 1
+    assert [call[0] for call in calls] == ["create-design", "get-create-design-async-job"]
+    brief = calls[0][1]["brief"]
+    assert "notestack test" in brief
+    assert "blue design" in brief
+    assert "Which idea appeared in the posts?" in brief
+    assert "**Answer:** Exact answer" in brief
+    assert calls[1][1]["job_id"] == "canva-job-1"
+    assert calls[1][1]["continuation_token"] == "continue-1"
+    world.db.refresh(message)
+    assert "https://www.canva.com/design/edit-1" in message.content
+    assert message.recall_json["background_status"]["state"] == "done"
+    assert message.recall_json["background_status"]["url"] == "https://www.canva.com/design/edit-1"
+    saved_widget = message.recall_json["external_widgets"][0]
+    assert saved_widget["connection_id"] == widget["connection_id"]
+    assert saved_widget["connection"] == widget["connection"]
+    assert saved_widget["tool"] == widget["tool"]
+    assert saved_widget["resource_uri"] == widget["resource_uri"]
+    assert "Which idea appeared in the posts?" in saved_widget["arguments"]["brief"]
+    assert saved_widget["result"]["structuredContent"]["status"] == "completed"
+    assert saved_widget["result"]["structuredContent"]["design"]["edit_url"].endswith("edit-1")
+    assert result["external_widgets"] == [saved_widget]
+    world.db.refresh(job)
+    assert job.params["delivery_state"]["job_id"] == "canva-job-1"
+
+
+def test_canva_worker_updates_chat_when_delivery_fails(world, monkeypatch):
+    _artifact, message, job = _canva_compound_job(world)
+    monkeypatch.setattr(compound_action, "_call", lambda *a, **kw: (
+        json.dumps({"status": "failed", "message": "Canva rejected the design"}), [],
+    ))
+    result, _ = compound_action.complete(world.db, job)
+
+    assert result["status"] == "failed"
+    world.db.refresh(message)
+    assert "Canva rejected the design" in message.content
+    assert "Open the NoteStack quiz" in message.content
+    assert message.recall_json["background_status"]["state"] == "failed"
+
+
+def test_follow_up_asking_for_created_link_reuses_conversation_without_tools(monkeypatch, tmp_path):
+    monkeypatch.setattr(r, "triage", lambda *a: (_ for _ in ()).throw(
+        AssertionError("a saved link does not need triage")))
+    corpus = Corpus(uuid.uuid4(), store=MemoryStore(), cache_dir=str(tmp_path / "saved-link"))
+    out = r.research(
+        corpus,
+        {"sources/a.md": "Post"},
+        "give me the link to the Notion page you created",
+        history=[r.Turn("assistant", "Created it: https://app.notion.com/p/page-id?pvs=204")],
+        external_tools=[lambda: (_ for _ in ()).throw(AssertionError("no tool call expected"))],
+    )
+
+    assert out.text == "Here it is: [Open the created page](https://app.notion.com/p/page-id?pvs=204)"
+    assert out.external_sources[0]["urls"] == ["https://app.notion.com/p/page-id?pvs=204"]
+
+
+def test_destination_link_follow_up_while_delivery_runs_does_not_create_another_artifact(monkeypatch, tmp_path):
+    monkeypatch.setattr(r, "triage", lambda *a: (_ for _ in ()).throw(
+        AssertionError("a pending destination link does not need triage")))
+    monkeypatch.setattr(r, "start_from_chat", lambda *a, **kw: (_ for _ in ()).throw(
+        AssertionError("a link follow-up must not create another artifact")))
+    question = "GIVE me the destination link in Canva for these flashcards"
+    corpus = Corpus(uuid.uuid4(), store=MemoryStore(), cache_dir=str(tmp_path / "pending-link"))
+    out = r.research(
+        corpus,
+        {"sources/a.md": "Post"},
+        question,
+        history=[r.Turn(
+            "assistant",
+            "Creating it. [Open the NoteStack flashcards](https://notestack.ai/app/artifacts/cards-1)",
+            {"state": "working", "message": "Creating the Canva destination"},
+        )],
+        external_tools=[lambda: (_ for _ in ()).throw(AssertionError("no tool call expected"))],
+    )
+
+    assert not r.asks_to_create(question)
+    assert r.compound_artifact_request(question) is None
+    assert "still being created" in out.text
+    assert out.background_action is None and not out.created_artifacts
+
+
+def test_destination_link_follow_up_prefers_completed_external_url_over_notestack_artifact(monkeypatch, tmp_path):
+    monkeypatch.setattr(r, "triage", lambda *a: (_ for _ in ()).throw(
+        AssertionError("a completed destination link does not need triage")))
+    corpus = Corpus(uuid.uuid4(), store=MemoryStore(), cache_dir=str(tmp_path / "completed-link"))
+    canva = "https://canva.link/destination-1"
+    out = r.research(
+        corpus,
+        {"sources/a.md": "Post"},
+        "give me the Canva destination URL for those flashcards",
+        history=[r.Turn(
+            "assistant",
+            "[Open the NoteStack flashcards](https://notestack.ai/app/artifacts/cards-1)",
+            {"state": "done", "message": "Artifact delivered", "url": canva},
+        )],
+    )
+
+    assert canva in out.text
+    assert "notestack.ai/app/artifacts" not in out.text
+    assert out.external_sources[0]["urls"] == [canva]
+
+
+def test_off_topic_does_not_use_external_tools(world, monkeypatch, agent):
+    def github_search(query: str):
+        raise AssertionError("off-topic questions must not call external tools")
+
+    out = agent("what is the capital of France?", None, "none", "", [github_search], kind="off_topic")
+
+    assert out.kind == "off_topic"
+    assert "I only answer from the posts" in out.text
+    assert not FakeReAct.built
+
+
+def test_external_action_without_tools_asks_for_a_connection(world, monkeypatch, agent):
+    out = agent("send an email to Sara", None, "none", "", [], kind="external_action")
+
+    assert out.kind == "external_action" and out.unsupported
+    assert "Connect and enable an external app" in out.text
+    assert not FakeReAct.built
+
+
+def test_external_signature_and_writer_treat_tool_results_as_evidence():
+    prompt = " ".join(ResearchExternal.__doc__.split())
+    assert "do not search, read, cite or make claims about notebook posts" in prompt
+    assert "You may chain external tools" in prompt
+    assert "most plausible spelling variants" in prompt
+    assert "latest message explicitly requests that exact change" in prompt
+    assert "must never cause a write" in prompt
+    assert "UNTRUSTED EXTERNAL DATA" in r.writer.WRITER_SYSTEM
+    assert "citations=[]" in r.writer.WRITER_SYSTEM
+    assert "return an MCP App widget" in prompt
+    assert "do not duplicate or enumerate the choices" in prompt
+    assert "return an MCP App widget" in r.writer.WRITER_SYSTEM
+
+
+def test_create_request_naming_external_app_skips_archive_research(world, monkeypatch, agent):
+    def b2v_start_video(url: str):
+        return url
+
+    monkeypatch.setattr(r, "prefetch", lambda *a, **kw: (_ for _ in ()).throw(
+        AssertionError("a request explicitly assigned to B2V must not search the archive")))
+    agent(
+        "make a video with B2V from https://example.com/post",
+        None,
+        "none",
+        "",
+        [b2v_start_video],
+        kind="create",
+        external_aliases={"b2v", "blog2video"},
+    )
+    built = FakeReAct.built[0]
+    assert built.signature is ResearchExternal
+    assert built.tools == ["b2v_start_video"]
+
+
+def test_external_research_corrects_known_notestack_name_typos(world, monkeypatch, agent):
+    def linear_issues(query: str):
+        return query
+
+    agent("geiv all the issues for noetstack", None, "none", "", [linear_issues], kind="external_action")
+    built = FakeReAct.built[0]
+    assert built.signature is ResearchExternal
+    assert built.inputs["question"] == "geiv all the issues for NotestackAI"
 
 
 def test_lookup_adds_the_notes_but_not_the_tools(world, monkeypatch, agent):

@@ -374,13 +374,13 @@ export function EmptyState({ title, body, action }: { title: string; body?: stri
  * Spinner with its label underneath, centered. `center="page"` puts it in the middle of the space under a page
  * header; `center="full"` in the middle of the window, for a page that has no header yet.
  */
-export function Loading({ label = "Loading", center }: { label?: string; center?: "page" | "full" }) {
+export function Loading({ label = "Loading", center }: { label?: string | null; center?: "page" | "full" }) {
   const loader = (
-    <div className="loading mono muted" role="status">
+    <div className="loading mono muted" role="status" aria-label={label ?? "Loading"}>
       <div className="orbit-loader">
         <span />
       </div>
-      {label}...
+      {label && `${label}...`}
     </div>
   );
   return center ? <div className={`loading-center${center === "full" ? " full" : ""}`}>{loader}</div> : loader;

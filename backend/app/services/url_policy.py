@@ -42,7 +42,7 @@ GOOGLE_DRIVE_RULE = ("drive.google.com", ["/file/d/", "/drive/", "/open", "/uc"]
 ADULT_KEYWORDS = ["porn", "xxx", "xvideos", "xnxx", "onlyfans", "redtube", "xhamster", "adult", "nsfw", "sex"]
 
 # Might not be readable: allowed with a warning.
-WARN_DOMAINS = ["youtube.com", "youtu.be", "m.youtube.com", "tiktok.com"]
+WARN_DOMAINS = ["youtube.com", "youtu.be", "m.youtube.com", "tiktok.com", "instagram.com"]
 
 BLOCKED_MESSAGE = "This site can't be added as a source."
 SOCIAL_BLOCKED_MESSAGE = "Social media home pages and feeds can't be added. Paste a link to a specific post instead."
@@ -83,7 +83,13 @@ def classify_url(s: str) -> UrlClassification:
         return UrlClassification("blocked", BLOCKED_MESSAGE)
     if any(_matches(host, d) for d in SOCIAL_DOMAINS):
         main = path.rstrip("/")
-        return UrlClassification("blocked", SOCIAL_BLOCKED_MESSAGE) if main == "" or main in SOCIAL_LANDING_PATHS else OK
+        if main == "" or main in SOCIAL_LANDING_PATHS:
+            return UrlClassification("blocked", SOCIAL_BLOCKED_MESSAGE)
+        return (
+            UrlClassification("warn", MAYBE_UNSCRAPABLE_WARNING)
+            if any(_matches(host, d) for d in WARN_DOMAINS)
+            else OK
+        )
     domain, prefixes = GOOGLE_DRIVE_RULE
     if _matches(host, domain) and any(path.startswith(p) for p in prefixes):
         return UrlClassification("warn", GOOGLE_DRIVE_WARNING)

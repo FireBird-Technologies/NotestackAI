@@ -21,8 +21,17 @@ The database is Neon. The frontend is on Cloudflare Pages.
    ```
    Add `RENDER=1` before `update.sh` to also run the video renderer.
 5. **Frontend**: in Cloudflare Pages set `VITE_API_URL=https://api.notestack.ai`, then retry the deployment.
-6. **Google OAuth client**: redirect URI `https://api.notestack.ai/api/auth/google/callback`, JavaScript origin
-   `https://notestackai.pages.dev`.
+6. **Google OAuth client**: add both redirect URIs
+   `https://api.notestack.ai/api/auth/google/callback` and
+   `https://api.notestack.ai/api/outbound-mcp/oauth/callback`, plus JavaScript origin
+   `https://notestackai.pages.dev`. The same `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are used for Google
+   sign-in and external Google Workspace MCP. On that Web application client, select **Use this client for an
+   AI-powered agent** and add both callback URIs.
+7. **Other protected MCP servers**: standards-compatible servers are discovered automatically. If a server supports
+   Client ID Metadata Documents, set `OUTBOUND_MCP_CLIENT_METADATA_URL` to the public URL
+   `https://api.notestack.ai/api/outbound-mcp/oauth/client-metadata`. For a provider requiring pre-registration, set
+   `OUTBOUND_MCP_OAUTH_CLIENTS_JSON` to a JSON list keyed by exact `issuer` and `resource`; see `app/config.py` for the
+   accepted fields. Never key credentials from the server's display name or hostname alone.
 
 ## Sharing the Droplet with other backends (Nginx)
 
