@@ -22,17 +22,18 @@ import {
   reportNotebookLmTransferStatus,
 } from "../lib/notebooklm";
 import { firstNotebookName } from "@notestack/shared/notebook";
-import { classifyUrl } from "@notestack/shared/urlScrapability";
+import { classifyUrl, looksLikeArticle } from "@notestack/shared/urlScrapability";
 import { PENDING_SOURCE_KEY } from "./Landing";
 
 type Step = "connect" | "indexing";
-type Mode = "feed" | "url" | "file" | "notebooklm";
+type Mode = "link" | "file" | "notebooklm";
+/** How a link is brought in: the site's whole feed, or just that one page. */
+type LinkAs = "feed" | "url";
 
 const MODES: { id: Mode; label: string }[] = [
-  { id: "feed", label: "Blog or website" },
-  { id: "notebooklm", label: "Transfer from NotebookLM" },
-  { id: "url", label: "One article" },
+  { id: "link", label: "Link" },
   { id: "file", label: "Upload files" },
+  { id: "notebooklm", label: "Transfer from NotebookLM" },
 ];
 
 const FILE_ACCEPT = ".md,.markdown,.txt,.vtt,.html,.htm,.pdf,text/vtt,text/markdown,text/plain,text/html,application/pdf";
@@ -94,7 +95,9 @@ export default function Welcome() {
   const [searchParams] = useSearchParams();
   const returningFromNotebookLm = searchParams.get("notebooklm") === "import";
   const [step, setStep] = useState<Step>("connect");
-  const [mode, setMode] = useState<Mode>(() => notebookLmGuideWasOpen() ? "notebooklm" : "feed");
+  const [mode, setMode] = useState<Mode>(() => notebookLmGuideWasOpen() ? "notebooklm" : "link");
+  // A blog or a single article is worked out from the link (as on Sources); the hint under the box can switch it.
+  const [override, setOverride] = useState<LinkAs | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [dragging, setDragging] = useState(false);
   const earlierJobs = useRef<string[]>([]);
@@ -135,7 +138,7 @@ export default function Welcome() {
 
   const { check, modal } = useSourceUrlCheck();
 
-  const connect = async (value: string, as: Mode = "feed") => {
+  const connect = async (value: string, as: LinkAs = looksLikeArticle(value) ? "url" : "feed") => {
     if (!value.trim()) return;
     setBusy(true);
     setError(null);
@@ -451,10 +454,12 @@ export default function Welcome() {
   ) : null;
   const first = (user.name ?? user.email).split(/[ @]/)[0];
 
+  const linkAs: LinkAs = override ?? (looksLikeArticle(url) ? "url" : "feed");
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (mode === "file") void upload();
-    else if (mode !== "notebooklm" && await check(url)) void connect(url, mode);
+    else if (mode === "link" && await check(url)) void connect(url, linkAs);
   };
 
   const selectMode = (next: Mode) => {
@@ -467,7 +472,7 @@ export default function Welcome() {
     }
   };
 
-  const setNotebookLmGuide = (open: boolean) => selectMode(open ? "notebooklm" : "feed");
+  const setNotebookLmGuide = (open: boolean) => selectMode(open ? "notebooklm" : "link");
 
   const installNotebookLmExtension = () => {
     setNotebookLmGuide(true);
@@ -542,6 +547,7 @@ export default function Welcome() {
             <Tabs<Mode>
               tabs={MODES}
               value={mode}
+              className="welcome-methods"
               label="Choose how to add your writing"
               onChange={(next) => {
                 selectMode(next);
@@ -593,8 +599,7 @@ export default function Welcome() {
             ) : (
               <>
                 <p className="muted small">
-                  {mode === "feed" && "Substack, Ghost, WordPress, Medium or anything with a feed. We find the feed, pull in your archive and keep it in sync."}
-                  {mode === "url" && "Any single article on the web. Add more later from Sources."}
+                  {mode === "link" && "Substack, Ghost, WordPress, Medium or anything with a feed, or one article. We work out which from the link."}
                   {mode === "file" && `Markdown, text, VTT transcripts, HTML or PDF: drafts, exports and posts that never had a feed. ${fileRoom === null ? "Add as many as you like." : `Your plan has room for ${fileRoom} ${fileRoom === 1 ? "file" : "files"}.`}`}
                 </p>
                 <form onSubmit={submit} className="welcome-form">
@@ -628,13 +633,15 @@ export default function Welcome() {
                     </label>
                   ) : (
                     <input
-                      key={mode}
                       className="input"
                       autoFocus
-                      placeholder={mode === "feed" ? "yourblog.com" : "https://example.com/my-essay"}
+                      placeholder="yourblog.com or an article link"
                       value={url}
-                      onChange={(e) => setUrl(e.target.value)}
-                      aria-label={mode === "feed" ? "Blog, newsletter or site address" : "Article URL"}
+                      onChange={(e) => {
+                        setUrl(e.target.value);
+                        setOverride(null);
+                      }}
+                      aria-label="Blog, newsletter or article link"
                     />
                   )}
                   {mode === "file" && files.length > 0 && (
@@ -648,14 +655,29 @@ export default function Welcome() {
                     </ul>
                   )}
                   <button className="btn btn-primary" disabled={busy || (mode === "file" ? !files.length : !url.trim())}>
-                    {mode === "feed" && (busy ? "Finding your feed..." : "Connect")}
-                    {mode === "url" && (busy ? "Importing..." : "Import")}
+                    {mode === "link" && linkAs === "feed" && (busy ? "Finding your feed..." : "Connect")}
+                    {mode === "link" && linkAs === "url" && (busy ? "Importing..." : "Import article")}
                     {mode === "file" && (busy ? "Uploading..." : files.length === 1 ? "Upload 1 file" : `Upload ${files.length || ""} files`.replace("  ", " "))}
                   </button>
                 </form>
-                {mode !== "file" && <SourceUrlHint url={url} />}
+                {mode === "link" && url.trim() && (
+                  <p className="muted small source-method-help">
+                    {linkAs === "feed" ? (
+                      <>
+                        We will pull in the whole archive and keep it in sync.{" "}
+                        <button type="button" className="link-btn small" onClick={() => setOverride("url")}>Just this one page instead</button>
+                      </>
+                    ) : (
+                      <>
+                        Looks like a single article, so we will import just this page.{" "}
+                        <button type="button" className="link-btn small" onClick={() => setOverride("feed")}>Connect the whole site instead</button>
+                      </>
+                    )}
+                  </p>
+                )}
+                {mode === "link" && <SourceUrlHint url={url} />}
                 {modal}
-                {mode === "feed" && (
+                {mode === "link" && !url.trim() && (
                   <div className="welcome-examples mono muted">
                     Try:{" "}
                     {EXAMPLES.map((ex) => (

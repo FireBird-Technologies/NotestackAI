@@ -5348,6 +5348,28 @@ details.map-legend[open] summary {
   grid-column: 1 / -1;
 }
 
+/* Onboarding on a phone: Link and Upload files side by side, NotebookLM across the row below. */
+@media (max-width: 720px) {
+  .tabs.welcome-methods {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    width: 100%;
+    border-radius: 18px;
+  }
+
+  .tabs.welcome-methods .tab {
+    justify-content: center;
+    padding: 8px 14px;
+    border-radius: 14px;
+    text-align: center;
+  }
+
+  .tabs.welcome-methods .tab:nth-child(3) {
+    grid-column: 1 / -1;
+  }
+}
+
 /* Desktop: all three on one row */
 @media (min-width: 721px) {
   .tabs.source-methods {
