@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { outboundMcpApi } from "../api/endpoints";
-import type { OutboundMcpConnection, OutboundMcpSuggestion, OutboundMcpTool } from "../api/types";
+import { outboundMcpApi } from "@notestack/shared/endpoints";
+import type { OutboundMcpConnection, OutboundMcpSuggestion, OutboundMcpTool } from "@notestack/shared/types";
 import { ConfirmButton, errorMessage, Loading, Modal, Tabs } from "./ui";
 
 type Access = "read" | "write" | "destructive";
