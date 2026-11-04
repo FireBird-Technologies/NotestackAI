@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
-import { resurfaceApi } from "../api/endpoints";
-import type { Job, ResurfaceItem } from "../api/types";
+import { resurfaceApi } from "@notestack/shared/endpoints";
+import type { Job, ResurfaceItem } from "@notestack/shared/types";
 import { Reader } from "../components/Reader";
 import { ScheduleModal } from "../components/ScheduleModal";
 import { errorMessage, formatDate, JobProgress, Loading } from "../components/ui";

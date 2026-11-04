@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { streamSSE } from "../api/stream";
-import type { Job } from "../api/types";
+import { streamSSE } from "@notestack/shared/stream";
+import type { Job } from "@notestack/shared/types";
 
 const TERMINAL = new Set(["done", "failed"]);
 

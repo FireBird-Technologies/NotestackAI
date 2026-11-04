@@ -11,6 +11,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    Text,
     UniqueConstraint,
     Uuid,
     true,
@@ -24,6 +25,7 @@ from app.models.base import IdMixin, TimestampMixin
 class AuthProvider(str, enum.Enum):
     GOOGLE = "google"
     EMAIL = "email"
+    APPLE = "apple"
 
 
 class User(IdMixin, TimestampMixin, Base):
@@ -36,6 +38,9 @@ class User(IdMixin, TimestampMixin, Base):
     avatar_url: Mapped[str | None] = mapped_column(String(1000))
     auth_provider: Mapped[AuthProvider] = mapped_column(Enum(AuthProvider, native_enum=False, length=16))
     google_id: Mapped[str | None] = mapped_column(String(64), unique=True)
+    apple_id: Mapped[str | None] = mapped_column(String(64), unique=True)
+    # Apple's refresh token for this account (encrypted), revoked when the account is deleted (App Store 5.1.1(v)).
+    apple_refresh_token: Mapped[str | None] = mapped_column(Text)
     password_hash: Mapped[str | None] = mapped_column(String(200))
     token_version: Mapped[int] = mapped_column(Integer, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

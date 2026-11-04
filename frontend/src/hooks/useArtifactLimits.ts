@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { settingsApi } from "../api/endpoints";
+import { settingsApi } from "@notestack/shared/endpoints";
 
 /** Posts a report or infographic reads, and a dialog ticks to start with (the server's ARTIFACT_MAX_POSTS; this is the default until it
  * answers). A quiz or flashcard set can pick as many as the plan indexes (`selectable`). */

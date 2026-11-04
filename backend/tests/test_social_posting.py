@@ -772,3 +772,49 @@ def test_linkedin_callback_redirect_fits_proxy_header_buffer(client, auth, ws, m
     ticket = parse_qs(urlparse(r.headers["location"]).query)["link"][0]
     r = client.post("/api/social/complete", json={"ticket": ticket}, headers=auth)
     assert r.status_code == 200 and any(a["handle"] == "Ada Lovelace" for a in r.json()["accounts"])
+
+
+def test_linkedin_connect_from_the_app_returns_to_the_app(client, auth, ws, monkeypatch):
+    from urllib.parse import parse_qs, urlparse
+
+    from app.services.social import linkedin
+
+    # The app starts the flow with client=app; the signed state remembers it and the callback answers the app's address.
+    monkeypatch.setattr(linkedin, "configured", lambda: True)
+    monkeypatch.setattr(linkedin, "authorize_url", lambda state: f"https://www.linkedin.com/oauth?state={state}")
+    monkeypatch.setattr(linkedin, "exchange_code", lambda code: {
+        "access_token": "a", "expires_in": 5183999, "scope": "w_member_social", "external_id": "li8", "handle": "Grace Hopper"})
+    r = client.post("/api/social/linkedin/start", params={"client": "app"}, headers=auth)
+    assert r.status_code == 200
+    state = parse_qs(urlparse(r.json()["url"]).query)["state"][0]
+
+    r = client.get("/api/social/linkedin/callback", params={"code": "c", "state": state}, follow_redirects=False)
+    location = r.headers["location"]
+    assert r.status_code == 302 and location.startswith("notestack://launchpad?")
+    ticket = parse_qs(urlparse(location).query)["link"][0]
+    r = client.post("/api/social/complete", json={"ticket": ticket}, headers=auth)
+    assert r.status_code == 200 and any(a["handle"] == "Grace Hopper" for a in r.json()["accounts"])
+
+
+def test_linkedin_connect_from_the_web_still_returns_to_the_web(client, auth, ws, monkeypatch):
+    from urllib.parse import parse_qs, urlparse
+
+    from app.config import settings
+    from app.services.social import linkedin
+
+    monkeypatch.setattr(linkedin, "configured", lambda: True)
+    monkeypatch.setattr(linkedin, "authorize_url", lambda state: f"https://www.linkedin.com/oauth?state={state}")
+    monkeypatch.setattr(linkedin, "exchange_code", lambda code: {"access_token": "a", "external_id": "li9", "handle": "Ada"})
+    r = client.post("/api/social/linkedin/start", headers=auth)
+    state = parse_qs(urlparse(r.json()["url"]).query)["state"][0]
+    r = client.get("/api/social/linkedin/callback", params={"code": "c", "state": state}, follow_redirects=False)
+    assert r.headers["location"].startswith(f"{settings.frontend_url.rstrip('/')}/app/launchpad?")
+
+
+def test_linkedin_cancel_in_the_app_returns_to_the_app(client, ws):
+    from app.auth import encode_signed
+
+    state = encode_signed({"typ": "social_state", "nonce": "n", "ws": str(ws.id), "platform": "linkedin", "client": "app"},
+                          timedelta(minutes=5))
+    r = client.get("/api/social/linkedin/callback", params={"error": "user_cancelled", "state": state}, follow_redirects=False)
+    assert r.status_code == 302 and r.headers["location"].startswith("notestack://launchpad?error=")

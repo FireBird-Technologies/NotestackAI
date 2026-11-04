@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import type { ChatSummary, Doc, NotebookSummary } from "../../api/types";
+import type { ChatSummary, Doc, NotebookSummary } from "@notestack/shared/types";
 import { DocPicker } from "../DocPicker";
 import { Dropdown } from "../Dropdown";
 import { SourcesMenu } from "./PostsMenu";

@@ -393,6 +393,9 @@ def import_upload(body: UploadImportIn, ctx: Ctx = Depends(get_ctx)):
     upload = ctx.db.scalar(select(Upload).where(Upload.id == body.upload_id, Upload.workspace_id == ctx.workspace.id))
     if not upload or upload.status != "complete":
         raise HTTPException(404, "Upload not found or not finished")
+    if (upload.size_bytes or 0) > settings.max_source_file_bytes:
+        storage.delete(upload.key)
+        raise HTTPException(413, f"Files can be up to {settings.max_source_file_bytes // (1024 * 1024)} MB.")
     _require_room(ctx)
     source = imports_source(ctx.db, ctx.workspace.id)
     ctx.db.commit()

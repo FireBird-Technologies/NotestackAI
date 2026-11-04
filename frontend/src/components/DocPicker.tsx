@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { docsApi } from "../api/endpoints";
-import type { Doc } from "../api/types";
+import { docsApi } from "@notestack/shared/endpoints";
+import type { Doc } from "@notestack/shared/types";
 import { formatDate, Loading } from "./ui";
 
 /** Searchable checklist of posts. `single` turns it into a radio list. Pass `docs` to pick from those (a notebook's
@@ -38,7 +38,8 @@ export function DocPicker({
     const skip = new Set(exclude);
     const needle = q.trim().toLowerCase();
     return [...(docs ?? [])]
-      .sort((a, b) => (Date.parse(b.added_at ?? "") || 0) - (Date.parse(a.added_at ?? "") || 0))
+      // Indexed posts first (the ones that can be picked), each group newest first.
+      .sort((a, b) => Number(!!a.locked) - Number(!!b.locked) || (Date.parse(b.added_at ?? "") || 0) - (Date.parse(a.added_at ?? "") || 0))
       .filter((d) => !skip.has(d.id)
         && (!needle || d.title.toLowerCase().includes(needle) || (d.source_title ?? "").toLowerCase().includes(needle)));
   }, [docs, q, exclude]);

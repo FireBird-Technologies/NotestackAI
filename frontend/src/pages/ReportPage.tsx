@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { artifactsApi, notebooksApi, reportsApi } from "../api/endpoints";
-import type { Artifact, Citation, ReportSuggestion } from "../api/types";
+import { artifactsApi, notebooksApi, reportsApi } from "@notestack/shared/endpoints";
+import type { Artifact, Citation, ReportSuggestion } from "@notestack/shared/types";
 import { CardFeedback } from "../components/CardFeedback";
 import { ReportAddDialog } from "../components/ReportAddDialog";
 import { ShareDialog } from "../components/ShareDialog";

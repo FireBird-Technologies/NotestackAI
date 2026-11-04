@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { videoStylesApi } from "../../api/endpoints";
-import type { VideoStyleItem } from "../../api/types";
+import { videoStylesApi } from "@notestack/shared/endpoints";
+import type { VideoStyleItem } from "@notestack/shared/types";
 import { errorMessage, Modal } from "../ui";
 
 /** A custom video style: guidance for how the script is written. Draft it with AI from a description, or write it.

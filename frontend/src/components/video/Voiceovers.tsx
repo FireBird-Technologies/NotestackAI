@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { VideoScene } from "../../api/types";
+import type { VideoScene } from "@notestack/shared/types";
 import type { PanelProps } from "./EditorPanels";
 
 const GROUP = 5;

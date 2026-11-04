@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { mcpApi } from "../api/endpoints";
-import type { McpGrant } from "../api/types";
+import { mcpApi } from "@notestack/shared/endpoints";
+import type { McpGrant } from "@notestack/shared/types";
 import { ConfirmButton, errorMessage } from "./ui";
 
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "never");

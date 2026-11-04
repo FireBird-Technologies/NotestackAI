@@ -1,0 +1,10 @@
+{
+  "name": "@notestack/shared",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "API client and types shared by the Notestack web and mobile apps",
+  "exports": {
+    "./*": "./src/*.ts"
+  }
+}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { docsApi, notebooksApi } from "../api/endpoints";
-import type { Doc } from "../api/types";
+import { docsApi, notebooksApi } from "@notestack/shared/endpoints";
+import type { Doc } from "@notestack/shared/types";
 import { errorMessage, formatDate, Loading, Modal } from "./ui";
 
 /** A notebook's posts in two tabbed lists: those in it (× removes one, after a warning) and the rest of the library (Add puts

@@ -48,6 +48,8 @@ def validate_password(password: str) -> None:
 def wrong_provider_error(user: User) -> IdentityError:
     if user.auth_provider == AuthProvider.GOOGLE:
         return IdentityError("wrong_provider", "This email uses Google sign in. Continue with Google.", 409)
+    if user.auth_provider == AuthProvider.APPLE:
+        return IdentityError("wrong_provider", "This email uses Apple sign in. Continue with Apple.", 409)
     return IdentityError("wrong_provider", "This email uses a password. Sign in with email instead.", 409)
 
 
@@ -86,6 +88,34 @@ def resolve_or_create_google_user(
     user = User(
         email=email, name=name, avatar_url=avatar_url, auth_provider=AuthProvider.GOOGLE, google_id=google_id
     )
+    db.add(user)
+    db.flush()
+    _bootstrap_workspace(db, user)
+    return Resolved(user, True)
+
+
+def resolve_or_create_apple_user(db: Session, *, apple_id: str, email: str | None, name: str | None) -> Resolved:
+    """Sign in with Apple. Apple sends the email (and the name, on the device) only the first time: later sign ins are
+    found by Apple's id alone. One provider per account: an email that already signs in another way is refused."""
+    user = db.scalar(select(User).where(User.apple_id == apple_id))
+    if not user and email:
+        user = find_user(db, email)
+    if user:
+        _ensure_active(user)
+        if user.auth_provider != AuthProvider.APPLE:
+            raise wrong_provider_error(user)
+        user.apple_id = user.apple_id or apple_id
+        user.name = user.name or name
+        return Resolved(user, False)
+    if not email:
+        # A first sign in always carries the email; without one there is no account to make (Apple was told to
+        # forget us, or the token is not the first one): starting over in Settings → Apple ID fixes it.
+        raise IdentityError(
+            "apple_no_email",
+            "Apple didn't share an email for this account. In your iPhone's Settings, remove Notestack from Sign in with Apple, then try again.",
+            400,
+        )
+    user = User(email=normalize_email(email), name=name, auth_provider=AuthProvider.APPLE, apple_id=apple_id)
     db.add(user)
     db.flush()
     _bootstrap_workspace(db, user)

@@ -1,12 +1,13 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { artifactsApi, notebooksApi } from "../api/endpoints";
-import { ApiError } from "../api/client";
-import { streamSSE } from "../api/stream";
+import { artifactsApi, notebooksApi } from "@notestack/shared/endpoints";
+import { ApiError } from "@notestack/shared/client";
+import { groupChats, STARTERS } from "@notestack/shared/notebook";
+import { streamSSE } from "@notestack/shared/stream";
 import { createTypewriter } from "../lib/typewriter";
 import { NOTEBOOKLM_PANEL_OPENED_AT_MARKER, NOTEBOOKLM_PANEL_OPENED_EVENT } from "../lib/notebooklm";
-import type { AnswerFeedback as Feedback, Artifact, BackgroundStatus, ChatAction, ChatArtifact, ChatMessage, ChatPreset, ChatSummary, Citation, ExternalSource, ExternalWidget, Job, MemoryChange, Notebook } from "../api/types";
+import type { AnswerFeedback as Feedback, Artifact, BackgroundStatus, ChatAction, ChatArtifact, ChatMessage, ChatPreset, ChatSummary, Citation, ExternalSource, ExternalWidget, Job, MemoryChange, Notebook } from "@notestack/shared/types";
 import { AnswerFeedback } from "../components/AnswerFeedback";
 import { ArtifactCard, CitationList } from "../components/ArtifactCard";
 import ConnectorModal from "../components/ConnectorModal";
@@ -85,24 +86,6 @@ const ARTIFACT_ICONS: Record<ChatArtifact, typeof VideoIcon> = {
 };
 
 
-/** Chats under date headings: Today, Yesterday, the last week, the last month, then by month. Newest first. */
-function groupChats(chats: ChatSummary[]): { label: string; items: ChatSummary[] }[] {
-  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-  const today = startOfDay(new Date());
-  const groups: { label: string; items: ChatSummary[] }[] = [];
-  const stamp = (c: ChatSummary) => (c.updated_at ? new Date(c.updated_at) : new Date()); // a chat with no time yet is brand new
-  [...chats].sort((a, b) => +stamp(b) - +stamp(a)).forEach((c) => {
-    const when = stamp(c);
-    const days = Math.round((today - startOfDay(when)) / 86400000);
-    const label = days <= 0 ? "Today" : days === 1 ? "Yesterday" : days <= 7 ? "Previous 7 days" : days <= 30 ? "Previous 30 days"
-      : when.toLocaleDateString(undefined, { month: "long", year: "numeric" });
-    const last = groups[groups.length - 1];
-    if (last && last.label === label) last.items.push(c);
-    else groups.push({ label, items: [c] });
-  });
-  return groups;
-}
-
 /** A streaming draft as shown: [n] markers (and a half-written "[12" at the end) are hidden until they are verified. */
 function streamingText(draft: string): string {
   return draft.replace(/ ?\[\d+\]/g, "").replace(/ ?\[\d*$/, "");
@@ -118,7 +101,6 @@ function researchStepsLabel(turn: Turn): string {
   return `Researching the archive · ${countLabel}`;
 }
 
-const STARTERS = ["What are the strongest ideas across these posts?", "Where do I contradict myself?", "Which post is most worth updating, and why?"];
 const ExternalMcpApp = lazy(() => import("../components/ExternalMcpApp").then((module) => ({
   default: module.ExternalMcpApp,
 })));
@@ -375,7 +357,7 @@ function StudioPanel({ notebookId, docs, chats, currentChatId, disabled, onNeedP
       {error && <p className="error-text">{error}</p>}
       {showMade && (!others || others.length > 0 || starting.length > 0) && <span className="vw-label nbv-made-label">Made from this notebook</span>}
       {section === "library" && others?.length === 0 && starting.length === 0 && (
-        <p className="muted small">Nothing made yet. Use the Create tab to make audio, slides, videos and more.</p>
+        <p className="muted small nbv-library-empty">Nothing made yet. Use the Create tab to make audio, slides, videos and more.</p>
       )}
       {showMade && (!others || others.length > 0 || starting.length > 0) && <div className="studio-list nbv-made">
         {!artifacts && <Loading />}
@@ -1254,6 +1236,7 @@ export default function NotebookView() {
           onSubmit={(e: FormEvent) => {
             e.preventDefault();
             if (outOfChat) openChatLimit(); // Enter or the send button once the free questions are used
+            else if (!nb.documents.length) setAdding(true); // nothing to ask yet: connect a source first
             else void ask(q);
           }}
           className="inline-form nbv-ask"
@@ -1262,10 +1245,10 @@ export default function NotebookView() {
             className="input"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            // Out of free questions the field stays clickable (read only, not disabled, which would swallow the click)
-            // and opens the upgrade popup instead of taking text.
-            readOnly={outOfChat}
-            onClick={outOfChat ? openChatLimit : undefined}
+            // Out of free questions, or with no posts yet, the field stays clickable (read only, not disabled, which
+            // would swallow the click): it opens the upgrade popup, or the Connect a source modal, instead of taking text.
+            readOnly={outOfChat || !nb.documents.length}
+            onClick={outOfChat ? openChatLimit : !nb.documents.length ? () => setAdding(true) : undefined}
             placeholder={
               outOfChat
                 ? "You have used all your free chat messages"
@@ -1274,7 +1257,7 @@ export default function NotebookView() {
                   : "Add posts to start asking"
             }
             aria-label="Ask your notebook"
-            disabled={!nb.documents.length || Boolean(loadingChatId)}
+            disabled={Boolean(loadingChatId)}
           />
           <button
             className="btn btn-primary nbv-send"

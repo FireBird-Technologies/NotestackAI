@@ -1,7 +1,8 @@
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { artifactsApi, videosApi } from "../api/endpoints";
-import type { Artifact, Citation, Segment } from "../api/types";
+import { artifactsApi, videosApi } from "@notestack/shared/endpoints";
+import type { Artifact, Citation, Segment } from "@notestack/shared/types";
+import { citedLines, groupCitations } from "@notestack/shared/citations";
 import { useJob } from "../hooks/useJob";
 import { Markdown } from "./Markdown";
 import { MindMapExplorer } from "./MindMap";
@@ -28,14 +29,8 @@ export function CitationList({
 }) {
   if (!citations.length) return null;
   // The same source is listed once: its title, then one clickable number for each place it was cited.
-  const groups: { key: string; title: string; cites: Citation[] }[] = [];
-  for (const c of [...citations].sort((x, y) => x.marker - y.marker)) {
-    const key = c.document_id || c.path || c.title;
-    const group = groups.find((g) => g.key === key);
-    if (group) group.cites.push(c);
-    else groups.push({ key, title: c.title, cites: [c] });
-  }
-  const lines = (c: Citation) => `lines ${c.line_start}${c.line_end > c.line_start ? ` to ${c.line_end}` : ""}`;
+  const groups = groupCitations(citations);
+  const lines = citedLines;
   const list = (
     <ul className="cites cites-grouped">
       {groups.map((g) => (

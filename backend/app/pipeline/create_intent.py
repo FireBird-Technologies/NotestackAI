@@ -125,6 +125,11 @@ def _video_template(value: str) -> dict | None:
     for t in templates:
         if name(t) == want or str(t["id"]).lower() == want.replace(" ", "_"):
             return t
+    # Written as one word or with other spacing ("stickman" is Stick Man): the name without spaces or punctuation.
+    squash = lambda s: re.sub(r"[^a-z0-9]", "", s)  # noqa: E731
+    for t in templates:
+        if squash(name(t)) == squash(want):
+            return t
     for t in templates:
         if words <= set(_WORD.findall(name(t))) | {str(t["id"]).lower()}:
             return t

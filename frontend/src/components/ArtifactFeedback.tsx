@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { artifactsApi } from "../api/endpoints";
-import type { AnswerFeedback as Feedback, Artifact } from "../api/types";
+import { artifactsApi } from "@notestack/shared/endpoints";
+import type { AnswerFeedback as Feedback, Artifact } from "@notestack/shared/types";
 import { Thumb } from "./AnswerFeedback";
 import { errorMessage } from "./ui";
 
