@@ -1,7 +1,7 @@
 """Read-only outbound MCP connections and call audit log.
 
 Revision ID: 0033_outbound_mcp
-Revises: 0032_plan_chat_messages
+Revises: 0034_starter_annual_price
 Create Date: 2026-10-26
 """
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0033_outbound_mcp"
-down_revision = "0032_plan_chat_messages"
+down_revision = "0034_starter_annual_price"
 branch_labels = None
 depends_on = None
 
