@@ -417,7 +417,7 @@ function AddVoices({ state, onSaved, onClone }: { state: VoiceState; onSaved: ()
           </>
         ) : (
           <View style={styles.notice}>
-            <Text style={styles.noticeTitle}>Voice cloning is on the Writer and Studio plans</Text>
+            <Text style={styles.noticeTitle}>Voice cloning is not available on this plan</Text>
             <Text style={pageStyles.body}>Record a couple of minutes and every audio overview is narrated by you.</Text>
           </View>
         )

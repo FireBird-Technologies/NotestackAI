@@ -35,16 +35,20 @@ export function forgetCustomer() {
   Purchases.logOut().catch(() => undefined);
 }
 
-export type PlanPackages = Partial<Record<`${"writer" | "studio"}_${Cycle}`, PurchasesPackage>>;
+const STORE_PLANS = ["starter", "writer", "studio"] as const;
+export type StorePlan = (typeof STORE_PLANS)[number];
+export type PlanPackages = Partial<Record<`${StorePlan}_${Cycle}`, PurchasesPackage>>;
 
-/** The plans for sale, by plan and cycle (the "default" offering's packages: writer_monthly, studio_annual, ...). */
+export const isStorePlan = (id: string): id is StorePlan => (STORE_PLANS as readonly string[]).includes(id);
+
+/** The plans for sale, by plan and cycle (the "default" offering's packages: starter_monthly, studio_annual, ...). */
 export async function getPackages(): Promise<PlanPackages> {
   const offerings = await Purchases.getOfferings();
   const offering = offerings.current ?? offerings.all.default;
   const out: PlanPackages = {};
   for (const pkg of offering?.availablePackages ?? []) {
     const key = pkg.identifier.toLowerCase();
-    for (const plan of ["writer", "studio"] as const) {
+    for (const plan of STORE_PLANS) {
       for (const cycle of ["monthly", "annual"] as const) {
         if (key === `${plan}_${cycle}` || (key.includes(plan) && key.includes(cycle === "annual" ? "annual" : "month"))) {
           out[`${plan}_${cycle}`] = pkg;
