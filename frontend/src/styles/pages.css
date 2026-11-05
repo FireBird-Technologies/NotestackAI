@@ -14011,6 +14011,11 @@ body.nbv-resizing iframe {
 .mcp-switch.disabled { opacity: .5; cursor: not-allowed; }
 
 .mcp-add-form { gap: 16px; }
+.mcp-provider-picker > p { margin: 0; }
+.mcp-provider-apps { display: grid; gap: 10px; }
+.mcp-provider-app { display: flex; align-items: center; gap: 12px; padding: 13px 14px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); }
+.mcp-provider-app.is-connected { border-color: var(--blue-60); background: var(--blue-05); }
+.mcp-provider-app .btn { flex: none; min-width: 86px; }
 .mcp-advanced summary { cursor: pointer; color: var(--text-2); font-size: .88rem; margin-bottom: 10px; }
 .mcp-dialog-footer { display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding-top: 14px; border-top: 1px solid var(--line); }
 .mcp-tools-footer { justify-content: space-between; }
@@ -14067,6 +14072,7 @@ body.nbv-resizing iframe {
 .mcp-suggestion { display: flex; align-items: center; gap: 12px; padding: 12px 14px; text-align: left; color: inherit; cursor: pointer; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); transition: border-color .14s, background .14s; }
 .mcp-suggestion:hover { border-color: var(--blue-60); background: var(--blue-05); }
 .mcp-suggestion.is-connected { cursor: default; border-color: var(--blue-60); background: var(--blue-05); opacity: 1; }
+.mcp-suggestion.is-manageable { cursor: pointer; }
 .mcp-suggestion-copy { min-width: 0; flex: 1; display: grid; gap: 2px; }
 .mcp-suggestion-copy .small { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; line-height: 1.35; }
 .mcp-suggestion-go { flex: none; color: var(--blue); font-size: .82rem; font-weight: 600; opacity: 0; transition: opacity .14s; }

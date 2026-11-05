@@ -152,15 +152,25 @@ export type OutboundMcpSuggestion = {
   description: string;
   server_url: string;
   icon_url: string;
+  provider?: "composio";
+  app_slug?: "gmail" | "outlook";
+  /** Apps offered inside a managed provider picker. */
+  apps?: {
+    app_slug: "gmail" | "outlook";
+    name: string;
+    description: string;
+  }[];
 };
 
 export type OutboundMcpConnection = {
   id: string;
   name: string;
   server_url: string;
-  auth_type: "none" | "bearer" | "oauth";
+  auth_type: "none" | "bearer" | "oauth" | "managed";
   has_token: boolean;
   provider: string | null;
+  /** Provider-specific app key for managed gateways, e.g. gmail or outlook. */
+  external_app: string | null;
   /** Logo fetched when the server was connected, as a data: URI. */
   icon_url: string | null;
   auth_status: "not_required" | "authorization_required" | "ready" | "reconnect_required" | "configuration_error";

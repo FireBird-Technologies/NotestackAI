@@ -214,6 +214,11 @@ class Settings(BaseSettings):
     #   "client_secret":"...","default_scopes":["read"],"authorization_params":{"audience":"..."}}]
     outbound_mcp_oauth_clients_json: str = ""
 
+    # Composio: managed per-user OAuth plus user-scoped Gmail/Outlook MCP sessions. The project API key must stay on
+    # the backend. End users only receive a short-lived hosted authorization link.
+    composio_api_key: str = ""
+    composio_mcp_url: str = "https://connect.composio.dev/mcp"  # display/catalog URL; runtime session URLs are scoped
+
     # Billing (Stripe). With BILLING_ENABLED=false everyone gets Studio limits and checkout is off.
     billing_enabled: bool = False
     stripe_secret_key: str = Field(

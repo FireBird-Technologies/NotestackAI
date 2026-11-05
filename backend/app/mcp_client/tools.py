@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db import SessionLocal
+from app.mcp_client import composio
 from app.mcp_client.manager import OutboundMcpError, OutboundToolResult, manager, tool_is_usable
 from app.mcp_client.oauth import access_token_for, mark_unauthorized
 from app.models import NotebookMcpConnection, OutboundMcpAudit, OutboundMcpConnection
@@ -295,7 +296,8 @@ def widget_is_displayable(raw_result: dict | None, *, tool_name: str = "", serve
 
 def _make_invoke(bundle: ExternalToolBundle, workspace_id: uuid.UUID, user_id: uuid.UUID, remote: str,
                  connection_id: uuid.UUID, connection_name: str, server_url: str, auth_type: str,
-                 manual_bearer: str | None, capture_resource_urls: bool = False):
+                 manual_bearer: str | None, provider: str | None = None, external_app: str | None = None,
+                 capture_resource_urls: bool = False):
     def call_remote(**kwargs: Any) -> str:
         started = time.perf_counter()
         source_name = f"{connection_name} / {remote}"
@@ -311,27 +313,41 @@ def _make_invoke(bundle: ExternalToolBundle, workspace_id: uuid.UUID, user_id: u
         tool_flow_log.info("MCP CALL START %s connection=%r tool=%r auth=%s args=%s", trace_id, connection_name,
                            remote, auth_type, argument_summary)
         try:
-            bearer = (access_token_for(connection_id, workspace_id, user_id)
-                      if auth_type == "oauth" else manual_bearer)
+            headers = None
+            call_url = server_url
+            if provider == composio.MCP_PROVIDER:
+                bearer = None
+                call_url, headers = composio.mcp_session(
+                    workspace_id, user_id, external_app or "", tool_names=[remote],
+                )
+            else:
+                bearer = (access_token_for(connection_id, workspace_id, user_id)
+                          if auth_type == "oauth" else manual_bearer)
             try:
-                result = manager.call(server_url, bearer, remote, kwargs)
+                result = (manager.call(call_url, bearer, remote, kwargs, headers=headers) if headers
+                          else manager.call(call_url, bearer, remote, kwargs))
             except OutboundMcpError as exc:
+                if exc.status_code == 401 and provider == composio.MCP_PROVIDER:
+                    mark_unauthorized(connection_id, workspace_id, user_id)
+                    raise
                 if exc.status_code == 401 and auth_type != "oauth":
                     mark_unauthorized(connection_id, workspace_id, user_id)
-                if auth_type != "oauth" or exc.status_code != 401:
                     raise
-                # A resource server can reject a token before its advertised expiry. Refresh once, then require a
-                # deliberate reconnect instead of looping or silently falling back to archive-only research.
-                _trace_step("external_retry", f"{source_name}: 401 -> refresh OAuth token and retry once")
-                tool_flow_log.info("MCP CALL RETRY %s connection=%r tool=%r reason=401 oauth_refresh=true",
-                                   trace_id, connection_name, remote)
-                bearer = access_token_for(connection_id, workspace_id, user_id, force_refresh=True)
-                try:
-                    result = manager.call(server_url, bearer, remote, kwargs)
-                except OutboundMcpError as retry_exc:
-                    if retry_exc.status_code == 401:
-                        mark_unauthorized(connection_id, workspace_id, user_id)
+                elif auth_type != "oauth" or exc.status_code != 401:
                     raise
+                else:
+                    # A resource server can reject a token before its advertised expiry. Refresh once, then require a
+                    # deliberate reconnect instead of looping or silently falling back to archive-only research.
+                    _trace_step("external_retry", f"{source_name}: 401 -> refresh OAuth token and retry once")
+                    tool_flow_log.info("MCP CALL RETRY %s connection=%r tool=%r reason=401 oauth_refresh=true",
+                                       trace_id, connection_name, remote)
+                    bearer = access_token_for(connection_id, workspace_id, user_id, force_refresh=True)
+                    try:
+                        result = manager.call(server_url, bearer, remote, kwargs)
+                    except OutboundMcpError as retry_exc:
+                        if retry_exc.status_code == 401:
+                            mark_unauthorized(connection_id, workspace_id, user_id)
+                        raise
         except Exception as exc:
             message = " ".join(str(exc).split())[:500] or type(exc).__name__
             _audit(connection_id, workspace_id, user_id, remote, kwargs, started, error=message)
@@ -404,6 +420,8 @@ def invoke_connection_tool_with_widgets(
         connection.server_url,
         connection.auth_type,
         decrypt(connection.access_token_encrypted),
+        connection.provider,
+        connection.canonical_resource,
         capture_resource_urls=capture_resource_urls,
     )
     wrapped = invoke(**arguments)
@@ -466,6 +484,8 @@ def load_external_tools(workspace_id: uuid.UUID, user_id: uuid.UUID, db: Session
         configs = [{
             "id": row.id, "name": row.name, "url": row.server_url, "auth_type": row.auth_type,
             "provider": _provider_key(row.provider or row.name),
+            "connection_provider": row.provider,
+            "external_app": row.canonical_resource,
             "aliases": _aliases(row.name, row.server_url),
             "token": decrypt(row.access_token_encrypted),
             "enabled": set(row.enabled_tools or []), "discovered": list(row.discovered_tools or []),
@@ -505,7 +525,8 @@ def load_external_tools(workspace_id: uuid.UUID, user_id: uuid.UUID, db: Session
 
             invoke = _make_invoke(
                 bundle, workspace_id, user_id, remote_name, connection_id, connection_name, url,
-                config["auth_type"], token, capture_resource_urls=not meta.get("read_only", False)
+                config["auth_type"], token, config["connection_provider"], config["external_app"],
+                capture_resource_urls=not meta.get("read_only", False)
             )
 
             capability = "Read-only" if meta.get("read_only") else "Destructive write" if meta.get("destructive") else "Write-capable"

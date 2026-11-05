@@ -1,6 +1,7 @@
 """Outbound MCP is user-scoped, encrypted, bounded, and usable by the research agent."""
 
 import json
+import uuid
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
@@ -917,11 +918,85 @@ def test_catalog_hides_slack_and_canva(client, auth, monkeypatch):
     monkeypatch.setattr("app.mcp_client.catalog.fetch_server_icon", lambda url: None)
     monkeypatch.setattr("app.routers.outbound_mcp.manager.discover", lambda url, token=None: TOOLS)
     entries = client.get("/api/outbound-mcp/catalog", headers=auth).json()
-    assert [entry["name"] for entry in entries] == ["B2V", "Notion", "Zapier"]
+    assert [entry["name"] for entry in entries] == ["B2V", "Notion", "Zapier", "Composio"]
     notion = next(e for e in entries if e["name"] == "Notion")
     assert notion["icon_url"].startswith("data:image/svg+xml") and notion["server_url"].startswith("https://")
+    composio_entry = next(e for e in entries if e["name"] == "Composio")
+    assert composio_entry["provider"] == "composio"
+    assert [app["app_slug"] for app in composio_entry["apps"]] == ["gmail", "outlook"]
     client.post("/api/outbound-mcp/connections", headers=auth, json={"name": "Notion", "server_url": notion["server_url"]})
     assert "Notion" in [e["name"] for e in client.get("/api/outbound-mcp/catalog", headers=auth).json()]
+
+
+def test_composio_connect_lifecycle_is_user_scoped(client, auth, db_session, monkeypatch):
+    links: list[dict] = []
+    headers_seen: list[dict] = []
+    session_tools: list[list[str] | None] = []
+    disconnected: list[tuple] = []
+
+    def connect_link(workspace_id, user_id, app_slug, **redirects):
+        links.append({"workspace": workspace_id, "user": user_id, "app": app_slug, **redirects})
+        return "https://connect.composio.dev/link/ln_test"
+
+    def active_account(_workspace_id, _user_id, _app_slug):
+        return SimpleNamespace(id="ca_test", alias="writer@example.com", state={})
+
+    def managed_session(_workspace_id, _user_id, _app_slug, **_kwargs):
+        session_tools.append(_kwargs.get("tool_names"))
+        return "https://backend.composio.dev/mcp/session_test", {"x-api-key": "session-token"}
+
+    def discover(url, token=None, *, headers=None):
+        assert url == "https://backend.composio.dev/mcp/session_test" and token is None
+        headers_seen.append(headers)
+        return TOOLS
+
+    monkeypatch.setattr("app.routers.outbound_mcp.composio.connect_link", connect_link)
+    monkeypatch.setattr("app.routers.outbound_mcp.composio.active_account", active_account)
+    monkeypatch.setattr("app.routers.outbound_mcp.composio.mcp_session", managed_session)
+    monkeypatch.setattr("app.routers.outbound_mcp.manager.discover", discover)
+
+    started = client.post("/api/outbound-mcp/composio/start", headers=auth, json={"app_slug": "gmail"})
+    assert started.status_code == 200, started.text
+    connection = started.json()["connection"]
+    assert connection["provider"] == "composio" and connection["external_app"] == "gmail"
+    assert connection["auth_type"] == "managed" and connection["auth_status"] == "authorization_required"
+    assert started.json()["authorization_url"] == "https://connect.composio.dev/link/ln_test"
+    assert links[0]["callback_url"].endswith(
+        f"mcp_composio=connected&connection_id={connection['id']}"
+    )
+
+    completed = client.post(
+        f"/api/outbound-mcp/connections/{connection['id']}/composio/complete", headers=auth,
+    )
+    assert completed.status_code == 200, completed.text
+    assert completed.json()["status"] == "ready" and completed.json()["has_token"] is True
+    assert completed.json()["enabled_tools"] == ["search_issues"]
+    assert headers_seen[0]["x-api-key"] == "session-token"
+    assert links[0]["workspace"] != links[0]["user"]
+
+    calls: list[tuple] = []
+    monkeypatch.setattr(
+        "app.mcp_client.tools.manager.call",
+        lambda url, token, name, arguments, **kwargs: calls.append((url, token, name, arguments, kwargs)) or "done",
+    )
+    user = db_session.scalar(select(__import__("app.models", fromlist=["User"]).User))
+    workspace = user.memberships[0].workspace
+    tool = load_external_tools(workspace.id, user.id, db_session).tools[0]
+    assert "done" in tool(query="mail search")
+    assert session_tools[-1] == ["search_issues"]
+    assert calls[0][0:3] == ("https://backend.composio.dev/mcp/session_test", None, "search_issues")
+    assert calls[0][4]["headers"]["x-api-key"] == "session-token"
+
+    monkeypatch.setattr(
+        "app.routers.outbound_mcp.composio.disconnect",
+        lambda workspace_id, user_id, app_slug: disconnected.append((workspace_id, user_id, app_slug)),
+    )
+    revoked = client.post(f"/api/outbound-mcp/connections/{connection['id']}/revoke", headers=auth)
+    assert revoked.status_code == 200
+    assert revoked.json()["auth_type"] == "managed" and revoked.json()["auth_status"] == "authorization_required"
+    assert disconnected and disconnected[0][2] == "gmail"
+    saved = db_session.get(OutboundMcpConnection, uuid.UUID(connection["id"]))
+    assert saved is not None and saved.provider == "composio" and saved.canonical_resource == "gmail"
 
 
 def test_a_request_naming_a_connected_app_is_not_taken_by_the_builtin_create_flow():

@@ -379,6 +379,15 @@ export const outboundMcpApi = {
   startOAuth: (id: string, scopes?: string[]) => post<{ authorization_url: string }>(
     `/api/outbound-mcp/connections/${id}/oauth/start`, scopes ? { scopes } : {},
   ),
+  startComposio: (app_slug: "gmail" | "outlook") => post<{
+    connection: OutboundMcpConnection; authorization_url: string;
+  }>("/api/outbound-mcp/composio/start", { app_slug }),
+  restartComposio: (id: string) => post<{ authorization_url: string }>(
+    `/api/outbound-mcp/connections/${id}/composio/start`,
+  ),
+  completeComposio: (id: string) => post<OutboundMcpConnection>(
+    `/api/outbound-mcp/connections/${id}/composio/complete`,
+  ),
   revokeOAuth: (id: string) => post<OutboundMcpConnection>(`/api/outbound-mcp/connections/${id}/revoke`),
   remove: (id: string) => del<{ ok: true }>(`/api/outbound-mcp/connections/${id}`),
 };
