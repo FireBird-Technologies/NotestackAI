@@ -7,6 +7,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Alert, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 
+import { analyticsEnabled, resetAnalytics, setAnalyticsEnabled } from "@/lib/analytics";
 import { setSoundsEnabled, soundsEnabled } from "@/lib/click-sound";
 import { useAuth } from "@/account/auth";
 import { planQuery } from "@/account/plan";
@@ -33,6 +34,7 @@ export default function Settings() {
   // Deleting: the button says so (and takes no second tap) until the account is gone or it failed.
   const [deleting, setDeleting] = useState(false);
   const [sounds, setSounds] = useState(soundsEnabled);
+  const [analytics, setAnalytics] = useState(analyticsEnabled);
   const confirmDelete = () =>
     confirm(
       "Delete account for good?",
@@ -41,6 +43,7 @@ export default function Settings() {
         setDeleting(true);
         try {
           await authApi.deleteAccount();
+          resetAnalytics();
           tokens.clear();
           await logout();
         } catch (e) {
@@ -146,6 +149,14 @@ export default function Settings() {
           value={!s.user.email_unsubscribed}
           onChange={(v) => save({ email_unsubscribed: !v }, "privacy")}
           label="Product updates by email. Reminders for scheduled posts always send."
+        />
+        <Toggle
+          value={analytics}
+          onChange={(v) => {
+            setAnalyticsEnabled(v);
+            setAnalytics(v);
+          }}
+          label="Share how I use the app, linked to my account, through Google Analytics (this phone). Never what I write."
         />
         <Toggle
           value={sounds}

@@ -3,6 +3,8 @@ import { File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import { useState } from "react";
 
+import { track } from "@/lib/analytics";
+
 /** What each kind of file is, for the share sheet (Android's MIME type, iOS's UTI). */
 const KINDS: Record<string, { mime: string; uti: string }> = {
   pdf: { mime: "application/pdf", uti: "com.adobe.pdf" },
@@ -39,6 +41,7 @@ export async function saveFile(source: FileSource, name: string, kind: FileKind)
     else await file.write("text" in source ? source.text : new Uint8Array(await apiBytes(source.api)));
   }
   await Sharing.shareAsync(file.uri, { dialogTitle: name, mimeType: KINDS[kind]?.mime, UTI: KINDS[kind]?.uti });
+  track("file_export", { file_type: kind });
 }
 
 /**

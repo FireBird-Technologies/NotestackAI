@@ -11,6 +11,7 @@ import { AudioDialog, InfographicDialog, SlidesDialog } from "@/create/media";
 import { ReportDialog } from "@/create/report";
 import { type CreateBody, type DialogProps, FlashcardsDialog, MindMapDialog, QuizDialog } from "@/create/study";
 import { VideoDialog } from "@/create/video";
+import { track } from "@/lib/analytics";
 import { ConnectorModal } from "@/sources/connector-modal";
 import { Composer } from "@/launchpad/editors";
 import { colors, fonts, radius } from "@/ui/theme";
@@ -195,7 +196,9 @@ export function CreateTab({
 /** Start a make. Out of this kind on the plan, the refusal opens the upgrade sheet (UpgradeProvider). */
 async function generate(body: Parameters<typeof artifactsApi.generate>[0]): Promise<Artifact> {
   try {
-    return await artifactsApi.generate(body);
+    const artifact = await artifactsApi.generate(body);
+    track("artifact_generate", { artifact_kind: body.type });
+    return artifact;
   } catch (e) {
     throw e;
   }

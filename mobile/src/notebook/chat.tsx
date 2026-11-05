@@ -13,6 +13,7 @@ import { Pressable } from "@/ui/pressable";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { planQuery } from "@/account/plan";
+import { track } from "@/lib/analytics";
 import { useBottomInset } from "@/lib/insets";
 import { AnswerFeedback, NextStepPill, nextSteps } from "@/notebook/answer-feedback";
 import { AnswerText } from "@/notebook/answer-text";
@@ -169,9 +170,11 @@ export function ChatTab({ notebook, chatId, onStarted, onNextStep, onNeedPosts }
             patch({ text: "" });
           } else if (event === "error") {
             answered = true;
+            track("chat_error");
             patch({ text: d.message as string, status: undefined });
           } else if (event === "answer") {
             answered = true;
+            track("chat_answer");
             action = (d.action as ChatAction | null | undefined) ?? undefined;
             patch({ text: d.text as string, citations: d.citations as Citation[], status: undefined, action });
             const left = d.quota as ChatQuota | null | undefined;

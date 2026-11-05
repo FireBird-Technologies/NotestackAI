@@ -2,7 +2,7 @@ import { authApi, type LoginResult } from "@notestack/shared/auth";
 import { ApiError } from "@notestack/shared/client";
 import { GoogleSignin, isErrorWithCode, statusCodes } from "@react-native-google-signin/google-signin";
 import * as AppleAuthentication from "expo-apple-authentication";
-import { Platform } from "react-native";
+import { Alert, Platform } from "react-native";
 
 /**
  * Native Google and Apple sign in. Each shows the system sheet, sends the identity token it returns to the API, and
@@ -72,10 +72,34 @@ export async function signInWithApple(): Promise<LoginResult | null> {
   if (!credential.identityToken) throw new SocialSignInError("Apple did not return a sign in token. Try again.");
   // Apple sends the name only the first time this Apple ID signs in to the app.
   const name = [credential.fullName?.givenName, credential.fullName?.familyName].filter(Boolean).join(" ");
-  return authApi.apple({
-    identity_token: credential.identityToken,
-    authorization_code: credential.authorizationCode,
-    name: name || null,
+  try {
+    return await authApi.apple({
+      identity_token: credential.identityToken,
+      authorization_code: credential.authorizationCode,
+      name: name || null,
+      warn_hidden_email: true,
+    });
+  } catch (e) {
+    if (!(e instanceof ApiError) || e.code !== "apple_hidden_email") throw e;
+    const signupToken = e.detail?.signup_token as string;
+    if (await confirmHiddenEmail()) return authApi.appleConfirm(signupToken);
+    await authApi.appleDecline(signupToken).catch(() => undefined);
+    return null;
+  }
+}
+
+/** A hidden email can't be matched to an account under the real one: whether to make a new account is theirs to say. */
+function confirmHiddenEmail(): Promise<boolean> {
+  return new Promise((resolve) => {
+    Alert.alert(
+      "Already have a Notestack account?",
+      "You chose to hide your email, so we can't tell if you already have an account. If you do, sign in with it instead. Otherwise you'll have two separate accounts.",
+      [
+        { text: "Use my existing account", style: "cancel", onPress: () => resolve(false) },
+        { text: "Continue with Apple", onPress: () => resolve(true) },
+      ],
+      { cancelable: false },
+    );
   });
 }
 

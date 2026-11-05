@@ -7,6 +7,7 @@ import * as WebBrowser from "expo-web-browser";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
+import { track } from "@/lib/analytics";
 import { extOf, fileName, saveFile } from "@/lib/downloads";
 import { DownloadIcon } from "@/ui/icons";
 import { colors, radius } from "@/ui/theme";
@@ -25,6 +26,12 @@ export const SHARE_WHAT: Record<string, string> = {
   mind_map: "Mind Constellation",
 };
 
+const createLink = async (id: string): Promise<ShareInfo> => {
+  const info = await shareApi.create(id);
+  track("share_link_create");
+  return info;
+};
+
 /** One link request per item at a time, so opening the dialog twice quickly never makes two. */
 const making = new Map<string, Promise<ShareInfo>>();
 function linkFor(id: string): Promise<ShareInfo> {
@@ -32,7 +39,7 @@ function linkFor(id: string): Promise<ShareInfo> {
   if (!got) {
     got = shareApi
       .get(id)
-      .then((s) => (s.shared ? s : shareApi.create(id)))
+      .then((s) => (s.shared ? s : createLink(id)))
       .finally(() => making.delete(id));
     making.set(id, got);
   }
@@ -94,7 +101,7 @@ export function ShareDialog({ artifactId, what, visible, onClose }: { artifactId
             Make a link anyone can open to see this {what}. They don&apos;t need an account, and they can&apos;t edit or see your posts, only the {what}.
           </Text>
           <View style={styles.end}>
-            <PillButton title={busy ? "Making the link..." : "Create preview link"} variant="primary" busy={busy} onPress={() => void run(() => shareApi.create(artifactId))} />
+            <PillButton title={busy ? "Making the link..." : "Create preview link"} variant="primary" busy={busy} onPress={() => void run(() => createLink(artifactId))} />
           </View>
         </>
       ) : null}

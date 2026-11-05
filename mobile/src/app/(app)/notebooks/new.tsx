@@ -6,6 +6,7 @@ import { router } from "expo-router";
 import { useMemo, useState } from "react";
 import { FlatList, StyleSheet, Text, TextInput, View } from "react-native";
 import { Pressable } from "@/ui/pressable";
+import { track } from "@/lib/analytics";
 import { useBottomInset } from "@/lib/insets";
 
 import { colors, fonts, gutter, radius } from "@/ui/theme";
@@ -42,6 +43,7 @@ export default function NewNotebook() {
     setError("");
     try {
       const nb = await notebooksApi.create(topic.trim() || "Untitled notebook", selected);
+      track("notebook_create", { from: "manual" });
       await queryClient.invalidateQueries({ queryKey: ["notebooks"] });
       router.dismiss();
       router.push({ pathname: "/notebooks/[id]", params: { id: nb.id, title: nb.title } });
