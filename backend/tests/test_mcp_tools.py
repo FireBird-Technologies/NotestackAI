@@ -10,7 +10,7 @@ from fastapi import HTTPException
 from mcp.server.auth.provider import AccessToken
 
 from app.mcp import common, limits, scope, tools_write, views, widgets
-from app.models import Artifact, DocumentTopic, Job, Notebook, Topic, User, Workspace
+from app.models import Artifact, DocumentTopic, Job, Notebook, Source, Topic, User, Workspace
 from tests.test_buildout import auth, connect, docs, feed  # noqa: F401  (fixtures and helpers)
 from tests.test_mcp import _blog, anyio_backend, as_writer, call, call_raw, fake_research, mcp, mcp_db  # noqa: F401  (fixtures and helpers)
 from tests.test_videos import API, b2v, make_video  # noqa: F401  (fixture and helper)
@@ -44,13 +44,14 @@ def make_artifact(db_session, kind="report", status="ready", content=None):
 
 
 EXPECTED = {
-    "find_content", "ask_notebook", "list_notebooks", "get_notebook", "list_notebook_chats",
+    "find_content", "ask_notebook", "start_notestack", "connect_sources", "list_notebooks", "get_notebook", "list_notebook_chats",
     "get_chat_messages", "show_flashcards", "show_quiz", "show_infographic", "show_report", "view_report", "choose_notebook", "choose_video_options", "generate_video", "get_video", "list_sources", "list_topics", "get_topic", "list_artifacts", "get_artifact", "get_job",
     "list_resurface", "list_report_templates", "suggest_report_templates", "get_usage", "get_memory_notes",
     "create_notebook", "add_documents_to_notebook", "remove_document_from_notebook", "add_source", "import_url",
+    "prepare_file_upload", "import_uploaded_file",
     "sync_source", "generate_report", "generate_quiz", "generate_flashcards", "generate_mind_map", "generate_infographic",
     "generate_slide_deck", "generate_audio_overview", "show_mind_map", "retry_artifact", "share_artifact",
-    "unshare_artifact", "rate_artifact", "add_report_block", "remove_report_block", "choose_notebook", "choose_video_options", "choose_options", "show_report",
+    "unshare_artifact", "rate_artifact", "add_report_block", "remove_report_block", "choose_options", "widget_state",
 }
 
 
@@ -133,8 +134,93 @@ async def test_the_browsing_tools_describe_the_workspace(client, auth, run_jobs,
 
 
 @pytest.mark.anyio
+async def test_an_empty_library_directs_every_entry_point_to_the_source_widget(as_writer, mcp):
+    for name, args in (("find_content", {"query": "anything"}), ("ask_notebook", {"question": "What did I write?"}),
+                       ("list_notebooks", {}), ("list_sources", {}),
+                       ("generate_quiz", {})):
+        out = await call(mcp, name, **args)
+        assert out["error"] == "empty_archive", name
+        assert out["next_tool"] == "connect_sources" and "connect posts" in out["message"].lower()
+
+    # A greeting/general-message preflight and the first generation tool both render the source widget themselves. Neither
+    # path relies on the host model noticing an error and making a second tool call.
+    started = await call_raw(mcp, "start_notestack")
+    assert started.structuredContent["kind"] == "source_connector"
+    assert started.structuredContent["post_count"] == 0 and started.structuredContent["source_count"] == 0
+
+    quiz = await call_raw(mcp, "choose_options", make="quiz")
+    assert quiz.structuredContent["kind"] == "source_connector"
+    assert quiz.structuredContent["for_what"] == "quiz"
+    assert quiz.structuredContent["next_label"] == "Continue to set up your quiz"
+
+    result = await call_raw(mcp, "connect_sources", for_what="quiz")
+    assert result.structuredContent["kind"] == "source_connector"
+    assert result.structuredContent["post_count"] == 0 and result.structuredContent["source_count"] == 0
+    assert result.structuredContent["posts"] == [] and result.structuredContent["for_what"] == "quiz"
+    assert result.structuredContent["next_label"] == "Continue to set up your quiz"
+    assert "quiz" in result.structuredContent["next_message"]
+    assert result.structuredContent["max_file_bytes"] == 10 * 1024 * 1024
+    assert result.structuredContent["open_url"].endswith("/app/sources")
+    assert "open Notestack" in json.loads(result.content[0].text)["ask_writer"]  # told NOT to send them away
+
+    plain = await call_raw(mcp, "connect_sources", for_what="something odd")
+    assert plain.structuredContent["for_what"] == "" and plain.structuredContent["next_label"] == "Continue"
+
+
+@pytest.mark.anyio
+async def test_a_source_with_zero_indexed_posts_still_opens_the_source_widget(
+    as_writer, mcp, db_session
+):
+    """A connected source can be pending, failed, or simply empty.
+
+    It must not make the unusable generation picker show ``All posts — 0
+    posts``; the connector is the only surface from which the writer can
+    recover.
+    """
+    db_session.add(
+        Source(
+            workspace_id=workspace_id(db_session),
+            feed_url="https://empty.example.com/feed.xml",
+            site_url="https://empty.example.com",
+            platform="rss",
+            title="Empty feed",
+            sync_status="error",
+            sync_error="No posts found",
+        )
+    )
+    db_session.commit()
+
+    quiz = await call_raw(mcp, "choose_options", make="quiz")
+    assert quiz.structuredContent["kind"] == "source_connector"
+    assert quiz.structuredContent["post_count"] == 0
+    assert quiz.structuredContent["source_count"] == 1
+    assert quiz.structuredContent["for_what"] == "quiz"
+
+
+@pytest.mark.anyio
+async def test_source_widget_can_upload_and_import_a_file_without_leaving_chat(client, auth, run_jobs, as_writer, mcp):  # noqa: F811
+    body = b"# Field Notes\n\nThe launch checklist starts with a small audience.\n"
+    started = await call(mcp, "prepare_file_upload", filename="field-notes.md", content_type="text/markdown",
+                         size_bytes=len(body))
+    assert started["upload_id"] and started["headers"] == {"Content-Type": "text/markdown"}
+    put = client.put(started["upload_url"].split("8000", 1)[1], content=body,
+                     headers=started["headers"])
+    assert put.status_code == 200
+
+    imported = await call(mcp, "import_uploaded_file", upload_id=started["upload_id"])
+    assert imported["job"]["kind"] == "import_upload"
+    assert run_jobs()[0].status == "done"
+    result = await call_raw(mcp, "connect_sources", for_what="quiz")
+    assert result.structuredContent["post_count"] == 1
+    assert result.structuredContent["posts"][0]["title"] == "Field Notes"
+
+
+@pytest.mark.anyio
 async def test_the_settings_form_offers_the_apps_real_choices(client, auth, run_jobs, feed, as_writer, mcp):  # noqa: F811
     _blog(client, auth, run_jobs)
+    started = await call_raw(mcp, "start_notestack")
+    assert started.structuredContent == {"kind": "archive_ready"}
+    assert json.loads(started.content[0].text)["archive_ready"] is True
     first = (await mcp.call_tool("choose_options", {"make": "quiz"})).structuredContent  # nothing chosen: the form starts with what to use
     assert first["notebook_id"] is None and "notebooks" in first and first["posts"] and first["tool"] == "generate_quiz"
     assert first["notebooks"][0]["title"] == "All posts"
@@ -142,6 +228,10 @@ async def test_the_settings_form_offers_the_apps_real_choices(client, auth, run_
     quiz = await call(mcp, "choose_options", make="quiz")
     assert [f["argument"] for f in quiz["fields"]] == ["count", "difficulty", "question_types", "topic"]
     assert quiz["fields"][1]["choices"] == ["Easy", "Medium", "Hard"]
+    assert quiz["fields"][2]["choices"] == ["Multiple choice", "Fill in the blank", "Short answer"]
+    question_types = next(f for f in first["fields"] if f["key"] == "question_types")
+    assert question_types["default"] == ["multiple_choice", "fill_blank", "short_answer"]
+    assert all(option["value"] != "multiple_select" for option in question_types["options"])
     report = await mcp.call_tool("choose_options", {"make": "report"})
     form = report.structuredContent
     assert form["kind"] == "generation_options" and form["tool"] == "generate_report" and form["notebook_id"] is None
@@ -157,6 +247,8 @@ async def test_the_settings_form_offers_the_apps_real_choices(client, auth, run_
 @pytest.mark.anyio
 async def test_the_settings_form_includes_every_notebook_in_activity_order(as_writer, mcp, db_session):  # noqa: F811
     base = datetime(2026, 1, 1, tzinfo=UTC)
+    db_session.add(Source(workspace_id=workspace_id(db_session), feed_url="https://pending.example/feed.xml",
+                          site_url="https://pending.example", platform="rss", title="Pending", sync_status="syncing"))
     notebooks = [Notebook(workspace_id=workspace_id(db_session), title=f"Notebook {i:02d}",
                           updated_at=base + timedelta(minutes=i)) for i in range(45)]
     db_session.add_all(notebooks)
@@ -727,14 +819,15 @@ async def test_the_map_tools_link_to_the_widget_and_it_is_served(mcp):  # noqa: 
     infographic = {"ui": {"resourceUri": widgets.INFOGRAPHIC_URI}}
     assert listed["generate_infographic"].meta == infographic and listed["show_infographic"].meta == infographic
     viewers = {"generate_mind_map", "show_mind_map", "generate_flashcards", "show_flashcards", "generate_quiz", "show_quiz",
-               "generate_infographic", "show_infographic", "choose_notebook", "choose_options", "choose_video_options",
+               "generate_infographic", "show_infographic", "start_notestack", "connect_sources", "choose_notebook", "choose_options", "choose_video_options",
                "generate_slide_deck", "generate_audio_overview", "generate_video", "get_video", "view_report", "generate_report",
-               "rate_artifact", "widget_state"}
-    assert listed["rate_artifact"].meta == widgets.app_only() and listed["widget_state"].meta == widgets.app_only()
+               "rate_artifact", "widget_state", "prepare_file_upload", "import_uploaded_file"}
+    for name in ("rate_artifact", "widget_state", "prepare_file_upload", "import_uploaded_file"):
+        assert listed[name].meta == widgets.app_only()
     assert all(t.meta is None for n, t in listed.items() if n not in viewers)
     assert all("visibility" not in (listed[name].meta or {}).get("ui", {}) for name in listed if name.startswith("generate_"))
     resources = await mcp.list_resources()
-    served = {widgets.MIND_MAP_URI, widgets.FLASHCARDS_URI, widgets.QUIZ_URI, widgets.INFOGRAPHIC_URI, widgets.PICKER_URI, widgets.REPORT_URI,
+    served = {widgets.MIND_MAP_URI, widgets.FLASHCARDS_URI, widgets.QUIZ_URI, widgets.INFOGRAPHIC_URI, widgets.PICKER_URI, widgets.SOURCE_CONNECTOR_URI, widgets.REPORT_URI,
               widgets.VIDEO_URI, widgets.VIDEO_OPTIONS_URI, widgets.OPTIONS_URI}
     legacy = {u for olds in widgets.LEGACY_URIS.values() for u in olds}
     assert {str(r.uri) for r in resources} == served | legacy and all(r.mimeType == "text/html;profile=mcp-app" for r in resources)
@@ -1016,6 +1109,9 @@ def test_the_video_view_plays_when_rendered_and_waits_when_not():
 
 @pytest.mark.anyio
 async def test_generation_form_restores_the_artifact_it_created(client, auth, as_writer, mcp, db_session):  # noqa: F811
+    db_session.add(Source(workspace_id=workspace_id(db_session), feed_url="https://pending.example/feed.xml",
+                          site_url="https://pending.example", platform="rss", title="Pending", sync_status="syncing"))
+    db_session.commit()
     form = await call_raw(mcp, "choose_options", make="mind_map")
     payload = form.structuredContent
     assert payload["state_url"] == "http://localhost:8000/api/mcp/widget-state"
@@ -1036,6 +1132,8 @@ async def test_video_tools_open_the_players_and_the_options_form(mcp):  # noqa: 
     assert listed["get_video"].meta == {"ui": {"resourceUri": widgets.VIDEO_URI}}
     assert listed["choose_video_options"].meta == {"ui": {"resourceUri": widgets.VIDEO_OPTIONS_URI}}
     assert listed["choose_notebook"].meta == {"ui": {"resourceUri": widgets.PICKER_URI}}
+    assert listed["connect_sources"].meta == {"ui": {"resourceUri": widgets.SOURCE_CONNECTOR_URI}}
+    assert listed["start_notestack"].meta == {"ui": {"resourceUri": widgets.SOURCE_CONNECTOR_URI}}
     assert "choose_video_options" in listed["generate_video"].description and "get_video" in listed["generate_video"].description
     resources = {str(r.uri): r for r in await mcp.list_resources()}
     assert "domains" not in json.dumps(resources[widgets.VIDEO_URI].meta or {}) and \
@@ -1246,6 +1344,9 @@ def test_the_video_form_offers_the_writers_saved_voices_with_previews_instead_of
 
 @pytest.mark.anyio
 async def test_widget_state_tool_saves_and_restores_without_direct_fetch(auth, as_writer, mcp, db_session):  # noqa: F811
+    db_session.add(Source(workspace_id=workspace_id(db_session), feed_url="https://pending.example/feed.xml",
+                          site_url="https://pending.example", platform="rss", title="Pending", sync_status="syncing"))
+    db_session.commit()
     form = await call_raw(mcp, "choose_options", make="mind_map")
     token = form.structuredContent["state_token"]
     artifact = make_artifact(db_session, "mind_map", content={"title": "Map", "root": {"label": "Root"}})
