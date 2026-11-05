@@ -219,7 +219,7 @@ def test_a_quiz_or_flashcards_take_any_number_of_posts_and_the_limits_are_served
     docs = make_posts(db_session, ws, 130)
     ids = [str(d.id) for d in docs]
     nb = _notebook(client, owner, docs)
-    assert client.get("/api/settings/limits", headers=headers).json() == {"posts": 20, "selectable_posts": 250}
+    assert client.get("/api/settings/limits", headers=headers).json() == {"posts": 20, "selectable_posts": 500}
     big = load_material(db_session, ws.id, uuid.UUID(nb["id"]), {"document_ids": ids}, what="quiz", large_ok=True)
     assert big.mode == "ideas" and len(big.docs) == 130 and big.text == []  # all of them count; the sample stays the same size
     assert len(idea_lines(idea_pool.sample(db_session, ws.id, big.docs))) == settings.artifact_idea_sample

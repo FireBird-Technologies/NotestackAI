@@ -171,7 +171,7 @@ function GenerateVoicePanel({
           ) : (
             <div className="vp-upgrade">
               <div>
-                <strong>Voice cloning is on the Writer and Studio plans</strong>
+                <strong>Voice cloning is not available on this plan</strong>
                 <p className="muted small">Record a couple of minutes and every audio overview is narrated by you.</p>
               </div>
               <button className="btn btn-primary" onClick={() => openUpgrade("writer")}>

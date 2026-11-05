@@ -23,7 +23,7 @@ CASES = [
     ("How do I make an audio overview?", "notebook Create tab, format and length"),
     ("What is in the free plan?", "1 source, 5 indexed posts, 3 min audio, 1 min video, 2 launch kits"),
     ("how much is the writer plan", "$24.99 monthly, $18.99 yearly"),
-    ("Does voice cloning cost extra?", "on Writer and Studio, not Free"),
+    ("Does voice cloning cost extra?", "paid plans only, not on Free"),
     ("how do I schedule a post to linkedin", "Launchpad, New post, connect LinkedIn"),
     ("why did I get an email instead of an auto post", "Substack Notes or unconnected platform sends a reminder"),
     ("can notestack make avatars of me", "says it does not; no invented feature"),

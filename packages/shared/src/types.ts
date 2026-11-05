@@ -566,7 +566,7 @@ export type Plan = {
   voice_cloning: boolean;
   /** Audio overviews allowed (in total on Free), whatever their length; -1 = no cap. */
   audio_overviews: number;
-  /** Notebook chat questions (in total on Free); -1 = unlimited. */
+  /** Notebook chat questions; -1 = unlimited. */
   chat_messages: number;
 };
 

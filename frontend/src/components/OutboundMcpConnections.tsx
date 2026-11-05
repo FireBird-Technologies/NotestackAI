@@ -293,7 +293,7 @@ export function OutboundMcpConnections() {
     // Load connections first so popular-app cards can immediately show which ones are already connected.
     outboundMcpApi.list().then(setConnections, (e) => setError(errorMessage(e)))
       .then(() => outboundMcpApi.catalog()).then((items) => {
-        // Temporarily hide these MCP options from the frontend catalog.
+        // Keep hidden catalog apps out even while the frontend and backend are deployed at different times.
         setSuggestions(items.filter((item) => !["Slack", "Canva"].includes(item.name)));
       }, () => setSuggestions([]));
     const params = new URLSearchParams(window.location.search);

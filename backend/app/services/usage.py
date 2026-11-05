@@ -102,7 +102,7 @@ def record_chat_message(db: Session, workspace_id) -> None:
 
 
 def chat_quota(db: Session, workspace: Workspace) -> dict | None:
-    """{used, limit, left} chat questions when the plan caps them (Free), else None (unlimited)."""
+    """{used, limit, left} chat questions for a custom capped plan, else None (unlimited)."""
     plan = effective_plan(db, workspace)
     if plan.chat_messages < 0:
         return None

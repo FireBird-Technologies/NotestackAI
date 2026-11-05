@@ -35,7 +35,7 @@
 }
 
 .upg-wide {
-  width: min(800px, 100%);
+  width: min(960px, 100%);
 }
 
 .upg-plans-view {
@@ -264,6 +264,15 @@
 @media (min-width: 640px) {
   .upg-plans {
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  }
+}
+
+/* Upgrade offers (up to three plans): keep them on one row whenever the modal is wide enough, scrollbar or not. */
+@media (min-width: 860px) {
+  .upg-plans:not(.upg-plans-all) {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
   }
 }
 

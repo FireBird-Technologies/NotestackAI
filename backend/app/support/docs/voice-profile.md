@@ -26,4 +26,4 @@ Notestack learns a writing voice from your posts and uses it in every draft, inc
 Choose the voices used for audio overviews.
 
 # Voice cloning
-A clone of your voice can replace one host in audio overviews. It needs your recorded consent, and you can revoke it. Voice cloning is on the Writer and Studio plans, not Free.
+A clone of your voice can replace one host in audio overviews. It needs your recorded consent, and you can revoke it. Voice cloning is included on every paid plan. It isn't available on Free.
