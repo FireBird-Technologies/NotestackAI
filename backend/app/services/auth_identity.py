@@ -1,6 +1,7 @@
 """Account resolution. One provider per account for life: Google accounts never get a password and
 email accounts never get linked to Google."""
 
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -11,6 +12,8 @@ from sqlalchemy.orm import Session
 from app.models import AuthProvider, McpGrant, Subscription, User, Workspace, WorkspaceMember
 from app.services.plans import PLANS
 
+log = logging.getLogger(__name__)
+
 
 class IdentityError(Exception):
     def __init__(self, code: str, message: str, status: int = 400):
@@ -18,6 +21,11 @@ class IdentityError(Exception):
         self.code = code
         self.message = message
         self.status = status
+
+
+class HiddenEmailSignup(Exception):
+    """A new Apple account would be made from a hidden (relay) email: the person may already have an account under
+    their real one, which this address can't be matched to. Nothing was written; they are asked first."""
 
 
 @dataclass
@@ -62,9 +70,13 @@ def _ensure_active(user: User) -> None:
         raise IdentityError("account_deleted", "This account was deleted. Contact support to restore it.", 403)
 
 
-def _bootstrap_workspace(db: Session, user: User) -> None:
-    first = (user.name or user.email.split("@")[0]).split(" ")[0]
-    workspace = Workspace(name=f"{first}'s workspace", owner_id=user.id)
+def _bootstrap_workspace(db: Session, user: User, *, hidden_email: bool = False) -> None:
+    if user.name or not hidden_email:
+        first = (user.name or user.email.split("@")[0]).split(" ")[0]
+        workspace_name = f"{first}'s workspace"
+    else:
+        workspace_name = "My workspace"  # a hidden email's address is random letters, not something to call anyone
+    workspace = Workspace(name=workspace_name, owner_id=user.id)
     db.add(workspace)
     db.flush()
     db.add(WorkspaceMember(workspace_id=workspace.id, user_id=user.id, role="owner"))
@@ -94,9 +106,18 @@ def resolve_or_create_google_user(
     return Resolved(user, True)
 
 
-def resolve_or_create_apple_user(db: Session, *, apple_id: str, email: str | None, name: str | None) -> Resolved:
+def resolve_or_create_apple_user(
+    db: Session,
+    *,
+    apple_id: str,
+    email: str | None,
+    name: str | None,
+    is_private_email: bool = False,
+    warn_hidden: bool = False,
+) -> Resolved:
     """Sign in with Apple. Apple sends the email (and the name, on the device) only the first time: later sign ins are
-    found by Apple's id alone. One provider per account: an email that already signs in another way is refused."""
+    found by Apple's id alone. One provider per account: an email that already signs in another way is refused. With
+    warn_hidden, a new account from a hidden email raises HiddenEmailSignup instead of being made."""
     user = db.scalar(select(User).where(User.apple_id == apple_id))
     if not user and email:
         user = find_user(db, email)
@@ -115,10 +136,14 @@ def resolve_or_create_apple_user(db: Session, *, apple_id: str, email: str | Non
             "Apple didn't share an email for this account. In your iPhone's Settings, remove Notestack from Sign in with Apple, then try again.",
             400,
         )
+    if warn_hidden and is_private_email:
+        raise HiddenEmailSignup
+    # Whether Apple sent a name is the question when an account has none; the name itself stays out of the logs.
+    log.info("Apple sign up: name %s, email %s", "sent" if name else "missing", "hidden" if is_private_email else "shared")
     user = User(email=normalize_email(email), name=name, auth_provider=AuthProvider.APPLE, apple_id=apple_id)
     db.add(user)
     db.flush()
-    _bootstrap_workspace(db, user)
+    _bootstrap_workspace(db, user, hidden_email=is_private_email)
     return Resolved(user, True)
 
 

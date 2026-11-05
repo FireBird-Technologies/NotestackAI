@@ -8,6 +8,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { Platform, StyleSheet, Text, View } from "react-native";
 
 import { planQuery } from "@/account/plan";
+import { track } from "@/lib/analytics";
 import { on } from "@/lib/platform";
 import { CycleToggle, PlanCard } from "@/account/plans";
 import { buy, getPackages, identify, manageSubscriptions, purchasesReady, restore } from "@/account/purchases";
@@ -35,12 +36,18 @@ export function useUpgrade() {
  */
 export function UpgradeProvider({ children }: { children: ReactNode }) {
   const [opening, setOpening] = useState<Opening | null>(null);
-  const open = useCallback((o: Opening = {}) => setOpening(o), []);
+  const open = useCallback((o: Opening = {}) => {
+    track("paywall_view", { limit: "manual" });
+    setOpening(o);
+  }, []);
   useEffect(
     () =>
       on(PLAN_LIMIT_EVENT, (detail) => {
         const d = detail as PlanLimitDetail;
-        if (d.left === undefined) setOpening({ message: d.message, highlight: d.upgrade_to });
+        if (d.left === undefined) {
+          track("paywall_view", { limit: d.kind ?? "unknown" });
+          setOpening({ message: d.message, highlight: d.upgrade_to });
+        }
       }),
     [],
   );
@@ -141,12 +148,16 @@ function Paywall({ opening }: { opening: Opening }) {
                   title={`Upgrade to ${plan.name}`}
                   busy={busy === plan.id}
                   disabled={busy !== null}
-                  onPress={() =>
+                  onPress={() => {
+                    track("purchase_start", { plan: plan.id, cycle });
                     void run(plan.id, () => buy(pkg), (next) => {
-                      if (next.plan.id === plan.id) return `You are on ${plan.name} now.`;
+                      if (next.plan.id === plan.id) {
+                        track("purchase_complete", { plan: plan.id });
+                        return `You are on ${plan.name} now.`;
+                      }
                       throw new Error(`The purchase went through, but your plan hasn't changed yet. Tap Restore purchases in a moment.`);
-                    })
-                  }
+                    });
+                  }}
                 />
                 {at === plan.id ? <Outcome error={error} notice={notice} /> : null}
               </View>

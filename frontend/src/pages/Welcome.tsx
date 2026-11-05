@@ -95,6 +95,8 @@ export default function Welcome() {
   const [searchParams] = useSearchParams();
   const returningFromNotebookLm = searchParams.get("notebooklm") === "import";
   const [step, setStep] = useState<Step>("connect");
+  const [yourName, setYourName] = useState("");
+  const [savedName, setSavedName] = useState("");
   const [mode, setMode] = useState<Mode>(() => notebookLmGuideWasOpen() ? "notebooklm" : "link");
   // A blog or a single article is worked out from the link (as on Sources); the hint under the box can switch it.
   const [override, setOverride] = useState<LinkAs | null>(null);
@@ -452,7 +454,15 @@ export default function Welcome() {
       </button>
     </div>
   ) : null;
-  const first = (user.name ?? user.email).split(/[ @]/)[0];
+  // Apple may send no name, and its hidden addresses are random letters: greet by name or not at all, and ask for one.
+  const isApple = user.auth_provider === "apple";
+  const known = user.name ?? (savedName || (isApple ? null : user.email));
+  const first = known?.split(/[ @]/)[0];
+  const saveYourName = () => {
+    const given = yourName.trim();
+    if (!given || given === savedName) return;
+    settingsApi.update({ name: given }).then(() => setSavedName(given), () => undefined); // can be set in Settings too
+  };
 
   const linkAs: LinkAs = override ?? (looksLikeArticle(url) ? "url" : "feed");
 
@@ -540,10 +550,23 @@ export default function Welcome() {
         {step === "connect" && (
           <section className="card welcome-card">
             <p className="welcome-hello">
-              Welcome aboard, <span>{first}</span>
+              Welcome aboard{first && <>, <span>{first}</span></>}
             </p>
             <h1 className="welcome-center">Where does your writing live?</h1>
             <p className="muted welcome-center">Bring it in however suits you. We turn it into a research notebook you can question, hear and launch from.</p>
+            {isApple && !user.name && (
+              <label className="welcome-name">
+                <span className="muted">What should we call you? (optional)</span>
+                <input
+                  className="input"
+                  value={yourName}
+                  maxLength={200}
+                  autoComplete="name"
+                  onChange={(e) => setYourName(e.target.value)}
+                  onBlur={saveYourName}
+                />
+              </label>
+            )}
             <Tabs<Mode>
               tabs={MODES}
               value={mode}

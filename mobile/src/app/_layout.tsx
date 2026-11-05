@@ -11,12 +11,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useEffect } from "react";
 
 import { AuthProvider, useAuth } from "@/account/auth";
+import { logScreen, startAnalytics } from "@/lib/analytics";
 import { preloadClicks } from "@/lib/click-sound";
 import { mobilePlatform } from "@/lib/platform";
 import { navTheme } from "@/ui/theme";
 import { Body, Button, Centered } from "@/ui";
 
 configurePlatform(mobilePlatform);
+startAnalytics();
 preloadClicks();
 SplashScreen.preventAutoHideAsync();
 
@@ -53,10 +55,17 @@ function RootNavigator() {
 
   // Signed in here: the start screen (app/index.tsx) opens where the web lands. Dropping the sign-in screens leads
   // there, unless they were opened from a public page (Pricing, a tool...), which stays under them: then go there.
-  const top = useSegments()[0];
+  const segments = useSegments() as string[];
+  const top = segments[0];
   useEffect(() => {
     if (ready && user && top && top !== "(auth)" && signInPending()) router.replace("/");
   }, [ready, user, top, signInPending]);
+
+  // Segments are the route's pattern (notebooks/[id]), so no real id reaches analytics; groups like (app) say nothing.
+  const screen = segments.filter((s) => !s.startsWith("(")).join("/") || "start";
+  useEffect(() => {
+    if (ready) logScreen(screen);
+  }, [ready, screen]);
 
   if (!ready) return null;
   if (restoreError) {

@@ -18,7 +18,8 @@
       "autoIncrement": true,
       "env": {
         "APP_VARIANT": "production",
-        "EXPO_PUBLIC_API_URL": "https://api.notestack.ai"
+        "EXPO_PUBLIC_API_URL": "https://api.notestack.ai",
+        "EXPO_PUBLIC_ANALYTICS": "on"
       }
     }
   },

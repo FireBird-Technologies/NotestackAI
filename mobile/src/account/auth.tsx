@@ -3,6 +3,7 @@ import { ApiError, SESSION_EXPIRED_EVENT, tokens } from "@notestack/shared/clien
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { AppState } from "react-native";
 
+import { identifyUser, track } from "@/lib/analytics";
 import { on } from "@/lib/platform";
 import { forgetCustomer } from "@/account/purchases";
 import { signOutOfGoogle } from "@/account/social-auth";
@@ -59,6 +60,10 @@ export function AuthProvider({ children, onSignOut }: { children: ReactNode; onS
 
   useEffect(() => on(SESSION_EXPIRED_EVENT, expire), [expire]);
 
+  // Every way in and out (a restored session, sign in, expiry, sign out) ends here.
+  const userId = user?.id ?? null;
+  useEffect(() => identifyUser(userId), [userId]);
+
   // A password reset elsewhere revokes this session on the server; check whenever the app comes back to the front.
   const signedIn = Boolean(user);
   useEffect(() => {
@@ -77,6 +82,8 @@ export function AuthProvider({ children, onSignOut }: { children: ReactNode; onS
     tokens.set(result.access_token, result.refresh_token);
     setRestoreError(null);
     setUser(result.user);
+    identifyUser(result.user.id); // ahead of the effect above, so this event carries the account
+    track(result.created ? "sign_up" : "login", { method: result.user.auth_provider });
   }, []);
 
   const logout = useCallback(async () => {

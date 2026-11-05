@@ -7,6 +7,7 @@ import * as DocumentPicker from "expo-document-picker";
 import { File } from "expo-file-system";
 import { useState } from "react";
 import { Alert, Platform, StyleSheet, Text, TextInput, View } from "react-native";
+import { track } from "@/lib/analytics";
 import { Pressable } from "@/ui/pressable";
 
 import { CloseIcon, UploadIcon } from "@/ui/icons";
@@ -117,6 +118,7 @@ export function AddSource({
     setBusy(true);
     try {
       const res = mode === "feed" ? await sourcesApi.connect(link, notebookId) : await sourcesApi.importUrl(link, notebookId);
+      track("source_add", { source_type: mode === "feed" ? "feed" : "url" });
       onAdded(res.source, res.job);
       setValue("");
       setOverride(null);
@@ -175,6 +177,7 @@ export function AddSource({
     for (const f of files) {
       try {
         const res = await sourcesApi.importFile(f.upload, notebookId);
+        track("source_add", { source_type: "file" });
         done.push({ source: res.source, job: res.job });
       } catch {
         failed.push(f);

@@ -37,6 +37,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     userInterfaceStyle: "dark",
     ios: {
       bundleIdentifier: APP_ID,
+      googleServicesFile: "./GoogleService-Info.plist",
       supportsTablet: true,
       usesAppleSignIn: true,
       infoPlist: {
@@ -54,6 +55,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     },
     android: {
       package: APP_ID,
+      googleServicesFile: "./google-services.json",
       adaptiveIcon: {
         backgroundColor: "#ffffff",
         foregroundImage: "./assets/images/android-icon-foreground.png",
@@ -61,6 +63,12 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         monochromeImage: "./assets/images/android-icon-monochrome.png",
       },
       permissions: ["RECORD_AUDIO"],
+      // Analytics measures the product, not ads: no advertising id (firebase.json turns its collection off too).
+      blockedPermissions: [
+        "com.google.android.gms.permission.AD_ID",
+        "android.permission.ACCESS_ADSERVICES_AD_ID",
+        "android.permission.ACCESS_ADSERVICES_ATTRIBUTION",
+      ],
       predictiveBackGestureEnabled: false,
     },
     plugins: [
@@ -79,6 +87,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ],
       "expo-video",
       "expo-apple-authentication",
+      "@react-native-firebase/app",
+      ["@react-native-firebase/analytics", { ios: { withoutAdIdSupport: true } }],
       ...(GOOGLE_IOS_URL_SCHEME
         ? [
             [
@@ -96,7 +106,14 @@ export default ({ config }: ConfigContext): ExpoConfig => {
           imageWidth: 120,
         },
       ],
-      ["expo-build-properties", { android: { usesCleartextTraffic: IS_DEV } }],
+      [
+        "expo-build-properties",
+        {
+          // Firebase's iOS SDK ships through Swift Package Manager only, which React Native Firebase links dynamically.
+          ios: { useFrameworks: "dynamic" },
+          android: { usesCleartextTraffic: IS_DEV },
+        },
+      ],
     ],
     experiments: {
       typedRoutes: true,

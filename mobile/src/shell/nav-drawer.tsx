@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAuth } from "@/account/auth";
 import { planQuery } from "@/account/plan";
+import { setPlan } from "@/lib/analytics";
 import { useBottomInset } from "@/lib/insets";
 import { useUpgrade } from "@/account/upgrade";
 import { colors, fonts, gutter, radius } from "@/ui/theme";
@@ -40,7 +41,10 @@ export function useDrawer() {
 export function DrawerProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   // Fetched as soon as the app opens, so the plan card is ready before the panel is (the status can take a while).
-  useQuery(planQuery);
+  const planId = useQuery(planQuery).data?.plan.id;
+  useEffect(() => {
+    if (planId) setPlan(planId);
+  }, [planId]);
 
   // Android's back button closes the panel before it leaves the screen.
   useEffect(() => {

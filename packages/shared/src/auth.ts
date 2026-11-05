@@ -15,7 +15,13 @@ export type LoginResult = { access_token: string; refresh_token: string; user: U
 export type Providers = { google: "redirect" | "popup" | null; apple?: "native" | "redirect" | null };
 
 /** What the iOS app sends after the native Sign in with Apple sheet (the name comes only the first time). */
-export type AppleSignIn = { identity_token: string; authorization_code?: string | null; name?: string | null };
+export type AppleSignIn = {
+  identity_token: string;
+  authorization_code?: string | null;
+  name?: string | null;
+  /** This client asks before making an account from a hidden email: the API answers apple_hidden_email instead. */
+  warn_hidden_email?: boolean;
+};
 
 /** Only same site paths, mirroring the backend check, so `next` cannot become an open redirect. */
 export function safeNext(path: string | null | undefined): string {
@@ -37,6 +43,10 @@ export const authApi = {
   providers: () => api<Providers>("/api/auth/providers"),
   google: (credential: string) => post<LoginResult>("/api/auth/google", { credential }),
   apple: (body: AppleSignIn) => post<LoginResult>("/api/auth/apple", body),
+  /** Carry on with a hidden email, once the person has been asked (the token comes with apple_hidden_email). */
+  appleConfirm: (signupToken: string) => post<LoginResult>("/api/auth/apple/confirm", { signup_token: signupToken }),
+  /** They'll use another account: Apple forgets this sign in, so the next one asks for the name and email again. */
+  appleDecline: (signupToken: string) => post<{ ok: boolean }>("/api/auth/apple/decline", { signup_token: signupToken }),
   /** Full page navigation target for Apple's redirect flow on the web. */
   appleStartUrl: (next: string) => `${platform().baseUrl}/api/auth/apple/start?${new URLSearchParams({ next })}`,
   /** Full page navigation target for the redirect flow (server side code exchange). */
