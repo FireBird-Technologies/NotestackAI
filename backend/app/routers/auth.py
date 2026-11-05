@@ -11,6 +11,7 @@ from fastapi.responses import RedirectResponse
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
 from pydantic import BaseModel, EmailStr
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth import (
@@ -278,6 +279,29 @@ class AppleIn(BaseModel):
     authorization_code: str | None = None
     # Apple gives the app the name (never in the token), and only on the first sign in.
     name: str | None = None
+    # This client can ask before making an account from a hidden email. Builds from before that make it straight away.
+    warn_hidden_email: bool = False
+
+
+APPLE_SIGNUP_TTL = timedelta(minutes=10)
+
+
+def _apple_signup_token(
+    info: apple.AppleIdentity, name: str | None, code: str | None, client_id: str, redirect_uri: str | None = None
+) -> str:
+    """Holds a sign up while the person decides: Apple may not send the email again, and never sends the name again."""
+    return encode_signed(
+        {
+            "typ": "apple_signup",
+            "apple_id": info.sub,
+            "email": info.email,
+            "name": name,
+            "code": encrypt(code),
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+        },
+        APPLE_SIGNUP_TTL,
+    )
 
 
 @router.post("/apple")
@@ -289,16 +313,73 @@ def apple_login(body: AppleIn, db: Session = Depends(get_db)):
     except apple.AppleTokenError as exc:
         log.warning("Apple identity token rejected: %s", exc)
         raise HTTPException(401, "Invalid Apple sign in") from exc
+    name = (body.name or "").strip()[:200] or None
+    # The token's audience is the app's bundle id: the code belongs to that client.
+    audience = str(jwt.decode(body.identity_token, options={"verify_signature": False}).get("aud"))
     try:
         resolved = ident.resolve_or_create_apple_user(
-            db, apple_id=info.sub, email=info.email, name=(body.name or "").strip()[:200] or None
+            db,
+            apple_id=info.sub,
+            email=info.email,
+            name=name,
+            is_private_email=info.is_private_email,
+            warn_hidden=body.warn_hidden_email,
         )
+    except ident.HiddenEmailSignup as exc:
+        raise HTTPException(
+            409,
+            {
+                "code": "apple_hidden_email",
+                "message": "You chose to hide your email, so we can't tell if you already have an account.",
+                "signup_token": _apple_signup_token(info, name, body.authorization_code, audience),
+            },
+        ) from exc
     except ident.IdentityError as exc:
         raise _err(exc) from exc
-    # The token's audience is the app's bundle id: the code belongs to that client.
-    audience = jwt.decode(body.identity_token, options={"verify_signature": False}).get("aud")
-    _keep_apple_token(resolved.user, body.authorization_code, str(audience))
+    _keep_apple_token(resolved.user, body.authorization_code, audience)
     return _finalize_login(db, resolved.user, resolved.created)
+
+
+class AppleConfirmIn(BaseModel):
+    signup_token: str
+
+
+@router.post("/apple/confirm")
+def apple_confirm(body: AppleConfirmIn, db: Session = Depends(get_db)):
+    """The person was told about their hidden email and chose to carry on. Asking twice finds the same account."""
+    try:
+        saved = decode_token_full(body.signup_token, expected_type="apple_signup")
+    except HTTPException as exc:
+        raise HTTPException(
+            400, {"code": "apple_signup_expired", "message": "That sign in expired. Continue with Apple again."}
+        ) from exc
+    try:
+        resolved = ident.resolve_or_create_apple_user(
+            db, apple_id=saved["apple_id"], email=saved["email"], name=saved["name"], is_private_email=True
+        )
+    except ident.IdentityError as exc:
+        db.rollback()
+        raise _err(exc) from exc
+    _keep_apple_token(resolved.user, decrypt(saved["code"]), saved["client_id"], saved["redirect_uri"])
+    return _finalize_login(db, resolved.user, resolved.created)
+
+
+@router.post("/apple/decline")
+def apple_decline(body: AppleConfirmIn, db: Session = Depends(get_db)):
+    """The person will use another account instead. Apple keeps the choices it was given until our access is revoked,
+    so revoke it: the next Apple sign in asks for the name and email again. Best effort, like signing in's exchange."""
+    try:
+        saved = decode_token_full(body.signup_token, expected_type="apple_signup")
+    except HTTPException:
+        return {"ok": True}
+    # A token used to make an account stays valid for a while: it must not cut that account off from Apple.
+    if db.scalar(select(User).where(User.apple_id == saved["apple_id"])):
+        return {"ok": True}
+    code = decrypt(saved["code"])
+    token = apple.exchange_code(code, saved["client_id"], saved["redirect_uri"]) if code else None
+    if token:
+        apple.revoke(token, saved["client_id"])
+    return {"ok": True}
 
 
 @router.get("/apple/start")
@@ -364,7 +445,19 @@ async def apple_callback(request: Request, db: Session = Depends(get_db)):
         except (ValueError, AttributeError):
             name = None
     try:
-        resolved = ident.resolve_or_create_apple_user(db, apple_id=info.sub, email=info.email, name=name)
+        resolved = ident.resolve_or_create_apple_user(
+            db,
+            apple_id=info.sub,
+            email=info.email,
+            name=name,
+            is_private_email=info.is_private_email,
+            warn_hidden=True,
+        )
+    except ident.HiddenEmailSignup:
+        signup = _apple_signup_token(info, name, code, settings.apple_services_id, settings.apple_redirect_url)
+        response = _frontend("/auth/callback", cookie_path=APPLE_COOKIE_PATH, apple_signup=signup, next=saved["next"])
+        response.status_code = 303
+        return response
     except ident.IdentityError as exc:
         db.rollback()
         return _auth_error(exc.message, APPLE_COOKIE_PATH)

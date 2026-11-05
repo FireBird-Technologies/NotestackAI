@@ -1,4 +1,4 @@
-import { docsApi, jobsApi, notebooksApi } from "@notestack/shared/endpoints";
+import { docsApi, jobsApi, notebooksApi, settingsApi } from "@notestack/shared/endpoints";
 import { firstNotebookName } from "@notestack/shared/notebook";
 import type { Job, Source } from "@notestack/shared/types";
 import { Image } from "expo-image";
@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAuth } from "@/account/auth";
 import { UpgradeProvider, useUpgrade } from "@/account/upgrade";
+import { track } from "@/lib/analytics";
 import { markOnboarded } from "@/lib/landing";
 import { AddSource } from "@/sources/add-source";
 import { colors, fonts, gutter, radius } from "@/ui/theme";
@@ -50,6 +51,8 @@ function Onboarding() {
   const upgrade = useUpgrade();
   const insets = useSafeAreaInsets();
   const [step, setStep] = useState<Step>("connect");
+  const [yourName, setYourName] = useState("");
+  const [savedName, setSavedName] = useState("");
   const [source, setSource] = useState<Source | null>(null);
   // Every job the source started (an upload makes one per file); the last one drives the bar.
   const [jobIds, setJobIds] = useState<string[]>([]);
@@ -110,6 +113,8 @@ function Onboarding() {
     if (docIds.length === 0) return toArchive();
     try {
       const nb = await notebooksApi.create(name.trim(), docIds);
+      track("notebook_create", { from: "onboarding" });
+      track("onboarding_complete", { post_count: docIds.length });
       router.replace({ pathname: "/notebooks/[id]", params: { id: nb.id, title: nb.title } });
     } catch {
       router.replace("/notebooks");
@@ -117,9 +122,18 @@ function Onboarding() {
   };
 
   if (!user) return null;
-  const first = (user.name ?? user.email).split(/[ @]/)[0];
+  // Apple may send no name, and its hidden addresses are random letters: greet by name or not at all, and ask for one.
+  const isApple = user.auth_provider === "apple";
+  const known = user.name ?? (savedName || (isApple ? null : user.email));
+  const first = known?.split(/[ @]/)[0];
+  const saveYourName = () => {
+    const given = yourName.trim();
+    if (!given || given === savedName) return;
+    settingsApi.update({ name: given }).then(() => setSavedName(given), () => undefined); // can be set in Settings too
+  };
 
   const added = (s: Source, job: Job) => {
+    saveYourName(); // tapping a button keeps the field focused here, so it may not have blurred
     setSource((cur) => cur ?? s);
     sourceTitle.current ??= s.title;
     setLive((cur) => cur ?? job);
@@ -155,6 +169,8 @@ function Onboarding() {
         <Pressable
           onPress={() => {
             opened.current = true;
+            saveYourName();
+            track("onboarding_skip");
             void markOnboarded().then(toArchive);
           }}
           hitSlop={10} accessibilityRole="button">
@@ -167,10 +183,24 @@ function Onboarding() {
         {step === "connect" ? (
           <View style={styles.card}>
             <Text style={styles.hello}>
-              Welcome aboard, <Text style={styles.helloName}>{first}</Text>
+              Welcome aboard{first ? ", " : ""}
+              {first ? <Text style={styles.helloName}>{first}</Text> : null}
             </Text>
             <Text style={[styles.h1, styles.center]}>Where does your writing live?</Text>
             <Text style={[styles.muted, styles.center]}>Bring it in however suits you. We turn it into a research notebook you can question, hear and launch from.</Text>
+            {isApple && !user.name ? (
+              <Field
+                label="What should we call you? (optional)"
+                value={yourName}
+                onChangeText={setYourName}
+                onBlur={saveYourName}
+                onSubmitEditing={saveYourName}
+                maxLength={200}
+                autoComplete="name"
+                textContentType="name"
+                returnKeyType="done"
+              />
+            ) : null}
             <AddSource compact roomy initialMethod="upload" examples={EXAMPLES} onAdded={added} />
           </View>
         ) : null}
