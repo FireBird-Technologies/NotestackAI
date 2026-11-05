@@ -73,6 +73,26 @@ def test_purchase_sync_sets_the_plan_and_upgrade_moves_it(client, auth, iap_on, 
     assert body["plan"]["id"] == "studio"
 
 
+def test_starter_purchase_sets_the_plan_and_upgrade_moves_it(client, auth, iap_on, store, db_session):
+    store.customer = customer("starter")
+    body = client.post("/api/billing/iap/sync", headers=auth).json()
+    assert body["plan"]["id"] == "starter" and body["billed_by"] == "app_store"
+
+    # Both active at once, as a store can briefly show during an upgrade: the higher plan wins.
+    store.customer = {"entitlements": {**customer("starter")["entitlements"], **customer("writer")["entitlements"]},
+                      "subscriptions": {**customer("starter")["subscriptions"], **customer("writer")["subscriptions"]}}
+    body = client.post("/api/billing/iap/sync", headers=auth).json()
+    assert body["plan"]["id"] == "writer"
+
+
+def test_expired_starter_drops_to_free(client, auth, iap_on, store, db_session):
+    store.customer = customer("starter")
+    client.post("/api/billing/iap/sync", headers=auth)
+    store.customer = customer("starter", expires=-timedelta(minutes=5))
+    body = client.post("/api/billing/iap/sync", headers=auth).json()
+    assert body["plan"]["id"] == "free"
+
+
 def test_expiry_drops_to_free_and_grace_keeps_the_plan(client, auth, iap_on, store, db_session):
     store.customer = customer("writer", issue=True)
     body = client.post("/api/billing/iap/sync", headers=auth).json()

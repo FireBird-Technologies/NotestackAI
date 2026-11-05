@@ -5,6 +5,7 @@ import logging
 import re
 import time
 import uuid
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from typing import Literal
 
@@ -540,6 +541,41 @@ def _sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
 
+CHAT_KEEPALIVE_SECONDS = 15.0
+_detached_streams: set[asyncio.Task] = set()  # the loop only holds tasks weakly: these must not be collected mid-answer
+
+
+def _detached(stream: AsyncIterator[str], keepalive: float = CHAT_KEEPALIVE_SECONDS) -> AsyncIterator[str]:
+    """Runs a stream on its own, so a phone that locks or loses signal stops only the reading: the answer is still
+    researched and saved, for the app to find when it comes back. Long silences send an SSE comment, which clients
+    ignore, so that nothing along the way takes the quiet connection for a dead one."""
+    chunks: asyncio.Queue[str | None] = asyncio.Queue()
+
+    async def pump() -> None:
+        try:
+            async for chunk in stream:
+                chunks.put_nowait(chunk)
+        finally:
+            chunks.put_nowait(None)
+
+    task = asyncio.create_task(pump())
+    _detached_streams.add(task)
+    task.add_done_callback(_detached_streams.discard)
+
+    async def read() -> AsyncIterator[str]:
+        while True:
+            try:
+                chunk = await asyncio.wait_for(chunks.get(), timeout=keepalive)
+            except TimeoutError:
+                yield ": keepalive\n\n"
+                continue
+            if chunk is None:
+                return
+            yield chunk
+
+    return read()
+
+
 _STEP_LABEL = {
     "list": "Scanning the archive", "search": "Searching for", "read": "Reading", "think": "",
     "recall": "Remembering", "external": "", "external_connect": "Connecting to",
@@ -798,7 +834,7 @@ async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)
             except Exception:
                 log.exception("Research failed for chat %s: %r", chat_row.id, body.question[:200])  # cause, not just "lost signal"
                 trace.error = "research raised (see the traceback above); no answer was saved"
-                yield _sse("error", {"message": "Lost signal while researching. Try again."})
+                yield _sse("error", {"message": "Something went wrong while researching. Try again."})
                 return
 
         save_started = time.perf_counter()
@@ -914,10 +950,11 @@ async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)
             log.exception("Chat failed for notebook %s: %r", nb.id, body.question[:200])
             trace.error = trace.error or "the chat stream raised (see the traceback above)"
             db.rollback()
-            yield _sse("error", {"message": "Lost signal while researching. Try again."})
+            yield _sse("error", {"message": "Something went wrong while researching. Try again."})
         finally:
             trace.emit()  # one block per message, also when the client left or research failed
+            db.commit()  # gives the connection back: this outlives the request, whose cleanup ran before the stream began
 
     # X-Accel-Buffering: nginx would otherwise hold the streamed answer back until the response ends.
-    return StreamingResponse(stream(), media_type="text/event-stream",
+    return StreamingResponse(_detached(stream()), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})

@@ -80,7 +80,7 @@ export function Reader({
                   archive, so you can ask about it and turn it into audio, video and Launch Kits.
                 </p>
               </div>
-              <button type="button" className="btn btn-small btn-primary" onClick={() => openUpgrade("indexed_posts")}>
+              <button type="button" className="btn btn-small btn-primary" onClick={() => openUpgrade()}>
                 Upgrade to index it
               </button>
             </div>

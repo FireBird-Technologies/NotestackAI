@@ -23,7 +23,7 @@ from app.models import BillingEvent, Subscription, User, Workspace
 log = logging.getLogger(__name__)
 
 API_URL = "https://api.revenuecat.com/v1/subscribers/{}"
-PLAN_ORDER = ("studio", "writer")  # the entitlement ids; the first active one is the plan
+PLAN_ORDER = ("studio", "writer", "starter")  # the entitlement ids, highest first; the first active one is the plan
 # Where the person manages a store subscription (the billing problem email links here).
 MANAGE_URLS = {
     "app_store": "https://apps.apple.com/account/subscriptions",
@@ -42,7 +42,7 @@ NEW_PERIOD = {"INITIAL_PURCHASE", "RENEWAL"}  # a fresh video allowance, as Stri
 
 @dataclass
 class StoreState:
-    plan: str  # "writer", "studio", or "free" when nothing is active
+    plan: str  # "starter", "writer", "studio", or "free" when nothing is active
     status: str  # "active", "past_due" (billing problem, still in the store's grace period) or "canceled"
     store: str | None  # "app_store" / "play_store"
     transaction_id: str | None
@@ -64,7 +64,7 @@ def fetch_customer(app_user_id: str) -> dict:
 
 
 def state_from(customer: dict, now: datetime | None = None) -> StoreState:
-    """The plan a customer's entitlements give: Studio over Writer, only while unexpired (or in a grace period)."""
+    """The plan a customer's entitlements give: the highest of them, only while unexpired (or in a grace period)."""
     now = now or datetime.now(UTC)
     # Matched without case: the dashboard's identifier may be "Writer" or "writer"
     entitlements = {k.lower(): v for k, v in (customer.get("entitlements") or {}).items()}
