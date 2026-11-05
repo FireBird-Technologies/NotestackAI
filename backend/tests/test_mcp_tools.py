@@ -10,7 +10,7 @@ from fastapi import HTTPException
 from mcp.server.auth.provider import AccessToken
 
 from app.mcp import common, limits, scope, tools_write, views, widgets
-from app.models import Artifact, DocumentTopic, Job, Notebook, Source, Topic, User, Workspace
+from app.models import Artifact, Document, DocumentTopic, Job, Notebook, Source, Topic, User, Workspace
 from tests.test_buildout import auth, connect, docs, feed  # noqa: F401  (fixtures and helpers)
 from tests.test_mcp import _blog, anyio_backend, as_writer, call, call_raw, fake_research, mcp, mcp_db  # noqa: F401  (fixtures and helpers)
 from tests.test_videos import API, b2v, make_video  # noqa: F401  (fixture and helper)
@@ -38,6 +38,19 @@ def make_artifact(db_session, kind="report", status="ready", content=None):
     db_session.add(a)
     db_session.commit()
     return a
+
+
+def make_indexed_document(db_session, title="A post"):
+    document = Document(
+        workspace_id=workspace_id(db_session),
+        title=title,
+        url=f"https://example.com/{uuid.uuid4()}",
+        path=f"sources/example/{uuid.uuid4()}.md",
+        clean_text="A usable indexed post.",
+    )
+    db_session.add(document)
+    db_session.commit()
+    return document
 
 
 # The whole set
@@ -247,8 +260,7 @@ async def test_the_settings_form_offers_the_apps_real_choices(client, auth, run_
 @pytest.mark.anyio
 async def test_the_settings_form_includes_every_notebook_in_activity_order(as_writer, mcp, db_session):  # noqa: F811
     base = datetime(2026, 1, 1, tzinfo=UTC)
-    db_session.add(Source(workspace_id=workspace_id(db_session), feed_url="https://pending.example/feed.xml",
-                          site_url="https://pending.example", platform="rss", title="Pending", sync_status="syncing"))
+    make_indexed_document(db_session)
     notebooks = [Notebook(workspace_id=workspace_id(db_session), title=f"Notebook {i:02d}",
                           updated_at=base + timedelta(minutes=i)) for i in range(45)]
     db_session.add_all(notebooks)
@@ -1109,9 +1121,7 @@ def test_the_video_view_plays_when_rendered_and_waits_when_not():
 
 @pytest.mark.anyio
 async def test_generation_form_restores_the_artifact_it_created(client, auth, as_writer, mcp, db_session):  # noqa: F811
-    db_session.add(Source(workspace_id=workspace_id(db_session), feed_url="https://pending.example/feed.xml",
-                          site_url="https://pending.example", platform="rss", title="Pending", sync_status="syncing"))
-    db_session.commit()
+    make_indexed_document(db_session)
     form = await call_raw(mcp, "choose_options", make="mind_map")
     payload = form.structuredContent
     assert payload["state_url"] == "http://localhost:8000/api/mcp/widget-state"
@@ -1344,9 +1354,7 @@ def test_the_video_form_offers_the_writers_saved_voices_with_previews_instead_of
 
 @pytest.mark.anyio
 async def test_widget_state_tool_saves_and_restores_without_direct_fetch(auth, as_writer, mcp, db_session):  # noqa: F811
-    db_session.add(Source(workspace_id=workspace_id(db_session), feed_url="https://pending.example/feed.xml",
-                          site_url="https://pending.example", platform="rss", title="Pending", sync_status="syncing"))
-    db_session.commit()
+    make_indexed_document(db_session)
     form = await call_raw(mcp, "choose_options", make="mind_map")
     token = form.structuredContent["state_token"]
     artifact = make_artifact(db_session, "mind_map", content={"title": "Map", "root": {"label": "Root"}})
