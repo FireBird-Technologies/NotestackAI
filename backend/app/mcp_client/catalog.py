@@ -5,12 +5,10 @@ from concurrent.futures import ThreadPoolExecutor
 
 from app.mcp_client.icon import fetch_server_icon, monogram_icon
 
-# Curated apps shown as one-click suggestions. Slack has no dynamic registration, so connecting it needs a Slack app
-# listed in OUTBOUND_MCP_OAUTH_CLIENTS_JSON.
+# Curated apps shown as one-click suggestions. Slack and Canva are intentionally omitted from the user-facing catalog;
+# writers can still add another remote MCP server manually.
 CATALOG: list[dict[str, str]] = [
     {"name": "B2V", "server_url": "https://api.blog2video.app/mcp/sse", "description": "Blog2Video: turn your posts into videos"},
-    {"name": "Slack", "server_url": "https://mcp.slack.com/mcp", "description": "Search and read channels and messages"},
-    {"name": "Canva", "server_url": "https://mcp.canva.com/mcp", "description": "Designs, posters and presentations"},
     {"name": "Notion", "server_url": "https://mcp.notion.com/mcp", "description": "Your notes, pages and docs"},
     {"name": "Zapier", "server_url": "https://mcp.zapier.com/api/v1/connect", "description": "Automations across your apps"},
 ]

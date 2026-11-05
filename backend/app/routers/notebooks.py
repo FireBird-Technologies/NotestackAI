@@ -655,7 +655,7 @@ async def _learn(db, workspace_id: uuid.UUID, message_id: uuid.UUID, kind: str,
 async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)):
     nb = _get(ctx, notebook_id)
     db = ctx.db
-    # Free has a fixed number of chat questions: refuse with a real 402 here, before the stream starts.
+    # Administrators may configure a capped plan: refuse with a real 402 before the stream starts.
     plan = check_limit(db, ctx.workspace, "chat_messages")
     trace = ChatTrace(notebook=nb.title, message=body.question)
     workspace_id = ctx.workspace.id

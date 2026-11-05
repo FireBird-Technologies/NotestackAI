@@ -17,8 +17,8 @@ const LIMIT_TITLES: Record<string, string> = {
   reports: "Reports used up",
   infographics: "Infographics used up",
   sources: "Your station is full",
-  voice_cloning: "Voice cloning is locked",
-  chat_messages: "Free chat messages used up",
+  voice_cloning: "Voice cloning is unavailable",
+  chat_messages: "Chat message limit reached",
 };
 
 /** What the plan adds over the current one, as short boost chips ("20x audio minutes"). */
@@ -138,7 +138,7 @@ export default function UpgradeModal() {
     ? [...(status?.meters ?? []), ...(status?.more_meters ?? [])].find((m) => m.key === limit.kind)
     : undefined;
   const meter = listed && counted ? { ...listed, ...counted } : listed;
-  // Free's chat messages are a total that never refills, and the popup also warns while some are still left.
+  // Custom capped plans can also warn while some chat messages are still left.
   const chatLimit = limit?.kind === "chat_messages";
   const warning = !!limit?.left && limit.left > 0;
   const canBuy = modal.mode !== "welcome" && offers.length > 0 && (status?.can_upgrade || !status?.billing_enabled);

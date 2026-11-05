@@ -7,8 +7,8 @@ import { PageHeader, Tabs } from "../components/ui";
 type Tab = "apps" | "tools";
 
 const TABS: { id: Tab; label: string; blurb: string }[] = [
-  { id: "apps", label: "Use Notestack in Claude or ChatGPT", blurb: "Let your AI apps search your archive and create notebooks." },
-  { id: "tools", label: "External tools", blurb: "Let Notestack's research chat use outside apps and data." },
+  { id: "apps", label: "Use Notestack in ChatGPT, Claude, and more via MCP", blurb: "Bring your notebooks into the AI assistants where you already work." },
+  { id: "tools", label: "Connect Notion, Zapier, and more to your notebooks", blurb: "Let research chat use approved external tools and live data." },
 ];
 
 /** Everything about extending Notestack: AI apps that use it, and outside tools it uses. */

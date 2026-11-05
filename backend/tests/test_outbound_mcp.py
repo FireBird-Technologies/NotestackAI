@@ -913,11 +913,11 @@ def test_every_connection_gets_a_logo(monkeypatch):
     assert icon.ensure_icon("https://x.dev/mcp", "X", "data:image/png;base64,REAL") == "data:image/png;base64,REAL"
 
 
-def test_catalog_keeps_connected_servers_visible(client, auth, monkeypatch):
+def test_catalog_hides_slack_and_canva(client, auth, monkeypatch):
     monkeypatch.setattr("app.mcp_client.catalog.fetch_server_icon", lambda url: None)
     monkeypatch.setattr("app.routers.outbound_mcp.manager.discover", lambda url, token=None: TOOLS)
     entries = client.get("/api/outbound-mcp/catalog", headers=auth).json()
-    assert [entry["name"] for entry in entries] == ["B2V", "Slack", "Canva", "Notion", "Zapier"]
+    assert [entry["name"] for entry in entries] == ["B2V", "Notion", "Zapier"]
     notion = next(e for e in entries if e["name"] == "Notion")
     assert notion["icon_url"].startswith("data:image/svg+xml") and notion["server_url"].startswith("https://")
     client.post("/api/outbound-mcp/connections", headers=auth, json={"name": "Notion", "server_url": notion["server_url"]})

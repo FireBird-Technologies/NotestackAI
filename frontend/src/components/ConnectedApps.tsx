@@ -29,7 +29,7 @@ export function ConnectedApps() {
   return (
     <>
       <p className="muted">
-        Apps like Claude that you have let use your Notestack. Add one from its connector settings with your API address.
+        Apps like ChatGPT and Claude that you have let use your Notestack. Add one from its connector settings with your API address.
         Disconnecting an app signs only that app out.
       </p>
       {grants && grants.length === 0 && <p className="mono muted">No apps connected.</p>}

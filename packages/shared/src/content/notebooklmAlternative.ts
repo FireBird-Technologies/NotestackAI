@@ -66,7 +66,7 @@ export const NOTEBOOKLM_ALT_FAQ = [
   },
   {
     q: "Is Notestack free?",
-    a: "Yes, there is a free plan to try it on your latest posts. Paid plans add more sources, more posts, more audio and video minutes and voice cloning.",
+    a: "Yes. Every plan includes unlimited notebooks, Notestack MCP access for ChatGPT and Claude, and external connections such as Notion and Zapier. Paid plans add unlimited chats, more posts and larger audio, video and creation allowances, and Writer and Studio add consented voice cloning.",
   },
   {
     q: "Can Notestack make NotebookLM style audio overviews?",

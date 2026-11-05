@@ -28,7 +28,7 @@ export function ConnectorSetup({ showOAuthNote = true, compact = false }: { show
 
   if (compact) return (
     <div className="connector-compact">
-      <p className="muted connector-intro">Paste this URL into Claude or ChatGPT, then sign in to approve access.</p>
+      <p className="muted connector-intro">Paste this URL into ChatGPT, Claude, or another MCP client, then sign in to approve access.</p>
 
       <section className="connector-url-card" aria-label="MCP server URL">
         <code>{MCP_SERVER_URL}</code>
@@ -66,7 +66,7 @@ export function ConnectorSetup({ showOAuthNote = true, compact = false }: { show
   return (
     <>
       <p className="muted connector-intro">
-        Use your archive and create Notestack projects from Claude or ChatGPT. Paste this MCP server address into the
+        Use your archive and create Notestack projects from ChatGPT, Claude, or another MCP client. Paste this server address into the
         app you want to connect; Notestack will ask you to sign in and approve access.
       </p>
 
