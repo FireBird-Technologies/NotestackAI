@@ -285,7 +285,7 @@ export function ChatTab({ notebook, chatId, onStarted, onNextStep, onNeedPosts }
             <View
               style={styles.track}
               accessibilityRole="progressbar"
-              accessibilityLabel="Free chat messages used"
+              accessibilityLabel="Plan chat messages used"
               accessibilityValue={{ min: 0, max: quota.limit, now: Math.min(quota.used, quota.limit) }}>
               <View
                 style={[
@@ -296,7 +296,7 @@ export function ChatTab({ notebook, chatId, onStarted, onNextStep, onNeedPosts }
               />
             </View>
             <Text style={styles.limitText}>
-              Free plan chat limit{" "}
+              Plan chat limit{" "}
               <Text style={styles.limitCount}>
                 {Math.min(quota.used, quota.limit)}/{quota.limit}
               </Text>{" "}

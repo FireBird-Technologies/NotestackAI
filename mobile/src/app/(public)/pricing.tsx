@@ -6,7 +6,7 @@ import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { CycleToggle, PlanCard } from "@/account/plans";
-import { Eyebrow, Lede, PageTitle, PublicPage } from "@/shell/public-page";
+import { Eyebrow, PageTitle, PublicPage } from "@/shell/public-page";
 import { Button } from "@/ui";
 
 /**
@@ -25,7 +25,6 @@ export default function Pricing() {
     <PublicPage>
       <Eyebrow>Pricing</Eyebrow>
       <PageTitle>Pick your trajectory</PageTitle>
-      <Lede>Start free with your first 5 posts. Paid plans index the rest of your archive.</Lede>
 
       <CycleToggle cycle={cycle} onChange={setCycle} plans={plans} />
 
