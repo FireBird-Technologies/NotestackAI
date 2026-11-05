@@ -174,7 +174,7 @@ function GenerateVoicePanel({
                 <strong>Voice cloning is not available on this plan</strong>
                 <p className="muted small">Record a couple of minutes and every audio overview is narrated by you.</p>
               </div>
-              <button className="btn btn-primary" onClick={() => openUpgrade("writer")}>
+              <button className="btn btn-primary" onClick={() => openUpgrade()}>
                 Upgrade to clone my voice
               </button>
             </div>
@@ -492,7 +492,7 @@ export default function VoiceProfile() {
             onClone={() => {
               setAdding(false); // the recorder opens in its own modal
               if (state.clone.allowed) setCloning(true);
-              else openUpgrade("writer");
+              else openUpgrade();
             }}
           />
         </Modal>

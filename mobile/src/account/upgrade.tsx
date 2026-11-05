@@ -11,7 +11,7 @@ import { planQuery } from "@/account/plan";
 import { track } from "@/lib/analytics";
 import { on } from "@/lib/platform";
 import { CycleToggle, PlanCard } from "@/account/plans";
-import { buy, getPackages, identify, manageSubscriptions, purchasesReady, restore } from "@/account/purchases";
+import { buy, getPackages, identify, isStorePlan, manageSubscriptions, purchasesReady, restore } from "@/account/purchases";
 import { colors } from "@/ui/theme";
 import { ErrorText, Loading } from "@/ui";
 import { PillButton, Sheet } from "@/ui/widgets";
@@ -19,7 +19,7 @@ import { PillButton, Sheet } from "@/ui/widgets";
 const SITE = "https://notestack.ai";
 const STORE = Platform.OS === "ios" ? "the App Store" : "Google Play";
 
-type Opening = { message?: string; highlight?: string | null };
+type Opening = { message?: string };
 
 const UpgradeContext = createContext<{ open: (o?: Opening) => void } | null>(null);
 
@@ -46,7 +46,7 @@ export function UpgradeProvider({ children }: { children: ReactNode }) {
         const d = detail as PlanLimitDetail;
         if (d.left === undefined) {
           track("paywall_view", { limit: d.kind ?? "unknown" });
-          setOpening({ message: d.message, highlight: d.upgrade_to });
+          setOpening({ message: d.message });
         }
       }),
     [],
@@ -129,8 +129,9 @@ function Paywall({ opening }: { opening: Opening }) {
       {!s.billing_enabled || !purchasesReady ? <Text style={styles.note}>Plans can&apos;t be bought in the app yet.</Text> : null}
 
       <CycleToggle cycle={cycle} onChange={setCycle} plans={plans} />
-      {plans.map((plan) => {
-        const pkg = plan.id === "writer" || plan.id === "studio" ? packages.data?.[`${plan.id}_${cycle}`] : undefined;
+      {/* Free isn't something to buy: only the paid plans, though `rank` still counts it as the lowest. */}
+      {plans.filter((plan) => plan.price_monthly_usd > 0).map((plan) => {
+        const pkg = isStorePlan(plan.id) ? packages.data?.[`${plan.id}_${cycle}`] : undefined;
         const isCurrent = plan.id === current;
         const higher = rank(plan.id) > rank(current);
         return (
@@ -138,7 +139,6 @@ function Paywall({ opening }: { opening: Opening }) {
             key={plan.id}
             plan={plan}
             cycle={cycle}
-            highlight={opening.highlight ? plan.id === opening.highlight : isCurrent || plan.id === POPULAR_PLAN}
             badge={isCurrent ? "Your plan" : plan.id === POPULAR_PLAN ? "Most popular" : null}
             storePrice={pkg?.product.priceString ?? null}>
             {sellable && pkg && higher ? (

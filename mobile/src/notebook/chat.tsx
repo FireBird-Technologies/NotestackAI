@@ -28,6 +28,7 @@ type Turn = {
   text: string;
   citations?: Citation[];
   status?: string;
+  savedId?: string; // a streamed answer's saved message: once the saved list has it, this turn gives way to it
   id?: string; // the saved message, once there is one: what a thumbs down is attached to
   feedback?: Feedback | null;
   topic?: string; // what the answer is about, named in the next-step suggestion under it
@@ -86,6 +87,9 @@ function OpenAction({ action, onOpen }: { action: ChatAction; onOpen: (kind: Cha
 
 /** The notebook bar's height under the status bar, for keeping the ask bar above the keyboard. */
 const BAR_HEIGHT = 60;
+/** After a dropped stream: how often to look for the answer the server is still finishing, and for how long. */
+const RECONNECT_EVERY_MS = 3000;
+const RECONNECT_MS = 3 * 60_000;
 
 /**
  * The Chat tab (web: NotebookView's chat pane): the open chat's turns, or the telescope and starter questions, the Free
@@ -139,6 +143,21 @@ export function ChatTab({ notebook, chatId, onStarted, onNextStep, onNeedPosts }
   const outOfChat = quota !== null && quota.left <= 0;
   const posts = notebook.documents.length;
 
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  /** The chat's messages as saved now, never the cached list; null when they can't be reached. */
+  const loadSaved = async (id: string) => {
+    const queryKey = ["chat", id, "messages"];
+    await queryClient.cancelQueries({ queryKey }); // a request from before the answer must not overwrite this one
+    return queryClient.fetchQuery({ queryKey, queryFn: () => notebooksApi.messages(id), staleTime: 0 }).catch(() => null);
+  };
+
   const ask = async (input: string) => {
     const text = input.trim();
     if (!text || busy || outOfChat) return;
@@ -148,16 +167,26 @@ export function ChatTab({ notebook, chatId, onStarted, onNextStep, onNeedPosts }
     const answerKey = `answer-${n}`;
     setPending((t) => [...t, { key: `ask-${n}`, role: "user", text }, { key: answerKey, role: "assistant", text: "", status: "Scanning" }]);
     const patch = (p: Partial<Turn>) => setPending((t) => t.map((x) => (x.key === answerKey ? { ...x, ...p } : x)));
+    const savedBefore = messages.data?.length ?? 0;
     let draft = "";
     let answered = false;
+    let reached = false; // the server started on this question, so it will finish it even if the stream drops
+    let limited = false;
+    let answerId: string | undefined;
     let newChatId: string | null = null;
     let action: ChatAction | undefined; // "create a report": its settings open once the stream is done
+    // Whether the saved list has this question's answer. The growth check: the same question may have been asked before.
+    const holdsAnswer = (msgs: { id: string; role: string; text: string }[]) =>
+      answerId
+        ? msgs.some((m) => m.id === answerId)
+        : msgs.length >= savedBefore + 2 && msgs.at(-1)?.role === "assistant" && msgs.at(-2)?.text === text;
     try {
       await streamSSE(
         `/api/notebooks/${notebook.id}/chat`,
         (event, data) => {
           const d = data as Record<string, unknown>;
           if (event === "status") {
+            reached = true;
             if (d.chat_id) newChatId = d.chat_id as string;
             patch({ status: d.message as string });
           } else if (event === "step") {
@@ -175,43 +204,66 @@ export function ChatTab({ notebook, chatId, onStarted, onNextStep, onNeedPosts }
           } else if (event === "answer") {
             answered = true;
             track("chat_answer");
+            answerId = d.message_id as string;
             action = (d.action as ChatAction | null | undefined) ?? undefined;
-            patch({ text: d.text as string, citations: d.citations as Citation[], status: undefined, action });
+            patch({ text: d.text as string, citations: d.citations as Citation[], status: undefined, action, savedId: answerId });
             const left = d.quota as ChatQuota | null | undefined;
             if (left !== undefined) setAnswerQuota(left);
           }
         },
         { method: "POST", body: JSON.stringify({ question: text, chat_id: chatId }) },
       );
-      if (!answered) patch({ text: "Lost signal. Try again.", status: undefined });
     } catch (e) {
       // Out of chat messages: take the question back and say so. Plans change on the web, so there is no purchase button.
       if (e instanceof ApiError && e.status === 402) {
+        limited = true;
         setPending((t) => t.filter((x) => x.key !== answerKey && !(x.role === "user" && x.text === text)));
         setQuestion(text);
         if (quota) setAnswerQuota({ used: quota.limit, limit: quota.limit, left: 0 });
       } else {
         if (__DEV__) console.warn("Chat stream failed", e);
-        // The answer already here stays; the stream only dropped after it.
-        if (!answered) patch({ text: "Lost signal. Try again.", status: undefined });
         setAnswerQuota(undefined);
       }
     } finally {
-      setBusy(false);
       void queryClient.invalidateQueries({ queryKey: planQuery.queryKey });
-      const saved = newChatId ?? chatId;
+      const saved = limited ? null : (newChatId ?? chatId);
+      let msgs = saved ? await loadSaved(saved) : null;
+      if (!answered && !limited) {
+        // The stream dropped before the answer. The server carries on without it, so look for the saved answer. The
+        // fetch comes before the deadline check: a phone back from the background gets one fresh look first.
+        if (reached && saved) {
+          patch({ status: "Reconnecting" });
+          const deadline = Date.now() + RECONNECT_MS;
+          while (mounted.current && !(msgs && holdsAnswer(msgs)) && Date.now() < deadline) {
+            await new Promise((resolve) => setTimeout(resolve, RECONNECT_EVERY_MS));
+            msgs = await loadSaved(saved);
+          }
+        }
+        if (msgs && holdsAnswer(msgs)) {
+          track("chat_answer");
+        } else {
+          track("chat_error");
+          patch({
+            text: reached ? "We couldn't finish this answer. Try again." : "Couldn't reach Notestack. Check your connection and try again.",
+            status: undefined,
+          });
+          // It never got there: nothing to find later, so the question is theirs to send again without retyping.
+          if (!reached) setQuestion((q) => q || text);
+        }
+      }
+      setBusy(false);
       if (saved) {
-        // Load the saved messages, then swap the streamed turns for them.
-        const msgs = await queryClient
-          .fetchQuery({ queryKey: ["chat", saved, "messages"], queryFn: () => notebooksApi.messages(saved) })
-          .catch(() => []);
         await queryClient.invalidateQueries({ queryKey: ["notebook", notebook.id, "chats"] });
         if (newChatId && newChatId !== chatId) onStarted(newChatId);
-        // The server answered even when the stream to here dropped first: the saved answer replaces "Lost signal".
-        const last = msgs.at(-1);
-        const savedAnswer = last?.role === "assistant" && msgs.at(-2)?.text === text ? last : undefined;
-        setPending((t) => (savedAnswer || t.some((x) => x.key === answerKey && x.citations) ? [] : t));
-        action ??= savedAnswer?.action ?? undefined;
+        // Swap the streamed turns for the saved ones only once the saved list has them. If it couldn't be loaded, they
+        // stay, and give way when it next arrives (see `settled` below).
+        if (msgs && holdsAnswer(msgs)) {
+          setPending([]);
+          action ??= msgs.at(-1)?.action ?? undefined;
+        } else if (msgs && msgs.length > savedBefore && msgs.at(-1)?.role === "user" && msgs.at(-1)?.text === text) {
+          // Saved without an answer (research failed): the list shows the question, this turn says what went wrong.
+          setPending((t) => t.filter((x) => x.key !== `ask-${n}`));
+        }
       }
       // "Create a report": its settings open now, as on the web (after the stream, so the switch can't cut it short).
       if (action) onNextStep(action.artifact, action.settings);
@@ -220,9 +272,12 @@ export function ChatTab({ notebook, chatId, onStarted, onNextStep, onNeedPosts }
 
   if (chatId && messages.isPending && !pending.length) return <Loading />;
 
+  // A streamed answer the saved list now holds gives way to it, with its question, so neither shows twice.
+  const savedIds = new Set((messages.data ?? []).map((m) => m.id));
+  const settled = new Set(pending.filter((t) => t.savedId && savedIds.has(t.savedId)).map((t) => t.key));
   const turns: Turn[] = [
     ...(messages.data ?? []).map((m) => ({ key: m.id, id: m.id, role: m.role, text: m.text, citations: m.citations, feedback: m.feedback, topic: m.topic, action: m.action ?? undefined })),
-    ...pending,
+    ...pending.filter((t) => !settled.has(t.key) && !settled.has(t.key.replace("ask-", "answer-"))),
   ];
   const off = busy || !posts || outOfChat;
   // The next-step suggestion goes under the last answer only, once it is saved and nothing is being asked.
@@ -301,7 +356,7 @@ export function ChatTab({ notebook, chatId, onStarted, onNextStep, onNeedPosts }
                 {Math.min(quota.used, quota.limit)}/{quota.limit}
               </Text>{" "}
               ·{" "}
-              <Text style={styles.upgrade} onPress={() => upgrade({ highlight: "writer" })} accessibilityRole="link">
+              <Text style={styles.upgrade} onPress={() => upgrade()} accessibilityRole="link">
                 Upgrade
               </Text>
             </Text>
@@ -313,7 +368,7 @@ export function ChatTab({ notebook, chatId, onStarted, onNextStep, onNeedPosts }
             value={question}
             onChangeText={setQuestion}
             placeholder={
-              outOfChat ? "You have used all your free chat messages" : posts ? "What have I written about pricing?" : "Add posts to start asking"
+              outOfChat ? "Chat limit reached" : posts ? "What have I written about pricing?" : "Add posts to start asking"
             }
             placeholderTextColor={colors.text3}
             multiline
@@ -332,8 +387,9 @@ export function ChatTab({ notebook, chatId, onStarted, onNextStep, onNeedPosts }
               <SymbolView name={{ ios: "arrow.up", android: "arrow_upward" }} size={20} weight="semibold" tintColor={colors.white} />
             )}
           </Pressable>
-          {/* A field that can't be typed in takes no taps of its own: this catches them, to add posts first. */}
+          {/* A field that can't be typed in takes no taps of its own: this catches them, to add posts or upgrade first. */}
           {!posts ? <Pressable onPress={onNeedPosts} accessibilityRole="button" accessibilityLabel="Add posts to start asking" style={StyleSheet.absoluteFill} /> : null}
+          {posts && outOfChat && !busy ? <Pressable onPress={() => upgrade()} accessibilityRole="button" accessibilityLabel="Chat limit reached. See plans" style={StyleSheet.absoluteFill} /> : null}
         </View>
       </View>
     </KeyboardAvoidingView>

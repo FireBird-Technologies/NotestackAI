@@ -727,7 +727,7 @@ export default function Sources() {
                       can use your whole archive.
                     </p>
                   </div>
-                  <button type="button" className="btn btn-small btn-primary" onClick={() => openUpgrade("indexed_posts")}>
+                  <button type="button" className="btn btn-small btn-primary" onClick={() => openUpgrade()}>
                     Index all {s.document_count}
                   </button>
                 </div>

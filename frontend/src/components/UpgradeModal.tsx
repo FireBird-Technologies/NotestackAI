@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { POPULAR_PLAN } from "@notestack/shared/billing";
 import type { BillingCycle } from "@notestack/shared/endpoints";
 import type { Meter, PlanInfo } from "@notestack/shared/types";
 import { useUpgrade } from "../hooks/useUpgrade";
@@ -122,14 +123,9 @@ export default function UpgradeModal() {
   let offers = (status?.plans ?? []).filter((p) => ORDER.indexOf(p.id) > rank);
   if (!offers.length && status && !status.billing_enabled) offers = status.plans.filter((p) => p.price_monthly_usd > 0);
   const limit = modal.mode === "limit" ? modal.limit : null;
-  // "View plans" lists every plan and highlights the current one (Studio on Free); the other modes only offer upgrades
-  // and recommend Studio unless the opener (a highlight, a limit's upgrade_to) names another.
+  // "View plans" lists every plan; the other modes only offer upgrades. The most popular plan is always the one picked.
   const plansMode = modal.mode === "plans";
   const shown = plansMode ? status?.plans ?? [] : offers;
-  const recommended = plansMode
-    ? current?.id === "free" ? "studio" : current?.id
-    : [modal.mode === "explore" ? modal.highlight : null, limit?.upgrade_to, "studio", status?.next_plan]
-        .find((id) => id && offers.some((p) => p.id === id)) ?? offers[0]?.id;
   // The popup's own counts when it carries them (a chat warning opens before the billing status refreshes).
   const counted = limit?.kind && limit.used !== undefined && limit.limit !== undefined && limit.limit > 0
     ? { used: limit.used, limit: limit.limit, pct: Math.min(1, limit.used / limit.limit) }
@@ -217,7 +213,7 @@ export default function UpgradeModal() {
             </div>
             <div className={`upg-plans${plansMode ? " upg-plans-all" : ""}`}>
               {shown.map((plan) => {
-                const pick = plan.id === recommended;
+                const pick = plan.id === POPULAR_PLAN;
                 const isCurrent = plan.id === current.id;
                 const higher = ORDER.indexOf(plan.id) > rank;
                 const free = plan.price_monthly_usd === 0;

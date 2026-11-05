@@ -156,7 +156,7 @@ function Onboarding() {
         title={`Index all ${found} posts`}
         onPress={() => {
           void markOnboarded();
-          upgrade({ highlight: "writer" });
+          upgrade();
         }}
       />
     </View>
