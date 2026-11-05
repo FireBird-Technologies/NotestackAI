@@ -441,7 +441,7 @@ export default function NotebookView() {
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [busy, setBusy] = useState(false);
   const upgrade = useUpgrade();
-  // Free's chat questions ({used, limit, left}): the latest answer's count, else the billing meter. null = unlimited.
+  // A configured chat cap ({used, limit, left}): the latest answer's count, else the billing meter. null = unlimited.
   const [chatQuota, setChatQuota] = useState<ChatQuota | null | undefined>(undefined);
   const chatMeter = upgrade.status?.more_meters.find((m) => m.key === "chat_messages");
   const quota =
@@ -815,19 +815,18 @@ export default function NotebookView() {
     }
   };
 
-  // The popup for a Free workspace that has used all its chat questions: from the input, the send button or Enter.
+  // The popup for a workspace with a custom chat cap: from the input, the send button or Enter.
   const openChatLimit = () => {
     if (!quota) return;
     const n = quota.limit;
-    upgrade.openLimit({ ...quota, kind: "chat_messages", message: `You have used all ${n} free chat message${n === 1 ? "" : "s"}.` });
+    upgrade.openLimit({ ...quota, kind: "chat_messages", message: `You have used all ${n} chat message${n === 1 ? "" : "s"} on this plan.` });
   };
 
-  // Free has a few chat questions: the upgrade popup shows after the 3rd and the 6th, and after the last one (the 10th
-  // on Free), when they have run out.
+  // If an administrator configures a capped plan, remind the writer as it approaches the limit.
   const CHAT_REMINDERS_AT = [3, 6];
   const remindChatQuota = (left: ChatQuota | null) => {
     if (!left || left.limit <= 0) return;
-    const plural = (n: number) => `${n} free chat message${n === 1 ? "" : "s"}`;
+    const plural = (n: number) => `${n} chat message${n === 1 ? "" : "s"}`;
     if (left.left <= 0) {
       upgrade.openLimit({ ...left, kind: "chat_messages", message: `You have used all ${plural(left.limit)}.` });
     } else if (CHAT_REMINDERS_AT.includes(left.used)) {
@@ -1207,13 +1206,13 @@ export default function NotebookView() {
           ))}
           <div ref={bottom} />
         </div>
-        {/* Free only: how many chat messages are left, as a bar that fills with each one sent. */}
+        {/* Custom capped plans only: how many chat messages are left. */}
         {quota && quota.limit > 0 && (
           <div className={`nbv-chat-limit${outOfChat ? " is-empty" : quota.left <= 3 ? " is-low" : ""}`}>
             <div
               className="nbv-chat-limit-track"
               role="progressbar"
-              aria-label="Free chat messages used"
+              aria-label="Plan chat messages used"
               aria-valuemin={0}
               aria-valuemax={quota.limit}
               aria-valuenow={Math.min(quota.used, quota.limit)}
@@ -1221,7 +1220,7 @@ export default function NotebookView() {
               <div className="nbv-chat-limit-fill" style={{ width: `${Math.min(100, (quota.used / quota.limit) * 100)}%` }} />
             </div>
             <p className="muted small">
-              Free plan chat limit{" "}
+              Plan chat limit{" "}
               <span className="nbv-chat-limit-count">
                 {Math.min(quota.used, quota.limit)}/{quota.limit}
               </span>{" "}

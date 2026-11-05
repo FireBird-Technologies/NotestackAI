@@ -342,7 +342,7 @@ async def quota(ctx: Ctx = Depends(get_ctx)):
 def give_consent(body: ConsentIn, request: Request, ctx: Ctx = Depends(get_ctx)):
     plan = effective_plan(ctx.db, ctx.workspace)
     if not plan.voice_cloning:
-        raise plan_limit_error(plan, "voice_cloning", "Voice cloning is on the Writer and Studio plans.")
+        raise plan_limit_error(plan, "voice_cloning", "Voice cloning is not available on this plan.")
     if not body.agreed or body.consent_text.strip() != CONSENT_TEXT:
         raise HTTPException(400, "Please read and accept the consent statement.")
     if not settings.elevenlabs_api_key:

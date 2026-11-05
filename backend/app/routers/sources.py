@@ -579,7 +579,9 @@ def list_columns() -> tuple:
     return (Document.id, Document.title, Document.url, Document.path, Document.source_id, Document.created_at,
             Document.published_at, Document.evergreen_score,
             Document.metadata_json["words"].as_integer().label("words"),
-            Document.metadata_json["locked"].as_boolean().label("locked"), Source.title.label("source_title"))
+            Document.metadata_json["locked"].as_boolean().label("locked"),
+            Document.metadata_json["notebooklm"]["notebook_title"].as_string().label("notebook_title"),
+            Source.title.label("source_title"))
 
 
 def serialize_list_rows(db, rows) -> list[dict]:
@@ -590,7 +592,9 @@ def serialize_list_rows(db, rows) -> list[dict]:
         if uncounted else {}
     return [{
         "id": str(r.id), "title": r.title, "url": r.url, "path": r.path,
-        "source_id": str(r.source_id) if r.source_id else None, "source_title": r.source_title,
+        "source_id": str(r.source_id) if r.source_id else None,
+        "source_title": r.notebook_title or r.source_title,
+        "transferred_from_notebooklm": bool(r.notebook_title),
         "added_at": r.created_at.isoformat() if r.created_at else None,
         "published_at": r.published_at.isoformat() if r.published_at else None,
         "words": r.words or len((counted.get(r.id) or "").split()), "evergreen_score": r.evergreen_score,

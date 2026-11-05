@@ -252,7 +252,7 @@ def test_notebooklm_transfer_imports_only_the_posts_left_on_the_plan(client, aut
             "kind": "source",
             "added_at": f"2026-01-{i + 1:02d}T12:00:00Z",
         }
-        for i in range(7)
+        for i in range(12)
     ]
     notebook_id = client.post("/api/notebooks", json={"title": "Imported research"}, headers=auth).json()["id"]
     r = client.post(
@@ -263,13 +263,13 @@ def test_notebooklm_transfer_imports_only_the_posts_left_on_the_plan(client, aut
     assert r.status_code == 200, r.text
     result = r.json()
     assert result["plan"] == "free"
-    assert result["plan_limit"] == 5
-    assert result["imported"] == 5
+    assert result["plan_limit"] == 10
+    assert result["imported"] == 10
     assert result["skipped_plan"] == 2
     assert {item["title"] for item in client.get("/api/documents", headers=auth).json()["items"]} == {
-        f"Notebook source {i}" for i in range(2, 7)
+        f"Notebook source {i}" for i in range(2, 12)
     }
-    assert len(client.get(f"/api/notebooks/{notebook_id}", headers=auth).json()["documents"]) == 5
+    assert len(client.get(f"/api/notebooks/{notebook_id}", headers=auth).json()["documents"]) == 10
 
     # Replaying the browser handoff is idempotent even when the plan has no room left.
     again = client.post(
@@ -278,9 +278,9 @@ def test_notebooklm_transfer_imports_only_the_posts_left_on_the_plan(client, aut
         headers=auth,
     ).json()
     assert again["imported"] == 0
-    assert again["unchanged"] == 5
+    assert again["unchanged"] == 10
     assert again["skipped_plan"] == 2
-    assert client.get("/api/documents", headers=auth).json()["total"] == 5
+    assert client.get("/api/documents", headers=auth).json()["total"] == 10
 
 
 def test_notebooklm_chat_is_a_post_sourced_to_its_notebook(client, auth, monkeypatch):
@@ -297,7 +297,7 @@ def test_notebooklm_chat_is_a_post_sourced_to_its_notebook(client, auth, monkeyp
             "kind": "source",
             "added_at": f"2026-01-{i + 1:02d}T12:00:00Z",
         }
-        for i in range(5)
+        for i in range(10)
     ]
     # The extension used to append chat.md after every source, which could drop the transcript at the plan boundary.
     posts.append({
@@ -317,7 +317,7 @@ def test_notebooklm_chat_is_a_post_sourced_to_its_notebook(client, auth, monkeyp
         headers=auth,
     )
     assert result.status_code == 200, result.text
-    assert result.json()["imported"] == 5
+    assert result.json()["imported"] == 10
     assert result.json()["skipped_plan"] == 1
 
     imported = docs(client, auth)

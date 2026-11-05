@@ -110,15 +110,15 @@ class PlanRecord(TimestampMixin, Base):
     price_monthly_usd: Mapped[float] = mapped_column(Float, default=0)
     price_annual_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
     sources: Mapped[int] = mapped_column(Integer, default=1)
-    indexed_posts: Mapped[int] = mapped_column(Integer, default=5)
+    indexed_posts: Mapped[int] = mapped_column(Integer, default=10)
     audio_minutes: Mapped[int] = mapped_column(Integer, default=0)
     videos: Mapped[int] = mapped_column(Integer, default=0)
     launch_kits: Mapped[int] = mapped_column(Integer, default=0)  # -1 = unlimited
     reports: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # per month, -1 = unlimited
     infographics: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # per month, -1 = unlimited
     audio_overviews: Mapped[int] = mapped_column(Integer, default=-1, server_default="-1")  # allowed (in total on Free); -1 = no cap
-    chat_messages: Mapped[int] = mapped_column(Integer, default=-1, server_default="-1")  # questions (in total on Free); -1 = unlimited
-    voice_cloning: Mapped[bool] = mapped_column(Boolean, default=False)
+    chat_messages: Mapped[int] = mapped_column(Integer, default=-1, server_default="-1")  # -1 = unlimited
+    voice_cloning: Mapped[bool] = mapped_column(Boolean, default=True)
     features: Mapped[list] = mapped_column(JSON, default=list)  # bullet points on the pricing page
     # Server defaults: 0006 seeds this table without these columns on a database 0001 built from the models.
     # False: `videos` is a lifetime total that never refills (Free). True: per month.

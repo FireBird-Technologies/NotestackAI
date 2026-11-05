@@ -42,11 +42,11 @@ class Plan:
     reports: int = 0  # reports a month; -1 = unlimited
     infographics: int = 0  # infographics a month (in total on a lifetime plan); -1 = unlimited
     audio_overviews: int = -1  # audio overviews allowed (in total on a lifetime plan), whatever their length; -1 = no cap
-    chat_messages: int = -1  # notebook chat questions (in total on a lifetime plan); -1 = unlimited
+    chat_messages: int = -1  # notebook chat questions; -1 = unlimited
 
     @property
     def lifetime(self) -> bool:
-        """The allowances for videos, audio overviews, Launch Kits, infographics and chat messages are totals that never reset (Free)."""
+        """Capped usage allowances are lifetime totals rather than monthly allowances on this plan (Free)."""
         return not self.videos_monthly
 
 
@@ -71,7 +71,7 @@ DEFAULT_PLANS: dict[str, Plan] = {
         price_monthly_usd=0,
         price_annual_usd=None,
         sources=-1,
-        indexed_posts=5,
+        indexed_posts=10,
         audio_minutes=-1,
         audio_overviews=1,
         videos=1,
@@ -81,10 +81,12 @@ DEFAULT_PLANS: dict[str, Plan] = {
         chat_messages=10,
         voice_cloning=False,
         features=(
-            "Up to 5 posts indexed, from any source",
-            "10 research chat messages with citations",
+            "Unlimited notebooks",
+            "10 posts per notebook",
+            "1 cinematic video",
+            "Use Notestack in ChatGPT, Claude, and more via MCP",
+            "Connect Notion, Zapier, and more to your notebooks",
             "1 audio overview, any length",
-            "1 video",
             "2 Launch Kits",
             "2 infographics",
             "2 reports a month",
@@ -99,18 +101,22 @@ DEFAULT_PLANS: dict[str, Plan] = {
         price_monthly_usd=14.99,
         price_annual_usd=136.99,
         sources=-1,
-        indexed_posts=30,
+        indexed_posts=100,
         audio_minutes=30,
         videos=5,
         launch_kits=20,
         reports=20,
         infographics=20,
-        voice_cloning=False,
+        voice_cloning=True,
         features=(
-            "Up to 30 posts indexed, from any source",
-            "Unlimited research chat",
+            "Unlimited notebooks",
+            "Unlimited chats",
+            "100 posts per notebook",
+            "5 cinematic videos a month",
+            "Use Notestack in ChatGPT, Claude, and more via MCP",
+            "Connect Notion, Zapier, and more to your notebooks",
+            "Unlimited voice cloning",
             "5x more audio overviews than Free",
-            "5 videos a month",
             "20 Launch Kits a month",
             "20 reports a month",
             "20 infographics a month",
@@ -124,7 +130,7 @@ DEFAULT_PLANS: dict[str, Plan] = {
         price_monthly_usd=24.99,
         price_annual_usd=227.99,
         sources=-1,
-        indexed_posts=100,
+        indexed_posts=300,
         audio_minutes=60,
         videos=10,
         launch_kits=40,
@@ -132,14 +138,17 @@ DEFAULT_PLANS: dict[str, Plan] = {
         infographics=50,
         voice_cloning=True,
         features=(
-            "Up to 100 posts indexed, from any source",
-            "Unlimited research chat",
+            "Unlimited notebooks",
+            "Unlimited chats",
+            "300 posts per notebook",
+            "10 cinematic videos a month",
+            "Use Notestack in ChatGPT, Claude, and more via MCP",
+            "Connect Notion, Zapier, and more to your notebooks",
+            "Unlimited voice cloning",
             "10x more audio overviews than Free",
-            "10 videos a month",
             "40 Launch Kits a month",
             "50 reports a month",
             "50 infographics a month",
-            "Voice cloning with consent",
         ),
         video_limits=WRITER_VIDEO_LIMITS,
     ),
@@ -150,7 +159,7 @@ DEFAULT_PLANS: dict[str, Plan] = {
         price_monthly_usd=48.99,
         price_annual_usd=443.99,
         sources=-1,
-        indexed_posts=250,
+        indexed_posts=500,
         audio_minutes=240,
         videos=20,
         launch_kits=-1,
@@ -158,10 +167,14 @@ DEFAULT_PLANS: dict[str, Plan] = {
         infographics=-1,
         voice_cloning=True,
         features=(
-            "Up to 250 posts indexed, from any source",
-            "Unlimited research chat",
+            "Unlimited notebooks",
+            "Unlimited chats",
+            "500 posts per notebook",
+            "20 cinematic videos a month",
+            "Use Notestack in ChatGPT, Claude, and more via MCP",
+            "Connect Notion, Zapier, and more to your notebooks",
+            "Unlimited voice cloning",
             "40x more audio overviews than Free",
-            "20 videos a month",
             "Unlimited Launch Kits",
             "Unlimited reports",
             "Unlimited infographics",

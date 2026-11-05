@@ -39,9 +39,9 @@ def test_free_plan_nudges_and_out_of_fuel_402(client, auth, billing_on, db_sessi
     kits = next(m for m in body["meters"] if m["key"] == "launch_kits")
     assert kits["used"] == 2 and kits["pct"] == 1
     more = {m["key"]: m for m in body["more_meters"]}  # the rest of the plan, behind the sidebar card's chevron
-    assert set(more) == {"indexed_posts", "reports", "infographics", "chat_messages"} and more["indexed_posts"]["limit"] == 5
+    assert set(more) == {"indexed_posts", "reports", "infographics", "chat_messages"} and more["indexed_posts"]["limit"] == 10
     ids = [n["id"] for n in body["nudges"]]
-    assert ids[0].startswith("empty-launch_kits") and "perk-voice" in ids
+    assert ids[0].startswith("empty-launch_kits") and "perk-voice" in ids  # Free has no voice cloning, so it is offered
     assert "—" not in str(body)
 
     nb = Notebook(workspace_id=ws.id, title="Pricing")
@@ -74,19 +74,19 @@ def test_post_limit_is_one_total_across_sources_links_and_uploads(client, auth, 
     db_session.add_all([feed_a, feed_b])
     db_session.commit()
     free = PLANS["free"]
-    assert free.indexed_posts == 5 and free.sources == -1  # any number of sources, five posts in all
+    assert free.indexed_posts == 10 and free.sources == -1  # any number of sources, ten posts in all
     _index_posts(db_session, ws, 3, feed_a)
-    assert post_room(db_session, ws.id, free) == 2
-    assert post_room(db_session, ws.id, free, feed_b.id) == 2  # a second source gets what the first leaves
-    _index_posts(db_session, ws, 2, feed_b)
+    assert post_room(db_session, ws.id, free) == 7
+    assert post_room(db_session, ws.id, free, feed_b.id) == 7  # a second source gets what the first leaves
+    _index_posts(db_session, ws, 7, feed_b)
     assert post_room(db_session, ws.id, free) == 0
     assert post_room(db_session, ws.id, free, feed_a.id) == 3  # a source keeps the posts it already has
 
-    # A link or a file is refused with the upgrade prompt once all five are used.
+    # A link or a file is refused with the upgrade prompt once all ten are used.
     r = client.post("/api/sources/url", headers=auth, json={"url": "https://example.com/a-post"})
     assert r.status_code == 402 and r.json()["detail"]["kind"] == "indexed_posts" and r.json()["detail"]["upgrade_to"] == "starter"
     assert client.post("/api/sources/upload", headers=auth, json={"upload_id": "00000000-0000-0000-0000-000000000000"}).status_code == 404
-    assert (PLANS["starter"].indexed_posts, PLANS["writer"].indexed_posts, PLANS["studio"].indexed_posts) == (30, 100, 250)
+    assert (PLANS["starter"].indexed_posts, PLANS["writer"].indexed_posts, PLANS["studio"].indexed_posts) == (100, 300, 500)
 
 
 def test_free_allowances_are_totals_and_paid_ones_are_monthly(client, auth, billing_on, db_session):
@@ -99,6 +99,20 @@ def test_free_allowances_are_totals_and_paid_ones_are_monthly(client, auth, bill
     assert (starter.launch_kits, starter.audio_minutes, starter.reports) == (20, 30, 20) and not starter.lifetime
     assert (writer.launch_kits, writer.audio_minutes, writer.reports, writer.infographics) == (40, 60, 50, 50)
     assert (studio.launch_kits, studio.audio_minutes, studio.reports) == (-1, 240, -1)
+    assert all(plan.chat_messages == -1 and plan.voice_cloning for plan in (starter, writer, studio))
+    assert free.chat_messages == 10 and not free.voice_cloning
+    for plan, posts in zip((free, starter, writer, studio), (10, 100, 300, 500), strict=True):
+        assert f"{posts} posts per notebook" in plan.features
+        assert {
+            "Unlimited notebooks",
+            "Use Notestack in ChatGPT, Claude, and more via MCP",
+            "Connect Notion, Zapier, and more to your notebooks",
+        } <= set(plan.features)
+        assert any("cinematic video" in feature for feature in plan.features)
+        paid = plan is not free
+        assert ("Unlimited chats" in plan.features) is paid
+        assert ("Unlimited voice cloning" in plan.features) is paid
+    assert not any("chat message" in feature.lower() for feature in free.features)  # the cap is enforced, not advertised
 
     old = Artifact(workspace_id=ws.id, type="infographic", status="ready")
     db_session.add_all([old, Artifact(workspace_id=ws.id, type="infographic", status="failed")])
@@ -141,7 +155,8 @@ def test_checkout_disabled_without_billing(client, auth):
 def test_plan_limit_error_names_the_upgrade():
     from app.services.plans import PLANS, plan_limit_error, upgrade_for
 
-    assert upgrade_for(PLANS["free"], "voice_cloning") == "writer"
+    assert upgrade_for(PLANS["free"], "voice_cloning") == "starter"
+    assert upgrade_for(PLANS["writer"], "voice_cloning") is None
     assert upgrade_for(PLANS["free"], "indexed_posts") == "starter"
     assert upgrade_for(PLANS["writer"], "launch_kits") == "studio"
     assert upgrade_for(PLANS["studio"], "audio_minutes") is None

@@ -32,8 +32,7 @@ METERS = {
 
 
 def _capped(used: float, limit: float) -> float:
-    """What a meter shows as used: never more than its limit (a Free workspace past its 10 chat messages shows 10/10,
-    however many it sent on a paid plan). Unlimited (-1) shows the real count."""
+    """What a meter shows as used: never more than its configured limit. Unlimited (-1) shows the real count."""
     return used if limit < 0 else min(used, limit)
 
 
@@ -98,7 +97,7 @@ def build_nudges(db: Session, workspace: Workspace, plan: Plan, meters: list[dic
                                   "See plans", priority=90))
         if not plan.voice_cloning:
             out.append(_nudge("perk-voice", "upgrade", "Narrate in your own voice",
-                              "Writer unlocks voice cloning, so every audio overview sounds like you.",
+                              "A plan with voice cloning lets every audio overview sound like you.",
                               "Unlock voice", priority=40))
 
     sources = _count(db, Source, ws)
