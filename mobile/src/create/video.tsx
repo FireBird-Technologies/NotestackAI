@@ -19,6 +19,7 @@ import { type ComponentRef, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Modal, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { Pressable } from "@/ui/pressable";
 
+import { track } from "@/lib/analytics";
 import { useVoicePlayer, voicePreviewUrl } from "@/lib/audio";
 import { createStyles, CustomTopic, FocusCards, Foot, Hint, Label, Select } from "@/create/fields";
 import { voicesQuery } from "@/create/media";
@@ -210,7 +211,9 @@ export function VideoDialog({ notebook, initial, onCreate }: {
     // The video's screen opens now and waits for the server there (the limit, the service and other refusals show
     // on it); busy only guards against a second tap while this sheet goes away.
     setBusy(true);
-    onCreate(videosApi.create(body));
+    const created = videosApi.create(body);
+    created.then(() => track("video_create")).catch(() => undefined); // a refusal is shown by the video's screen
+    onCreate(created);
   };
 
   if (config.error) return <ErrorText>{config.error.message}</ErrorText>;

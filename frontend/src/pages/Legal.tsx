@@ -5,7 +5,7 @@ import SkyCanvas from "../components/SkyCanvas";
 import { useMeta } from "./Blog";
 import "../styles/legal.css";
 
-const UPDATED = "October 14, 2026";
+const UPDATED = "November 4, 2026";
 
 function LegalPage({ eyebrow, title, description, children }: {
   eyebrow: string;
@@ -98,7 +98,8 @@ export function PrivacyPolicy() {
           <li><strong>Payment processors</strong> for billing and subscription management.</li>
           <li><strong>Cloud infrastructure providers</strong> for hosting and storage.</li>
           <li><strong>AI, speech, web-import, and media providers</strong> for features you request.</li>
-          <li><strong>Analytics and email providers</strong> for usage analysis and communications.</li>
+          <li><strong>Analytics providers</strong>, including Google Analytics and Google Analytics for Firebase, for usage analysis.</li>
+          <li><strong>Email providers</strong> for communications.</li>
           <li><strong>Connected apps and MCP clients</strong> when you authorise access.</li>
         </ul>
         <p>
@@ -146,11 +147,18 @@ export function PrivacyPolicy() {
       </section>
 
       <section>
-        <h2>8. Cookies</h2>
+        <h2>8. Cookies and analytics</h2>
         <p>
           We use cookies, local storage, session storage, and similar technologies to operate the Service, maintain sign-in,
           remember preferences, preserve temporary workflow state, and analyse usage. You can control these technologies
           through your browser settings, though disabling them may affect Service functionality.
+        </p>
+        <p>
+          Our website uses Google Analytics. Our iOS and Android apps use Google Analytics for Firebase, which records the
+          screens you view, the features you use, in-app purchase activity, your app version, device and operating system
+          details, approximate location, and an app instance identifier, linked to an internal account identifier. It does
+          not receive what you write, import, or generate, and the apps do not collect advertising identifiers. You can turn
+          app analytics off at any time in the app under Settings, Privacy and email.
         </p>
       </section>
 
