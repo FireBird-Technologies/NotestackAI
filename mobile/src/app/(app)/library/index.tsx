@@ -185,7 +185,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 16,
     paddingHorizontal: 22,
-    paddingVertical: 14,
+    paddingVertical: 10,
     borderRadius: 999,
     borderWidth: 1.5,
     borderColor: colors.blue,
@@ -198,7 +198,7 @@ const styles = StyleSheet.create({
   filterText: { color: colors.text, fontSize: 18 },
   menu: {
     position: "absolute",
-    top: 60,
+    top: 52,
     left: 0,
     right: 0,
     padding: 8,

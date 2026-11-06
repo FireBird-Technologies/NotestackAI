@@ -274,14 +274,19 @@ export function PillButton({
   disabled,
   small,
   icon,
+  iconEnd,
+  style,
 }: {
-  title: string;
+  title: ReactNode;
   onPress: () => void;
   variant?: "outline" | "primary" | "danger";
   busy?: boolean;
   disabled?: boolean;
   small?: boolean;
   icon?: ReactNode;
+  /** An icon after the title; the title wraps on a narrow phone so the icon stays inside the pill. */
+  iconEnd?: ReactNode;
+  style?: StyleProp<ViewStyle>;
 }) {
   const off = disabled || busy;
   return (
@@ -297,11 +302,13 @@ export function PillButton({
         variant === "danger" && pageStyles.pillDanger,
         off && pageStyles.pillOff,
         pressed && pageStyles.pressed,
+        style,
       ]}>
       {busy ? <ActivityIndicator size="small" color={colors.white} /> : icon}
-      <Text style={[pageStyles.pillText, small && pageStyles.pillTextSmall, variant === "danger" && pageStyles.dangerText]}>
+      <Text style={[pageStyles.pillText, small && pageStyles.pillTextSmall, variant === "danger" && pageStyles.dangerText, iconEnd ? pageStyles.pillTextShrink : null]}>
         {title}
       </Text>
+      {iconEnd}
     </Pressable>
   );
 }
@@ -462,6 +469,7 @@ export const pageStyles = StyleSheet.create({
   pressed: { opacity: 0.75 },
   pillText: { color: colors.white, fontSize: 16, fontWeight: "600" },
   pillTextSmall: { fontSize: 14.5 },
+  pillTextShrink: { flexShrink: 1 },
   dangerText: { color: colors.danger },
   meter: { gap: 6 },
   meterHead: { flexDirection: "row", justifyContent: "space-between", gap: 10 },

@@ -18,6 +18,12 @@ function Icon({ size = 20, color = colors.text, strokeWidth = 1.5, strokeLinecap
   );
 }
 
+export const ExternalLinkIcon = (p: P) => (
+  <Icon {...p}>
+    <Path d="M14 4h6v6M20 4l-9 9M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4" />
+  </Icon>
+);
+
 export const PencilIcon = (p: P) => (
   <Icon {...p}>
     <Path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4zM13.5 6.5l4 4" />
