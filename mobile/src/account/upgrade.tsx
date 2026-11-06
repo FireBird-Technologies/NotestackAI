@@ -10,7 +10,7 @@ import { Platform, StyleSheet, Text, View } from "react-native";
 import { planQuery } from "@/account/plan";
 import { track } from "@/lib/analytics";
 import { on } from "@/lib/platform";
-import { CycleToggle, ManageOnWeb, PlanCard } from "@/account/plans";
+import { CycleToggle, LegalLinks, ManageOnWeb, PlanCard } from "@/account/plans";
 import { buy, getPackages, identify, isStorePlan, manageSubscriptions, purchasesReady, restore } from "@/account/purchases";
 import { colors } from "@/ui/theme";
 import { ErrorText, Loading } from "@/ui";
@@ -233,7 +233,9 @@ function Paywall({ opening }: { opening: Opening }) {
             Privacy Policy
           </Text>
         </Text>
-      ) : null}
+      ) : (
+        <LegalLinks />
+      )}
     </View>
   );
 }

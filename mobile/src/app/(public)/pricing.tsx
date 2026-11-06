@@ -5,7 +5,7 @@ import { router } from "expo-router";
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 
-import { CycleToggle, ManageOnWeb, PlanCard } from "@/account/plans";
+import { CycleToggle, LegalLinks, ManageOnWeb, PlanCard } from "@/account/plans";
 import { Eyebrow, PageTitle, PublicPage } from "@/shell/public-page";
 import { Button } from "@/ui";
 
@@ -37,6 +37,8 @@ export default function Pricing() {
       <View style={styles.cta}>
         <Button title="Start free" onPress={() => router.navigate("/sign-up")} />
       </View>
+
+      <LegalLinks />
     </PublicPage>
   );
 }
