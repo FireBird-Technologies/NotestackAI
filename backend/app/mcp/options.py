@@ -14,8 +14,8 @@ INSTRUCTIONS = {"key": "instructions", "label": "Anything to emphasise (optional
 KINDS = {
     "quiz": ("Set up your quiz", "generate_quiz", [
         COUNT, DIFFICULTY,
-        {"key": "question_types", "label": "Question types", "type": "multi", "default": ["multiple_choice", "multiple_select", "fill_blank", "short_answer"],
-         "options": [{"value": "multiple_choice", "label": "Multiple choice"}, {"value": "multiple_select", "label": "Multiple select"},
+        {"key": "question_types", "label": "Question types", "type": "multi", "default": ["multiple_choice", "fill_blank", "short_answer"],
+         "options": [{"value": "multiple_choice", "label": "Multiple choice"},
                      {"value": "fill_blank", "label": "Fill in the blank"}, {"value": "short_answer", "label": "Short answer"}]},
         TOPIC]),
     "flashcards": ("Set up your flashcards", "generate_flashcards", [COUNT, DIFFICULTY, TOPIC]),

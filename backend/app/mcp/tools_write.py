@@ -125,6 +125,28 @@ def register(mcp: FastMCP) -> None:
         out = await loopback.data("POST", "/api/sources/url", token(), json={"url": url})
         return {"source_id": out["source"]["id"], "job": views.job_view(out["job"]), "ask_writer": ASK_WHERE}
 
+    @mcp.tool(meta=widgets.app_only(), **_desc(
+        "Start one file upload selected inside the Notestack source widget. This is a widget-only helper; the returned "
+        "upload address is short-lived and must not be shown or saved."))
+    @guarded("prepare_file_upload")
+    async def prepare_file_upload(filename: str, content_type: str, size_bytes: int) -> dict:
+        return await loopback.data("POST", "/api/storage/uploads", token(), json={
+            "filename": filename,
+            "content_type": content_type,
+            "size_bytes": size_bytes,
+        })
+
+    @mcp.tool(meta=widgets.app_only(), **_desc(
+        "Finish and import one file uploaded inside the Notestack source widget. This is a widget-only helper and "
+        "returns the background import job that the widget follows."))
+    @guarded("import_uploaded_file")
+    async def import_uploaded_file(upload_id: str) -> dict:
+        access = token()
+        upload_id = uid(upload_id)
+        await loopback.data("POST", f"/api/storage/uploads/{upload_id}/complete", access)
+        out = await loopback.data("POST", "/api/sources/upload", access, json={"upload_id": upload_id})
+        return {"source_id": out["source"]["id"], "job": views.job_view(out["job"])}
+
     @mcp.tool(**_desc("Check a connected source for new posts. Returns a job_id to follow with get_job.",
                       openWorldHint=True))
     @guarded("sync_source")
