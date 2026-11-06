@@ -10,7 +10,7 @@ import { Platform, StyleSheet, Text, View } from "react-native";
 import { planQuery } from "@/account/plan";
 import { track } from "@/lib/analytics";
 import { on } from "@/lib/platform";
-import { CycleToggle, PlanCard } from "@/account/plans";
+import { CycleToggle, ManageOnWeb, PlanCard } from "@/account/plans";
 import { buy, getPackages, identify, isStorePlan, manageSubscriptions, purchasesReady, restore } from "@/account/purchases";
 import { colors } from "@/ui/theme";
 import { ErrorText, Loading } from "@/ui";
@@ -23,7 +23,7 @@ type Opening = { message?: string };
 
 const UpgradeContext = createContext<{ open: (o?: Opening) => void } | null>(null);
 
-/** Opens the upgrade sheet: the plans, bought in the app. `message` says why (a limit that was hit). */
+/** Opens the upgrade sheet: the plans, and where to buy them. `message` says why (a limit that was hit). */
 export function useUpgrade() {
   const ctx = useContext(UpgradeContext);
   if (!ctx) throw new Error("useUpgrade must be used inside UpgradeProvider");
@@ -59,6 +59,21 @@ export function UpgradeProvider({ children }: { children: ReactNode }) {
         {opening ? <Paywall opening={opening} /> : null}
       </Sheet>
     </UpgradeContext.Provider>
+  );
+}
+
+/**
+ * The plans, opened from inside another sheet. iOS can't show the provider's sheet over one that is already open, so
+ * render this as a child of that sheet: it is presented from there, and closing it returns to that sheet.
+ */
+export function NestedPlansSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  useEffect(() => {
+    if (visible) track("paywall_view", { limit: "manual" });
+  }, [visible]);
+  return (
+    <Sheet visible={visible} title="Plans" onClose={onClose}>
+      {visible ? <Paywall opening={{}} /> : null}
+    </Sheet>
   );
 }
 
@@ -123,12 +138,13 @@ function Paywall({ opening }: { opening: Opening }) {
       </Text>
 
       {s.billed_by === "stripe" ? (
-        // Bought on the web: the app can't sell or change it (and may not point to the web to buy).
+        // Bought on the web: the app can't sell or change it.
         <Text style={styles.note}>Your plan is billed on notestack.ai, so it is changed and cancelled there.</Text>
       ) : null}
-      {!s.billing_enabled || !purchasesReady ? <Text style={styles.note}>Plans can&apos;t be bought in the app yet.</Text> : null}
+      {!s.billing_enabled ? <Text style={styles.note}>Plans can&apos;t be bought in the app yet.</Text> : null}
 
       <CycleToggle cycle={cycle} onChange={setCycle} plans={plans} />
+      <ManageOnWeb />
       {/* Free isn't something to buy: only the paid plans, though `rank` still counts it as the lowest. */}
       {plans.filter((plan) => plan.price_monthly_usd > 0).map((plan) => {
         const pkg = isStorePlan(plan.id) ? packages.data?.[`${plan.id}_${cycle}`] : undefined;

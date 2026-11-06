@@ -1,11 +1,13 @@
 import { annualMonthly, annualTotal, money, savingsPct, type Cycle, type Plan } from "@notestack/shared/content/marketing";
 import { POPULAR_PLAN } from "@notestack/shared/billing";
 import type { ReactNode } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Linking, StyleSheet, Text, View } from "react-native";
 import { Pressable } from "@/ui/pressable";
 
 import { Card, publicText } from "@/shell/public-page";
+import { ExternalLinkIcon } from "@/ui/icons";
 import { colors, fonts, radius } from "@/ui/theme";
+import { PillButton } from "@/ui/widgets";
 
 /** Monthly or annual, with the best annual saving on its tab (the pricing page and the upgrade sheet). */
 export function CycleToggle({ cycle, onChange, plans }: { cycle: Cycle; onChange: (c: Cycle) => void; plans: Plan[] }) {
@@ -23,6 +25,25 @@ export function CycleToggle({ cycle, onChange, plans }: { cycle: Cycle; onChange
           {c === "annual" && bestSaving > 0 ? <Text style={styles.save}>Save {bestSaving}%</Text> : null}
         </Pressable>
       ))}
+    </View>
+  );
+}
+
+/** Where plans are bought and managed for now: the web's settings, in the phone's browser (the upgrade sheet and the pricing page). */
+export function ManageOnWeb() {
+  return (
+    <View style={styles.manage}>
+      <PillButton
+        small
+        title={
+          <>
+            Manage your subscriptions on <Text style={styles.manageSite}>notestack.ai</Text>
+          </>
+        }
+        iconEnd={<ExternalLinkIcon size={16} color={colors.white} />}
+        style={styles.manageButton}
+        onPress={() => void Linking.openURL("https://notestack.ai/app/settings")}
+      />
     </View>
   );
 }
@@ -89,6 +110,9 @@ export function PlanCard({
 }
 
 const styles = StyleSheet.create({
+  manage: { alignSelf: "flex-start", maxWidth: "100%" },
+  manageButton: { borderRadius: radius.sm },
+  manageSite: { color: colors.blue },
   toggle: {
     flexDirection: "row",
     alignSelf: "flex-start",
