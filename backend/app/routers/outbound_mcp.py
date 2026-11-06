@@ -6,7 +6,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.auth import Ctx, decode_token_full, encode_signed, get_ctx
 from app.config import settings
 from app.db import get_db
+from app.mcp_client import composio
 from app.mcp_client.catalog import catalog_with_icons
 from app.mcp_client.icon import ensure_icon, monogram_icon
 from app.mcp_client.manager import (
@@ -90,6 +91,10 @@ class OAuthStart(BaseModel):
     scopes: list[str] | None = None
 
 
+class ComposioStart(BaseModel):
+    app_slug: str = Field(min_length=1, max_length=100)
+
+
 class WidgetToolCall(BaseModel):
     arguments: dict = Field(default_factory=dict)
     approved: bool = False
@@ -111,8 +116,11 @@ def _out(row: OutboundMcpConnection) -> dict:
     discovered = [{**tool, "usable": tool_is_usable(tool)} for tool in (row.discovered_tools or [])]
     return {
         "id": str(row.id), "name": row.name, "server_url": row.server_url, "auth_type": row.auth_type,
-        "has_token": bool(row.access_token_encrypted) or (row.auth_type == "oauth" and row.auth_status == "ready"),
-        "provider": row.provider, "icon_url": row.icon_url or monogram_icon(row.name),
+        "has_token": bool(row.access_token_encrypted) or (
+            row.auth_type in {"oauth", "managed"} and row.auth_status == "ready"
+        ),
+        "provider": row.provider, "external_app": row.canonical_resource if row.provider == composio.MCP_PROVIDER else None,
+        "icon_url": row.icon_url or monogram_icon(row.name),
         "auth_status": row.auth_status, "account_label": row.account_label,
         "granted_scopes": row.granted_scopes or [], "enabled": row.enabled,
         "enabled_tools": row.enabled_tools or [], "discovered_tools": discovered,
@@ -127,6 +135,25 @@ def _connection_token(row: OutboundMcpConnection) -> str | None:
                 if row.auth_type == "oauth" else decrypt(row.access_token_encrypted))
     except OAuthFlowError as exc:
         raise HTTPException(401, "Reconnect this MCP server before using its widget.") from exc
+
+
+def _connection_credentials(row: OutboundMcpConnection, *, tool_names: list[str] | None = None) \
+        -> tuple[str | None, dict[str, str] | None, str]:
+    if row.provider == composio.MCP_PROVIDER:
+        try:
+            url, headers = composio.mcp_session(
+                row.workspace_id, row.user_id, str(row.canonical_resource or ""), tool_names=tool_names,
+            )
+            return None, headers, url
+        except composio.ComposioError as exc:
+            raise HTTPException(400, str(exc)) from exc
+    return _connection_token(row), None, row.server_url
+
+
+def _discover_connection(row: OutboundMcpConnection, token: str | None,
+                         headers: dict[str, str] | None, server_url: str) -> list[dict]:
+    # Preserve the original two-argument manager contract for ordinary servers (and its test doubles).
+    return manager.discover(server_url, token, headers=headers) if headers else manager.discover(server_url, token)
 
 
 def _enabled_tool(row: OutboundMcpConnection, tool_name: str) -> dict:
@@ -161,6 +188,120 @@ def catalog(_ctx: Ctx = Depends(get_ctx)):
     return catalog_with_icons()
 
 
+@router.get("/composio/apps")
+def composio_apps(
+    q: str = Query("", max_length=100),
+    limit: int = Query(40, ge=1, le=100),
+    _ctx: Ctx = Depends(get_ctx),
+):
+    """Search Composio's app catalog while keeping the project API key on the backend."""
+    try:
+        return {"items": composio.search_apps(q, limit=limit)}
+    except composio.ComposioError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+def _composio_redirect(connection_id: uuid.UUID, result: str) -> str:
+    return (
+        f"{settings.frontend_url.rstrip('/')}/app/connector?"
+        + urlencode({"mcp_composio": result, "connection_id": str(connection_id)})
+    )
+
+
+def _composio_link(row: OutboundMcpConnection) -> str:
+    try:
+        return composio.connect_link(
+            row.workspace_id,
+            row.user_id,
+            str(row.canonical_resource or ""),
+            callback_url=_composio_redirect(row.id, "connected"),
+        )
+    except composio.ComposioError as exc:
+        row.auth_status, row.status, row.last_error = "configuration_error", "error", str(exc)[:500]
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.post("/composio/start")
+def start_composio_connection(body: ComposioStart, ctx: Ctx = Depends(get_ctx)):
+    """Create or resume one user-scoped app connection hosted by Composio."""
+    try:
+        app = composio.app_info(body.app_slug)
+    except composio.ComposioError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    app_slug = app["app_slug"]
+    row = ctx.db.scalar(select(OutboundMcpConnection).where(
+        OutboundMcpConnection.workspace_id == ctx.workspace.id,
+        OutboundMcpConnection.user_id == ctx.user.id,
+        OutboundMcpConnection.provider == composio.MCP_PROVIDER,
+        OutboundMcpConnection.canonical_resource == app_slug,
+        OutboundMcpConnection.deleted_at.is_(None),
+    ))
+    if not row:
+        row = OutboundMcpConnection(
+            workspace_id=ctx.workspace.id,
+            user_id=ctx.user.id,
+            name=app["name"],
+            server_url=settings.composio_mcp_url,
+            auth_type="managed",
+            provider=composio.MCP_PROVIDER,
+            canonical_resource=app_slug,
+            auth_status="authorization_required",
+            account_label=app["name"],
+            enabled=True,
+            enabled_tools=[],
+            discovered_tools=[],
+            status="error",
+            last_error=f"Connect your {app['name']} account with Composio to finish setup.",
+            icon_url=ensure_icon(app.get("app_url") or settings.composio_mcp_url, app["name"], app.get("icon_url")),
+        )
+        ctx.db.add(row)
+        try:
+            ctx.db.commit()
+        except IntegrityError as exc:
+            ctx.db.rollback()
+            raise HTTPException(409, f"A connection named {app['name']} already exists.") from exc
+    try:
+        authorization_url = _composio_link(row)
+        ctx.db.commit()
+    except HTTPException:
+        ctx.db.commit()
+        raise
+    return {"connection": _out(row), "authorization_url": authorization_url}
+
+
+@router.post("/connections/{connection_id}/composio/start")
+def restart_composio_connection(connection_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
+    row = _get(ctx, connection_id)
+    if row.provider != composio.MCP_PROVIDER:
+        raise HTTPException(400, "This is not a Composio connection.")
+    authorization_url = _composio_link(row)
+    ctx.db.commit()
+    return {"authorization_url": authorization_url}
+
+
+@router.post("/connections/{connection_id}/composio/complete")
+def complete_composio_connection(connection_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
+    """Verify the returned account by discovering its MCP tools, then make it available to research chat."""
+    row = _get(ctx, connection_id)
+    if row.provider != composio.MCP_PROVIDER:
+        raise HTTPException(400, "This is not a Composio connection.")
+    try:
+        account = composio.active_account(row.workspace_id, row.user_id, str(row.canonical_resource or ""))
+        token, headers, server_url = _connection_credentials(row)
+        row.discovered_tools = _discover_connection(row, token, headers, server_url)
+        row.enabled_tools = enable_read_only_tools(row.discovered_tools, row.enabled_tools)
+        row.account_label = composio.account_label(account, row.name)
+        row.auth_status, row.status, row.last_error = "ready", "ready", None
+        row.last_checked_at = datetime.now(UTC)
+        ctx.db.commit()
+    except (OutboundMcpError, HTTPException, composio.ComposioError) as exc:
+        message = str(exc.detail) if isinstance(exc, HTTPException) else str(exc)
+        row.auth_status, row.status, row.last_error = "reconnect_required", "error", message[:500]
+        ctx.db.commit()
+        raise HTTPException(400, message) from exc
+    return _out(row)
+
+
 @router.get("/connections")
 def list_connections(ctx: Ctx = Depends(get_ctx)):
     rows = ctx.db.scalars(select(OutboundMcpConnection).where(
@@ -187,14 +328,15 @@ def widget_resource(connection_id: uuid.UUID, tool_name: str, ctx: Ctx = Depends
     """Fetch the UI resource declared by one enabled tool without exposing the MCP credential to the browser."""
     row = _get(ctx, connection_id)
     _enabled_tool(row, tool_name)
-    token = _connection_token(row)
+    token, headers, server_url = _connection_credentials(row, tool_names=[tool_name])
     try:
-        current = next((tool for tool in manager.discover(row.server_url, token)
+        current = next((tool for tool in _discover_connection(row, token, headers, server_url)
                         if tool.get("name") == tool_name), None)
         resource_uri = (current or {}).get("ui_resource_uri")
         if not resource_uri:
             raise HTTPException(404, "This tool does not declare an MCP App UI resource.")
-        resource = manager.read_resource(row.server_url, token, resource_uri)
+        resource = (manager.read_resource(server_url, token, resource_uri, headers=headers) if headers
+                    else manager.read_resource(server_url, token, resource_uri))
     except HTTPException:
         raise
     except OutboundMcpError as exc:
@@ -228,7 +370,9 @@ def widget_call_tool(connection_id: uuid.UUID, tool_name: str, body: WidgetToolC
             "tool": tool_name,
         })
     try:
-        result = manager.call(row.server_url, _connection_token(row), tool_name, body.arguments)
+        token, headers, server_url = _connection_credentials(row, tool_names=[tool_name])
+        result = (manager.call(server_url, token, tool_name, body.arguments, headers=headers) if headers
+                  else manager.call(server_url, token, tool_name, body.arguments))
     except OutboundMcpError as exc:
         raise HTTPException(502, str(exc)) from exc
     if isinstance(result, OutboundToolResult):
@@ -299,25 +443,28 @@ def update_connection(connection_id: uuid.UUID, body: ConnectionPatch, ctx: Ctx 
 def refresh_connection(connection_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
     row = _get(ctx, connection_id)
     try:
-        token = (access_token_for(row.id, row.workspace_id, row.user_id)
-                 if row.auth_type == "oauth" else decrypt(row.access_token_encrypted))
-    except OAuthFlowError as exc:
-        row.auth_status, row.status, row.last_error = "reconnect_required", "error", str(exc)[:500]
+        token, headers, server_url = _connection_credentials(row)
+    except (OAuthFlowError, HTTPException) as exc:
+        message = str(exc.detail) if isinstance(exc, HTTPException) else str(exc)
+        row.auth_status, row.status, row.last_error = "reconnect_required", "error", message[:500]
         ctx.db.commit()
         return _out(row)
     if row.auth_type == "bearer" and not token:
         raise HTTPException(400, "This connection's credential cannot be decrypted. Reconnect it.")
     row.icon_url = ensure_icon(row.server_url, row.name, row.icon_url)
     try:
-        row.discovered_tools = manager.discover(row.server_url, token)
+        row.discovered_tools = _discover_connection(row, token, headers, server_url)
         row.enabled_tools = enable_read_only_tools(row.discovered_tools, row.enabled_tools)
         row.status, row.last_error = "ready", None
-        if row.auth_type == "oauth":
+        if row.auth_type in {"oauth", "managed"}:
             row.auth_status = "ready"
-        if row.auth_type != "oauth" and not token:
+        if row.auth_type not in {"oauth", "managed"} and not token:
             probe_authorization(ctx.db, row)
     except Exception as exc:
-        if isinstance(exc, OutboundMcpError) and exc.status_code == 401 and settings.outbound_mcp_oauth_enabled:
+        if row.provider == composio.MCP_PROVIDER:
+            row.auth_status = "reconnect_required" if isinstance(exc, OutboundMcpError) else "configuration_error"
+            row.status, row.last_error = "error", " ".join(str(exc).split())[:500]
+        elif isinstance(exc, OutboundMcpError) and exc.status_code == 401 and settings.outbound_mcp_oauth_enabled:
             row.auth_status = "authorization_required"
             try:
                 prepare_authorization(ctx.db, row, exc.headers)
@@ -336,6 +483,8 @@ def refresh_connection(connection_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
 @router.post("/connections/{connection_id}/oauth/start")
 def oauth_start(connection_id: uuid.UUID, body: OAuthStart | None = None, ctx: Ctx = Depends(get_ctx)):
     row = _get(ctx, connection_id)
+    if row.provider == composio.MCP_PROVIDER:
+        raise HTTPException(400, "Use the Composio authorization flow for this connection.")
     try:
         authorization_url = start_authorization(ctx.db, row, body.scopes if body else None)
     except OAuthFlowError as exc:
@@ -440,6 +589,16 @@ def oauth_callback(request: Request, code: str | None = None, state: str | None 
 @router.post("/connections/{connection_id}/revoke")
 def revoke_oauth_connection(connection_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
     row = _get(ctx, connection_id)
+    if row.provider == composio.MCP_PROVIDER:
+        composio.disconnect(row.workspace_id, row.user_id, str(row.canonical_resource or ""))
+        row.auth_type = "managed"
+        row.auth_status = "authorization_required"
+        row.enabled_tools = []
+        row.discovered_tools = []
+        row.status = "error"
+        row.last_error = "App account disconnected."
+        ctx.db.commit()
+        return _out(row)
     revoke_connection(ctx.db, row)
     return _out(row)
 
@@ -450,7 +609,16 @@ def delete_connection(connection_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
     # End remote/local authorization first, but retain the non-secret connection and tool-definition snapshot so the
     # database records that this writer once connected the server. A later connection creates a fresh row and runs
     # tools/list again; it never copies definitions or credentials from this removed row.
-    revoke_connection(ctx.db, row)
+    if row.provider == composio.MCP_PROVIDER:
+        composio.disconnect(row.workspace_id, row.user_id, str(row.canonical_resource or ""))
+        row.access_token_encrypted = None
+        row.auth_status = "authorization_required"
+        row.account_label = None
+        row.granted_scopes = []
+        row.enabled_tools = []
+        ctx.db.commit()
+    else:
+        revoke_connection(ctx.db, row)
     ctx.db.execute(delete(OutboundMcpAuthAttempt).where(OutboundMcpAuthAttempt.connection_id == row.id))
     row.deleted_at = datetime.now(UTC)
     row.enabled = False

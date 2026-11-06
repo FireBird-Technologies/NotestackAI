@@ -7,6 +7,7 @@ import type {
   CalendarItem,
   ChatMessage,
   ChatSummary,
+  ComposioApp,
   PublicArtifactData,
   QuizQuestionType,
   ReportSuggestionKind,
@@ -371,6 +372,9 @@ export const settingsApi = {
 export const outboundMcpApi = {
   list: () => api<OutboundMcpConnection[]>("/api/outbound-mcp/connections"),
   catalog: () => api<OutboundMcpSuggestion[]>("/api/outbound-mcp/catalog"),
+  composioApps: (q = "", limit = 40) => api<{ items: ComposioApp[] }>(
+    `/api/outbound-mcp/composio/apps${qs({ q: q || undefined, limit })}`,
+  ),
   create: (body: { name: string; server_url: string; bearer_token?: string }) =>
     post<OutboundMcpConnection>("/api/outbound-mcp/connections", body),
   update: (id: string, body: { enabled?: boolean; enabled_tools?: string[] }) =>
@@ -378,6 +382,15 @@ export const outboundMcpApi = {
   refresh: (id: string) => post<OutboundMcpConnection>(`/api/outbound-mcp/connections/${id}/refresh`),
   startOAuth: (id: string, scopes?: string[]) => post<{ authorization_url: string }>(
     `/api/outbound-mcp/connections/${id}/oauth/start`, scopes ? { scopes } : {},
+  ),
+  startComposio: (app_slug: string) => post<{
+    connection: OutboundMcpConnection; authorization_url: string;
+  }>("/api/outbound-mcp/composio/start", { app_slug }),
+  restartComposio: (id: string) => post<{ authorization_url: string }>(
+    `/api/outbound-mcp/connections/${id}/composio/start`,
+  ),
+  completeComposio: (id: string) => post<OutboundMcpConnection>(
+    `/api/outbound-mcp/connections/${id}/composio/complete`,
   ),
   revokeOAuth: (id: string) => post<OutboundMcpConnection>(`/api/outbound-mcp/connections/${id}/revoke`),
   remove: (id: string) => del<{ ok: true }>(`/api/outbound-mcp/connections/${id}`),
