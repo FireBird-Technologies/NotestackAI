@@ -30,12 +30,13 @@ export function safeNext(path: string | null | undefined): string {
   return path;
 }
 
-/** Where a new account goes after signing up from `next`: onboarding, except people who came to use a free tool or to
- * read a shared preview, who go straight back to it. */
+/** Where a new account goes after signing up from `next`: onboarding, except flows that explicitly need to return to
+ * the requested page (free tools, shared previews, imports, upgrades, and the public Connect your AI launcher). */
 export function afterSignUp(next: string): string {
   return next.startsWith("/tools/") || next.startsWith("/r/") || next === "/notebooklm-import" || next === "/notebooklm-connect"
     || next === "/welcome?notebooklm=import" || next === "/app/sources?notebooklm=import"
-    || next.startsWith("/app/notebooks?upgrade=") ? next : "/welcome";
+    || next.startsWith("/app/notebooks?upgrade=")
+    || next === "/app/connector?tab=apps" || next === "/app/connector?tab=tools" ? next : "/welcome";
 }
 
 export const authApi = {

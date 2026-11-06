@@ -1,11 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { blogPosts } from "@notestack/shared/content/blogPosts";
 import { tools } from "@notestack/shared/content/tools";
 import { MenuIcon } from "./icons/Icons";
+import { ConnectorSetup } from "./ConnectorModal";
 import Logo from "./Logo";
 import MenuSheet from "./MenuSheet";
+import { Modal, Tabs } from "./ui";
 
 const NAV_LINKS = [
   { to: "/#features", label: "Features" },
@@ -21,7 +23,64 @@ function isLinkActive(to: string, pathname: string, hash: string) {
   return pathname === path || pathname.startsWith(`${path}/`);
 }
 
-function MobileMenu({ signedIn, onClose }: { signedIn: boolean; onClose: () => void }) {
+const CONNECT_AI_DESTINATION = "/app/connector?tab=apps";
+const EXTERNAL_TOOLS_DESTINATION = "/app/connector?tab=tools";
+const EXTERNAL_APPS = [
+  { name: "Notion", logo: "notion" },
+  { name: "Canva", logo: "canva" },
+  { name: "Gmail", logo: "gmail" },
+  { name: "Slack", logo: "slack" },
+  { name: "Google Drive", logo: "googledrive" },
+  { name: "Outlook", logo: "outlook" },
+  { name: "Google Calendar", logo: "googlecalendar" },
+  { name: "Google Docs", logo: "googledocs" },
+  { name: "Google Sheets", logo: "googlesheets" },
+  { name: "GitHub", logo: "github" },
+  { name: "Linear", logo: "linear" },
+  { name: "HubSpot", logo: "hubspot" },
+  { name: "Airtable", logo: "airtable" },
+  { name: "Jira", logo: "jira" },
+  { name: "Figma", logo: "figma" },
+  { name: "Microsoft Teams", logo: "microsoft_teams" },
+  { name: "OneDrive", logo: "one_drive" },
+  { name: "Trello", logo: "trello" },
+] as const;
+const FEATURED_EXTERNAL_APPS = EXTERNAL_APPS.slice(0, 12);
+
+function AppOrbitRing({ apps, ring }: {
+  apps: readonly (typeof EXTERNAL_APPS)[number][];
+  ring: "outer" | "inner";
+}) {
+  return (
+    <div className={`public-orbit-ring ${ring}`}>
+      {apps.map((app, index) => {
+        const angle = -90 + (360 / apps.length) * index;
+        return (
+          <div
+            className="public-orbit-app"
+            style={{
+              "--orbit-angle": `${angle}deg`,
+              "--orbit-counter-angle": `${-angle}deg`,
+            } as CSSProperties}
+            key={app.name}
+            role="listitem"
+            aria-label={app.name}
+          >
+            <span className="public-external-icon" data-label={app.name} aria-hidden="true">
+              <img src={`https://logos.composio.dev/api/${app.logo}`} alt="" />
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function MobileMenu({ signedIn, onClose, onConnectAi }: {
+  signedIn: boolean;
+  onClose: () => void;
+  onConnectAi?: () => void;
+}) {
   const { pathname, hash } = useLocation();
   return (
     <MenuSheet id="nav-menu" className="nav-menu-backdrop" onClose={onClose}>
@@ -41,6 +100,11 @@ function MobileMenu({ signedIn, onClose }: { signedIn: boolean; onClose: () => v
           );
         })}
       </nav>
+      {onConnectAi && (
+        <button type="button" className="btn nav-menu-connect" onClick={onConnectAi}>
+          Connect with AI
+        </button>
+      )}
       {!signedIn && (
         <Link to="/auth" className="btn nav-menu-signin" onClick={onClose}>
           Sign in
@@ -50,11 +114,85 @@ function MobileMenu({ signedIn, onClose }: { signedIn: boolean; onClose: () => v
   );
 }
 
-export function PublicNav() {
+function ConnectAiModal({ signedIn, onClose }: { signedIn: boolean; onClose: () => void }) {
+  const [tab, setTab] = useState<"ai" | "tools">("ai");
+  const destination = tab === "ai" ? CONNECT_AI_DESTINATION : EXTERNAL_TOOLS_DESTINATION;
+  const signin = `/auth?${new URLSearchParams({ next: destination })}`;
+  const action = signedIn ? destination : signin;
+  return (
+    <Modal title="Connect with Notestack" onClose={onClose} wide>
+      <Tabs
+        label="Connection type"
+        value={tab}
+        onChange={setTab}
+        tabs={[
+          { id: "ai", label: "Use Notestack in Claude or ChatGPT" },
+          { id: "tools", label: "External tools" },
+        ]}
+      />
+      {tab === "ai" ? (
+        <ConnectorSetup compact />
+      ) : (
+        <div className="public-external-tools">
+          <div className="public-external-heading">
+            <div>
+              <span className="connector-section-kicker mono">POPULAR CONNECTIONS</span>
+              <h3>Bring your work into Notestack</h3>
+            </div>
+            <p className="muted small">
+              Let Notestack research across your notes, email, files and team conversations. You choose each app and
+              exactly which tools it may use.
+            </p>
+          </div>
+          <div className="public-app-orbit" role="list" aria-label="Available external apps">
+            <div className="public-orbit-system">
+              <svg className="public-orbit-constellation" viewBox="0 0 390 390" aria-hidden="true">
+                <g className="public-constellation-track outer">
+                  <circle className="public-constellation-orbit" cx="195" cy="195" r="170" />
+                  {[[195, 25], [328, 89], [361, 233], [269, 348], [121, 348], [29, 233], [62, 89]]
+                    .map(([cx, cy]) => <circle className="public-constellation-node" cx={cx} cy={cy} r="3" key={`${cx}-${cy}`} />)}
+                </g>
+                <g className="public-constellation-track inner">
+                  <circle className="public-constellation-orbit" cx="195" cy="195" r="100" />
+                  {[[195, 95], [282, 245], [108, 245]]
+                    .map(([cx, cy]) => <circle className="public-constellation-node" cx={cx} cy={cy} r="3" key={`${cx}-${cy}`} />)}
+                </g>
+              </svg>
+              <AppOrbitRing apps={FEATURED_EXTERNAL_APPS.slice(0, 7)} ring="outer" />
+              <AppOrbitRing apps={FEATURED_EXTERNAL_APPS.slice(7, 10)} ring="inner" />
+              <div className="public-orbit-hub">
+                <Logo size={42} withWordmark={false} />
+                <strong>Notestack</strong>
+              </div>
+            </div>
+          </div>
+          <div className="public-external-more">
+            <strong>More connections available</strong>
+            <span className="muted small">Search the full app catalog after signing in</span>
+          </div>
+        </div>
+      )}
+      {tab === "tools" ? (
+        <div className="public-connect-footer">
+          <Link to={action} className="btn btn-primary" onClick={onClose}>
+            {signedIn ? "Open external tools" : "Sign in to connect"}
+          </Link>
+        </div>
+      ) : null}
+    </Modal>
+  );
+}
+
+export function PublicNav({ connectAi = false }: { connectAi?: boolean }) {
   const { user } = useAuth();
   const { pathname, hash } = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [connectOpen, setConnectOpen] = useState(false);
   const closeMenu = () => setMenuOpen(false);
+  const openConnect = () => {
+    setMenuOpen(false);
+    setConnectOpen(true);
+  };
 
   // Navigating anywhere (including the browser back button) closes the menu.
   useEffect(() => setMenuOpen(false), [pathname, hash]);
@@ -88,6 +226,7 @@ export function PublicNav() {
         {user ? (
           <div className="nav-auth">
             {toggle}
+            {connectAi && <button type="button" className="btn nav-connect-ai" onClick={openConnect}>Connect with AI</button>}
             <Link to="/app/notebooks" className="btn btn-primary nav-cta">
               Your notebooks
             </Link>
@@ -95,6 +234,7 @@ export function PublicNav() {
         ) : (
           <div className="nav-auth">
             {toggle}
+            {connectAi && <button type="button" className="btn nav-connect-ai" onClick={openConnect}>Connect with AI</button>}
             <Link to="/auth" className="nav-signin">
               Sign in
             </Link>
@@ -104,7 +244,8 @@ export function PublicNav() {
           </div>
         )}
       </div>
-      {menuOpen && <MobileMenu signedIn={!!user} onClose={closeMenu} />}
+      {menuOpen && <MobileMenu signedIn={!!user} onClose={closeMenu} onConnectAi={connectAi ? openConnect : undefined} />}
+      {connectOpen && <ConnectAiModal signedIn={!!user} onClose={() => setConnectOpen(false)} />}
     </header>
   );
 }
