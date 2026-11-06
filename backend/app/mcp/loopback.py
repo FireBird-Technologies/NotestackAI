@@ -43,7 +43,9 @@ ALLOWED = [
         WRITE,
         ("POST", "/api/notebooks"),
         ("POST", f"/api/notebooks/{_ID}/documents"), ("DELETE", f"/api/notebooks/{_ID}/documents/{_ID}"),
-        ("POST", "/api/sources"), ("POST", "/api/sources/url"), ("POST", f"/api/sources/{_ID}/sync"),
+        ("POST", "/api/sources"), ("POST", "/api/sources/url"), ("POST", "/api/sources/upload"),
+        ("POST", f"/api/sources/{_ID}/sync"),
+        ("POST", "/api/storage/uploads"), ("POST", f"/api/storage/uploads/{_ID}/complete"),
         ("POST", "/api/artifacts/generate"), ("POST", f"/api/artifacts/{_ID}/retry"),
         ("PUT", f"/api/artifacts/{_ID}/feedback"),
         ("POST", "/api/videos"),  # the web app's own video route, which asks blog2video to make it

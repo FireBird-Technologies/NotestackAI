@@ -36,12 +36,44 @@ SCOPE_HELP = (
     "tool returns choose_scope."
 )
 
+EMPTY_ARCHIVE = {
+    "error": "empty_archive",
+    "message": "You need to connect posts to Notestack before I can answer from your writing. Open the source connector now.",
+    "next_tool": "connect_sources",
+    "tell_the_writer": ("Say in one short sentence that their Notestack has no posts yet, then call connect_sources immediately "
+                        "(pass for_what: what they asked for, such as quiz). Its form imports the posts right in this chat and "
+                        "has its own Continue button. Do not tell them to open Notestack, do not list steps, and do not "
+                        "describe what you could make."),
+}
+
+
+def empty_archive(for_what: str = "") -> dict:
+    """The empty-library answer, naming what the writer was trying to do so the connector can offer the next step."""
+    out = dict(EMPTY_ARCHIVE)
+    if for_what:
+        out["for_what"] = for_what
+        out["next_step"] = f"Call connect_sources with for_what='{for_what}'."
+    return out
+
 
 def token():
     access = get_access_token()
     if not access:
         raise ValueError("Not signed in.")
     return access
+
+
+async def archive_is_empty(access) -> bool:
+    """True when the library has no indexed posts that an MCP workflow can use.
+
+    A source row is not enough to make the archive usable: a pending, failed, or
+    genuinely empty source can exist while ``All posts`` still contains zero
+    posts.  In that state the source connector is the useful surface (it can
+    show the existing source/import state and accept another source), whereas
+    the generation picker can only present a disabled ``0 posts`` choice.
+    """
+    docs = await loopback.data("GET", "/api/documents", access, params={"limit": 1, "indexed_only": "true"})
+    return not bool(docs.get("total", 0))
 
 
 class ToolError(Exception):

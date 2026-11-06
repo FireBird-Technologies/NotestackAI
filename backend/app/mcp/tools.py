@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from mcp.server.fastmcp import FastMCP
 
 from app.mcp import loopback, scope, tools_read, tools_write, views, widgets
-from app.mcp.common import DATA, ToolError, guarded, parse_sse, token, uid
+from app.mcp.common import DATA, EMPTY_ARCHIVE, ToolError, archive_is_empty, guarded, parse_sse, token, uid
 
 KINDS = ("posts", "topics", "sources", "notebooks")
 CONVERSATION_GAP = timedelta(minutes=15)  # a question this soon after the last one is the same conversation
@@ -68,6 +68,8 @@ def register(mcp: FastMCP) -> None:
         if not needle:
             raise ToolError("empty_query", "Say what to look for.")
         access, out = token(), {}
+        if await archive_is_empty(access):
+            return dict(EMPTY_ARCHIVE)
         if "posts" in wanted:
             docs = await loopback.data("GET", "/api/documents", access, params={"q": query.strip(), "limit": limit})
             out["posts"] = {"total": docs["total"], "items": [views.document_row(d) for d in docs["items"]]}
@@ -91,6 +93,8 @@ def register(mcp: FastMCP) -> None:
     async def ask_notebook(question: str, notebook_id: str | None = None, notebook_title: str | None = None,
                            chat_id: str | None = None) -> dict:
         access = token()
+        if not (notebook_id or notebook_title or chat_id) and await archive_is_empty(access):
+            return dict(EMPTY_ARCHIVE)
         resolved = await scope.resolve(access, notebook_id=notebook_id, notebook_title=notebook_title)
         nid = resolved.notebook_id
         label = _label(access)

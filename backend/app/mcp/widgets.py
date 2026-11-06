@@ -34,8 +34,10 @@ VIDEO_UI = {"ui": {"resourceUri": VIDEO_URI}}
 VIDEO_OPTIONS_URI = "ui://notestack/video-options-v8"
 VIDEO_OPTIONS_UI = {"ui": {"resourceUri": VIDEO_OPTIONS_URI}}
 
-OPTIONS_URI = "ui://notestack/generation-options-v59"
+OPTIONS_URI = "ui://notestack/generation-options-v60"
 OPTIONS_UI = {"ui": {"resourceUri": OPTIONS_URI}}
+SOURCE_CONNECTOR_URI = "ui://notestack/source-connector-v4"
+SOURCE_CONNECTOR_UI = {"ui": {"resourceUri": SOURCE_CONNECTOR_URI}}
 # Chats remember the page address a result was made with. When a page changes its address, the old one keeps serving
 # the current page, so a chat reopened later still shows its result instead of "unable to reach".
 LEGACY_URIS = {
@@ -43,7 +45,9 @@ LEGACY_URIS = {
     FLASHCARDS_URI: ["ui://notestack/flashcards-v9"],
     QUIZ_URI: ["ui://notestack/quiz-v9"],
     INFOGRAPHIC_URI: ["ui://notestack/infographic-v3"],
-    OPTIONS_URI: ["ui://notestack/generation-options-v58"],
+    OPTIONS_URI: ["ui://notestack/generation-options-v58", "ui://notestack/generation-options-v59"],
+    SOURCE_CONNECTOR_URI: ["ui://notestack/source-connector-v1", "ui://notestack/source-connector-v2",
+                           "ui://notestack/source-connector-v3"],
 }
 _OPTIONS_HTML = Path(__file__).with_name("widgets") / "generation_options.html"
 
@@ -65,6 +69,7 @@ _PICKER_HTML = Path(__file__).with_name("widgets") / "notebook_picker.html"
 _REPORT_HTML = Path(__file__).with_name("widgets") / "report.html"
 _VIDEO_HTML = Path(__file__).with_name("widgets") / "video_player.html"
 _VIDEO_OPTIONS_HTML = Path(__file__).with_name("widgets") / "video_options.html"
+_SOURCE_CONNECTOR_HTML = Path(__file__).with_name("widgets") / "source_connector.html"
 
 
 def _trim(node: dict, budget: list[int]) -> dict:
@@ -219,6 +224,32 @@ def picker_payload(notebooks: list[dict], posts: list[dict], default_id: str | N
             "posts": [{"id": d["id"], "title": str(d.get("title") or "Untitled")[:120]} for d in posts[:MAX_PICK_POSTS]]}
 
 
+MAX_CONNECTOR_POSTS = 50
+# What the writer was trying to do, so the form can offer it as the next step once their posts are in.
+NEXT_STEP = {"quiz": "quiz", "flashcards": "flashcards", "report": "report", "infographic": "infographic",
+             "slide_deck": "slide deck", "audio_overview": "audio overview", "mind_map": "mind map", "video": "video"}
+
+
+def source_connector_payload(*, source_count: int = 0, post_count: int = 0, posts: list[dict] | None = None,
+                             for_what: str = "") -> dict:
+    """The source control: link and file imports both run inside the chat."""
+    key = for_what.strip().lower().replace(" ", "_").replace("-", "_")
+    thing = NEXT_STEP.get(key)
+    return {
+        "kind": "source_connector",
+        "source_count": max(0, source_count),
+        "post_count": max(0, post_count),
+        "posts": [{"id": p.get("id"), "title": shown(p.get("title")) or "Untitled", "published_at": p.get("published_at")}
+                  for p in (posts or [])[:MAX_CONNECTOR_POSTS]],
+        "for_what": key if thing else "",
+        "next_label": f"Continue to set up your {thing}" if thing else "Continue",
+        "next_message": (f"My posts are ready. Please set up my {thing} now." if thing
+                         else "My posts are ready. Please continue with what I asked for."),
+        "max_file_bytes": settings.max_source_file_bytes,
+        "open_url": settings.frontend_url.rstrip("/") + "/app/sources",
+    }
+
+
 def video_payload(artifact_id: str, status: str | None, video_url: str | None, title: str | None, open_url: str,
                   *, preview_url: str | None = None, ready: bool = False,
                   poll_url: str | None = None, poll_token: str | None = None) -> dict:
@@ -286,6 +317,19 @@ def _api_domains() -> list[str]:
 
     u = urlsplit(settings.api_url.strip())
     return [f"{u.scheme}://{u.netloc}"] if u.scheme == "https" and u.netloc else []
+
+
+def _upload_domains() -> list[str]:
+    """Exact HTTPS origins a source widget may PUT a user-selected file to."""
+    from urllib.parse import urlsplit
+
+    origins = _api_domains()
+    for raw in (() if settings.use_local_storage else (settings.r2_endpoint,)):
+        u = urlsplit(raw.strip())
+        origin = f"{u.scheme}://{u.netloc}" if u.scheme == "https" and u.netloc else ""
+        if origin and origin not in origins:
+            origins.append(origin)
+    return origins
 
 
 def _csp(*, display_modes: list[str] | None = None, description: str | None = None,
@@ -412,6 +456,13 @@ def register(mcp: FastMCP) -> None:
     def notebook_picker() -> str:
         return _themed(_PICKER_HTML.read_text(encoding="utf-8"))
 
+    @mcp.resource(SOURCE_CONNECTOR_URI, name="source-connector", title="Connect posts", mime_type=MIME,
+                  description="Lets a new writer connect a link or upload source files from the conversation.",
+                  meta=_csp(description="Connect links or upload files to an empty Notestack library.",
+                            connect_domains=_upload_domains()))
+    def source_connector() -> str:
+        return _themed(_SOURCE_CONNECTOR_HTML.read_text(encoding="utf-8"))
+
     @mcp.resource(VIDEO_URI, name="video", title="Video", mime_type=MIME,
                   description="Plays a finished video in the chat, or shows that it is still being made.",
                   meta=_csp(resource_domains=_media_domains() + _preview_domains(), connect_domains=_api_domains()))
@@ -427,12 +478,13 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.resource(OPTIONS_URI, name="generation-options", title="Choose settings", mime_type=MIME,
                   description="Lets the writer choose the settings (difficulty, template, look, length...) for what is made.",
-                  meta=_csp(resource_domains=_media_domains() + _preview_domains(), connect_domains=_api_domains()))
+                  meta=_csp(resource_domains=_media_domains() + _preview_domains(), connect_domains=_upload_domains()))
     def generation_options() -> str:
         """The form page, with the quiz, flashcards and mind map pages inside it so a finished one plays right there."""
         players = {k: _themed((Path(__file__).with_name("widgets") / f).read_text(encoding="utf-8"))
                    for k, f in (("quiz", "quiz.html"), ("flashcards", "flashcards.html"), ("mind_map", "mind_map.html"),
-                                ("infographic", "infographic.html"), ("report", "report.html"), ("video", "video_player.html"))}
+                                ("infographic", "infographic.html"), ("report", "report.html"), ("video", "video_player.html"),
+                                ("source_connector", "source_connector.html"))}
         blob = json.dumps(players).replace("</", "<\\/")
         return _themed(_OPTIONS_HTML.read_text(encoding="utf-8")).replace("/*__PLAYERS__*/{}", blob)
 

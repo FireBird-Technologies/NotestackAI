@@ -572,7 +572,7 @@ async def test_find_content_only_sees_the_callers_own_workspace(client, auth, ru
     monkeypatch.setattr(common, "get_access_token", lambda: AccessToken(
         token="x", client_id="t", scopes=["mcp:read"], subject=bob["user"]["id"], claims={"tv": tv}))
     out = await call(mcp, "find_content", query="pric")
-    assert out["posts"]["total"] == 0 and out["sources"] == [] and out["notebooks"] == []
+    assert out["error"] == "empty_archive" and out["next_tool"] == "connect_sources"
 
 
 @pytest.mark.anyio
@@ -676,6 +676,8 @@ async def test_connect_then_use_the_tools_over_http(http, client, auth, run_jobs
     # Claude cannot read posts itself, so questions about the writer's words go through ask_notebook
     assert "ask_notebook" in init["instructions"] and "returns citations" in init["instructions"]
     assert "choose_options" in init["instructions"]
+    assert "start_notestack" in init["instructions"][:512]
+    assert "choose_options" in init["instructions"][:512]
     assert "in-chat view" in init["instructions"]
     assert "artifact_preview_url" in init["instructions"]
     listed = {x["name"] for x in (await rpc("tools/list", id_=2))["tools"]}
