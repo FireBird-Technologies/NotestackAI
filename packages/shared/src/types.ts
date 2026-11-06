@@ -153,13 +153,15 @@ export type OutboundMcpSuggestion = {
   server_url: string;
   icon_url: string;
   provider?: "composio";
-  app_slug?: "gmail" | "outlook";
-  /** Apps offered inside a managed provider picker. */
-  apps?: {
-    app_slug: "gmail" | "outlook";
-    name: string;
-    description: string;
-  }[];
+  app_slug?: string;
+};
+
+export type ComposioApp = {
+  app_slug: string;
+  name: string;
+  description: string;
+  icon_url: string;
+  app_url: string;
 };
 
 export type OutboundMcpConnection = {

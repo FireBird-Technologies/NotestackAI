@@ -1,9 +1,10 @@
 """Composio managed authentication and user-scoped MCP sessions.
 
 The project API key never leaves the backend. Composio stores provider credentials; NoteStack uses the same stable
-external user id for a writer across Gmail and Outlook, and pins every MCP session to that writer's active account.
+external user id for a writer across apps, and pins every MCP session to that writer's active account.
 """
 
+import re
 import uuid
 from typing import Any
 
@@ -12,10 +13,34 @@ from composio import SESSION_PRESET_DIRECT_TOOLS, Composio
 from app.config import settings
 
 MCP_PROVIDER = "composio"
-SUPPORTED_EMAIL_APPS = {
-    "gmail": {"name": "Gmail", "description": "Send, draft, reply to, and search Gmail"},
-    "outlook": {"name": "Outlook", "description": "Send, draft, reply to, and search Outlook mail"},
+CURATED_APPS = {
+    "gmail": {
+        "name": "Gmail", "description": "Send, draft, reply to, and search Gmail",
+        "app_url": "https://gmail.com",
+    },
+    "outlook": {
+        "name": "Outlook", "description": "Send, draft, reply to, and search Outlook mail",
+        "app_url": "https://outlook.com",
+    },
+    "slack": {
+        "name": "Slack", "description": "Search conversations, send messages, and manage Slack",
+        "app_url": "https://slack.com",
+    },
+    "canva": {
+        "name": "Canva", "description": "Find, create, and manage Canva designs",
+        "app_url": "https://canva.com",
+    },
+    "googledrive": {
+        "name": "Google Drive", "description": "Find and manage files in Google Drive",
+        "app_url": "https://drive.google.com",
+    },
+    "googlecalendar": {
+        "name": "Google Calendar", "description": "View and manage Google Calendar events",
+        "app_url": "https://calendar.google.com",
+    },
 }
+_APP_SLUG = re.compile(r"^[a-z0-9][a-z0-9_-]{0,99}$")
+_BLOCKED_APP_SLUGS = {"composio"}
 
 
 class ComposioError(RuntimeError):
@@ -48,10 +73,71 @@ def _message(exc: Exception, fallback: str) -> str:
     return text[:300] if text else fallback
 
 
+def _valid_slug(app_slug: str) -> str:
+    slug = app_slug.strip().lower()
+    if not _APP_SLUG.fullmatch(slug):
+        raise ComposioError("That Composio app is invalid.")
+    if slug in _BLOCKED_APP_SLUGS:
+        raise ComposioError("Composio's system toolkit cannot be connected as an app.")
+    return slug
+
+
+def _app_dict(toolkit: Any) -> dict[str, str]:
+    meta = getattr(toolkit, "meta", None)
+    slug = str(getattr(toolkit, "slug", "") or "").strip().lower()
+    name = str(getattr(toolkit, "name", "") or slug).strip()
+    description = str(getattr(meta, "description", "") or f"Connect {name} with Composio").strip()
+    logo = str(getattr(meta, "logo", "") or "").strip()
+    app_url = str(getattr(meta, "app_url", "") or "").strip()
+    return {
+        "app_slug": slug,
+        "name": name[:100],
+        "description": description[:300],
+        "icon_url": logo[:2000],
+        "app_url": app_url[:2000],
+    }
+
+
+def app_info(app_slug: str) -> dict[str, str]:
+    """Resolve an app server-side before creating a connection for it."""
+    slug = _valid_slug(app_slug)
+    if slug in CURATED_APPS:
+        return {"app_slug": slug, "icon_url": "", **CURATED_APPS[slug]}
+    try:
+        toolkit = _client().toolkits.get(slug)
+    except Exception as exc:
+        raise ComposioError(_message(exc, "Composio could not find that app.")) from exc
+    if not getattr(toolkit, "enabled", True) or getattr(toolkit, "type", "native") != "native":
+        raise ComposioError("That Composio app is not available.")
+    app = _app_dict(toolkit)
+    if not app["app_slug"]:
+        raise ComposioError("Composio returned an invalid app.")
+    return app
+
+
+def search_apps(query: str = "", *, limit: int = 40) -> list[dict[str, str]]:
+    """Search Composio's live native-app catalog without exposing the project API key."""
+    try:
+        params: dict[str, Any] = {
+            "limit": max(1, min(limit, 100)),
+            "sort_by": "usage",
+            "type": "native",
+        }
+        if query.strip():
+            params["search"] = query.strip()[:100]
+        toolkits = _client().toolkits.get(query=params)
+    except Exception as exc:
+        raise ComposioError(_message(exc, "Composio could not load its app catalog.")) from exc
+    apps = [_app_dict(toolkit) for toolkit in toolkits]
+    return [
+        app for app in apps
+        if app["app_slug"] and app["name"] and app["app_slug"] not in _BLOCKED_APP_SLUGS
+    ]
+
+
 def connect_link(workspace_id: uuid.UUID | str, user_id: uuid.UUID | str, app_slug: str, *,
                  callback_url: str) -> str:
-    if app_slug not in SUPPORTED_EMAIL_APPS:
-        raise ComposioError("That Composio email provider is not supported.")
+    app_slug = _valid_slug(app_slug)
     try:
         session = _client().sessions.create(
             user_id=external_user_id(workspace_id, user_id),
@@ -66,8 +152,7 @@ def connect_link(workspace_id: uuid.UUID | str, user_id: uuid.UUID | str, app_sl
 
 
 def _active_accounts(workspace_id: uuid.UUID | str, user_id: uuid.UUID | str, app_slug: str) -> list[Any]:
-    if app_slug not in SUPPORTED_EMAIL_APPS:
-        raise ComposioError("That Composio email provider is not supported.")
+    app_slug = _valid_slug(app_slug)
     try:
         response = _client().connected_accounts.list(
             user_ids=[external_user_id(workspace_id, user_id)],
@@ -135,9 +220,10 @@ def mcp_session(workspace_id: uuid.UUID | str, user_id: uuid.UUID | str, app_slu
 
 def disconnect(workspace_id: uuid.UUID | str, user_id: uuid.UUID | str, app_slug: str) -> None:
     """Best-effort remote credential deletion for one writer's provider connection."""
-    if not configured() or app_slug not in SUPPORTED_EMAIL_APPS:
+    if not configured():
         return
     try:
+        app_slug = _valid_slug(app_slug)
         accounts = _active_accounts(workspace_id, user_id, app_slug)
         client = _client()
         for account in accounts:

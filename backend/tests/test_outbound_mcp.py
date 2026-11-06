@@ -914,18 +914,63 @@ def test_every_connection_gets_a_logo(monkeypatch):
     assert icon.ensure_icon("https://x.dev/mcp", "X", "data:image/png;base64,REAL") == "data:image/png;base64,REAL"
 
 
-def test_catalog_hides_slack_and_canva(client, auth, monkeypatch):
+def test_catalog_shows_curated_composio_apps_as_separate_cards(client, auth, monkeypatch):
     monkeypatch.setattr("app.mcp_client.catalog.fetch_server_icon", lambda url: None)
     monkeypatch.setattr("app.routers.outbound_mcp.manager.discover", lambda url, token=None: TOOLS)
     entries = client.get("/api/outbound-mcp/catalog", headers=auth).json()
-    assert [entry["name"] for entry in entries] == ["B2V", "Notion", "Zapier", "Composio"]
+    assert [entry["name"] for entry in entries] == [
+        "B2V", "Notion", "Zapier", "Gmail", "Outlook", "Slack", "Canva", "Google Drive", "Google Calendar",
+    ]
     notion = next(e for e in entries if e["name"] == "Notion")
     assert notion["icon_url"].startswith("data:image/svg+xml") and notion["server_url"].startswith("https://")
-    composio_entry = next(e for e in entries if e["name"] == "Composio")
-    assert composio_entry["provider"] == "composio"
-    assert [app["app_slug"] for app in composio_entry["apps"]] == ["gmail", "outlook"]
+    canva = next(e for e in entries if e["name"] == "Canva")
+    assert canva["provider"] == "composio" and canva["app_slug"] == "canva"
+    assert canva["icon_url"].startswith("data:image/svg+xml")
     client.post("/api/outbound-mcp/connections", headers=auth, json={"name": "Notion", "server_url": notion["server_url"]})
     assert "Notion" in [e["name"] for e in client.get("/api/outbound-mcp/catalog", headers=auth).json()]
+
+
+def test_composio_app_search_is_authenticated_and_backend_mediated(client, auth, monkeypatch):
+    calls = []
+
+    def search_apps(query, *, limit):
+        calls.append((query, limit))
+        return [{
+            "app_slug": "linear", "name": "Linear", "description": "Manage issues",
+            "icon_url": "https://cdn.example.com/linear.png", "app_url": "https://linear.app",
+        }]
+
+    monkeypatch.setattr("app.routers.outbound_mcp.composio.search_apps", search_apps)
+    assert client.get("/api/outbound-mcp/composio/apps?q=lin").status_code == 401
+    response = client.get("/api/outbound-mcp/composio/apps?q=lin&limit=12", headers=auth)
+    assert response.status_code == 200, response.text
+    assert response.json()["items"][0]["app_slug"] == "linear"
+    assert calls == [("lin", 12)]
+
+
+def test_composio_can_start_any_server_resolved_native_app(client, auth, monkeypatch):
+    monkeypatch.setattr("app.routers.outbound_mcp.composio.app_info", lambda slug: {
+        "app_slug": slug, "name": "Linear", "description": "Manage issues",
+        "icon_url": "https://cdn.example.com/linear.png", "app_url": "https://linear.app",
+    })
+    monkeypatch.setattr(
+        "app.routers.outbound_mcp.composio.connect_link",
+        lambda *_args, **_kwargs: "https://connect.composio.dev/link/linear",
+    )
+    started = client.post("/api/outbound-mcp/composio/start", headers=auth, json={"app_slug": "linear"})
+    assert started.status_code == 200, started.text
+    assert started.json()["connection"]["name"] == "Linear"
+    assert started.json()["connection"]["external_app"] == "linear"
+
+
+def test_composio_system_toolkit_cannot_be_connected_as_an_app(client, auth, monkeypatch):
+    monkeypatch.setattr(
+        "app.routers.outbound_mcp.composio.connect_link",
+        lambda *_args, **_kwargs: pytest.fail("blocked apps must not start authorization"),
+    )
+    response = client.post("/api/outbound-mcp/composio/start", headers=auth, json={"app_slug": "composio"})
+    assert response.status_code == 400
+    assert "system toolkit" in response.json()["detail"]
 
 
 def test_composio_connect_lifecycle_is_user_scoped(client, auth, db_session, monkeypatch):

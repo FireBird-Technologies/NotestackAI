@@ -6,7 +6,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
@@ -92,7 +92,7 @@ class OAuthStart(BaseModel):
 
 
 class ComposioStart(BaseModel):
-    app_slug: str
+    app_slug: str = Field(min_length=1, max_length=100)
 
 
 class WidgetToolCall(BaseModel):
@@ -188,6 +188,19 @@ def catalog(_ctx: Ctx = Depends(get_ctx)):
     return catalog_with_icons()
 
 
+@router.get("/composio/apps")
+def composio_apps(
+    q: str = Query("", max_length=100),
+    limit: int = Query(40, ge=1, le=100),
+    _ctx: Ctx = Depends(get_ctx),
+):
+    """Search Composio's app catalog while keeping the project API key on the backend."""
+    try:
+        return {"items": composio.search_apps(q, limit=limit)}
+    except composio.ComposioError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 def _composio_redirect(connection_id: uuid.UUID, result: str) -> str:
     return (
         f"{settings.frontend_url.rstrip('/')}/app/connector?"
@@ -210,15 +223,17 @@ def _composio_link(row: OutboundMcpConnection) -> str:
 
 @router.post("/composio/start")
 def start_composio_connection(body: ComposioStart, ctx: Ctx = Depends(get_ctx)):
-    """Create or resume a user-scoped Gmail/Outlook connection hosted by Composio."""
-    app = composio.SUPPORTED_EMAIL_APPS.get(body.app_slug)
-    if not app:
-        raise HTTPException(400, "That Composio email provider is not supported.")
+    """Create or resume one user-scoped app connection hosted by Composio."""
+    try:
+        app = composio.app_info(body.app_slug)
+    except composio.ComposioError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    app_slug = app["app_slug"]
     row = ctx.db.scalar(select(OutboundMcpConnection).where(
         OutboundMcpConnection.workspace_id == ctx.workspace.id,
         OutboundMcpConnection.user_id == ctx.user.id,
         OutboundMcpConnection.provider == composio.MCP_PROVIDER,
-        OutboundMcpConnection.canonical_resource == body.app_slug,
+        OutboundMcpConnection.canonical_resource == app_slug,
         OutboundMcpConnection.deleted_at.is_(None),
     ))
     if not row:
@@ -229,17 +244,15 @@ def start_composio_connection(body: ComposioStart, ctx: Ctx = Depends(get_ctx)):
             server_url=settings.composio_mcp_url,
             auth_type="managed",
             provider=composio.MCP_PROVIDER,
-            canonical_resource=body.app_slug,
+            canonical_resource=app_slug,
             auth_status="authorization_required",
             account_label=app["name"],
             enabled=True,
             enabled_tools=[],
             discovered_tools=[],
             status="error",
-            last_error="Connect your email account with Composio to finish setup.",
-            icon_url=ensure_icon(
-                "https://gmail.com" if body.app_slug == "gmail" else "https://outlook.com", app["name"],
-            ),
+            last_error=f"Connect your {app['name']} account with Composio to finish setup.",
+            icon_url=ensure_icon(app.get("app_url") or settings.composio_mcp_url, app["name"], app.get("icon_url")),
         )
         ctx.db.add(row)
         try:
@@ -583,7 +596,7 @@ def revoke_oauth_connection(connection_id: uuid.UUID, ctx: Ctx = Depends(get_ctx
         row.enabled_tools = []
         row.discovered_tools = []
         row.status = "error"
-        row.last_error = "Email account disconnected."
+        row.last_error = "App account disconnected."
         ctx.db.commit()
         return _out(row)
     revoke_connection(ctx.db, row)
