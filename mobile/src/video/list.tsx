@@ -70,7 +70,7 @@ export function VideosList() {
           {q ? `${q.used} of ${q.limit} video${q.limit === 1 ? "" : "s"} used${q.resets_at ? ` this period, refills ${formatDate(q.resets_at)}` : " on your plan"}` : ""}
         </Text>
         {out ? (
-          <PillButton small variant="primary" title="Get more videos" onPress={() => upgrade({ highlight: q?.plan === "writer" ? "studio" : "writer" })} />
+          <PillButton small variant="primary" title="Get more videos" onPress={() => upgrade()} />
         ) : (
           <PillButton small variant="primary" title="New video" onPress={() => router.push("/library/videos/new")} />
         )}
