@@ -28,7 +28,7 @@ export function SourcesNav({ current }: { current: "posts" | "map" }) {
   );
 }
 
-/** A two or more way switch in the same pill style (Recency and Momentum on the map). */
+/** A two or more way switch in the same pill style (Recency and Momentum on the map). Stays on screen: the labels shrink to fit. */
 export function Segments<T extends string>({
   options,
   value,
@@ -48,8 +48,10 @@ export function Segments<T extends string>({
             onPress={() => onChange(o.id)}
             accessibilityRole="radio"
             accessibilityState={{ checked: on }}
-            style={[styles.segment, on && styles.segmentOn]}>
-            <Text style={on ? styles.textOn : styles.text}>{o.label}</Text>
+            style={[styles.segment, options.length > 2 && styles.segmentTight, on && styles.segmentOn]}>
+            <Text style={on ? styles.textOn : styles.text} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+              {o.label}
+            </Text>
           </Pressable>
         );
       })}
@@ -61,6 +63,7 @@ const styles = StyleSheet.create({
   segments: {
     flexDirection: "row",
     alignSelf: "flex-start",
+    maxWidth: "100%",
     padding: 4,
     gap: 4,
     borderRadius: 999,
@@ -68,7 +71,8 @@ const styles = StyleSheet.create({
     borderColor: colors.lineStrong,
     backgroundColor: colors.surface,
   },
-  segment: { paddingHorizontal: 18, paddingVertical: 9, borderRadius: 999 },
+  segment: { flexShrink: 1, paddingHorizontal: 18, paddingVertical: 9, borderRadius: 999 },
+  segmentTight: { paddingHorizontal: 12 },
   segmentOn: { backgroundColor: colors.blue },
   text: { color: colors.text2, fontSize: 16, fontWeight: "500" },
   textOn: { color: colors.white, fontSize: 16, fontWeight: "600" },
