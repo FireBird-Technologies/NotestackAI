@@ -1,4 +1,3 @@
-import { ApiError } from "@notestack/shared/client";
 import { videoEditApi, videosApi } from "@notestack/shared/endpoints";
 import { finished, jobPercent } from "@notestack/shared/jobState";
 import { useEffect, useRef, useState } from "react";
@@ -7,6 +6,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { colors, fonts } from "@/ui/theme";
 import { ErrorText } from "@/ui";
 import { Spinner } from "@/video/ui";
+import { CRASH_BODY, CRASH_TITLE, renderStartError } from "@/video/live-player";
 import { Dialog, pageStyles, PillButton } from "@/ui/widgets";
 
 type Step = "confirm" | "rendering" | "done" | "failed";
@@ -19,11 +19,13 @@ const renderPct = new Map<string, number>();
  * Render a video that has no MP4 yet before it is posted (web: launchpad/Attachment.tsx RenderVideoModal): asks first,
  * then shows the render's progress. Opened on a video already rendering, it says to wait. Closing it mid-render leaves
  * the render running. `onRendered(id, true)` is "Schedule it"; `(id, false)` says it finished behind the dialog.
+ * With `watch`, it is opened because the live player crashed, so it offers the render as the way to watch the video.
  */
-export function RenderVideoDialog({ video, onClose, onRendered }: {
+export function RenderVideoDialog({ video, onClose, onRendered, watch }: {
   video: { id: string; title: string; rendering: boolean };
   onClose: () => void;
   onRendered: (id: string, schedule: boolean) => void;
+  watch?: { onStarted: () => void; onWatch: () => void };
 }) {
   const waiting = video.rendering;
   const [step, setStep] = useState<Step>(waiting ? "rendering" : "confirm");
@@ -85,31 +87,42 @@ export function RenderVideoDialog({ video, onClose, onRendered }: {
       renderPct.delete(video.id); // a new run starts from 0
       setPct(null);
       setStep("rendering");
+      watch?.onStarted();
     } catch (e) {
-      setError(
-        e instanceof ApiError && e.status === 409
-          ? "Another change is still running on this video, try again in a moment."
-          : e instanceof Error && e.message
-            ? e.message
-            : "Could not start the render. Try again.",
-      );
+      setError(renderStartError(e));
     } finally {
       setBusy(false);
     }
   };
 
   const title =
-    step === "done" ? "Video rendered" : step === "failed" ? "Render failed" : waiting ? "Still rendering" : step === "rendering" ? "Rendering your video" : "Render this video?";
+    step === "done"
+      ? "Video rendered"
+      : step === "failed"
+        ? "Render failed"
+        : waiting
+          ? "Still rendering"
+          : step === "rendering"
+            ? "Rendering your video"
+            : watch
+              ? CRASH_TITLE
+              : "Render this video?";
   return (
     <Dialog visible title={title} onClose={onClose}>
-      <Text style={styles.name}>{video.title}</Text>
+      {watch && step === "confirm" ? null : <Text style={styles.name}>{video.title}</Text>}
       {step === "confirm" ? (
-        <Text style={styles.muted}>It has no MP4 yet, so it can&apos;t be posted. Render it now; it takes a few minutes and you can close this while it runs.</Text>
+        <Text style={styles.muted}>
+          {watch ? `${CRASH_BODY} Render the video to watch it smoothly.` : "It has no MP4 yet, so it can't be posted. Render it now; it takes a few minutes and you can close this while it runs."}
+        </Text>
       ) : null}
       {step === "rendering" ? (
         <>
           <Text style={styles.muted}>
-            {waiting ? "Wait for the render to complete before scheduling it." : "You can close this: the render keeps going and the video shows as Rendering until it's done."}
+            {watch
+              ? "It takes a few minutes. You can close this: the render keeps going and the MP4 plays here when it's ready."
+              : waiting
+                ? "Wait for the render to complete before scheduling it."
+                : "You can close this: the render keeps going and the video shows as Rendering until it's done."}
           </Text>
           <View style={styles.status} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: pct ?? 0 }}>
             <View style={styles.line}>
@@ -124,7 +137,9 @@ export function RenderVideoDialog({ video, onClose, onRendered }: {
         </>
       ) : null}
       {step === "done" ? (
-        <Text style={styles.muted}>The MP4 is ready. Schedule it now, or pick it from the list later. We&apos;ve also emailed you a link to download it.</Text>
+        <Text style={styles.muted}>
+          {watch ? "The MP4 is ready to watch. We've also emailed you a link to download it." : "The MP4 is ready. Schedule it now, or pick it from the list later. We've also emailed you a link to download it."}
+        </Text>
       ) : null}
       <ErrorText>{error}</ErrorText>
       <View style={styles.end}>
@@ -144,7 +159,7 @@ export function RenderVideoDialog({ video, onClose, onRendered }: {
         {step === "done" ? (
           <>
             <PillButton title="Close" onPress={onClose} />
-            <PillButton title="Schedule it" variant="primary" onPress={() => onRendered(video.id, true)} />
+            {watch ? <PillButton title="Watch now" variant="primary" onPress={watch.onWatch} /> : <PillButton title="Schedule it" variant="primary" onPress={() => onRendered(video.id, true)} />}
           </>
         ) : null}
       </View>
