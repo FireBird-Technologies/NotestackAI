@@ -105,7 +105,7 @@ export default function Settings() {
           <Section title="Privacy and email">
             <label className="check">
               <input type="checkbox" checked={s.workspace.training_opt_in} onChange={(e) => save({ training_opt_in: e.target.checked }, "privacy")} />
-              Let Notestack use my generations to improve its prompts. Off by default; your posts are never shared.
+              Let Notestack use my generations to improve its prompts. Off by default.
             </label>
             <label className="check">
               <input type="checkbox" checked={s.workspace.allow_public_links} onChange={(e) => save({ allow_public_links: e.target.checked }, "privacy")} />
