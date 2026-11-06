@@ -9,7 +9,18 @@ from mcp.server.fastmcp import FastMCP
 from app.auth import encode_signed
 from app.config import settings
 from app.mcp import loopback, options, scope, views, widgets
-from app.mcp.common import DATA, SCOPE_HELP, VISUAL, ToolError, guarded, shown, token, uid
+from app.mcp.common import (
+    DATA,
+    EMPTY_ARCHIVE,
+    SCOPE_HELP,
+    VISUAL,
+    ToolError,
+    archive_is_empty,
+    guarded,
+    shown,
+    token,
+    uid,
+)
 from app.mcp.loopback import ApiError
 
 READ_ONLY = {"readOnlyHint": True, "destructiveHint": False, "openWorldHint": False}
@@ -20,13 +31,63 @@ def _desc(text: str) -> dict:
     return {"description": text, "annotations": READ_ONLY}
 
 
+async def _source_connector(access, for_what: str = ""):
+    sources = await loopback.data("GET", "/api/sources", access)
+    page = await loopback.data("GET", "/api/documents", access,
+                               params={"limit": widgets.MAX_CONNECTOR_POSTS, "indexed_only": "true"})
+    payload = widgets.source_connector_payload(source_count=len(sources), post_count=page.get("total", 0),
+                                               posts=page.get("items", []), for_what=for_what)
+    view = {
+        "ask_writer": ("The source and file-upload form is shown. Say nothing more than one short line asking them to "
+                       "add their posts in it. Do not tell them to open Notestack or list steps; its Continue button "
+                       "brings them back here."),
+        "source_count": payload["source_count"],
+        "post_count": payload["post_count"],
+    }
+    return widgets.with_widget(view, payload)
+
+
 def register(mcp: FastMCP) -> None:
+    @mcp.tool(meta=widgets.SOURCE_CONNECTOR_UI, **_desc(
+        "Required readiness check for every user message that is not a request to make an artifact. Call this before "
+        "replying to greetings such as hello, acknowledgements, general conversation, or any other Notestack request. "
+        "If the writer has no posts or connected sources, this directly shows the add-source widget in the chat. If their "
+        "library is ready, it stays out of the way and tells you to continue with the tool that answers their request. "
+        "For requests to make a quiz, flashcards, report, infographic, slide deck, audio overview, mind map or video, call "
+        "choose_options instead because it performs this same check and opens the correct setup form."))
+    @guarded("start_notestack")
+    async def start_notestack() -> dict:
+        access = token()
+        if await archive_is_empty(access):
+            return await _source_connector(access)
+        return widgets.with_widget(
+            {
+                "archive_ready": True,
+                "instruction": ("The writer has connected content. Continue with their request now: use the matching "
+                                "Notestack tool when one applies, or answer a greeting briefly."),
+            },
+            {"kind": "archive_ready"},
+        )
+
+    @mcp.tool(meta=widgets.SOURCE_CONNECTOR_UI, **_desc(
+        "Show the Notestack source connector. Call this immediately when another tool returns empty_archive, or whenever "
+        "the writer wants to add posts. Pass for_what with what they were trying to make or do (quiz, flashcards, report, "
+        "infographic, slide_deck, audio_overview, mind_map, video, or a question) so the form can offer that as the next step. "
+        "The writer connects a blog, newsletter, feed, site or one article in the form itself, watches the import there, and "
+        "continues with its button. Afterwards do NOT tell them to open Notestack or to import elsewhere, and do not list steps."))
+    @guarded("connect_sources")
+    async def connect_sources(for_what: str = "") -> dict:
+        return await _source_connector(token(), for_what)
+
     @mcp.tool(**_desc(
         "List the writer's notebooks with how many posts, chats and generated items each holds. The notebook called "
         "\"All posts\" (is_archive) holds everything. Pass its visible title as notebook_title to another tool."))
     @guarded("list_notebooks")
     async def list_notebooks() -> dict:
-        rows = await loopback.data("GET", "/api/notebooks", token())
+        access = token()
+        if await archive_is_empty(access):
+            return dict(EMPTY_ARCHIVE)
+        rows = await loopback.data("GET", "/api/notebooks", access)
         return {"notebooks": [{k: n.get(k) for k in ("title", "description", "document_count", "chat_count",
                                                       "artifact_count", "is_archive", "updated_at")} | {"title": shown(n.get("title"))}
                               for n in rows]}
@@ -60,7 +121,10 @@ def register(mcp: FastMCP) -> None:
         "and whether it has finished syncing. Use it to get a source_id or to check a sync."))
     @guarded("list_sources")
     async def list_sources() -> dict:
-        rows = await loopback.data("GET", "/api/sources", token())
+        access = token()
+        if await archive_is_empty(access):
+            return dict(EMPTY_ARCHIVE)
+        rows = await loopback.data("GET", "/api/sources", access)
         return {"sources": [{"id": s["id"], "title": s["title"], "platform": s["platform"], "url": s["site_url"] or s["feed_url"],
                              "posts": s["document_count"] - s["locked_count"], "locked_posts": s["locked_count"],
                              "sync_status": s["sync_status"], "sync_error": s["sync_error"], "last_synced_at": s["last_synced_at"]}
@@ -194,6 +258,8 @@ def register(mcp: FastMCP) -> None:
     @guarded("choose_notebook")
     async def choose_notebook(for_what: str = "") -> dict:
         access = token()
+        if await archive_is_empty(access):
+            return dict(EMPTY_ARCHIVE)
         notebooks = await loopback.data("GET", "/api/notebooks", access)
         docs = (await loopback.data("GET", "/api/documents", access, params={"limit": widgets.MAX_PICK_POSTS, "indexed_only": "true"}))["items"]
         current = await scope.current_assistant_notebook(access)
@@ -233,7 +299,10 @@ def register(mcp: FastMCP) -> None:
         return widgets.with_widget(view, payload)
 
     @mcp.tool(meta=widgets.OPTIONS_UI, **_desc(
-        "The way to make anything. Call it FIRST when the writer asks for a quiz, flashcards, report, infographic, "
+        "The way to make anything from the writer's own notes. Whenever the writer asks for a quiz, flashcards, report, infographic, "
+        "slide deck, audio overview, mind map or video, you MUST call this tool, even if you think they have no notes: it "
+        "tells you what to do. NEVER make a quiz, flashcards or any of these yourself, from general knowledge, or with your own "
+        "quiz or form tools. Call it FIRST when the writer asks for a quiz, flashcards, report, infographic, "
         "slide deck, audio overview, mind map or video: it shows one form where they choose the notebook (or tick posts for a new "
         "one) and then the same settings as the Notestack app: quiz or flashcards (how many, difficulty, question types), a report (written or interactive, "
         "template), an infographic (look, layout), a slide deck (format, length, theme), an audio overview (format, hosts, "
@@ -245,6 +314,10 @@ def register(mcp: FastMCP) -> None:
     @guarded("choose_options")
     async def choose_options(make: Literal["report", "quiz", "flashcards", "infographic", "slide_deck", "audio_overview", "mind_map", "video"]) -> dict:
         access = token()
+        if await archive_is_empty(access):
+            # This tool already owns the generation-options UI. Return the source UI in the same result instead of
+            # trusting the host model to notice empty_archive and make a second tool call.
+            return await _source_connector(access, make)
         templates = None
         if make in ("report", "video"):
             try:

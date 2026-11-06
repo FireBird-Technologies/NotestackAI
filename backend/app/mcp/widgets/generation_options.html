@@ -206,7 +206,7 @@
     if (!o || d > 6) return null;
     if (typeof o === "string") { try { return find(JSON.parse(o), d + 1); } catch (e) { return null; } }
     if (typeof o !== "object") return null;
-    if (o.kind === "generation_options") return o;
+    if (o.kind === "generation_options" || o.kind === "source_connector") return o;
     for (var k in o) { var f = find(o[k], d + 1); if (f) return f; }
     return null;
   }
@@ -277,8 +277,8 @@
     if (m.method === "tools/call" && m.id !== undefined) {
       request("tools/call", m.params).then(function (r) { w.postMessage({ jsonrpc: "2.0", id: m.id, result: r || {} }, "*"); },
         function (er) { w.postMessage({ jsonrpc: "2.0", id: m.id, error: er }, "*"); });
-    } else if (m.method === "ui/open-link" && m.id !== undefined) {
-      request("ui/open-link", m.params).then(function (r) { w.postMessage({ jsonrpc: "2.0", id: m.id, result: r || {} }, "*"); },
+    } else if (["ui/open-link", "ui/message", "ui/update-model-context"].indexOf(m.method) >= 0 && m.id !== undefined) {
+      request(m.method, m.params).then(function (r) { w.postMessage({ jsonrpc: "2.0", id: m.id, result: r || {} }, "*"); },
         function (er) { w.postMessage({ jsonrpc: "2.0", id: m.id, error: er }, "*"); });
     } else if (m.method && m.id !== undefined) { w.postMessage({ jsonrpc: "2.0", id: m.id, result: {} }, "*"); }
   }
@@ -467,6 +467,14 @@
   }
   $("back").addEventListener("click", function () { showWhere(); });
   function show(d) {
+    if (d.kind === "source_connector") {
+      got = true; data = d; shown = d;
+      $("msg").hidden = true; $("main").hidden = true; $("box").style.display = "none";
+      $("out").classList.add("on"); $("player").style.display = "block"; $("player").textContent = "";
+      frame = document.createElement("iframe"); frame.setAttribute("sandbox", "allow-scripts allow-forms");
+      frame.srcdoc = PLAYERS.source_connector || ""; $("player").appendChild(frame); reportSize();
+      return;
+    }
     got = true; data = d; nb = d.notebook_id || null; nbTitle = nb ? "your notebook" : "";
     $("msg").hidden = true; $("main").hidden = false;
     restoreState().then(function (saved) {

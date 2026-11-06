@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connect a source</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: transparent; }
+  body { padding: 14px; }
+  /* The web app's "Connect a source" dialog: a black card, a hairline-bordered inner card with pill tabs, then the posts list. */
+  #box { display: none; color: #fff; background: #000; border: 1px solid var(--line-strong, rgba(255,255,255,.18)); border-radius: 22px; padding: 22px;
+    box-shadow: 0 0 0 1px rgba(33,124,255,.3), 0 0 44px rgba(33,124,255,.3); }
+  h2 { margin: 0; font-size: 22px; }
+  .sub { margin: 14px 0 16px; font-size: 14px; line-height: 1.5; color: rgba(255,255,255,.72); }
+  .card { padding: 14px; border: 1px solid rgba(59,130,246,.65); border-radius: 18px; background: rgba(255,255,255,.025); box-shadow: 0 0 22px rgba(33,124,255,.2); }
+  .tabs { display: flex; gap: 4px; padding: 4px; margin-bottom: 14px; border: 1px solid rgba(255,255,255,.12); border-radius: 999px; background: rgba(0,0,0,.4); }
+  .tab { flex: 1; border: 0; border-radius: 999px; padding: 10px 8px; color: rgba(255,255,255,.7); background: transparent; font-size: 14px; font-weight: 500; cursor: pointer; transition: background .15s, color .15s; }
+  .tab:hover { color: #fff; }
+  .tab.active { color: #fff; background: #3b82f6; box-shadow: 0 0 18px rgba(59,130,246,.35); }
+  .panel[hidden] { display: none; }
+  .linkrow { display: flex; gap: 10px; }
+  input[type=text], input[type=search] { min-width: 0; flex: 1; color: #fff; background: #050505; border: 1px solid rgba(255,255,255,.18); padding: 12px 18px; font-size: 14.5px; }
+  #url { border-radius: 999px; }
+  #q { width: 100%; flex: none; border-radius: 8px; padding: 11px 14px; border-color: rgba(255,255,255,.14); }
+  input::placeholder { color: rgba(255,255,255,.5); }
+  input:focus, #url:not(:placeholder-shown) { outline: none; border-color: rgba(59,130,246,.85); box-shadow: 0 0 14px rgba(33,124,255,.22); }
+  button { font-family: inherit; }
+  .btn { color: #fff; border: 1px solid transparent; border-radius: 999px; padding: 11px 22px; font-size: 14.5px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .primary { background: #3b82f6; box-shadow: 0 0 20px rgba(59,130,246,.3); }
+  .primary:hover:not(:disabled) { background: #5a96f8; }
+  .primary:disabled { background: #1d3a78; color: rgba(255,255,255,.5); box-shadow: none; cursor: default; }
+  .ghost { background: transparent; border-color: rgba(255,255,255,.2); }
+  .ghost:hover:not(:disabled) { border-color: rgba(59,130,246,.75); }
+  .hint { margin: 12px 2px 2px; font-size: 14px; line-height: 1.45; color: rgba(255,255,255,.62); }
+  .link-btn { padding: 0; border: 0; border-bottom: 1px solid #3b82f6; border-radius: 0; background: none; color: #fff; font: inherit; cursor: pointer; }
+  .link-btn:hover { color: #9cc2ff; }
+  .drop { padding: 20px 14px; text-align: center; border: 1px dashed rgba(255,255,255,.28); border-radius: 14px; background: rgba(255,255,255,.025); transition: border .15s, background .15s; }
+  .drop.drag { border-color: #5a96f8; background: rgba(59,130,246,.1); }
+  .drop strong { display: block; font-size: 15px; margin-bottom: 6px; }
+  .drop p { margin: 0 0 12px; color: rgba(255,255,255,.6); font-size: 13.5px; line-height: 1.5; }
+  .filelist { margin: 10px 0 0; }
+  .file { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 12px; margin-top: 6px; border: 1px solid rgba(255,255,255,.12); border-radius: 9px; background: #050505; font-size: 13px; text-align: left; }
+  .file span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file .meta { flex: none; color: rgba(255,255,255,.55); font-size: 12px; }
+  .file.bad .meta { color: #ff8a8a; }
+  #upload-files { width: 100%; margin-top: 10px; }
+
+  /* the import, shown in place of the form while it runs */
+  #job { display: none; margin-top: 14px; padding: 14px; border-radius: 14px; border: 1px solid rgba(59,130,246,.3); background: rgba(33,124,255,.07); }
+  #job.show { display: block; }
+  #job.ok { border-color: rgba(74,222,128,.4); background: rgba(74,222,128,.07); }
+  #job.bad { border-color: rgba(255,90,90,.4); background: rgba(255,70,70,.07); }
+  .jobline { display: flex; align-items: center; gap: 10px; font-size: 14px; line-height: 1.4; }
+  .spin { flex: none; width: 16px; height: 16px; border-radius: 50%; border: 2px solid rgba(255,255,255,.2); border-top-color: #5a96f8; animation: r .8s linear infinite; }
+  #job.ok .spin, #job.bad .spin { display: none; }
+  .mark { display: none; flex: none; font-weight: 700; }
+  #job.ok .mark { display: inline; color: #4ade80; } #job.bad .mark { display: inline; color: #ff8a8a; }
+  @keyframes r { to { transform: rotate(360deg); } }
+  .bar { height: 4px; margin-top: 12px; border-radius: 999px; background: rgba(255,255,255,.1); overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 6%; border-radius: 999px; background: #3b82f6; transition: width .6s ease; }
+  #job.ok .bar, #job.bad .bar { display: none; }
+  .jobnote { margin: 8px 0 0; font-size: 12.5px; color: rgba(255,255,255,.55); }
+  #next { width: 100%; margin-top: 14px; display: none; padding: 13px 22px; font-size: 15px; }
+  #next.show { display: block; }
+
+  .posts { margin-top: 18px; }
+  .cap { margin: 16px 0 10px; font-family: var(--font-mono, "JetBrains Mono", monospace); font-size: 12.5px; letter-spacing: .22em; text-transform: uppercase; color: rgba(255,255,255,.6); }
+  ul { list-style: none; margin: 0; padding: 0; }
+  .row { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; padding: 13px 16px; margin-bottom: 6px; border: 1px solid rgba(255,255,255,.12); border-radius: 8px; background: #050505; font-size: 14px; }
+  .row .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .d { flex: none; font-family: var(--font-mono, "JetBrains Mono", monospace); font-size: 11.5px; color: rgba(255,255,255,.5); }
+  .row.empty { color: rgba(255,255,255,.72); }
+  #list { max-height: 260px; overflow-y: auto; }
+  @media (max-width: 520px) { .linkrow { flex-direction: column; } .linkrow .btn { width: 100%; } .tab { font-size: 12.5px; padding-inline: 4px; } #box { padding: 16px; } }
+</style>
+</head>
+<body>
+<section id="box">
+  <h2>Connect a source</h2>
+  <p class="sub" id="sub">This archive already contains all your posts. Posts from a new source join it automatically.</p>
+  <div class="card">
+    <nav class="tabs" aria-label="Choose an import method">
+      <button class="tab active" type="button" data-tab="link">Link</button>
+      <button class="tab" type="button" data-tab="upload">Upload</button>
+    </nav>
+    <div class="panel" id="link">
+      <form id="form">
+        <div class="linkrow">
+          <input id="url" type="text" inputmode="url" autocomplete="url" placeholder="Paste a blog, newsletter or article link" aria-label="Blog, newsletter or article link">
+          <button class="btn primary" id="connect" type="submit" disabled>Connect</button>
+        </div>
+        <p class="hint" id="hint"></p>
+      </form>
+    </div>
+    <div class="panel" id="upload" hidden>
+      <div class="drop" id="drop">
+        <input id="files" type="file" accept=".md,.markdown,.txt,.vtt,.html,.htm,.pdf,text/markdown,text/plain,text/vtt,text/html,application/pdf" multiple hidden>
+        <strong>Drop documents here</strong>
+        <p>Markdown, text, VTT, HTML, or PDF · up to 10 MB each</p>
+        <button class="btn ghost" id="browse" type="button">Choose files</button>
+      </div>
+      <ul class="filelist" id="filelist"></ul>
+      <button class="btn primary" id="upload-files" type="button" disabled>Upload files</button>
+    </div>
+    <div id="job" role="status" aria-live="polite">
+      <div class="jobline"><span class="spin" aria-hidden="true"></span><span class="mark" id="mark" aria-hidden="true"></span><span id="jobtext"></span></div>
+      <div class="bar" aria-hidden="true"><i id="fill"></i></div>
+      <p class="jobnote" id="jobnote" hidden></p>
+    </div>
+  </div>
+  <button class="btn primary" id="next" type="button">Continue</button>
+  <div class="posts">
+    <input id="q" type="search" placeholder="Search posts" aria-label="Search posts">
+    <p class="cap" id="cap">Already added posts (0)</p>
+    <ul id="list"></ul>
+  </div>
+</section>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var data = { posts: [], post_count: 0, for_what: "", next_label: "Continue", next_message: "My posts are ready. Please continue with what I asked for.", max_file_bytes: 10485760 };
+  var pending = {}, rid = 1, timer = null, busy = false, baseline = 0, sent = false, override = null, selected = [];
+  function send(m) { m.jsonrpc = "2.0"; window.parent.postMessage(m, "*"); }
+  function request(method, params) { return new Promise(function (resolve, reject) {
+    var id = rid++; pending[id] = { resolve: resolve, reject: reject }; send({ id: id, method: method, params: params || {} });
+  }); }
+  function notify(method, params) { send({ method: method, params: params || {} }); }
+  function find(o, depth) {
+    if (!o || depth > 6) return null;
+    if (typeof o === "string") { try { return find(JSON.parse(o), depth + 1); } catch (e) { return null; } }
+    if (typeof o !== "object") return null;
+    if (o.kind === "source_connector" || o.kind === "archive_ready") return o;
+    for (var k in o) { var found = find(o[k], depth + 1); if (found) return found; }
+    return null;
+  }
+  function parse(res) { try { return JSON.parse(res.content[0].text); } catch (e) { return {}; } }
+  // A tool's own answer; an error answer (not signed in, plan limit, a bad link) is thrown as it came.
+  function call(name, args) { return request("tools/call", { name: name, arguments: args || {} }).then(function (res) {
+    var value = parse(res); if (res.isError || value.error) throw value; return value;
+  }); }
+  function size() { notify("ui/notifications/size-changed", { width: Math.ceil(document.documentElement.scrollWidth), height: Math.ceil(document.body.getBoundingClientRect().height) }); }
+  if (window.ResizeObserver) new ResizeObserver(size).observe(document.body);
+  window.addEventListener("message", function (e) {
+    if (e.source !== window.parent) return;
+    var m = e.data; if (!m || m.jsonrpc !== "2.0") return;
+    if (m.method === undefined && m.id !== undefined) {
+      var p = pending[m.id]; if (!p) return; delete pending[m.id]; if (m.error) p.reject(m.error); else p.resolve(m.result);
+    } else if (m.method && m.params) {
+      var payload = find(m.params, 0); if (payload) { data = payload; render(); }
+    } else if ((m.method === "ui/resource-teardown" || m.method === "ping") && m.id !== undefined) send({ id: m.id, result: {} });
+  });
+
+  function plural(n, one, many) { return n + " " + (n === 1 ? one : many); }
+  function thing() { return (data.next_label || "").replace(/^Continue to set up your /, ""); }
+  function render() {
+    if (!data || data.kind === "archive_ready") {
+      $("box").style.display = "none";
+      notify("ui/notifications/size-changed", { width: 1, height: 1 });
+      return;
+    }
+    $("box").style.display = "block";
+    $("sub").textContent = data.for_what
+      ? "Add your posts here, then continue to set up your " + thing() + "."
+      : "This archive already contains all your posts. Posts from a new source join it automatically.";
+    $("next").textContent = (data.next_label || "Continue") + " →";
+    renderList();
+    // Someone who already has posts and came here to make something can go straight on.
+    if (!busy && data.for_what && data.post_count > 0) $("next").classList.add("show");
+    renderFiles();
+    size();
+  }
+  function renderList() {
+    var q = $("q").value.trim().toLowerCase(), posts = data.posts || [], ul = $("list");
+    $("cap").textContent = "Already added posts (" + (data.post_count || posts.length) + ")";
+    ul.textContent = "";
+    var shown = posts.filter(function (p) { return !q || (p.title || "").toLowerCase().indexOf(q) >= 0; });
+    shown.forEach(function (p) {
+      var li = document.createElement("li"), t = document.createElement("span"), d = document.createElement("span");
+      li.className = "row"; t.className = "t"; t.textContent = p.title || "Untitled"; d.className = "d";
+      if (p.published_at) { var dt = new Date(p.published_at); if (!isNaN(dt)) d.textContent = dt.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }); }
+      li.appendChild(t); li.appendChild(d); ul.appendChild(li);
+    });
+    if (!shown.length) { var li = document.createElement("li"); li.className = "row empty"; li.textContent = posts.length ? "No posts match." : "No posts yet."; ul.appendChild(li); }
+  }
+  function looksArticle(raw) {
+    try { var u = new URL(raw.indexOf("://") >= 0 ? raw : "https://" + raw); var path = u.pathname.replace(/\/+$/, "");
+      if (!path || /(feed|rss|atom)(\.xml)?$/i.test(path) || /^\/@[^/]+$/.test(path)) return false;
+      return /\/p\/|\/posts?\/|\/\d{4}\/|\.html?$/i.test(path) || path.split("/").filter(Boolean).length >= 2 || path.length > 24;
+    } catch (e) { return false; }
+  }
+  // "feed" connects the whole site, "url" imports one page. The link decides, and the writer can flip it from the hint.
+  function mode() { return override || (looksArticle($("url").value.trim()) ? "url" : "feed"); }
+  function updateForm() {
+    var value = $("url").value.trim(), m = mode(), hint = $("hint");
+    hint.textContent = "";
+    if (!value) hint.textContent = "Paste a blog, newsletter, feed, or one article.";
+    else {
+      hint.appendChild(document.createTextNode(m === "feed" ? "We will pull in the whole archive and keep it in sync. " : "Looks like a single article, so we will import just this page. "));
+      var b = document.createElement("button"); b.type = "button"; b.className = "link-btn";
+      b.textContent = m === "feed" ? "Just this one page instead" : "Connect the whole site instead";
+      b.addEventListener("click", function () { override = m === "feed" ? "url" : "feed"; updateForm(); });
+      hint.appendChild(b);
+    }
+    $("connect").textContent = busy ? (m === "feed" ? "Finding posts\u2026" : "Working\u2026") : (m === "feed" ? "Connect" : "Import article");
+    $("connect").disabled = !value || busy; size();
+  }
+
+  function fileType(file) {
+    var name = (file.name || "").toLowerCase(), known = {
+      ".md": "text/markdown", ".markdown": "text/markdown", ".txt": "text/plain", ".vtt": "text/vtt",
+      ".html": "text/html", ".htm": "text/html", ".pdf": "application/pdf"
+    };
+    for (var ext in known) if (name.slice(-ext.length) === ext) return known[ext];
+    return ["text/markdown", "text/plain", "text/vtt", "text/html", "application/pdf"].indexOf(file.type) >= 0 ? file.type : "";
+  }
+  function bytes(n) { return n < 1024 * 1024 ? Math.max(1, Math.round(n / 1024)) + " KB" : (n / (1024 * 1024)).toFixed(1) + " MB"; }
+  function fileProblem(file) {
+    if (!fileType(file)) return "Unsupported type";
+    if (!file.size) return "Empty file";
+    if (file.size > (data.max_file_bytes || 10485760)) return "Too large";
+    return "";
+  }
+  function renderFiles() {
+    var ul = $("filelist"); ul.textContent = "";
+    selected.forEach(function (file) {
+      var li = document.createElement("li"), name = document.createElement("span"), meta = document.createElement("span"), problem = fileProblem(file);
+      li.className = "file" + (problem ? " bad" : ""); name.textContent = file.name || "Untitled"; meta.className = "meta";
+      meta.textContent = problem || bytes(file.size); li.appendChild(name); li.appendChild(meta); ul.appendChild(li);
+    });
+    $("upload-files").textContent = selected.length ? "Upload " + plural(selected.length, "file", "files") : "Upload files";
+    $("upload-files").disabled = busy || !selected.length || selected.some(fileProblem);
+    size();
+  }
+  function pick(files) { selected = Array.prototype.slice.call(files || [], 0, 20); renderFiles(); }
+
+  // The import's state, shown in the widget itself: running (spinner and bar), done, or failed.
+  function job(state, text, progress, note) {
+    var box = $("job"); box.className = "show" + (state === "ok" ? " ok" : state === "bad" ? " bad" : "");
+    $("mark").textContent = state === "ok" ? "✓" : state === "bad" ? "!" : "";
+    $("jobtext").textContent = text;
+    if (typeof progress === "number") $("fill").style.width = Math.max(6, Math.min(100, Math.round(progress * 100))) + "%";
+    $("jobnote").hidden = !note; $("jobnote").textContent = note || ""; size();
+  }
+  function stop() { busy = false; clearTimeout(timer); updateForm(); renderFiles(); }
+  function fail(text) { stop(); job("bad", text); }
+  function refresh() {
+    return request("tools/call", { name: "connect_sources", arguments: { for_what: data.for_what || "" } }).then(function (res) {
+      var fresh = (res && res.structuredContent && res.structuredContent.kind === "source_connector") ? res.structuredContent : find(res, 0);
+      if (fresh) { data = fresh; renderList(); }
+    }).catch(function () {});
+  }
+  function finish() {
+    refresh().then(function () {
+      stop();
+      var added = Math.max(0, (data.post_count || 0) - baseline);
+      if (!(data.post_count > 0)) { job("bad", "The import finished but no posts were found. Try a different link."); return; }
+      job("ok", added > 0 ? plural(added, "post", "posts") + " added to your library." : "Your posts are in your library.");
+      $("url").value = ""; selected = []; $("files").value = ""; updateForm(); render();
+      $("next").classList.add("show"); $("next").focus();
+      request("ui/update-model-context", { content: [{ type: "text", text: "The writer connected posts to Notestack and the import finished (" + data.post_count + " posts)." }] }).catch(function () {});
+    });
+  }
+  function watch(first) {
+    var fails = 0, started = Date.now();
+    (function tick() {
+      timer = setTimeout(function () {
+        call("get_job", { job_id: first.id }).then(function (j) {
+          fails = 0;
+          if (j.status === "done") finish();
+          else if (j.status === "failed") fail(j.error || j.message || "Notestack could not import that link.");
+          else {
+            job("run", j.message || "Importing your posts…", typeof j.progress === "number" ? j.progress : undefined,
+                Date.now() - started > 60000 ? "Large sites take a few minutes. You can keep this open." : "");
+            tick();
+          }
+        }).catch(function (err) {
+          if (err && err.error === "not_signed_in") { fail("Your Notestack sign-in expired (logging out of the Notestack website does this). Reconnect Notestack in ChatGPT, then try again."); return; }
+          if (++fails >= 4) fail("Lost contact with Notestack while checking the import. It may still finish: ask me to continue in a moment.");
+          else tick();
+        });
+      }, 1800);
+    })();
+  }
+  $("url").addEventListener("input", function () { override = null; updateForm(); });
+  $("q").addEventListener("input", renderList);
+  $("form").addEventListener("submit", function (e) {
+    e.preventDefault(); var url = $("url").value.trim(); if (!url || busy) return;
+    var article = mode() === "url";
+    busy = true; baseline = data.post_count || 0; $("next").classList.remove("show"); updateForm();
+    job("run", article ? "Importing the article…" : "Looking for posts…", 0.05);
+    call(article ? "import_url" : "add_source", { url: url }).then(function (out) {
+      var j = out.job || {};
+      job("run", j.message || "Connected. Importing your posts…", typeof j.progress === "number" ? j.progress : 0.1);
+      if (j.id) watch(j); else finish();
+    }).catch(function (err) {
+      fail(err && err.error === "not_signed_in" ? "Your Notestack sign-in expired. Reconnect Notestack in ChatGPT, then try again."
+        : (err && (err.message || err.tell_the_writer)) || "That link could not be added.");
+    });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll(".tab"), function (tab) { tab.addEventListener("click", function () {
+    Array.prototype.forEach.call(document.querySelectorAll(".tab"), function (b) { b.classList.toggle("active", b === tab); });
+    Array.prototype.forEach.call(document.querySelectorAll(".panel"), function (p) { p.hidden = p.id !== tab.getAttribute("data-tab"); }); size();
+  }); });
+  $("browse").addEventListener("click", function () { if (!busy) $("files").click(); });
+  $("files").addEventListener("change", function () { pick(this.files); });
+  ["dragenter", "dragover"].forEach(function (name) { $("drop").addEventListener(name, function (e) { e.preventDefault(); if (!busy) $("drop").classList.add("drag"); }); });
+  ["dragleave", "drop"].forEach(function (name) { $("drop").addEventListener(name, function (e) { e.preventDefault(); $("drop").classList.remove("drag"); }); });
+  $("drop").addEventListener("drop", function (e) { if (!busy && e.dataTransfer) pick(e.dataTransfer.files); });
+
+  function putFile(url, headers, file, progress) { return new Promise(function (resolve, reject) {
+    var xhr = new XMLHttpRequest(); xhr.open("PUT", url, true);
+    Object.keys(headers || {}).forEach(function (key) { xhr.setRequestHeader(key, headers[key]); });
+    xhr.upload.onprogress = function (e) { if (e.lengthComputable) progress(e.loaded / e.total); };
+    xhr.onload = function () { if (xhr.status >= 200 && xhr.status < 300) resolve(); else reject(new Error("Upload failed (" + xhr.status + ").")); };
+    xhr.onerror = function () { reject(new Error("The file upload could not reach storage.")); };
+    xhr.send(file);
+  }); }
+  function waitImport(first, label, done, total) { return new Promise(function (resolve, reject) {
+    var failures = 0;
+    (function tick() {
+      setTimeout(function () {
+        call("get_job", { job_id: first.id }).then(function (j) {
+          failures = 0;
+          if (j.status === "done") resolve(j);
+          else if (j.status === "failed") reject(new Error(j.error || j.message || "Notestack could not read " + label + "."));
+          else {
+            var within = typeof j.progress === "number" ? j.progress : .5;
+            job("run", "Reading " + label + "…", Math.min(.98, (done + .55 + .4 * within) / total)); tick();
+          }
+        }).catch(function (err) { if (++failures >= 4) reject(err); else tick(); });
+      }, 1500);
+    })();
+  }); }
+  $("upload-files").addEventListener("click", async function () {
+    if (busy || !selected.length || selected.some(fileProblem)) return;
+    busy = true; baseline = data.post_count || 0; $("next").classList.remove("show"); updateForm(); renderFiles();
+    var files = selected.slice(), total = files.length;
+    try {
+      for (var i = 0; i < files.length; i++) {
+        var file = files[i], label = file.name || "file";
+        job("run", "Uploading " + label + "…", i / total);
+        var start = await call("prepare_file_upload", { filename: label, content_type: fileType(file), size_bytes: file.size });
+        await putFile(start.upload_url, start.headers || { "Content-Type": fileType(file) }, file, function (p) {
+          job("run", "Uploading " + label + "…", Math.min(.98, (i + .55 * p) / total));
+        });
+        var imported = await call("import_uploaded_file", { upload_id: start.upload_id }), first = imported.job || {};
+        if (first.id) await waitImport(first, label, i, total);
+      }
+      finish();
+    } catch (err) {
+      fail((err && (err.message || err.tell_the_writer)) || "Notestack could not upload that file.");
+    }
+  });
+  // The next step: the writer's own message, so the assistant carries on with what they first asked for.
+  $("next").addEventListener("click", function () {
+    if (sent) return; sent = true; $("next").disabled = true; $("next").textContent = "Sent ✓";
+    request("ui/message", { role: "user", content: [{ type: "text", text: data.next_message }] }).catch(function () {
+      sent = false; $("next").disabled = false; $("next").textContent = (data.next_label || "Continue") + " →";
+      job("bad", "I couldn't send that from here. Just tell me to continue.");
+    });
+  });
+  updateForm();
+  request("ui/initialize", { protocolVersion: "2026-01-26", appInfo: { name: "notestack-source-connector", version: "2.0.0" }, appCapabilities: {} })
+    .then(function () { notify("ui/notifications/initialized", {}); size(); }).catch(function () { job("bad", "This control needs an app that supports interactive results."); });
+  setTimeout(function () { notify("ui/notifications/initialized", {}); size(); }, 1200);
+})();
+</script>
+</body>
+</html>
