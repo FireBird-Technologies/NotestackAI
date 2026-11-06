@@ -5,13 +5,13 @@ import { router } from "expo-router";
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 
-import { CycleToggle, PlanCard } from "@/account/plans";
+import { CycleToggle, LegalLinks, ManageOnWeb, PlanCard } from "@/account/plans";
 import { Eyebrow, PageTitle, PublicPage } from "@/shell/public-page";
 import { Button } from "@/ui";
 
 /**
  * The plans, as on the landing page's pricing section, for people not signed in: what each plan includes and costs,
- * then Start free. Signed in, plans are bought in the upgrade sheet (src/account/upgrade.tsx).
+ * then Start free. Signed in, the plans are in the upgrade sheet (src/account/upgrade.tsx). Both are bought on notestack.ai.
  */
 export default function Pricing() {
   const [cycle, setCycle] = useState<Cycle>("annual");
@@ -28,6 +28,8 @@ export default function Pricing() {
 
       <CycleToggle cycle={cycle} onChange={setCycle} plans={plans} />
 
+      <ManageOnWeb />
+
       {plans.map((plan) => (
         <PlanCard key={plan.id} plan={plan} cycle={cycle} />
       ))}
@@ -35,6 +37,8 @@ export default function Pricing() {
       <View style={styles.cta}>
         <Button title="Start free" onPress={() => router.navigate("/sign-up")} />
       </View>
+
+      <LegalLinks />
     </PublicPage>
   );
 }

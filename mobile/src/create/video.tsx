@@ -25,7 +25,7 @@ import { createStyles, CustomTopic, FocusCards, Foot, Hint, Label, Select } from
 import { voicesQuery } from "@/create/media";
 import { colors, fonts, radius } from "@/ui/theme";
 import { ErrorText, formatDate, Loading } from "@/ui";
-import { useUpgrade } from "@/account/upgrade";
+import { NestedPlansSheet } from "@/account/upgrade";
 import { pageStyles, PillButton } from "@/ui/widgets";
 
 type Source = { kind: "notebook"; id: string } | { kind: "post"; id: string };
@@ -77,7 +77,7 @@ export function VideoDialog({ notebook, initial, onCreate }: {
   onCreate: (created: Promise<Artifact>) => void;
 }) {
   const config = useQuery({ queryKey: ["videos", "config"], queryFn: videosApi.config });
-  const upgrade = useUpgrade();
+  const [plansOpen, setPlansOpen] = useState(false);
   const quota = useQuery({ queryKey: ["videos", "quota"], queryFn: videosApi.quota });
   const catalog = useQuery({ queryKey: ["videos", "catalog"], queryFn: videosApi.catalog, enabled: Boolean(config.data?.configured) });
   const voices = useQuery({ ...voicesQuery, enabled: Boolean(config.data?.configured) });
@@ -226,7 +226,8 @@ export function VideoDialog({ notebook, initial, onCreate }: {
         <Text style={pageStyles.body}>
           You have used all of the videos included in your current plan. Upgrade to a bigger plan to keep turning your posts and chats into videos.
         </Text>
-        <PillButton title="Upgrade" variant="primary" onPress={() => upgrade()} />
+        <PillButton title="Upgrade" variant="primary" onPress={() => setPlansOpen(true)} />
+        <NestedPlansSheet visible={plansOpen} onClose={() => setPlansOpen(false)} />
       </View>
     );
   }

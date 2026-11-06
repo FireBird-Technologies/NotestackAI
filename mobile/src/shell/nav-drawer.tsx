@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import { router, useSegments, type Href } from "expo-router";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { BackHandler, ScrollView, StyleSheet, Text, View } from "react-native";
+import { BackHandler, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Pressable } from "@/ui/pressable";
 import Animated, { FadeIn, FadeOut, SlideInLeft, SlideOutLeft } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -280,8 +280,10 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
     color: colors.text,
     fontSize: 15,
-    textDecorationLine: "underline",
-    textDecorationColor: colors.blue,
+    ...Platform.select({
+      ios: { paddingTop: 6 },
+      default: { textDecorationLine: "underline", textDecorationColor: colors.blue },
+    }),
   },
   email: { color: colors.text2, fontFamily: fonts.mono, fontSize: 13, marginTop: 6, paddingHorizontal: 16 },
   signOut: { alignSelf: "flex-start", paddingHorizontal: 16, paddingVertical: 8 },
