@@ -20,6 +20,7 @@ import { Dialog, PillButton, StatusPill, confirm } from "@/ui/widgets";
 
 import { BackLink } from "./back";
 import { ImagesPanel } from "./images";
+import { isWebUrl, LivePlayer, Mp4Player, PlayerCrashDialog } from "./live-player";
 import { MakingPage, MakingVideo } from "./making";
 import { SceneList } from "./scenes";
 import { LookPanel } from "./settings";
@@ -33,7 +34,6 @@ type Running = { label: string; poll: () => Promise<VideoJobState | null> } | nu
 
 const message = (e: unknown) => (e instanceof ApiError || e instanceof Error ? e.message : "Something went wrong. Try again.");
 const busyMessage = (e: unknown) => (e instanceof ApiError && e.status === 409 ? "Another change is still running, try again in a moment." : message(e));
-const isWebUrl = (u: unknown): u is string => typeof u === "string" && /^https?:\/\//.test(u);
 
 /** Out of videos on the plan: say so, and offer the plans (the upgrade sheet). */
 function outOfVideos(q: VideoQuota | null | undefined, onPlans: () => void) {
@@ -391,6 +391,14 @@ export function VideoEditor({ id, renderOnOpen = false, fresh = false }: { id: s
   const [layoutInfo, setLayoutInfo] = useState<LayoutInfo | null>(null);
   const [panel, setPanel] = useState<Panel>("scenes");
   const [error, setError] = useState("");
+  // The live preview crashed (the phone ran out of memory) and has not been loaded again.
+  const [liveCrashed, setLiveCrashed] = useState(false);
+  const [liveAttempt, setLiveAttempt] = useState(0); // a new number loads a new live preview
+  const [playMp4, setPlayMp4] = useState(false); // the preview shows the MP4 instead of the live player
+  const reloadLive = () => {
+    setLiveCrashed(false);
+    setLiveAttempt((n) => n + 1);
+  };
 
   const reload = useCallback(
     () =>
@@ -492,6 +500,18 @@ export function VideoEditor({ id, renderOnOpen = false, fresh = false }: { id: s
     }
   };
   const storedMp4 = project ? (project.video_url ?? project.artifact.url ?? null) : null;
+  // A finished render's file can take a moment to upload: keep checking until the preview has it to play.
+  const playableMp4 = isWebUrl(storedMp4) ? storedMp4 : null;
+  usePoll<VideoProject | LegacyVideo>(
+    playMp4 && !playableMp4
+      ? () =>
+          videosApi.get(id).then((p) => {
+            setProject(p);
+            return p;
+          })
+      : null,
+    { intervalMs: 4000, key: `mp4:${id}`, until: (p) => isWebUrl(p.video_url) },
+  );
   async function downloadNow() {
     const fresh = await videoEditApi
       .downloadUrl(id)
@@ -526,6 +546,14 @@ export function VideoEditor({ id, renderOnOpen = false, fresh = false }: { id: s
       const err = job.data?.error;
       if (err) setError(`${running.label} failed: ${err}`);
       if (running.label === "Rendering" && !err) setRendered3s(true);
+      // The live preview crashed before this render ended: the MP4 takes its place, or if there is none, it loads again.
+      if (running.label === "Rendering" && liveCrashed) {
+        if (err) reloadLive();
+        else {
+          setLiveCrashed(false);
+          setPlayMp4(true);
+        }
+      }
       if (running.label === "Rendering" && autoDownload.current) {
         autoDownload.current = false;
         if (!err) {
@@ -713,17 +741,22 @@ export function VideoEditor({ id, renderOnOpen = false, fresh = false }: { id: s
       {project && panelProps && !generating && !awaiting && !REVIEW.has(status?.status ?? "") && !fullScreenJob ? (
         <View style={styles.editor}>
           <View style={vstyles.card}>
-            {project.preview_url && previewReady ? (
+            {playMp4 ? (
+              <>
+                <View style={[styles.previewBox, playableMp4 ? null : styles.center, previewSize]}>
+                  {playableMp4 ? <Mp4Player uri={playableMp4} /> : <Spinner />}
+                </View>
+                <Text style={[vstyles.muted, vstyles.small]}>Showing your last render. Edits appear after you render again.</Text>
+              </>
+            ) : liveCrashed ? (
+              <View style={[styles.previewBox, styles.center, previewSize]} accessibilityRole={isRendering ? "progressbar" : undefined}>
+                {isRendering ? <Spinner /> : null}
+                <Text style={vstyles.muted}>{isRendering ? "Rendering. The MP4 will play here when it's ready." : "The preview stopped."}</Text>
+              </View>
+            ) : project.preview_url && previewReady ? (
               // Keyed on the format: a switch reloads it in the new shape. Other edits reach the embed by themselves.
               <View key={portrait ? "portrait" : "landscape"} style={[styles.previewBox, previewSize]}>
-                <WebView
-                  source={{ uri: embedUrl(project.preview_url) }}
-                  style={styles.web}
-                  containerStyle={styles.web}
-                  allowsInlineMediaPlayback
-                  allowsFullscreenVideo
-                  mediaPlaybackRequiresUserAction={false}
-                />
+                <LivePlayer key={liveAttempt} uri={embedUrl(project.preview_url)} onCrash={() => setLiveCrashed(true)} />
               </View>
             ) : project.preview_url ? (
               <View style={[styles.previewBox, styles.center, previewSize]} accessibilityRole="progressbar">
@@ -794,6 +827,7 @@ export function VideoEditor({ id, renderOnOpen = false, fresh = false }: { id: s
             if (ok) {
               autoDownload.current = false;
               setRunning(null);
+              if (liveCrashed) reloadLive();
             }
             return ok;
           }}
@@ -824,6 +858,23 @@ export function VideoEditor({ id, renderOnOpen = false, fresh = false }: { id: s
         />
       ) : null}
       {project && storedMp4 ? <ShareDialog artifactId={project.artifact.id} what="video" visible={sharing} onClose={() => setSharing(false)} /> : null}
+      {/* Waits for any other dialog and job to finish: iOS can't show two of these at once */}
+      {liveCrashed && !locked && !downloading && !formatTo && !stoppingRender && !sharing ? (
+        <PlayerCrashDialog
+          hasMp4={!!playableMp4}
+          onCancel={reloadLive}
+          onPrimary={async () => {
+            if (playableMp4) {
+              setLiveCrashed(false);
+              setPlayMp4(true);
+              return;
+            }
+            setError("");
+            await videoEditApi.render(id, { force: false });
+            setRunning({ label: "Rendering", poll: () => videoEditApi.renderStatus(id) });
+          }}
+        />
+      ) : null}
     </ScrollView>
   );
 }

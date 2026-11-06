@@ -361,7 +361,7 @@ export function ArtifactCard({ artifact: a, onRemoved, onChanged }: { artifact: 
       {a.type === "mind_map" && ready && a.content?.root ? (
         <MindMapScreen map={{ id: a.id, title: a.title, root: a.content.root as MindNode }} visible={opened} onClose={() => setOpened(false)} feedback={<CardFeedback artifact={a} />} />
       ) : null}
-      {isVideo && viewable ? <VideoPreview artifact={a} visible={previewing} onClose={() => setPreviewing(false)} /> : null}
+      {isVideo && viewable ? <VideoPreview artifact={a} visible={previewing} onClose={() => setPreviewing(false)} onChanged={onChanged} /> : null}
       {pictures.node}
       {canShare(a) ? <ShareDialog artifactId={a.id} what={SHARE_WHAT[a.type] ?? "item"} visible={sharing} onClose={() => setSharing(false)} /> : null}
       {launching === "render" ? (
