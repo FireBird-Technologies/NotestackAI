@@ -152,7 +152,7 @@ export default function Landing() {
   return (
     <div className="page">
       <SkyCanvas travel />
-      <PublicNav />
+      <PublicNav connectAi />
 
       <main>
         <section className="hero">

@@ -13121,6 +13121,272 @@ body.nbv-resizing iframe {
   font-size: 0.62rem;
 }
 
+/* Public navbar's two connector previews: AI client setup and a lightweight external-app catalog. */
+.public-external-tools {
+  display: grid;
+  gap: 14px;
+}
+
+.public-external-tools h3,
+.public-external-tools p {
+  margin: 0;
+}
+
+.public-external-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.public-external-heading > div {
+  display: grid;
+  gap: 4px;
+  flex: none;
+}
+
+.public-external-heading > p {
+  max-width: 390px;
+  text-align: right;
+}
+
+.public-app-orbit {
+  position: relative;
+  height: 390px;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(circle at 50% 50%, var(--blue-10), transparent 36%),
+    radial-gradient(circle at 17% 22%, var(--text-3) 0 1px, transparent 2px),
+    radial-gradient(circle at 82% 24%, var(--text-3) 0 1px, transparent 2px),
+    radial-gradient(circle at 76% 78%, var(--text-3) 0 1px, transparent 2px),
+    var(--surface);
+  box-shadow: inset 0 0 70px var(--blue-05);
+}
+
+.public-orbit-system {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 390px;
+  height: 390px;
+  transform: translate(-50%, -50%);
+}
+
+.public-orbit-constellation {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  color: var(--blue-35);
+}
+
+.public-constellation-orbit {
+  fill: none;
+  stroke: var(--blue-35);
+  stroke-width: 1.25;
+  vector-effect: non-scaling-stroke;
+}
+
+.public-constellation-track {
+  transform-box: view-box;
+  transform-origin: center;
+  animation: public-constellation-spin 48s linear infinite;
+}
+
+.public-constellation-track.inner {
+  animation-duration: 36s;
+  animation-direction: reverse;
+}
+
+.public-constellation-track.inner .public-constellation-orbit {
+  stroke: var(--line-strong);
+  stroke-dasharray: 4 6;
+}
+
+.public-constellation-node {
+  fill: var(--white);
+  stroke: var(--blue-60);
+  stroke-width: 2;
+  filter: drop-shadow(0 0 6px var(--blue-60));
+}
+
+.public-orbit-ring {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.public-orbit-app {
+  --orbit-radius: 170px;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  pointer-events: auto;
+  transform: translate(-50%, -50%) rotate(var(--orbit-angle)) translateX(var(--orbit-radius)) rotate(var(--orbit-counter-angle));
+  animation: public-orbit-app-travel 48s linear infinite;
+  will-change: transform;
+}
+
+.public-orbit-ring.inner .public-orbit-app {
+  --orbit-radius: 100px;
+  animation-duration: 36s;
+  animation-direction: reverse;
+}
+
+.public-external-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--line-strong);
+  border-radius: 13px;
+  background: #fff;
+  box-shadow: 0 7px 24px rgba(0, 0, 0, .36), var(--glow-sm);
+  transform: rotate(0deg);
+}
+
+.public-external-icon img {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+}
+
+.public-external-icon::after {
+  content: attr(data-label);
+  position: absolute;
+  z-index: 2;
+  top: calc(100% + 6px);
+  left: 50%;
+  width: max-content;
+  max-width: 120px;
+  padding: 3px 7px;
+  transform: translateX(-50%) translateY(-2px);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: rgba(5, 8, 15, .94);
+  color: var(--white);
+  font-size: .64rem;
+  font-weight: 600;
+  line-height: 1.2;
+  opacity: 0;
+  transition: opacity .12s, transform .12s;
+  pointer-events: none;
+}
+
+.public-external-icon:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.public-orbit-hub {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 7px;
+  width: 112px;
+  height: 112px;
+  padding: 0;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--blue-60);
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 12%, var(--blue-20), var(--black) 64%);
+  box-shadow: var(--glow-md), inset 0 0 28px var(--blue-10);
+}
+
+.public-orbit-hub .logo-mark {
+  border-radius: 11px;
+}
+
+.public-orbit-hub strong {
+  font-size: .88rem;
+}
+
+@keyframes public-orbit-app-travel {
+  from {
+    transform: translate(-50%, -50%) rotate(var(--orbit-angle)) translateX(var(--orbit-radius)) rotate(var(--orbit-counter-angle));
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(calc(var(--orbit-angle) + 360deg)) translateX(var(--orbit-radius)) rotate(calc(var(--orbit-counter-angle) - 360deg));
+  }
+}
+
+@keyframes public-constellation-spin {
+  to { transform: rotate(360deg); }
+}
+
+.public-external-more {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+  width: max-content;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+}
+
+.public-external-more strong {
+  color: var(--blue);
+  font-size: .82rem;
+}
+
+.public-connect-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+@media (max-width: 720px) {
+  .public-external-heading {
+    align-items: start;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .public-external-heading > p {
+    max-width: none;
+    text-align: left;
+  }
+
+}
+
+@media (max-width: 560px) {
+  .public-app-orbit {
+    height: 300px;
+  }
+
+  .public-orbit-system {
+    transform: translate(-50%, -50%) scale(.72);
+  }
+
+  .public-connect-footer .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .public-orbit-app,
+  .public-constellation-track {
+    animation: none !important;
+  }
+}
+
 /* "Show transcript" reads as a plain text link: no underline, blue when pointed at */
 .link-btn.ao-transcript-toggle {
   text-decoration: none;

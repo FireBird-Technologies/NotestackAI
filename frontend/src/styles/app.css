@@ -118,6 +118,18 @@
   margin-left: 0;
 }
 
+.nav-connect-ai {
+  height: 38px;
+  padding: 0 14px;
+  white-space: nowrap;
+  border-color: var(--blue-60);
+  color: var(--white);
+}
+
+.nav-connect-ai:hover {
+  background: var(--blue-10);
+}
+
 .nav-toggle {
   display: grid;
   place-items: center;
@@ -135,7 +147,7 @@
   background: var(--surface-2);
 }
 
-/* Below 720px the links and Sign in live in the hamburger menu. */
+/* Below 900px the links and Sign in live in the hamburger menu, leaving room for the new connector CTA. */
 .nav-auth .nav-signin {
   display: none;
 }
@@ -203,7 +215,19 @@
   height: 44px;
 }
 
-@media (min-width: 720px) {
+.nav-menu-connect {
+  justify-content: center;
+  height: 44px;
+  border-color: var(--blue-60);
+}
+
+@media (max-width: 899px) {
+  .nav-connect-ai {
+    display: none;
+  }
+}
+
+@media (min-width: 900px) {
   .nav-links {
     display: flex;
   }
