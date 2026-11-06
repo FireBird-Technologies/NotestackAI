@@ -83,7 +83,7 @@ class OutboundMcpConnection(IdMixin, TimestampMixin, Base):
     user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(100))
     server_url: Mapped[str] = mapped_column(Text)
-    auth_type: Mapped[str] = mapped_column(String(20), default="none")  # none | bearer | oauth
+    auth_type: Mapped[str] = mapped_column(String(20), default="none")  # none | bearer | oauth | managed
     access_token_encrypted: Mapped[str | None] = mapped_column(Text)
     provider: Mapped[str | None] = mapped_column(String(80))
     icon_url: Mapped[str | None] = mapped_column(Text)  # data: URI fetched when the server was connected

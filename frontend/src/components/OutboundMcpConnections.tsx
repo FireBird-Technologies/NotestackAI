@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { outboundMcpApi } from "@notestack/shared/endpoints";
-import type { OutboundMcpConnection, OutboundMcpSuggestion, OutboundMcpTool } from "@notestack/shared/types";
+import type { ComposioApp, OutboundMcpConnection, OutboundMcpSuggestion, OutboundMcpTool } from "@notestack/shared/types";
 import { ConfirmButton, errorMessage, Loading, Modal, Tabs } from "./ui";
 
 type Access = "read" | "write" | "destructive";
@@ -113,6 +113,88 @@ function AddServerModal({ onClose, onAdded, initial }: {
           </button>
         </div>
       </form>
+    </Modal>
+  );
+}
+
+function ComposioAppModal({ connections, onClose, onConnect }: {
+  connections: OutboundMcpConnection[];
+  onClose: () => void;
+  onConnect: (appSlug: string) => Promise<void>;
+}) {
+  const [query, setQuery] = useState("");
+  const [apps, setApps] = useState<ComposioApp[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setApps(null);
+    setError(null);
+    const timer = window.setTimeout(() => {
+      void outboundMcpApi.composioApps(query).then((result) => {
+        if (active) setApps(result.items);
+      }).catch((e) => {
+        if (active) { setApps([]); setError(errorMessage(e)); }
+      });
+    }, query ? 250 : 0);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [query]);
+
+  const connect = async (appSlug: string) => {
+    setBusy(appSlug);
+    setError(null);
+    try {
+      await onConnect(appSlug);
+    } catch (e) {
+      setError(errorMessage(e));
+      setBusy(null);
+    }
+  };
+
+  return (
+    <Modal title="Connect with Composio" onClose={onClose}>
+      <div className="stack mcp-provider-picker">
+        <p className="muted small">
+          Search Composio's app catalog, then connect one account securely. Each app stays separate so you control
+          exactly which tools Notestack can use.
+        </p>
+        <input className="input" type="search" autoFocus value={query} onChange={(e) => setQuery(e.target.value)}
+               placeholder="Search apps, for example GitHub or Linear" aria-label="Search Composio apps" />
+        <div className="mcp-provider-apps">
+          {apps === null && Array.from({ length: 5 }, (_, index) => (
+            <div className="mcp-provider-app mcp-skeleton" key={index} aria-hidden="true">
+              <span className="mcp-server-mark" />
+              <span className="mcp-suggestion-copy"><span className="mcp-skeleton-line" /><span className="mcp-skeleton-line short" /></span>
+            </div>
+          ))}
+          {apps?.map((app) => {
+            const connection = connections.find((row) =>
+              row.provider === "composio" && row.external_app === app.app_slug);
+            const connected = connection?.auth_status === "ready";
+            return (
+              <div className={`mcp-provider-app${connected ? " is-connected" : ""}`} key={app.app_slug}>
+                <ServerLogo name={app.name} icon={app.icon_url || null} />
+                <span className="mcp-suggestion-copy">
+                  <strong>{app.name}</strong>
+                  <span className="muted small">{app.description}</span>
+                </span>
+                <button type="button" className="btn btn-small" disabled={connected || busy !== null}
+                        onClick={() => void connect(app.app_slug)}>
+                  {connected ? "Connected" : busy === app.app_slug ? "Opening…" : connection ? "Finish setup" : "Connect"}
+                </button>
+              </div>
+            );
+          })}
+          {apps?.length === 0 && !error && (
+            <p className="muted small mcp-no-apps">No Composio apps match “{query}”.</p>
+          )}
+        </div>
+        {error && <p className="error-text small">{error}</p>}
+        <div className="mcp-dialog-footer">
+          <button type="button" className="btn" onClick={onClose}>Close</button>
+        </div>
+      </div>
     </Modal>
   );
 }
@@ -284,24 +366,48 @@ export function OutboundMcpConnections() {
   const [adding, setAdding] = useState(false);
   const [suggestions, setSuggestions] = useState<OutboundMcpSuggestion[] | null>(null);
   const [preset, setPreset] = useState<OutboundMcpSuggestion | undefined>();
+  const [composioPicker, setComposioPicker] = useState(false);
   const [managingId, setManagingId] = useState<string | null>(null);
 
   const replace = (next: OutboundMcpConnection) =>
     setConnections((rows) => (rows ?? []).map((row) => row.id === next.id ? next : row));
 
   useEffect(() => {
-    // Load connections first so popular-app cards can immediately show which ones are already connected.
-    outboundMcpApi.list().then(setConnections, (e) => setError(errorMessage(e)))
-      .then(() => outboundMcpApi.catalog()).then((items) => {
-        // Keep hidden catalog apps out even while the frontend and backend are deployed at different times.
-        setSuggestions(items.filter((item) => !["Slack", "Canva"].includes(item.name)));
-      }, () => setSuggestions([]));
     const params = new URLSearchParams(window.location.search);
     const oauthResult = params.get("mcp_oauth");
-    if (oauthResult === "connected") setNotice("External app connected. Choose the tools Notestack may use.");
-    if (oauthResult === "error") setError(params.get("message") || "The external app could not be authorized.");
-    if (oauthResult) {
+    const composioResult = params.get("mcp_composio");
+    const composioConnectionId = params.get("connection_id");
+    void (async () => {
+      try {
+        let rows = await outboundMcpApi.list();
+        if (composioResult === "connected" && composioConnectionId) {
+          const connected = await outboundMcpApi.completeComposio(composioConnectionId);
+          rows = rows.some((row) => row.id === connected.id)
+            ? rows.map((row) => row.id === connected.id ? connected : row)
+            : [...rows, connected];
+          setNotice(`${connected.name} connected. Choose the tools Notestack may use.`);
+          if (connected.discovered_tools.length > 0) setManagingId(connected.id);
+        } else if (composioResult === "error") {
+          setError("The email account could not be connected.");
+        }
+        if (oauthResult === "connected") setNotice("External app connected. Choose the tools Notestack may use.");
+        if (oauthResult === "error") setError(params.get("message") || "The external app could not be authorized.");
+        setConnections(rows);
+      } catch (e) {
+        setError(errorMessage(e));
+        try { setConnections(await outboundMcpApi.list()); } catch { setConnections([]); }
+      }
+      try {
+        const items = await outboundMcpApi.catalog();
+        setSuggestions(items);
+      } catch {
+        setSuggestions([]);
+      }
+    })();
+    if (oauthResult || composioResult) {
       params.delete("mcp_oauth");
+      params.delete("mcp_composio");
+      params.delete("connection_id");
       params.delete("message");
       const query = params.toString();
       window.history.replaceState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`);
@@ -310,13 +416,23 @@ export function OutboundMcpConnections() {
 
   const authorize = async (row: OutboundMcpConnection) => {
     setError(null);
-    const result = await outboundMcpApi.startOAuth(row.id);
+    const result = row.provider === "composio"
+      ? await outboundMcpApi.restartComposio(row.id)
+      : await outboundMcpApi.startOAuth(row.id);
     window.location.assign(result.authorization_url);
   };
 
   const run = async (action: () => Promise<void>) => {
     setError(null);
     try { await action(); } catch (e) { setError(errorMessage(e)); }
+  };
+
+  const connectComposio = async (appSlug: string) => {
+    const started = await outboundMcpApi.startComposio(appSlug);
+    setConnections((rows) => (rows ?? []).some((row) => row.id === started.connection.id)
+      ? (rows ?? []).map((row) => row.id === started.connection.id ? started.connection : row)
+      : [...(rows ?? []), started.connection]);
+    window.location.assign(started.authorization_url);
   };
 
   const managing = connections?.find((row) => row.id === managingId) ?? null;
@@ -395,7 +511,7 @@ export function OutboundMcpConnections() {
                     Refresh tools
                   </button>
                 )}
-                {row.auth_type === "oauth" && (
+                {(row.auth_type === "oauth" || row.auth_type === "managed") && (
                   <ConfirmButton className="btn btn-small" confirmLabel="Sign out?"
                                  onConfirm={async () => { replace(await outboundMcpApi.revokeOAuth(row.id)); }}>
                     Sign out
@@ -429,11 +545,22 @@ export function OutboundMcpConnections() {
             </div>
           ))}
           {suggestions?.map((item) => {
-            const connection = connections.find((row) => hostOf(row.server_url) === hostOf(item.server_url));
+            const connection = item.provider === "composio"
+              ? connections.find((row) => row.provider === "composio" && row.external_app === item.app_slug)
+              : connections.find((row) => hostOf(row.server_url) === hostOf(item.server_url));
             const connectionStatus = connection ? statusOf(connection).label : null;
             return (
-              <button type="button" className={`mcp-suggestion${connection ? " is-connected" : ""}`} key={item.server_url}
-                      disabled={Boolean(connection)} onClick={() => { setPreset(item); setAdding(true); }}>
+              <button type="button" className={`mcp-suggestion${connection ? " is-connected" : ""}`}
+                      key={`${item.provider ?? "mcp"}:${item.app_slug ?? item.server_url}`}
+                      disabled={connection?.auth_status === "ready" || (item.provider !== "composio" && Boolean(connection))} onClick={() => {
+                        const appSlug = item.app_slug;
+                        if (item.provider === "composio" && appSlug) {
+                          void run(() => connectComposio(appSlug));
+                          return;
+                        }
+                        setPreset(item);
+                        setAdding(true);
+                      }}>
                 <span className="mcp-server-mark"><img src={item.icon_url} alt="" /></span>
                 <span className="mcp-suggestion-copy">
                   <strong>{item.name}</strong>
@@ -443,6 +570,16 @@ export function OutboundMcpConnections() {
               </button>
             );
           })}
+          {suggestions !== null && (
+            <button type="button" className="mcp-suggestion mcp-add-app" onClick={() => setComposioPicker(true)}>
+              <span className="mcp-server-mark mcp-plus" aria-hidden="true">+</span>
+              <span className="mcp-suggestion-copy">
+                <strong>Add another app</strong>
+                <span className="muted small">Search every app available through Composio</span>
+              </span>
+              <span className="mcp-suggestion-go" aria-hidden="true">Browse</span>
+            </button>
+          )}
         </div>
       </section>
       {adding && (
@@ -457,6 +594,13 @@ export function OutboundMcpConnections() {
               setManagingId(row.id);
             }
           }}
+        />
+      )}
+      {composioPicker && (
+        <ComposioAppModal
+          connections={connections}
+          onClose={() => setComposioPicker(false)}
+          onConnect={connectComposio}
         />
       )}
       {managing && (
