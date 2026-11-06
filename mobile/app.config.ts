@@ -68,6 +68,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         "com.google.android.gms.permission.AD_ID",
         "android.permission.ACCESS_ADSERVICES_AD_ID",
         "android.permission.ACCESS_ADSERVICES_ATTRIBUTION",
+        // RevenueCat's SDK adds this, but plans are sold on the web. Remove it when IN_APP_PURCHASES_ON (src/account/purchases.ts) is turned on.
+        "com.android.vending.BILLING",
       ],
       predictiveBackGestureEnabled: false,
     },
