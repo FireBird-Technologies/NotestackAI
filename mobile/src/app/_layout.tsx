@@ -10,6 +10,7 @@ import { Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useEffect } from "react";
 
+import { AiConsentGate, AiConsentProvider } from "@/account/ai-consent";
 import { AuthProvider, useAuth } from "@/account/auth";
 import { logScreen, startAnalytics } from "@/lib/analytics";
 import { preloadClicks } from "@/lib/click-sound";
@@ -34,7 +35,9 @@ export default function RootLayout() {
         <AuthProvider onSignOut={() => queryClient.clear()}>
           <ThemeProvider value={navTheme}>
             <StatusBar style="light" />
-            <RootNavigator />
+            <AiConsentProvider>
+              <RootNavigator />
+            </AiConsentProvider>
           </ThemeProvider>
         </AuthProvider>
       </QueryClientProvider>
@@ -77,16 +80,19 @@ function RootNavigator() {
     );
   }
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="index" />
-      <Stack.Screen name="(public)" />
-      <Stack.Protected guard={Boolean(user)}>
-        <Stack.Screen name="(app)" />
-        <Stack.Screen name="onboarding" />
-      </Stack.Protected>
-      <Stack.Protected guard={!user}>
-        <Stack.Screen name="(auth)" />
-      </Stack.Protected>
-    </Stack>
+    <>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="(public)" />
+        <Stack.Protected guard={Boolean(user)}>
+          <Stack.Screen name="(app)" />
+          <Stack.Screen name="onboarding" />
+        </Stack.Protected>
+        <Stack.Protected guard={!user}>
+          <Stack.Screen name="(auth)" />
+        </Stack.Protected>
+      </Stack>
+      <AiConsentGate />
+    </>
   );
 }
