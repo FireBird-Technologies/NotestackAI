@@ -15,7 +15,10 @@ const API_KEY = Platform.select({
   android: process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY,
 });
 
-/** Plans are sold on notestack.ai for now, with no store products set up. Set to true to bring in-app purchases back. */
+/**
+ * Plans are sold on notestack.ai for now, with no store products set up. To bring in-app purchases back, set this to
+ * true and remove com.android.vending.BILLING from blockedPermissions in app.config.ts.
+ */
 const IN_APP_PURCHASES_ON = false as boolean;
 
 /** Whether this build can sell plans (in-app purchases are on, and it was given RevenueCat's key for this platform). */

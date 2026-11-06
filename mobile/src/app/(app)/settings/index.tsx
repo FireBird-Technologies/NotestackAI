@@ -9,6 +9,7 @@ import { Alert, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 
 import { analyticsEnabled, resetAnalytics, setAnalyticsEnabled } from "@/lib/analytics";
 import { setSoundsEnabled, soundsEnabled } from "@/lib/click-sound";
+import { useAiConsent } from "@/account/ai-consent";
 import { useAuth } from "@/account/auth";
 import { planQuery } from "@/account/plan";
 import { manageSubscriptions } from "@/account/purchases";
@@ -22,6 +23,7 @@ import { confirm, Meter, Page, PageHead, pageStyles, PillButton, Section } from 
 export default function Settings() {
   const queryClient = useQueryClient();
   const { logout } = useAuth();
+  const { withdraw: withdrawAi } = useAiConsent();
   const settings = useQuery({ queryKey: ["settings"], queryFn: settingsApi.get });
   const s = settings.data;
   const upgrade = useUpgrade();
@@ -138,7 +140,7 @@ export default function Settings() {
         <Toggle
           value={s.workspace.training_opt_in}
           onChange={(v) => save({ training_opt_in: v }, "privacy")}
-          label="Let Notestack use my generations to improve its prompts. Off by default; your posts are never shared."
+          label="Let Notestack use my generations to improve its prompts. Off by default."
         />
         <Toggle
           value={s.workspace.allow_public_links}
@@ -166,6 +168,20 @@ export default function Settings() {
           }}
           label="Soft click sounds on buttons (this phone)."
         />
+        <View style={pageStyles.row}>
+          <PillButton
+            small
+            title="Withdraw AI permission"
+            onPress={() =>
+              confirm(
+                "Withdraw AI permission?",
+                "Withdraw",
+                withdrawAi,
+                "Notestack can't work without its AI services, so you'll be asked again before you can keep using the app.",
+              )
+            }
+          />
+        </View>
       </Section>
 
       <Section title="Plan and usage">
