@@ -15,7 +15,7 @@ branch_labels = None
 depends_on = None
 
 OLD = "2 reports a month"
-NEW = "2 reports in total"
+NEW = "2 reports"
 
 plans = sa.table("plans", sa.column("id", sa.String), sa.column("features", sa.JSON))
 

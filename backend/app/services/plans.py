@@ -89,7 +89,7 @@ DEFAULT_PLANS: dict[str, Plan] = {
             "1 audio overview, any length",
             "2 Launch Kits",
             "2 infographics",
-            "2 reports in total",
+            "2 reports",
         ),
         video_limits=FREE_VIDEO_LIMITS,
         videos_monthly=False,
