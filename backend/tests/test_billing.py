@@ -95,7 +95,8 @@ def test_free_allowances_are_totals_and_paid_ones_are_monthly(client, auth, bill
 
     ws = db_session.query(Workspace).one()
     free, starter, writer, studio = (PLANS[pid] for pid in ("free", "starter", "writer", "studio"))
-    assert (free.videos, free.audio_overviews, free.launch_kits, free.infographics) == (1, 1, 2, 2) and free.lifetime
+    assert (free.videos, free.audio_overviews, free.launch_kits, free.reports, free.infographics) == (1, 1, 2, 2, 2) \
+        and free.lifetime
     assert (starter.launch_kits, starter.audio_minutes, starter.reports) == (20, 30, 20) and not starter.lifetime
     assert (writer.launch_kits, writer.audio_minutes, writer.reports, writer.infographics) == (40, 60, 50, 50)
     assert (studio.launch_kits, studio.audio_minutes, studio.reports) == (-1, 240, -1)
@@ -115,20 +116,28 @@ def test_free_allowances_are_totals_and_paid_ones_are_monthly(client, auth, bill
     assert not any("chat message" in feature.lower() for feature in free.features)  # the cap is enforced, not advertised
 
     old = Artifact(workspace_id=ws.id, type="infographic", status="ready")
-    db_session.add_all([old, Artifact(workspace_id=ws.id, type="infographic", status="failed")])
+    old_report = Artifact(workspace_id=ws.id, type="report", status="ready")
+    db_session.add_all([old, old_report, Artifact(workspace_id=ws.id, type="infographic", status="failed")])
     db_session.commit()
     # An infographic made in an earlier month still counts on Free, a failed one never does.
     from datetime import UTC, datetime, timedelta
 
-    old.created_at = datetime.now(UTC) - timedelta(days=90)
+    old.created_at = old_report.created_at = datetime.now(UTC) - timedelta(days=90)
     db_session.commit()
     assert month_usage(db_session, ws.id, lifetime=True)["infographics"] == 1
+    assert month_usage(db_session, ws.id, lifetime=True)["reports"] == 1
+    assert month_usage(db_session, ws.id, lifetime=False)["reports"] == 0
     assert month_usage(db_session, ws.id, lifetime=False)["infographics"] == 1  # (the failed one is this month's)
     db_session.add(Artifact(workspace_id=ws.id, type="infographic", status="ready"))
     db_session.commit()
     with pytest.raises(Exception) as err:
         check_limit(db_session, ws, "infographics", 1)
     assert err.value.status_code == 402 and "in total" in err.value.detail["message"]
+    db_session.add(Artifact(workspace_id=ws.id, type="report", status="ready"))
+    db_session.commit()
+    with pytest.raises(Exception) as report_err:
+        check_limit(db_session, ws, "reports", 1)
+    assert report_err.value.status_code == 402 and "in total" in report_err.value.detail["message"]
     # Deleting one gives its place back.
     db_session.delete(old)
     db_session.commit()

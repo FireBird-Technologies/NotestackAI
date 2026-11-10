@@ -1,4 +1,4 @@
-"""Monthly usage against plan limits, from usage_events."""
+"""Usage against plan limits, monthly on paid plans and over all time on Free."""
 
 from datetime import UTC, datetime
 
@@ -16,8 +16,8 @@ def month_start(now: datetime | None = None) -> datetime:
 
 
 def month_usage(db: Session, workspace_id, lifetime: bool = False) -> dict:
-    """What this month has used. With `lifetime` (the Free plan) Launch Kits, infographics and audio overviews are
-    counted over all time instead, not counting the ones that failed (a failed one never uses up an allowance)."""
+    """What this month has used. With `lifetime` (the Free plan), capped artifact allowances are counted over all
+    time instead, not counting the ones that failed (a failed one never uses up an allowance)."""
     since = month_start()
 
     def total(kind: str, unit: str, *, all_time: bool = False) -> float:
@@ -27,9 +27,9 @@ def month_usage(db: Session, workspace_id, lifetime: bool = False) -> dict:
             q = q.where(UsageEvent.created_at >= since)
         return float(db.scalar(q) or 0)
 
-    def made(type_: str, *, always_month: bool = False) -> int:
+    def made(type_: str) -> int:
         q = select(func.count()).select_from(Artifact).where(Artifact.workspace_id == workspace_id, Artifact.type == type_)
-        if lifetime and not always_month:
+        if lifetime:
             q = q.where(Artifact.status != "failed")
         else:
             q = q.where(Artifact.created_at >= since)
@@ -39,7 +39,7 @@ def month_usage(db: Session, workspace_id, lifetime: bool = False) -> dict:
         "audio_minutes": round(total("tts", "seconds") / 60, 1),
         "audio_overviews": made("audio_overview"),
         "launch_kits": made("launch_kit"),
-        "reports": made("report", always_month=True),  # reports stay monthly on every plan
+        "reports": made("report"),
         "infographics": made("infographic"),
         # One usage event per chat question, so deleting a chat never gives questions back.
         "chat_messages": int(total("chat", "messages", all_time=lifetime)),
@@ -91,7 +91,7 @@ def check_limit(db: Session, workspace: Workspace, kind: str, amount: float = 1)
             err.detail["limit"] = limit  # the chat page says how many there were
             raise err
         label = kind.replace("_", " ")
-        total = plan.lifetime and kind != "reports"  # Free's allowances are totals, its reports are monthly
+        total = plan.lifetime
         raise plan_limit_error(plan, kind, f"This would go over your {limit} {label}{' in total' if total else ' this month'}.")
     return plan
 

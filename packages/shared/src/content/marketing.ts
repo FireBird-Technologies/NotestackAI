@@ -85,7 +85,7 @@ export const FALLBACK_PLANS: Plan[] = [
       "1 audio overview, any length",
       "2 Launch Kits",
       "2 infographics",
-      "2 reports a month",
+      "2 reports in total",
     ],
   },
   {

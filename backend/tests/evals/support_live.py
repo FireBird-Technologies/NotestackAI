@@ -64,7 +64,7 @@ CASES = [
     ("how do I make an infographic", "Create > Infographic, theme, Generate"),
     ("what infographic themes are there", "Launch, Galaxy, Solar System, Space Station, Moon Base, Observatory"),
     ("what is a mind constellation", "galaxy map of ideas, from posts"),
-    ("how many reports can I make on the free plan", "2 a month"),
+    ("how many reports can I make on the free plan", "2 in total"),
     ("is there a limit on infographics on the writer plan", "30 a month"),
     ("how do I make a quote card", "not in Create panel now; no invention"),
     ("can I make a podcast with more than two hosts", "no invention"),

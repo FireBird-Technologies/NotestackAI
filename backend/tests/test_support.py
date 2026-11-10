@@ -237,7 +237,7 @@ def test_plan_doc_lists_report_and_infographic_limits():
 
     body = next(d for d in get_corpus() if d.id == "plans-and-billing").body
     free = PLANS["free"]
-    assert f"{free.reports} reports a month" in body and f"{free.infographics} infographics in total" in body
+    assert f"{free.reports} reports in total" in body and f"{free.infographics} infographics in total" in body
     assert "unlimited reports a month" in body
 
 
