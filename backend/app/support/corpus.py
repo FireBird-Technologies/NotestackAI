@@ -87,7 +87,7 @@ def _plans_doc() -> Doc:
             f"Limits: {_count(p.sources)} sources, {p.indexed_posts} indexed posts across every source, {audio}, "
             f"{p.videos} videos {'a month' if p.videos_monthly else 'in total, never renewing'}, "
             f"{_count(p.launch_kits)} Launch Kits {per}, {_count(p.infographics)} infographics {per}, "
-            f"{_count(p.reports)} reports a month. "
+            f"{_count(p.reports)} reports {per}. "
             f"Voice cloning: {'yes' if p.voice_cloning else 'no'}.",
             "Includes: " + "; ".join(p.features) + ".",
         ]

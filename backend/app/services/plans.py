@@ -39,7 +39,7 @@ class Plan:
     # Per-workspace shares of what blog2video only limits account-wide (keys in VIDEO_LIMITS; 0 = none).
     video_limits: dict = field(default_factory=dict)
     videos_monthly: bool = True
-    reports: int = 0  # reports a month; -1 = unlimited
+    reports: int = 0  # a month (or in total on a lifetime plan); -1 = unlimited
     infographics: int = 0  # infographics a month (in total on a lifetime plan); -1 = unlimited
     audio_overviews: int = -1  # audio overviews allowed (in total on a lifetime plan), whatever their length; -1 = no cap
     chat_messages: int = -1  # notebook chat questions; -1 = unlimited
@@ -89,7 +89,7 @@ DEFAULT_PLANS: dict[str, Plan] = {
             "1 audio overview, any length",
             "2 Launch Kits",
             "2 infographics",
-            "2 reports a month",
+            "2 reports",
         ),
         video_limits=FREE_VIDEO_LIMITS,
         videos_monthly=False,

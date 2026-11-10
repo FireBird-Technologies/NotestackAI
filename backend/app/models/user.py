@@ -114,7 +114,7 @@ class PlanRecord(TimestampMixin, Base):
     audio_minutes: Mapped[int] = mapped_column(Integer, default=0)
     videos: Mapped[int] = mapped_column(Integer, default=0)
     launch_kits: Mapped[int] = mapped_column(Integer, default=0)  # -1 = unlimited
-    reports: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # per month, -1 = unlimited
+    reports: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # monthly, or total on Free; -1 unlimited
     infographics: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # per month, -1 = unlimited
     audio_overviews: Mapped[int] = mapped_column(Integer, default=-1, server_default="-1")  # allowed (in total on Free); -1 = no cap
     chat_messages: Mapped[int] = mapped_column(Integer, default=-1, server_default="-1")  # -1 = unlimited
