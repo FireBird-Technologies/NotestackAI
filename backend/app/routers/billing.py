@@ -1,5 +1,7 @@
+import logging
 from typing import Literal
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -9,6 +11,8 @@ from app.config import settings
 from app.db import get_db
 from app.services.billing import STORE_NAMES, billing_status, create_checkout_url, create_portal_url, store_billed
 from app.services.plans import PLANS, effective_plan, plan_dict, plan_order
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/billing", tags=["billing"])
 
@@ -100,7 +104,14 @@ def iap_sync(ctx: Ctx = Depends(get_ctx)):
         raise HTTPException(409, {"code": "billing_disabled", "message": "In-app purchases are not available yet."})
     from app.services import revenuecat
 
-    revenuecat.sync_workspace(ctx.db, ctx.workspace.id)
+    try:
+        revenuecat.sync_workspace(ctx.db, ctx.workspace.id)
+    except httpx.HTTPError as exc:
+        # RevenueCat refused or didn't answer (a wrong key, an outage). The purchase is safe with the store, and the
+        # webhook or the next restore applies it.
+        log.warning("revenuecat sync for workspace %s failed: %s", ctx.workspace.id, exc)
+        message = "Couldn't confirm your purchase with the store yet. Tap Restore purchases in a moment."
+        raise HTTPException(502, {"code": "store_unreachable", "message": message}) from exc
     return billing_status(ctx.db, ctx.workspace)
 
 

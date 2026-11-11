@@ -53,6 +53,7 @@ from app.pipeline.generate import NothingToDo
 from app.pipeline.ingest import FeedNotFound, UnreadableFile, entry_from_upload, extract_article, ingest_source, store_entries
 from app.pipeline.memory import learn_from_message
 from app.services import launchpad, report_suggestions, tts, video_quota, video_status
+from app.services.account_purge import purge_deleted_accounts
 from app.services.email import email_service
 from app.services.email_verification import purge_old_codes
 from app.services.jobs import (
@@ -524,6 +525,8 @@ def update_email_batch(session_factory: Callable[[], Session] = SessionLocal) ->
 def daily_cleanup(session_factory: Callable[[], Session] = SessionLocal) -> None:
     with session_factory() as db:
         purge_old_codes(db)
+    with session_factory() as db:
+        purge_deleted_accounts(db)  # accounts deleted 30+ days ago: their data goes for good (no emails)
     sweep_orphan_uploads(session_factory)  # upload files whose record was deleted, and unfinished uploads
 
 

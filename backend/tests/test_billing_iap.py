@@ -207,3 +207,17 @@ def test_test_store_counts_only_when_allowed(client, auth, iap_on, store, monkey
     store.customer["entitlements"] = {"Writer": store.customer["entitlements"]["writer"]}  # the dashboard's casing
     body = client.post("/api/billing/iap/sync", headers=auth).json()
     assert body["plan"]["id"] == "writer" and body["billed_by"] == "test_store"
+
+
+def test_sync_says_try_again_when_revenuecat_refuses(client, auth, iap_on, monkeypatch):
+    """A wrong key or an outage at RevenueCat: a clear 502 the app shows, not a 500."""
+    import httpx
+
+    def refused(app_user_id):
+        request = httpx.Request("GET", f"https://api.revenuecat.com/v1/subscribers/{app_user_id}")
+        raise httpx.HTTPStatusError("403 Forbidden", request=request, response=httpx.Response(403, request=request))
+
+    monkeypatch.setattr(revenuecat, "fetch_customer", refused)
+    r = client.post("/api/billing/iap/sync", headers=auth)
+    assert r.status_code == 502
+    assert r.json()["detail"]["code"] == "store_unreachable"

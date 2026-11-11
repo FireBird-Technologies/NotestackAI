@@ -1,4 +1,4 @@
-import { POPULAR_PLAN } from "@notestack/shared/billing";
+import { managedElsewhere, POPULAR_PLAN, type BillingPlace } from "@notestack/shared/billing";
 import { api, PLAN_LIMIT_EVENT, type PlanLimitDetail } from "@notestack/shared/client";
 import { FALLBACK_PLANS, type Cycle, type Plan } from "@notestack/shared/content/marketing";
 import type { BillingStatus } from "@notestack/shared/types";
@@ -10,7 +10,7 @@ import { Platform, StyleSheet, Text, View } from "react-native";
 import { planQuery } from "@/account/plan";
 import { track } from "@/lib/analytics";
 import { on } from "@/lib/platform";
-import { CycleToggle, LegalLinks, ManageOnWeb, PlanCard } from "@/account/plans";
+import { CycleToggle, PlanCard } from "@/account/plans";
 import { buy, getPackages, identify, isStorePlan, manageSubscriptions, purchasesReady, restore } from "@/account/purchases";
 import { colors } from "@/ui/theme";
 import { ErrorText, Loading } from "@/ui";
@@ -18,6 +18,8 @@ import { PillButton, Sheet } from "@/ui/widgets";
 
 const SITE = "https://notestack.ai";
 const STORE = Platform.OS === "ios" ? "the App Store" : "Google Play";
+/** Where this app sells and manages plans: its phone's store. */
+const HERE: BillingPlace = Platform.OS === "ios" ? "app_store" : "play_store";
 
 type Opening = { message?: string };
 
@@ -103,8 +105,10 @@ function Paywall({ opening }: { opening: Opening }) {
   const s = status.data;
   const current = s.plan.id;
   const rank = (id: string) => plans.findIndex((p) => p.id === id);
-  const billedHere = s.billed_by === "app_store" || s.billed_by === "play_store";
-  const sellable = s.billing_enabled && purchasesReady && s.billed_by !== "stripe";
+  // A plan bought elsewhere (the web, or the other phone's store) is managed only there: no buying or managing here.
+  const elsewhere = managedElsewhere(s, HERE);
+  const billedHere = s.billed_by === HERE || s.billed_by === "test_store";
+  const sellable = s.billing_enabled && purchasesReady && !elsewhere;
 
   /** A purchase, restore or plan change went through: every screen shows the new plan and its limits. */
   const applied = (next: BillingStatus) => {
@@ -137,14 +141,9 @@ function Paywall({ opening }: { opening: Opening }) {
         You are on <Text style={styles.strong}>{s.plan.name}</Text>.
       </Text>
 
-      {s.billed_by === "stripe" ? (
-        // Bought on the web: the app can't sell or change it.
-        <Text style={styles.note}>Your plan is billed on notestack.ai, so it is changed and cancelled there.</Text>
-      ) : null}
-      {!s.billing_enabled ? <Text style={styles.note}>Plans can&apos;t be bought in the app yet.</Text> : null}
+      {elsewhere ? <Text style={styles.elsewhere}>{elsewhere.text}</Text> : null}
 
       <CycleToggle cycle={cycle} onChange={setCycle} plans={plans} />
-      <ManageOnWeb />
       {/* Free isn't something to buy: only the paid plans, though `rank` still counts it as the lowest. */}
       {plans.filter((plan) => plan.price_monthly_usd > 0).map((plan) => {
         const pkg = isStorePlan(plan.id) ? packages.data?.[`${plan.id}_${cycle}`] : undefined;
@@ -219,23 +218,19 @@ function Paywall({ opening }: { opening: Opening }) {
         </View>
       ) : null}
 
-      {sellable ? (
-        // The subscription terms the stores ask to see next to the purchase buttons
-        <Text style={styles.terms}>
-          Plans renew automatically at the price shown, monthly or yearly, until you cancel. Payment is charged to your{" "}
-          {Platform.OS === "ios" ? "Apple ID" : "Google account"} at confirmation. Cancel at least 24 hours before the
-          period ends in your {Platform.OS === "ios" ? "App Store account settings" : "Google Play subscriptions"}.{" "}
-          <Text style={styles.link} onPress={() => void WebBrowser.openBrowserAsync(`${SITE}/terms`, { controlsColor: colors.blue })}>
-            Terms of Service
-          </Text>{" "}
-          ·{" "}
-          <Text style={styles.link} onPress={() => void WebBrowser.openBrowserAsync(`${SITE}/privacy`, { controlsColor: colors.blue })}>
-            Privacy Policy
-          </Text>
+      {/* The subscription terms the stores ask to see wherever the plans are shown */}
+      <Text style={styles.terms}>
+        Plans renew automatically at the price shown, monthly or yearly, until you cancel. Payment is charged to your{" "}
+        {Platform.OS === "ios" ? "Apple ID" : "Google account"} at confirmation. Cancel at least 24 hours before the
+        period ends in your {Platform.OS === "ios" ? "App Store account settings" : "Google Play subscriptions"}.{" "}
+        <Text style={styles.link} onPress={() => void WebBrowser.openBrowserAsync(`${SITE}/terms`, { controlsColor: colors.blue })}>
+          Terms of Service
+        </Text>{" "}
+        ·{" "}
+        <Text style={styles.link} onPress={() => void WebBrowser.openBrowserAsync(`${SITE}/privacy`, { controlsColor: colors.blue })}>
+          Privacy Policy
         </Text>
-      ) : (
-        <LegalLinks />
-      )}
+      </Text>
     </View>
   );
 }
@@ -254,7 +249,16 @@ const styles = StyleSheet.create({
   reason: { color: colors.text, fontSize: 16, lineHeight: 23 },
   current: { color: colors.text2, fontSize: 15 },
   strong: { color: colors.text, fontWeight: "700" },
-  note: { color: colors.text2, fontSize: 14.5, lineHeight: 21 },
+  elsewhere: {
+    color: colors.text,
+    fontSize: 14.5,
+    lineHeight: 21,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.lineStrong,
+    backgroundColor: colors.surface2,
+  },
   notice: { color: colors.blue, fontSize: 15, fontWeight: "600" },
   buy: { marginTop: 12, gap: 10, alignItems: "flex-start" },
   row: { flexDirection: "row", flexWrap: "wrap", gap: 10 },

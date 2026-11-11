@@ -4,7 +4,7 @@ import { tokens } from "@notestack/shared/client";
 import { settingsApi, type SettingsPatch } from "@notestack/shared/endpoints";
 import type { Settings as SettingsData } from "@notestack/shared/types";
 import { ConnectedApps } from "../components/ConnectedApps";
-import { deletePlanWarning } from "@notestack/shared/billing";
+import { deletePlanWarning, managedElsewhere } from "@notestack/shared/billing";
 import { ConfirmButton, errorMessage, formatDate, Loading, PageHeader } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
 import { useUpgrade } from "../hooks/useUpgrade";
@@ -49,6 +49,8 @@ export default function Settings() {
   const [sounds, setSounds] = useState(soundsEnabled);
   const { logout, signingOut } = useAuth();
   const upgrade = useUpgrade();
+  // A plan bought in the iPhone or Android app is managed only there (no Upgrade or Manage billing here).
+  const elsewhere = managedElsewhere(upgrade.status, "web");
 
   const hydrate = (d: SettingsData) => {
     setS(d);
@@ -146,11 +148,18 @@ export default function Settings() {
               Refills on the 1st of every month.
               {u.videos_resets_at && ` Videos refill on ${formatDate(u.videos_resets_at)}.`}
             </p>
-            {s.billing_enabled && (upgrade.status?.billed_by === "app_store" || upgrade.status?.billed_by === "play_store") ? (
+            {s.billing_enabled && elsewhere ? (
               // Bought in the iOS or Android app: only that store can change or cancel it
               <p className="muted">
-                Your plan is billed through {upgrade.status.billed_by === "app_store" ? "the App Store" : "Google Play"}. Change or
-                cancel it in the Notestack app on your phone.
+                {elsewhere.text}
+                {elsewhere.url && (
+                  <>
+                    {" "}
+                    <a href={elsewhere.url} target="_blank" rel="noreferrer">
+                      Open my subscriptions
+                    </a>
+                  </>
+                )}
               </p>
             ) : s.billing_enabled && (
               <div className="row">

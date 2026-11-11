@@ -1,17 +1,18 @@
 import { authApi } from "@notestack/shared/auth";
 import { ApiError, tokens } from "@notestack/shared/client";
-import { deletePlanWarning } from "@notestack/shared/billing";
+import { deletePlanWarning, managedElsewhere, type BillingPlace } from "@notestack/shared/billing";
 import { settingsApi, type SettingsPatch } from "@notestack/shared/endpoints";
 import type { Settings as SettingsData } from "@notestack/shared/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Alert, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { Alert, Platform, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 
 import { analyticsEnabled, resetAnalytics, setAnalyticsEnabled } from "@/lib/analytics";
 import { setSoundsEnabled, soundsEnabled } from "@/lib/click-sound";
 import { useAiConsent } from "@/account/ai-consent";
 import { useAuth } from "@/account/auth";
 import { planQuery } from "@/account/plan";
+import { LegalLinks } from "@/account/plans";
 import { manageSubscriptions } from "@/account/purchases";
 import { useUpgrade } from "@/account/upgrade";
 import { ConnectedApps } from "@/sources/connected-apps";
@@ -28,10 +29,13 @@ export default function Settings() {
   const s = settings.data;
   const upgrade = useUpgrade();
   const billing = useQuery(planQuery);
-  // A plan bought in this app's store is managed (changed, cancelled) on the store's own page.
-  const storeBilled = billing.data?.billed_by === "app_store" || billing.data?.billed_by === "play_store";
+  // A plan is managed only where it was bought: this phone's store on its own page, anywhere else not from here.
+  const here: BillingPlace = Platform.OS === "ios" ? "app_store" : "play_store";
+  const elsewhere = managedElsewhere(billing.data, here);
+  const storeBilled = billing.data?.billed_by === here || billing.data?.billed_by === "test_store";
   const planWarning = deletePlanWarning(billing.data);
-  const appleBilled = billing.data?.billed_by === "app_store";
+  // Only the iPhone / iPad app can open Apple's subscription page to cancel first.
+  const appleBilled = billing.data?.billed_by === "app_store" && Platform.OS === "ios";
 
   // Deleting: the button says so (and takes no second tap) until the account is gone or it failed.
   const [deleting, setDeleting] = useState(false);
@@ -53,7 +57,7 @@ export default function Settings() {
           setDeleting(false);
         }
       },
-      `Your notebooks, sources and everything you made are deleted. This can't be undone.${planWarning ? `\n\n${planWarning}` : ""}`,
+      `Your account is closed now, and your notebooks, sources and everything you made are permanently deleted within 30 days. This can't be undone.${planWarning ? `\n\n${planWarning}` : ""}`,
     );
 
   // An App Store subscription outlives the account unless the person cancels it (only they can): offer that first.
@@ -204,12 +208,14 @@ export default function Settings() {
         </Text>
         {billing.data?.billing_enabled ? (
           <View style={pageStyles.row}>
-            {billing.data.can_upgrade && billing.data.billed_by !== "stripe" ? (
+            {billing.data.can_upgrade && !elsewhere ? (
               <PillButton small variant="primary" title="Upgrade" onPress={() => upgrade()} />
             ) : null}
             {storeBilled ? <PillButton small title="Manage subscription" onPress={() => void manageSubscriptions()} /> : null}
-            {billing.data.billed_by === "stripe" ? <Text style={pageStyles.mono}>Billed on notestack.ai.</Text> : null}
           </View>
+        ) : null}
+        {billing.data?.billing_enabled && elsewhere ? (
+          <Text style={pageStyles.body}>{elsewhere.text}</Text>
         ) : null}
       </Section>
 
@@ -233,6 +239,7 @@ export default function Settings() {
             onPress={() => (appleBilled ? cancelAppleFirst() : confirmDelete())}
           />
         </View>
+        <LegalLinks />
       </Section>
     </Page>
   );
