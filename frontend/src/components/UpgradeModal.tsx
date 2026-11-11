@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { POPULAR_PLAN } from "@notestack/shared/billing";
+import { managedElsewhere, POPULAR_PLAN } from "@notestack/shared/billing";
 import type { BillingCycle } from "@notestack/shared/endpoints";
 import type { Meter, PlanInfo } from "@notestack/shared/types";
 import { useUpgrade } from "../hooks/useUpgrade";
@@ -137,9 +137,11 @@ export default function UpgradeModal() {
   // Custom capped plans can also warn while some chat messages are still left.
   const chatLimit = limit?.kind === "chat_messages";
   const warning = !!limit?.left && limit.left > 0;
-  const canBuy = modal.mode !== "welcome" && offers.length > 0 && (status?.can_upgrade || !status?.billing_enabled);
+  // Bought in the iPhone or Android app: only that store changes or cancels it, so nothing is bought or managed here.
+  const elsewhere = managedElsewhere(status, "web");
+  const canBuy = !elsewhere && modal.mode !== "welcome" && offers.length > 0 && (status?.can_upgrade || !status?.billing_enabled);
   const showPlans = plansMode ? shown.length > 0 : canBuy;
-  const paid = !!current && current.price_monthly_usd > 0; // has a subscription to manage
+  const paid = !elsewhere && !!current && current.price_monthly_usd > 0; // has a subscription to manage here
   const saving = shown.find((p) => p.annual_savings_pct > 0)?.annual_savings_pct ?? 0;
   const title =
     modal.mode === "welcome"
@@ -179,6 +181,19 @@ export default function UpgradeModal() {
                 : "Your archive has more orbits in it. More sources, more minutes and more Launch Kits, so every post gets a second life."}
           </p>
           {meter && <FuelMeter meter={meter} />}
+          {elsewhere && (
+            <p className="notice">
+              {elsewhere.text}
+              {elsewhere.url && (
+                <>
+                  {" "}
+                  <a href={elsewhere.url} target="_blank" rel="noreferrer">
+                    Open my subscriptions
+                  </a>
+                </>
+              )}
+            </p>
+          )}
         </header>
 
         {modal.mode === "welcome" && current && (
@@ -256,7 +271,7 @@ export default function UpgradeModal() {
                         ))}
                       </ul>
                     )}
-                    {!isCurrent && (higher || !plansMode) ? (
+                    {elsewhere ? null : !isCurrent && (higher || !plansMode) ? (
                       <button className={`btn ${pick ? "btn-primary" : ""} upg-cta`} disabled={busy} onClick={() => checkout(plan.id, cycle)}>
                         {busy ? "Opening checkout..." : `Launch with ${plan.name}`}
                       </button>

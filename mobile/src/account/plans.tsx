@@ -1,14 +1,12 @@
-import { annualMonthly, annualTotal, money, savingsPct, type Cycle, type Plan } from "@notestack/shared/content/marketing";
+import { savingsPct, type Cycle, type Plan } from "@notestack/shared/content/marketing";
 import { POPULAR_PLAN } from "@notestack/shared/billing";
 import * as WebBrowser from "expo-web-browser";
 import type { ReactNode } from "react";
-import { Linking, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { Pressable } from "@/ui/pressable";
 
 import { Card, publicText } from "@/shell/public-page";
-import { ExternalLinkIcon } from "@/ui/icons";
 import { colors, fonts, radius } from "@/ui/theme";
-import { PillButton } from "@/ui/widgets";
 
 /** Monthly or annual, with the best annual saving on its tab (the pricing page and the upgrade sheet). */
 export function CycleToggle({ cycle, onChange, plans }: { cycle: Cycle; onChange: (c: Cycle) => void; plans: Plan[] }) {
@@ -30,26 +28,7 @@ export function CycleToggle({ cycle, onChange, plans }: { cycle: Cycle; onChange
   );
 }
 
-/** Where plans are bought and managed for now: the web's settings, in the phone's browser (the upgrade sheet and the pricing page). */
-export function ManageOnWeb() {
-  return (
-    <View style={styles.manage}>
-      <PillButton
-        small
-        title={
-          <>
-            Manage your subscriptions on <Text style={styles.manageSite}>notestack.ai</Text>
-          </>
-        }
-        iconEnd={<ExternalLinkIcon size={16} color={colors.white} />}
-        style={styles.manageButton}
-        onPress={() => void Linking.openURL("https://notestack.ai/app/settings")}
-      />
-    </View>
-  );
-}
-
-/** The Terms of Service and Privacy Policy, opened in the app's browser (the upgrade sheet and the pricing page). */
+/** The Terms of Service and Privacy Policy, opened in the app's browser (the upgrade sheet, the pricing page, settings, sign in). */
 export function LegalLinks() {
   const open = (path: string) => void WebBrowser.openBrowserAsync(`https://notestack.ai${path}`, { controlsColor: colors.blue });
   return (
@@ -68,8 +47,9 @@ export function LegalLinks() {
 
 /**
  * One plan: its name, price and what it includes. `storePrice` is the App Store / Google Play price for this cycle
- * (localized, the whole period's), shown in place of our own when the app can sell it. `children` go under the
- * features (the upgrade sheet's buttons).
+ * (localized, the whole period's). It is the only price the app shows for a paid plan: without it (signed out, or the
+ * store's plans not loaded) the card has no price, since the stores don't allow pointing at other prices. `children`
+ * go under the features (the upgrade sheet's buttons).
  */
 export function PlanCard({
   plan,
@@ -95,25 +75,21 @@ export function PlanCard({
         {badge ? <Text style={styles.badge}>{badge}</Text> : null}
       </View>
       <Text style={publicText.small}>{plan.tagline}</Text>
-      <View style={styles.priceRow}>
-        {free ? (
-          <Text style={styles.price}>Free</Text>
-        ) : storePrice ? (
-          <>
-            <Text style={styles.price}>{storePrice}</Text>
-            <Text style={publicText.small}>{annual ? "/year" : "/month"}</Text>
-          </>
-        ) : (
-          <>
-            {annual ? <Text style={styles.was}>{money(plan.price_monthly_usd)}</Text> : null}
-            <Text style={styles.price}>{money(annual ? annualMonthly(plan) : plan.price_monthly_usd)}</Text>
-            <Text style={publicText.small}>/month</Text>
-          </>
-        )}
-      </View>
-      <Text style={publicText.mono}>
-        {free ? "Free forever" : storePrice ? (annual ? "Billed yearly" : "Billed monthly") : annual ? `${money(annualTotal(plan))} billed yearly` : "Billed monthly"}
-      </Text>
+      {free || storePrice ? (
+        <>
+          <View style={styles.priceRow}>
+            {free ? (
+              <Text style={styles.price}>Free</Text>
+            ) : (
+              <>
+                <Text style={styles.price}>{storePrice}</Text>
+                <Text style={publicText.small}>{annual ? "/year" : "/month"}</Text>
+              </>
+            )}
+          </View>
+          <Text style={publicText.mono}>{free ? "Free forever" : annual ? "Billed yearly" : "Billed monthly"}</Text>
+        </>
+      ) : null}
       <View style={styles.features}>
         {plan.features.map((f) => (
           <View key={f} style={styles.feature}>
@@ -128,9 +104,6 @@ export function PlanCard({
 }
 
 const styles = StyleSheet.create({
-  manage: { alignSelf: "flex-start", maxWidth: "100%" },
-  manageButton: { borderRadius: radius.sm },
-  manageSite: { color: colors.blue },
   legal: { flexDirection: "row", gap: 8, marginTop: 6, paddingTop: 16, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.lineStrong },
   legalItem: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   legalLink: { flexShrink: 1, color: colors.white, fontSize: 13.5, lineHeight: 20 },
@@ -160,7 +133,6 @@ const styles = StyleSheet.create({
   },
   priceRow: { flexDirection: "row", alignItems: "baseline", gap: 6, marginTop: 4 },
   price: { color: colors.text, fontFamily: fonts.displayBold, fontSize: 38 },
-  was: { color: colors.text3, fontSize: 18, textDecorationLine: "line-through" },
   features: { gap: 8, marginTop: 8 },
   feature: { flexDirection: "row", gap: 10 },
   check: { color: colors.blue, fontSize: 17, lineHeight: 26, fontWeight: "700" },
