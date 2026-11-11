@@ -4,7 +4,6 @@ import { layout, TALL } from "@notestack/shared/topicLayout";
 import type { Job, TopicDetail, TopicMap } from "@notestack/shared/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
-import * as WebBrowser from "expo-web-browser";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ActionSheetIOS, Alert, Platform, ScrollView, StyleSheet, Switch, Text, useWindowDimensions, View } from "react-native";
 import { playClick } from "@/lib/click-sound";
@@ -362,7 +361,7 @@ function TopicCard({
             title="Launch Kit for the latest post"
             variant="secondary"
             disabled={acting !== null}
-            onPress={() => WebBrowser.openBrowserAsync(`https://notestack.ai/app/launchpad/kits?post=${t.posts[0].id}`)}
+            onPress={() => router.push({ pathname: "/launchpad/kits", params: { post: t.posts[0].id } })}
           />
         ) : null}
         <Button title="Open as notebook" variant="secondary" onPress={onNotebook} busy={acting === "notebook"} disabled={acting !== null} />

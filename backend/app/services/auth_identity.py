@@ -6,10 +6,10 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 import bcrypt
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
-from app.models import AuthProvider, McpGrant, Subscription, User, Workspace, WorkspaceMember
+from app.models import ArtifactShare, AuthProvider, McpGrant, Subscription, User, Workspace, WorkspaceMember
 from app.services.plans import PLANS
 
 log = logging.getLogger(__name__)
@@ -67,7 +67,7 @@ def find_user(db: Session, email: str) -> User | None:
 
 def _ensure_active(user: User) -> None:
     if user.deleted_at or not user.is_active:
-        raise IdentityError("account_deleted", "This account was deleted. Contact support to restore it.", 403)
+        raise IdentityError("account_deleted", "This account was deleted.", 403)
 
 
 def _bootstrap_workspace(db: Session, user: User, *, hidden_email: bool = False) -> None:
@@ -185,6 +185,10 @@ def sign_out_everywhere(db: Session, user: User) -> None:
 
 
 def soft_delete(db: Session, user: User) -> None:
+    """Close the account now: signed out everywhere, and its public links stop working. Its data is removed for good
+    30 days later (services/account_purge.py)."""
     user.deleted_at = datetime.now(UTC)
     user.is_active = False
     sign_out_everywhere(db, user)
+    owned = select(Workspace.id).where(Workspace.owner_id == user.id)
+    db.execute(delete(ArtifactShare).where(ArtifactShare.workspace_id.in_(owned)))

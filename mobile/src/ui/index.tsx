@@ -1,5 +1,4 @@
 import { Image } from "expo-image";
-import * as WebBrowser from "expo-web-browser";
 import type { ReactNode } from "react";
 import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View, type TextInputProps } from "react-native";
 import { Pressable } from "@/ui/pressable";
@@ -122,21 +121,6 @@ export function formatDate(iso: string | null | undefined, withTime = false): st
   return `${day}, ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
 }
 
-/** A tab that is not built yet: says what it will hold and opens the web app, which has it today. */
-export function ComingSoon({ what, webPath }: { what: string; webPath: string }) {
-  return (
-    <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.page}>
-      <Body>{what}</Body>
-      <Body muted>This part of the app is coming next. Until then, it is on the web.</Body>
-      <Button
-        title="Open on notestack.ai"
-        variant="secondary"
-        onPress={() => WebBrowser.openBrowserAsync(`https://notestack.ai${webPath}`)}
-      />
-    </ScrollView>
-  );
-}
-
 export function Loading() {
   return (
     <Centered>
@@ -148,7 +132,6 @@ export function Loading() {
 const styles = StyleSheet.create({
   fill: { flex: 1, backgroundColor: colors.black },
   form: { flexGrow: 1, justifyContent: "center", padding: gutter * 1.5, gap: gutter },
-  page: { padding: gutter, gap: gutter },
   title: { color: colors.text, fontSize: 30, fontWeight: "700", letterSpacing: -0.5 },
   brand: { alignItems: "center", gap: 20, paddingVertical: gutter },
   brandLogo: { width: 76, height: 76, borderRadius: 20 },

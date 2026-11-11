@@ -5,7 +5,7 @@ import SkyCanvas from "../components/SkyCanvas";
 import { useMeta } from "./Blog";
 import "../styles/legal.css";
 
-const UPDATED = "November 4, 2026";
+const UPDATED = "November 10, 2026";
 
 function LegalPage({ eyebrow, title, description, children }: {
   eyebrow: string;
@@ -67,8 +67,9 @@ export function PrivacyPolicy() {
         </p>
         <h3>Payment information</h3>
         <p>
-          Payment transactions are processed by our third-party payment processor. We do not store full payment-card
-          details on our servers.
+          Payment transactions are processed by our third-party payment processor on the web, and by Apple (App Store) or
+          Google (Google Play) for subscriptions bought in our mobile apps. We receive the subscription's status, not your
+          payment details, and we do not store full payment-card details on our servers.
         </p>
       </section>
 
@@ -115,7 +116,12 @@ export function PrivacyPolicy() {
         <p>
           We retain your account information and User Content for as long as your account is active or as needed to provide
           the Service. You may delete content or request deletion of your account. We may retain certain information as
-          required by law or for legitimate security, billing, dispute, or backup purposes. Unfinished uploads and
+          required by law or for legitimate security, billing, dispute, or backup purposes. When you delete your account,
+          it is closed and your public links stop working at once, and your notebooks, sources, uploads, chats, generated
+          content, voice samples and connections are permanently deleted within 30 days. After that we keep only a minimal
+          record of the account (its email address and the dates it was created and deleted) so it is not reused or
+          recreated by mistake; it is not used for anything else. See <Link to="/delete-account">how to delete your
+          account</Link>. Unfinished uploads and
           verification records are normally removed after one day. MCP access tokens normally expire after one hour and
           refresh access after 30 days.
         </p>
@@ -231,7 +237,9 @@ export function TermsOfService() {
         <p>
           Certain features of the Service require a paid subscription. By subscribing, you agree to pay the applicable
           fees described on our Pricing page. Subscriptions renew automatically unless cancelled before the renewal date.
-          You may cancel your subscription at any time through your account settings. Fees are non-refundable except where
+          You may cancel your subscription at any time through your account settings. A subscription bought in our iOS or
+          Android app is billed by Apple or Google, and is managed and cancelled in your App Store or Google Play account
+          settings; their refund terms apply to it. Fees are non-refundable except where
           required by applicable law or otherwise stated in our refund policy. We reserve the right to change pricing with
           reasonable notice.
         </p>
@@ -364,6 +372,55 @@ export function SupportPage() {
         <p>
           You can manage connected apps, privacy choices, and account deletion in Settings. Read our
           {" "}<Link to="/privacy">privacy policy</Link> or <Link to="/terms">terms of service</Link>.
+        </p>
+      </section>
+    </LegalPage>
+  );
+}
+
+export function DeleteAccountPage() {
+  return (
+    <LegalPage
+      eyebrow="Your data"
+      title="Delete your account"
+      description="How to delete your Notestack account and what happens to your data."
+    >
+      <section>
+        <h2>In the app</h2>
+        <ol>
+          <li>Open Notestack on iPhone, iPad or Android, and sign in.</li>
+          <li>Open the menu, then <strong>Settings</strong>.</li>
+          <li>Under <strong>Account</strong>, tap <strong>Delete account</strong> and confirm.</li>
+        </ol>
+      </section>
+      <section>
+        <h2>On the web</h2>
+        <p>
+          Sign in at <a href="https://notestack.ai/app/settings">notestack.ai</a>, open <strong>Settings</strong>, and
+          choose <strong>Delete account</strong> under Account.
+        </p>
+      </section>
+      <section>
+        <h2>What is deleted</h2>
+        <p>
+          Your account is closed at once: you are signed out everywhere and your public links stop working. Within 30
+          days your notebooks, sources, uploads, chats, generated content, voice samples and connected apps are
+          permanently deleted. We keep only a minimal record of the account (its email address and the dates it was
+          created and deleted). Read our <Link to="/privacy">privacy policy</Link> for details.
+        </p>
+      </section>
+      <section>
+        <h2>Subscriptions</h2>
+        <p>
+          Deleting your account does not cancel a subscription bought through the App Store: cancel it in your Apple ID
+          settings first. Subscriptions bought on the web or through Google Play end with the account.
+        </p>
+      </section>
+      <section>
+        <h2>Can't sign in?</h2>
+        <p>
+          Email <a href="mailto:arslan@firebird-technologies.com">arslan@firebird-technologies.com</a> from the address
+          on your account, and we will delete it for you.
         </p>
       </section>
     </LegalPage>

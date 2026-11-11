@@ -45,6 +45,8 @@ class User(IdMixin, TimestampMixin, Base):
     token_version: Mapped[int] = mapped_column(Integer, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # When the deleted account's data was removed for good (services/account_purge.py); the row itself is kept.
+    purged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     email_unsubscribed: Mapped[bool] = mapped_column(Boolean, default=False)
     welcome_email_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
