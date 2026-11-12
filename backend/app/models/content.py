@@ -420,7 +420,7 @@ class CalendarItem(IdMixin, TimestampMixin, Base):
     # The Launch Kit the post was written from, kept apart from the attachment (nothing of it is uploaded).
     kit_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("artifacts.id", ondelete="SET NULL"))
     document_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("documents.id", ondelete="SET NULL"))
-    platform: Mapped[str] = mapped_column(String(30))  # x | linkedin | bluesky | substack_notes
+    platform: Mapped[str] = mapped_column(String(30))  # x | instagram | threads | linkedin | bluesky | substack_notes
     scheduled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     # scheduled | publishing | posted | reminded | failed | draft
     status: Mapped[str] = mapped_column(String(20), default="scheduled")
@@ -439,7 +439,7 @@ class CalendarItem(IdMixin, TimestampMixin, Base):
 
 
 class SocialAccount(IdMixin, TimestampMixin, Base):
-    """A connected X, LinkedIn or Bluesky account. Tokens are Fernet encrypted (app/services/crypto.py)."""
+    """A directly connected social destination."""
 
     __tablename__ = "social_accounts"
     __table_args__ = (UniqueConstraint("workspace_id", "platform", "external_id"),)
@@ -448,13 +448,15 @@ class SocialAccount(IdMixin, TimestampMixin, Base):
     platform: Mapped[str] = mapped_column(String(20))
     handle: Mapped[str] = mapped_column(String(200))
     external_id: Mapped[str] = mapped_column(String(200))
+    # App-scoped Meta person/system-user id returned by /me during Facebook or Instagram authorization. Meta's
+    # deauthorization and deletion callbacks identify the grant by this id, not by the Page/Instagram account id.
+    authorization_user_id: Mapped[str | None] = mapped_column(String(200), index=True)
     access_token: Mapped[str] = mapped_column(Text)
     refresh_token: Mapped[str | None] = mapped_column(Text)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     scopes: Mapped[str | None] = mapped_column(String(500))
     status: Mapped[str] = mapped_column(String(20), default="active")  # active | expired | revoked | disconnected
     avatar_url: Mapped[str | None] = mapped_column(String(1000))
-
 
 class Topic(IdMixin, TimestampMixin, Base):
     __tablename__ = "topics"

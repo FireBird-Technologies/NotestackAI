@@ -45,6 +45,9 @@ export function monthGrid(month: Date): Date[] {
 /** Where a post can go: its name, character limit, and whether it posts by itself (else an email reminder). */
 export const PLATFORMS: { id: Platform; label: string; limit: number; auto: boolean }[] = [
   { id: "x", label: "X", limit: 280, auto: true },
+  { id: "facebook", label: "Facebook", limit: 63206, auto: true },
+  { id: "instagram", label: "Instagram", limit: 2200, auto: true },
+  { id: "threads", label: "Threads", limit: 500, auto: true },
   { id: "linkedin", label: "LinkedIn", limit: 3000, auto: true },
   { id: "bluesky", label: "Bluesky", limit: 300, auto: true },
   { id: "substack_notes", label: "Substack Notes", limit: 2000, auto: false },

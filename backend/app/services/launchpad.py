@@ -68,7 +68,8 @@ def publish_item(db: Session, item: CalendarItem) -> CalendarItem:
         return item
     account = db.get(SocialAccount, item.social_account_id) if item.social_account_id else None
     label = PLATFORM_LABELS.get(item.platform, item.platform)
-    if item.platform in ("x", "linkedin") and not item.remind_by_email and (not account or account.status != "active"):
+    if item.platform in ("x", "facebook", "instagram", "threads", "linkedin") and not item.remind_by_email \
+            and (not account or account.status != "active"):
         # The connection is down: never attempted; it resumes when the account is reconnected.
         item.status, item.error = "paused", f"{label} disconnected. Reconnect {label} to resume."
         db.commit()
@@ -84,17 +85,20 @@ def publish_item(db: Session, item: CalendarItem) -> CalendarItem:
         return item
     item.attempts += 1
     try:
-        tracked = [track_links(db, item, p) for p in posts]
+        # Instagram captions do not make URLs clickable. Replacing the writer's URL with our tracking redirect only
+        # exposes an unfamiliar redirect domain in the caption, so preserve Instagram captions exactly as written.
+        outbound = posts if item.platform == "instagram" else [track_links(db, item, p) for p in posts]
         db.flush()
         artifact = db.get(Artifact, item.artifact_id) if item.artifact_id else None
-        if artifact and media_count(artifact) and item.platform in ("x", "linkedin") \
+        if artifact and media_count(artifact) and item.platform in ("x", "facebook", "instagram", "threads", "linkedin") \
                 and not module(item.platform).can_post_media(account):
             # Scheduled before the account lost the right to post media: held, not attempted, until reconnected.
             item.status, item.error = "paused", f"Reconnect {label} to post images and videos."
             db.commit()
             return item
-        with media_for(artifact, item.platform) as media:  # temporary video files go when this ends
-            external_id, url = module(item.platform).publish(db, account, tracked, media)
+        else:
+            with media_for(artifact, item.platform) as media:  # temporary video files go when this ends
+                external_id, url = module(item.platform).publish(db, account, outbound, media)
     except SocialError as exc:
         if exc.reconnect:  # the platform refused the connection: it is down, and its posts pause
             mark_down(db, account, "expired", str(exc))
@@ -130,7 +134,8 @@ def _fail_or_retry(db: Session, item: CalendarItem, error: str, permanent: bool)
 def has_media(db: Session, item: CalendarItem) -> bool:
     """The post uploads images or a video (slow: it goes through a job, also for Publish now)."""
     artifact = db.get(Artifact, item.artifact_id) if item.artifact_id else None
-    return bool(artifact) and item.platform in ("x", "linkedin") and media_count(artifact) > 0
+    return bool(artifact) and item.platform in ("x", "facebook", "instagram", "threads", "linkedin") \
+        and media_count(artifact) > 0
 
 
 def queue_publish(db: Session, item: CalendarItem) -> None:
@@ -156,10 +161,9 @@ def publish_due(session_factory: Callable[[], Session] = SessionLocal) -> int:
         for stuck in db.scalars(select(CalendarItem).where(
                 CalendarItem.status == "publishing", CalendarItem.updated_at < now - STUCK_AFTER)):
             stuck.status = "scheduled"
-        due = db.scalars(
-            select(CalendarItem).where(CalendarItem.status == "scheduled", CalendarItem.scheduled_at <= now)
-            .order_by(CalendarItem.scheduled_at).limit(50)
-        ).all()
+        due = db.scalars(select(CalendarItem).where(
+            CalendarItem.status == "scheduled", CalendarItem.scheduled_at <= now
+        ).order_by(CalendarItem.scheduled_at).limit(50)).all()
         for item in due:
             item.status = "publishing"  # claim, so an overlapping tick skips it
         db.commit()

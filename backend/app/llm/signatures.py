@@ -391,6 +391,21 @@ class PlatformAdapter(dspy.Signature):
     posts: list[str] = dspy.OutputField()
 
 
+class SocialPostAssistant(dspy.Signature):
+    """Write or rework one social post. Follow the requested action exactly and keep every factual detail grounded in
+    the brief or current text. Preserve URLs, handles and hashtags when reworking. Return only the finished post, with
+    no commentary, labels, quotation marks or markdown fences. Use short readable paragraphs, at most three relevant
+    hashtags, and never use em dashes. Stay within the character limit."""
+
+    platform: str = dspy.InputField(desc="The destination social network")
+    action: Literal["generate", "rephrase", "shorten", "expand", "casual", "formal"] = dspy.InputField()
+    brief: str = dspy.InputField(desc="What the writer wants to communicate, or blank when reworking")
+    current_text: str = dspy.InputField(desc="The existing post to rework, or blank when generating")
+    voice_profile: str = dspy.InputField(desc="The writer's preferred voice")
+    character_limit: int = dspy.InputField()
+    text: str = dspy.OutputField(desc="The finished post only")
+
+
 class SummarizeNotebook(dspy.Signature):
     """Summarize what these posts say as a whole: the main arguments, how they connect and where the
     writer changed their mind. Every factual sentence ends with a [n] marker and a citation to the

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Link } from "react-router-dom";
+import { SocialBrandIcon, type SocialBrand } from "./SocialBrandIcon";
 
 /** Landing page feature tour: one full section per feature, alternating sides, each with a small
  * product visual that animates when the section arrives (the parent adds .arrived via Landing's observer). */
@@ -294,7 +295,7 @@ function KitVisual() {
     ["X thread", "I doubled my price. My paid tier doubled too."],
     ["LinkedIn", "Most writers underprice. I did for two years."],
     ["Notes", "Price is a signal. Readers told me so."],
-    ["Bluesky", "Raised my price to $10. Paid went up."],
+    ["Instagram", "A price is more than a number. It is a signal."],
   ];
   return (
     <div className="fx fx-kit">
@@ -334,21 +335,63 @@ function VoiceVisual() {
 }
 
 function PadVisual() {
-  const lit = [2, 5, 9, 12, 16, 19];
+  const scheduled: Record<number, { brand: SocialBrand; label: string; time: string }> = {
+    3: { brand: "linkedin", label: "Post", time: "9:00" },
+    6: { brand: "instagram", label: "Carousel", time: "12:30" },
+    10: { brand: "x", label: "Thread", time: "10:00" },
+    13: { brand: "facebook", label: "Post", time: "3:00" },
+    17: { brand: "threads", label: "Thread", time: "11:30" },
+    20: { brand: "linkedin", label: "Quote card", time: "4:00" },
+  };
+  const channels: { brand: SocialBrand; label: string }[] = [
+    { brand: "x", label: "X" },
+    { brand: "facebook", label: "Facebook" },
+    { brand: "instagram", label: "Instagram" },
+    { brand: "threads", label: "Threads" },
+    { brand: "linkedin", label: "LinkedIn" },
+  ];
   return (
     <div className="fx fx-pad">
+      <header className="fx-pad-head">
+        <div>
+          <span className="mono">LAUNCH CALENDAR</span>
+          <strong>October publishing plan</strong>
+        </div>
+        <span className="fx-pad-count">6 scheduled</span>
+      </header>
+      <div className="fx-pad-weekdays mono" aria-hidden="true">
+        {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, i) => <span key={`${day}-${i}`}>{day}</span>)}
+      </div>
       <div className="fx-cal">
-        {Array.from({ length: 21 }).map((_, i) => (
-          <span key={i} className={lit.includes(i) ? "on" : ""} style={{ ["--d" as string]: `${lit.indexOf(i) * 0.12}s` }}>
-            {i + 1}
+        {Array.from({ length: 21 }).map((_, i) => {
+          const day = i + 1;
+          const item = scheduled[day];
+          return (
+            <span key={day} className={item ? "on" : ""} style={{ ["--d" as string]: `${Object.keys(scheduled).indexOf(String(day)) * 0.1}s` }}>
+              <small>{day}</small>
+              {item && (
+                <b>
+                  <SocialBrandIcon brand={item.brand} size={15} />
+                  <em>{item.label}</em>
+                  <i>{item.time}</i>
+                </b>
+              )}
+            </span>
+          );
+        })}
+      </div>
+      <div className="fx-launch" aria-label="Connected publishing channels">
+        {channels.map(({ brand, label }) => (
+          <span key={brand}>
+            <i><SocialBrandIcon brand={brand} size={18} /></i>
+            <b>{label}</b>
+            <small>Connected</small>
           </span>
         ))}
       </div>
-      <div className="fx-launch mono">
-        <span>X</span>
-        <span>LinkedIn</span>
-        <span>Bluesky</span>
-        <span>Notes reminder</span>
+      <div className="fx-pad-foot mono">
+        <span><i /> Auto publishing on</span>
+        <span>Links tracked after launch</span>
       </div>
     </div>
   );
@@ -407,7 +450,7 @@ const FEATURES: Feature[] = [
     id: "kit",
     eyebrow: "Launch Kit",
     title: "One post becomes a launch on every platform.",
-    body: "Hooks, an X thread, a LinkedIn post, Substack Notes, a Bluesky thread, an SEO pack, a carousel and quote cards, all written in your voice from claims the post actually makes.",
+    body: "Hooks, an X thread, LinkedIn and Instagram posts, Substack Notes, an SEO pack, a carousel and quote cards, all written in your voice from claims the post actually makes.",
     points: ["Edit anything, copy in one click", "Character counts per platform", "Quote cards rendered and ready"],
     visual: <KitVisual />,
   },
@@ -423,8 +466,8 @@ const FEATURES: Feature[] = [
     id: "pad",
     eyebrow: "Launchpad",
     title: "Schedule the countdown. We handle liftoff.",
-    body: "Plan every post on one calendar. Notestack publishes to X, LinkedIn and Bluesky on time, emails you Substack Notes to paste, and tracks the clicks that follow.",
-    points: ["Auto posting with connected accounts", "Tracked links and engagement", "Resurface evergreen posts when they matter"],
+    body: "Plan every post on one calendar. Notestack publishes to X, Facebook, Instagram, Threads and LinkedIn on time, and tracks the clicks that follow.",
+    points: ["Five connected publishing channels", "Tracked links and engagement", "Resurface evergreen posts when they matter"],
     visual: <PadVisual />,
   },
 ];

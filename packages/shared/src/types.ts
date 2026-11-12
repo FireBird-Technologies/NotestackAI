@@ -476,7 +476,7 @@ export type Quota = {
   voice_limit?: number;
 };
 
-export type Platform = "x" | "linkedin" | "bluesky" | "substack_notes";
+export type Platform = "x" | "facebook" | "instagram" | "threads" | "linkedin" | "bluesky" | "substack_notes";
 
 /** Something made that a post can carry: images (quote card, carousel slides), a video, or text only. */
 export type PostableArtifact = {
@@ -536,7 +536,7 @@ export type CalendarItem = {
 
 export type SocialAccount = {
   id: string;
-  platform: "x" | "linkedin" | "bluesky";
+  platform: "x" | "facebook" | "instagram" | "threads" | "linkedin" | "bluesky";
   platform_label: string;
   handle: string;
   status: string;
@@ -552,8 +552,9 @@ export type SocialAccount = {
 
 export type SocialAccounts = {
   accounts: SocialAccount[];
-  available: { x: boolean; linkedin: boolean; bluesky: boolean };
-  redirect_uris: { x: string; linkedin: string };
+  available: { x: boolean; facebook: boolean; instagram: boolean; threads: boolean; linkedin: boolean; bluesky: boolean };
+  visible: { x: boolean; facebook: boolean; instagram: boolean; threads: boolean; linkedin: boolean; bluesky: boolean };
+  redirect_uris: { x: string; facebook: string; instagram: string; threads: string; linkedin: string };
 };
 
 export type ResurfaceItem = Doc & {

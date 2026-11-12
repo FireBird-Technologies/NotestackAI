@@ -3,8 +3,8 @@
     publish(db, account, posts: list[str], media: list[Media] | None) -> (external_id, external_url)
     metrics(db, account, external_id) -> dict
 
-A list with more than one post is published as a thread (reply chain) where the platform supports it. Media (images or
-one video, from social.media) goes on the first post; only X and LinkedIn take it.
+A list with more than one post is published as a thread (reply chain) where the platform supports it. Media comes from
+social.media; Instagram requires it, while the other supported platforms may also publish text-only posts.
 """
 
 from datetime import UTC, datetime
@@ -25,9 +25,13 @@ class SocialError(RuntimeError):
         self.reconnect = reconnect
 
 
-PLATFORM_LABELS = {"x": "X", "linkedin": "LinkedIn", "bluesky": "Bluesky", "substack_notes": "Substack Notes"}
-AUTO_POST = {"x", "linkedin", "bluesky"}
-LIMITS = {"x": 280, "bluesky": 300, "linkedin": 3000, "substack_notes": 2000}
+PLATFORM_LABELS = {
+    "x": "X", "facebook": "Facebook", "instagram": "Instagram", "threads": "Threads", "linkedin": "LinkedIn",
+    "bluesky": "Bluesky", "substack_notes": "Substack Notes",
+}
+AUTO_POST = {"x", "facebook", "instagram", "threads", "linkedin", "bluesky"}
+LIMITS = {"x": 280, "facebook": 63206, "instagram": 2200, "threads": 500, "bluesky": 300,
+          "linkedin": 3000, "substack_notes": 2000}
 
 
 def token(account: SocialAccount) -> str:
@@ -60,6 +64,7 @@ def scope_set(scopes: str | None) -> set[str]:
 
 
 def module(platform: str):
-    from app.services.social import bluesky, linkedin, x
+    from app.services.social import bluesky, facebook, instagram, linkedin, threads, x
 
-    return {"x": x, "linkedin": linkedin, "bluesky": bluesky}[platform]
+    return {"x": x, "facebook": facebook, "instagram": instagram, "threads": threads,
+            "linkedin": linkedin, "bluesky": bluesky}[platform]

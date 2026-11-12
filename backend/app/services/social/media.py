@@ -8,6 +8,7 @@ Videos are streamed to a temporary file (never held whole in memory) and read in
 removed when the post is done (media_for is a context manager). Sizes are checked before anything is sent."""
 
 import contextlib
+import io
 import os
 import re
 import tempfile
@@ -16,14 +17,15 @@ from dataclasses import dataclass
 
 import httpx
 from fastapi import HTTPException
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 from app.models import Artifact
 from app.services.social import SocialError
 
-MAX_IMAGES = {"x": 4, "linkedin": 20}
+MAX_IMAGES = {"x": 4, "facebook": 10, "instagram": 10, "threads": 10, "linkedin": 20}
 X_VIDEO_SECONDS = 140  # X's limit for videos from standard accounts (2:20)
 TEXT_ONLY = {"summary", "launch_kit"}
-MEDIA_PLATFORMS = {"x", "linkedin"}
+MEDIA_PLATFORMS = {"x", "facebook", "instagram", "threads", "linkedin"}
 MB = 1024 * 1024
 # What the user can upload from their computer to post: LinkedIn takes JPG, PNG and GIF images and MP4 videos.
 UPLOAD_TYPES = {"image/png": "image", "image/jpeg": "image", "image/gif": "image", "video/mp4": "video"}
@@ -35,6 +37,7 @@ SIZE_LIMITS = {
     ("linkedin", "video"): (75 * 1024, 500 * MB),
     ("linkedin", "document"): (1, 100 * MB),
 }
+INSTAGRAM_SQUARE = 1080
 
 
 @dataclass
@@ -117,10 +120,12 @@ def check_postable(a: Artifact, platform: str) -> None:
             raise HTTPException(400, "Reports go to LinkedIn as a PDF. Post it there.")
         return
     if platform not in MEDIA_PLATFORMS:
-        raise HTTPException(400, "Images and videos can only be posted to X and LinkedIn.")
-    if a.type in ("slide_deck", "infographic"):  # drawn when the post goes out: nothing stored to wait for
+        raise HTTPException(400, "Images and videos can only be posted to X, Facebook, Instagram, Threads and LinkedIn.")
+    # Carousels keep their images in content.slide_keys (and uploaded ones intentionally have no single storage_key).
+    # Decks and infographics are drawn when the post goes out, so all three are ready when their media count is known.
+    if a.type in ("carousel", "slide_deck", "infographic"):
         if a.status != "ready" or not media_count(a):
-            raise HTTPException(400, "This slide deck isn't ready yet. Post it once it has finished.")
+            raise HTTPException(400, f"This {a.type.replace('_', ' ')} isn't ready yet. Post it once it has finished.")
     elif a.type == "video" and is_blog2video(a):
         if not (a.content_json or {}).get("video_url"):
             raise HTTPException(400, "This video isn't finished yet. Post it once it has rendered.")
@@ -142,6 +147,39 @@ def check_size(m: Media, platform: str) -> None:
         raise SocialError(f"This {m.kind} is too small for {label} (at least {low // 1024} KB).", permanent=True)
 
 
+def _instagram_ready(m: Media, position: float = 0.5, fit: bool = False, x_position: float = 0.5) -> Media:
+    """Make an Instagram square by cropping at the selected position or fitting the full image on black."""
+    if m.kind != "image":
+        return m
+    data = m.read()
+    try:
+        with Image.open(io.BytesIO(data)) as opened:
+            image = ImageOps.exif_transpose(opened)
+            width, height = image.size
+            if width == height:
+                return m
+            if fit:
+                square = ImageOps.pad(image.convert("RGB"), (INSTAGRAM_SQUARE, INSTAGRAM_SQUARE),
+                                      Image.Resampling.LANCZOS, color=(0, 0, 0), centering=(0.5, 0.5))
+            else:
+                try:
+                    center_y = max(0.0, min(1.0, float(position)))
+                except (TypeError, ValueError):
+                    center_y = 0.5
+                try:
+                    center_x = max(0.0, min(1.0, float(x_position)))
+                except (TypeError, ValueError):
+                    center_x = 0.5
+                square = ImageOps.fit(image.convert("RGB"), (INSTAGRAM_SQUARE, INSTAGRAM_SQUARE),
+                                      Image.Resampling.LANCZOS, centering=(center_x, center_y))
+            out = io.BytesIO()
+            square.save(out, "JPEG", quality=92, optimize=True)
+    except (OSError, UnidentifiedImageError):
+        return m
+    name = m.filename.rsplit(".", 1)[0] + ".jpg"
+    return Media("image", name, "image/jpeg", data=out.getvalue())
+
+
 @contextlib.contextmanager
 def media_for(a: Artifact | None, platform: str) -> Iterator[list[Media]]:
     """The files to upload with a post of this artifact (none for text-only ones), size checked. Temporary video
@@ -155,9 +193,16 @@ def media_for(a: Artifact | None, platform: str) -> Iterator[list[Media]]:
             if a.type == "quote_card":
                 out = [Media("image", "quote.png", "image/png", data=storage.get_bytes(a.storage_key))]
             elif a.type == "carousel":
-                keys = (a.content_json or {}).get("slide_keys") or [a.storage_key]
-                out = [Media("image", f"slide-{i + 1}.png", "image/png", data=storage.get_bytes(k))
-                       for i, k in enumerate(keys[:MAX_IMAGES[platform]])]
+                content = a.content_json or {}
+                uploaded = content.get("slide_files") or []
+                if uploaded:
+                    out = [Media("image", item.get("filename") or f"image-{i + 1}",
+                                 item.get("content_type") or "image/png", data=storage.get_bytes(item["key"]))
+                           for i, item in enumerate(uploaded[:MAX_IMAGES[platform]])]
+                else:
+                    keys = content.get("slide_keys") or [a.storage_key]
+                    out = [Media("image", f"slide-{i + 1}.png", "image/png", data=storage.get_bytes(k))
+                           for i, k in enumerate(keys[:MAX_IMAGES[platform]])]
             elif a.type == "slide_deck":
                 out = [Media("image", f"slide-{i + 1}.png", "image/png", data=png)
                        for i, png in enumerate(_slide_images(a, MAX_IMAGES[platform]))]
@@ -182,6 +227,20 @@ def media_for(a: Artifact | None, platform: str) -> Iterator[list[Media]]:
                     else:
                         storage.download_to(a.storage_key, f)
                 out = [Media("video", "video.mp4", "video/mp4", path=path)]
+        if platform == "instagram":
+            positions = (a.content_json or {}).get("instagram_positions") if a else None
+            positions = positions if isinstance(positions, list) else []
+            fits = (a.content_json or {}).get("instagram_fits") if a else None
+            fits = fits if isinstance(fits, list) else []
+            x_positions = (a.content_json or {}).get("instagram_x_positions") if a else None
+            x_positions = x_positions if isinstance(x_positions, list) else []
+            # Landscape slides are unreadable when silently center-cropped. Preserve the complete slide unless the
+            # author explicitly chooses Crop in the preview.
+            default_fit = bool(a and a.type == "slide_deck")
+            out = [_instagram_ready(m, positions[i] if i < len(positions) else 0.5,
+                                    fits[i] is True if i < len(fits) else default_fit,
+                                    x_positions[i] if i < len(x_positions) else 0.5)
+                   for i, m in enumerate(out)]
         for m in out:
             check_size(m, platform)
         yield out
