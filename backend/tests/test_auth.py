@@ -122,6 +122,73 @@ def test_delete_account(client):
     assert r.status_code == 403
 
 
+def test_delete_account_erases_owned_social_connections_and_pauses_posts(client, db_session):
+    from datetime import timedelta
+
+    from sqlalchemy import select
+
+    from app.models import CalendarItem, SocialAccount, User, Workspace
+    from app.services.crypto import encrypt
+
+    data = _signup(client, email="social-delete@example.com")
+    headers = {"Authorization": f"Bearer {data['access_token']}"}
+    user = db_session.scalar(select(User).where(User.email == "social-delete@example.com"))
+    workspace = db_session.scalar(select(Workspace).where(Workspace.owner_id == user.id))
+    account = SocialAccount(
+        workspace_id=workspace.id, platform="instagram", handle="ada.photos", external_id="ig-42",
+        authorization_user_id="meta-user-42", access_token=encrypt("access"), refresh_token=encrypt("refresh"),
+        scopes="instagram_basic,instagram_content_publish", avatar_url="https://cdn.example/ada.jpg", status="active",
+    )
+    db_session.add(account)
+    db_session.flush()
+    item = CalendarItem(
+        workspace_id=workspace.id, platform="instagram", scheduled_at=datetime.now(UTC) + timedelta(days=1),
+        content="Tomorrow", social_account_id=account.id, status="scheduled",
+    )
+    db_session.add(item)
+    db_session.commit()
+
+    assert client.post("/api/auth/delete-account", headers=headers).status_code == 200
+
+    db_session.refresh(account)
+    db_session.refresh(item)
+    assert account.status == "disconnected"
+    assert account.access_token == "" and account.refresh_token is None and account.expires_at is None
+    assert account.authorization_user_id is None and account.scopes is None and account.avatar_url is None
+    assert account.handle == "Deleted connection" and account.external_id == f"deleted:{account.id}"
+    assert item.status == "paused" and "account that owned this connection was deleted" in item.error
+
+
+def test_delete_member_account_does_not_erase_another_users_workspace_connection(client, db_session):
+    from sqlalchemy import select
+
+    from app.models import SocialAccount, User, Workspace, WorkspaceMember
+    from app.services.crypto import encrypt
+
+    owner_data = _signup(client, email="workspace-owner@example.com")
+    owner = db_session.scalar(select(User).where(User.email == "workspace-owner@example.com"))
+    workspace = db_session.scalar(select(Workspace).where(Workspace.owner_id == owner.id))
+    member_data = _signup(client, email="workspace-member@example.com")
+    member = db_session.scalar(select(User).where(User.email == "workspace-member@example.com"))
+    db_session.add(WorkspaceMember(workspace_id=workspace.id, user_id=member.id, role="member"))
+    account = SocialAccount(
+        workspace_id=workspace.id, platform="facebook", handle="Owner Page", external_id="page-42",
+        authorization_user_id="meta-owner", access_token=encrypt("access"), status="active",
+    )
+    db_session.add(account)
+    db_session.commit()
+
+    response = client.post("/api/auth/delete-account", headers={
+        "Authorization": f"Bearer {member_data['access_token']}",
+    })
+    assert response.status_code == 200
+    db_session.refresh(account)
+    assert account.status == "active" and account.handle == "Owner Page" and account.access_token
+
+    # Keep the first signup result used so static checks do not mistake it for accidental dead setup.
+    assert owner_data["user"]["email"] == "workspace-owner@example.com"
+
+
 def _google_redirect(client, monkeypatch, claims: dict, next_path="/app/notebooks"):
     from urllib.parse import parse_qs, urlparse
 

@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { launchpadApi } from "@notestack/shared/endpoints";
+import { artifactsApi, launchpadApi } from "@notestack/shared/endpoints";
 import type { CalendarItem, PostableArtifact, SocialAccounts } from "@notestack/shared/types";
 import { ArrowLeftIcon, ArrowRightIcon, FilmIcon } from "../components/icons/Icons";
+import { InfographicFrame, type Layout as InfographicLayout } from "../components/Infographic";
 import { AttachmentChip, AttachPicker, LibraryPicker } from "../components/launchpad/Attachment";
+import { ArtifactCarouselPreview } from "../components/launchpad/CarouselPreview";
+import { ArtifactDeckPreview } from "../components/launchpad/DeckSocialPreview";
 import { PLATFORMS, ScheduleModal } from "../components/ScheduleModal";
+import { SocialAccountAvatar, SocialBrandIcon, type SocialBrand } from "../components/SocialBrandIcon";
 import { dayKey, monthGrid, nextSlot, SlotPicker, toWall, userTimeZone, wallToDate } from "../components/launchpad/SlotPicker";
 import { BackArrow, ConfirmButton, CopyButton, errorMessage, formatDate, Loading, Modal, PageHeader, StatusPill, Tabs } from "../components/ui";
 
@@ -47,20 +51,45 @@ function ItemModal({
   accounts: SocialAccounts | null;
   onClose: () => void;
   onChanged: (item: CalendarItem | null) => void;
-  onReconnect: (platform: "x" | "linkedin") => void;
+  onReconnect: (platform: "x" | "facebook" | "instagram" | "threads" | "linkedin") => void;
 }) {
   const [posts, setPosts] = useState([item.content, ...item.thread]);
-  // Its time on the user's clock; one made before half-hour slots stays as it is until a new slot is picked.
-  const [when, setWhen] = useState(() => toWall(new Date(item.scheduled_at)));
+  // A failed/paused post whose old time passed starts at the next usable half hour, so Reschedule works immediately.
+  const [when, setWhen] = useState(() => {
+    const scheduled = new Date(item.scheduled_at);
+    return toWall(item.status !== "scheduled" && scheduled <= new Date() ? nextSlot() : scheduled);
+  });
   const moved = when !== toWall(new Date(item.scheduled_at));
   const [accountId, setAccountId] = useState(item.social_account_id ?? "");
   const [attached, setAttached] = useState<PostableArtifact | null>(item.artifact);
   const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [infographicPreview, setInfographicPreview] = useState<{ html: string; layout: InfographicLayout } | null>(null);
   const meta = PLATFORMS.find((p) => p.id === item.platform)!;
   const locked = item.status === "posted" || item.status === "publishing";
   const options = (accounts?.accounts ?? []).filter((a) => a.platform === item.platform);
+  const activeAccount = options.find((a) => a.id === accountId) ?? options.find((a) => a.status === "active") ?? null;
+  const previewText = posts.filter(Boolean).join("\n\n");
+
+  // Calendar rows carry only lightweight attachment metadata. Load an infographic's rich layout for its preview;
+  // slide decks use ArtifactDeckPreview, which also loads and saves their Instagram crop settings.
+  useEffect(() => {
+    let live = true;
+    setInfographicPreview(null);
+    if (attached?.type !== "infographic") return () => { live = false; };
+    artifactsApi.get(attached.id).then((artifact) => {
+      if (!live) return;
+      const landscape = artifact.content?.html_landscape;
+      const portrait = artifact.content?.html;
+      if (typeof landscape === "string" && landscape) {
+        setInfographicPreview({ html: landscape, layout: "landscape" });
+      } else if (typeof portrait === "string" && portrait) {
+        setInfographicPreview({ html: portrait, layout: "portrait" });
+      }
+    }, () => undefined);
+    return () => { live = false; };
+  }, [attached?.id, attached?.type]);
 
   // Not on the calendar to go out (a draft, failed, reminded or paused post): Save puts it back, at the time shown.
   const reschedules = item.status !== "scheduled";
@@ -88,141 +117,231 @@ function ItemModal({
     }
   };
 
+  const retryNow = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await launchpadApi.publishNow(item.id);
+      onChanged(next);
+      if (next.status === "failed" || (next.error && next.status !== "publishing")) {
+        setError(next.error ?? "Publishing failed.");
+      } else {
+        onClose();
+      }
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <Modal title={`${item.platform_label} post`} onClose={onClose} wide>
-      <div className="stack">
-        <div className="row between">
-          <span className="mono muted">
-            {item.auto_post ? `Auto posts as ${item.account_handle}` : "Email reminder"} · {formatDate(item.scheduled_at, true)}
-          </span>
-          <StatusPill status={item.status} />
-        </div>
-        {item.kit_id && (
-          <p className="muted small lp-from-kit">Written from the launch kit: {item.kit_title ?? "a launch kit"}</p>
-        )}
-        {item.status === "paused" ? (
-          <div className="lp-paused">
-            <span>{item.error ?? "Paused: it won't go out until resumed."}</span>
-            {/* Its connection is down (Reconnect), or was disconnected and none is connected now (Connect: any account
-                takes its posts over) */}
-            {(item.platform === "x" || item.platform === "linkedin") && accounts
-              && !accounts.accounts.some((a) => a.platform === item.platform && !a.needs_reconnect) && (
-              <button className="btn btn-small btn-primary" onClick={() => onReconnect(item.platform as "x" | "linkedin")}>
-                {accounts.accounts.some((a) => a.platform === item.platform) ? "Reconnect" : "Connect"} {item.platform_label}
-              </button>
-            )}
-            <span className="muted small">Pick a time still ahead and Save to resume it.</span>
-          </div>
-        ) : item.error && <p className="error-text">{item.error}</p>}
-        {item.external_url && (
-          <p>
-            <a href={item.external_url} target="_blank" rel="noreferrer">
-              View the live post
-            </a>
-          </p>
-        )}
-        {(item.status === "posted" || item.clicks > 0) && (
-          <div className="metrics mono">
-            {Object.entries(item.metrics)
-              .filter(([k]) => k !== "synced_at")
-              .map(([k, v]) => (
-                <span key={k}>
-                  {v} {k}
-                </span>
-              ))}
-            <span>{item.clicks} link clicks</span>
-          </div>
-        )}
-        {(attached || !locked) && (
-          <div className="field">
-            <span className="vw-label">Attachment</span>
-            {attached ? (
-              <AttachmentChip a={attached} onChange={locked ? undefined : () => setPicking(true)}
-                              onRemove={locked ? undefined : () => setAttached(null)} />
-            ) : (
-              <button type="button" className="btn lp-attach-btn" onClick={() => setPicking(true)}>
-                + Attach from your Library
-              </button>
-            )}
-          </div>
-        )}
-        {posts.map((p, i) => (
-          <label key={i} className="field">
-            <span className="field-row">
-              <span>{posts.length > 1 ? `Post ${i + 1}` : "Post"}</span>
-              <span className={`mono ${p.length > meta.limit ? "over" : "muted"}`}>
-                {p.length} / {meta.limit}
+      <div className="lp-item-compose">
+        <div className="lp-item-grid">
+          <main className="lp-item-main">
+            <div className="lp-item-summary">
+              <span className={`lp-brand-tile brand-${item.platform}`}>
+                <SocialBrandIcon brand={item.platform} size={20} />
               </span>
-            </span>
-            <textarea className="textarea" rows={4} disabled={locked} value={p} onChange={(e) => setPosts(posts.map((x, j) => (j === i ? e.target.value : x)))} />
-          </label>
-        ))}
-        {!locked && (
-          <div className="lp-edit-when">
-            <div className="field">
-              <span>When</span>
-              <SlotPicker value={when} onChange={setWhen} />
+              <span className="lp-item-summary-copy">
+                <strong>{activeAccount?.handle ?? item.account_handle ?? `${item.platform_label} account`}</strong>
+                <span className="muted small">
+                  {item.auto_post ? "Automatic publishing" : "Email reminder"} · {formatDate(item.scheduled_at, true)}
+                </span>
+              </span>
+              <StatusPill status={item.status} />
             </div>
-            {meta.auto && (
-              <label className="field">
-                <span>Account</span>
-                <select className="input input-sm" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
-                  <option value="">Email me a reminder</option>
-                  {options.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.handle}
-                    </option>
-                  ))}
-                </select>
-              </label>
+
+            {item.kit_id && (
+              <p className="muted small lp-item-kit">From launch kit: {item.kit_title ?? "a launch kit"}</p>
             )}
+
+            {item.status === "paused" ? (
+              <div className="lp-item-alert">
+                <span className="lp-item-alert-icon">!</span>
+                <span>
+                  <strong>{item.error ?? "Publishing is paused."}</strong>
+                  <small>Reconnect the channel, choose a future time, then reschedule this post.</small>
+                </span>
+                {(["x", "facebook", "instagram", "threads", "linkedin"] as string[]).includes(item.platform) && accounts
+                  && !accounts.accounts.some((a) => a.platform === item.platform && !a.needs_reconnect) && (
+                  <button type="button" className="btn btn-small" onClick={() => onReconnect(
+                    item.platform as "x" | "facebook" | "instagram" | "threads" | "linkedin"
+                  )}>
+                    {accounts.accounts.some((a) => a.platform === item.platform) ? "Reconnect" : "Connect"} {item.platform_label}
+                  </button>
+                )}
+              </div>
+            ) : item.status === "failed" ? (
+              <div className="lp-item-alert lp-item-alert-failed">
+                <span className="lp-item-alert-icon">!</span>
+                <span>
+                  <strong>Publishing failed</strong>
+                  <small>{item.error ?? "The platform could not publish this post."}</small>
+                </span>
+                <span className="lp-item-alert-actions">
+                  <button type="button" className="btn btn-small" disabled={busy} onClick={retryNow}>
+                    {busy ? "Retrying..." : "Retry now"}
+                  </button>
+                  <button type="button" className="btn btn-small btn-primary" disabled={busy} onClick={save}>
+                    Reschedule
+                  </button>
+                </span>
+              </div>
+            ) : item.error && <p className="error-text lp-item-error">{item.error}</p>}
+
+            <section className="lp-item-editor">
+              <div className="lp-writing-canvas">
+                {posts.map((p, i) => (
+                  <label key={i} className="lp-post-field">
+                    {posts.length > 1 && <span className="small muted">Post {i + 1}</span>}
+                    <textarea className="textarea" rows={i === 0 ? 9 : 5} disabled={locked} value={p}
+                              placeholder={`Write your ${item.platform_label} post...`}
+                              onChange={(e) => setPosts(posts.map((x, j) => (j === i ? e.target.value : x)))} />
+                    <span className={`mono small lp-char-count ${p.length > meta.limit ? "over" : "muted"}`}>
+                      {p.length} / {meta.limit}
+                    </span>
+                  </label>
+                ))}
+
+                {(attached || !locked) && (
+                  <div className="lp-compose-media">
+                    {attached ? (
+                      <AttachmentChip a={attached} onChange={locked ? undefined : () => setPicking(true)}
+                                      onRemove={locked ? undefined : () => setAttached(null)} />
+                    ) : (
+                      <button type="button" className="lp-media-drop" onClick={() => setPicking(true)}>
+                        <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+                          <rect x="3" y="4" width="18" height="16" rx="2.5" /><path d="m4 16 5-5 4 4 2.5-2.5L20 17" />
+                          <path d="M17.5 3v5M15 5.5h5" />
+                        </svg>
+                        <span><strong>Add media</strong><small>Choose an image, video, deck or report from your Library</small></span>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {item.external_url && (
+              <a className="lp-item-live-link" href={item.external_url} target="_blank" rel="noreferrer">View live post ↗</a>
+            )}
+            {(item.status === "posted" || item.clicks > 0) && (
+              <div className="metrics mono lp-item-metrics">
+                {Object.entries(item.metrics).filter(([k]) => k !== "synced_at").map(([k, v]) => <span key={k}>{v} {k}</span>)}
+                <span>{item.clicks} link clicks</span>
+              </div>
+            )}
+            {error && <p className="error-text lp-item-error">{error}</p>}
+          </main>
+
+          <aside className="lp-post-preview lp-item-preview" aria-label={`${item.platform_label} preview`}>
+            <div className="lp-preview-heading">
+              <span><SocialBrandIcon brand={item.platform} size={19} /> Preview</span>
+              <span className="lp-preview-live"><i /> Live preview</span>
+            </div>
+            <article className={`lp-social-preview brand-${item.platform}`}>
+              <header>
+                <SocialAccountAvatar avatarUrl={activeAccount?.avatar_url}
+                                     handle={activeAccount?.handle ?? item.account_handle ?? "Your account"} />
+                <span>
+                  <strong>{activeAccount?.handle ?? item.account_handle ?? "Your account"}</strong>
+                  {item.platform !== "instagram" && <small>{item.platform_label}</small>}
+                </span>
+                {item.platform === "instagram" ? (
+                  <span className="lp-instagram-more" aria-hidden="true">•••</span>
+                ) : <span className="lp-preview-more" aria-hidden="true">•••</span>}
+              </header>
+              <p className={previewText ? "" : "muted"}>
+                {item.platform === "instagram" && previewText ? (
+                  <><strong className="lp-instagram-caption-account">{activeAccount?.handle ?? item.account_handle ?? "Your account"}</strong>{" "}{previewText}</>
+                ) : previewText || `Your ${item.platform_label} post will appear here.`}
+              </p>
+              {attached?.type === "carousel" && (
+                <ArtifactCarouselPreview artifact={attached} platform={item.platform} editable={!locked} />
+              )}
+              {attached?.type === "slide_deck" && (
+                <ArtifactDeckPreview artifact={attached} platform={item.platform} editable={!locked} />
+              )}
+              {attached?.type === "infographic" && infographicPreview && (
+                <div className={`lp-preview-infographic ${infographicPreview.layout}`}>
+                  <InfographicFrame html={infographicPreview.html} title={attached.title} layout={infographicPreview.layout} />
+                </div>
+              )}
+              {attached?.type !== "carousel" && attached?.type !== "slide_deck" && attached?.type !== "infographic" && attached?.thumb_url && (
+                <img className="lp-preview-media" src={attached.thumb_url} alt={attached.title} />
+              )}
+              {attached && attached.type !== "carousel" && attached.type !== "slide_deck" && attached.type !== "infographic" && !attached.thumb_url && (
+                <div className="lp-preview-attachment"><span>{attached.type_label}</span><strong>{attached.title}</strong></div>
+              )}
+              {attached?.type === "infographic" && !infographicPreview && (
+                <div className="lp-preview-attachment"><span>Loading infographic preview</span><strong>{attached.title}</strong></div>
+              )}
+              {item.platform === "instagram" ? (
+                <footer className="lp-instagram-actions" aria-hidden="true">
+                  <span>
+                    <svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8Z" /></svg>
+                    <svg viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.5 9.6 9.6 0 0 1-4-.9L3 21l1.7-4.7A8.5 8.5 0 1 1 21 11.5Z" /></svg>
+                    <svg viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4 20-7Z" /><path d="M22 2 11 13" /></svg>
+                  </span>
+                  <svg viewBox="0 0 24 24"><path d="M5 3h14v18l-7-5-7 5V3Z" /></svg>
+                </footer>
+              ) : <footer aria-hidden="true"><span>♡</span><span>↻</span><span>↗</span><span>⌁</span></footer>}
+            </article>
+            <p className="muted small lp-preview-note">Preview is approximate. Final spacing may vary slightly on {item.platform_label}.</p>
+          </aside>
+        </div>
+
+        {!locked && (
+          <div className="lp-schedule-bar lp-item-schedule-bar">
+            <span className="lp-schedule-bar-copy">
+              <span className="lp-schedule-bar-icon" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <rect x="3" y="5" width="18" height="16" rx="2.5" />
+                  <path d="M8 3v4M16 3v4M3 10h18" />
+                </svg>
+              </span>
+              <span><strong>Publishing time</strong><small>Choose a future date and time for this post.</small></span>
+            </span>
+            <div className="lp-item-schedule-controls">
+              <div className="lp-item-when"><SlotPicker value={when} onChange={setWhen} /></div>
+              {meta.auto && (
+                <label className="lp-item-account-select">
+                  <span className="sr-only">Account</span>
+                  <select className="input input-sm" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+                    <option value="">Email reminder</option>
+                    {options.map((a) => <option key={a.id} value={a.id}>{a.handle}</option>)}
+                  </select>
+                </label>
+              )}
+            </div>
           </div>
         )}
-        {error && <p className="error-text">{error}</p>}
-        <div className="row between lp-edit-actions">
-          <div className="row">
+
+        <footer className="lp-item-footer">
+          <div className="lp-item-secondary-actions">
             <CopyButton text={posts.join("\n\n")} />
-            <ConfirmButton
-              onConfirm={async () => {
-                await launchpadApi.remove(item.id);
-                onChanged(null);
-                onClose();
-              }}
-            >
-              Delete
-            </ConfirmButton>
+            <ConfirmButton onConfirm={async () => {
+              await launchpadApi.remove(item.id);
+              onChanged(null);
+              onClose();
+            }}>Delete</ConfirmButton>
           </div>
           {!locked && (
-            <div className="row">
-              <button
-                className="btn"
-                disabled={busy}
-                onClick={async () => {
-                  setBusy(true);
-                  setError(null);
-                  try {
-                    const next = await launchpadApi.publishNow(item.id);
-                    onChanged(next);
-                    // With a video or images it uploads in the background; the calendar follows it.
-                    if (next.status === "failed" || (next.error && next.status !== "publishing")) {
-                      setError(next.error ?? "Publishing failed.");
-                    } else onClose();
-                  } catch (e) {
-                    setError(errorMessage(e));
-                  } finally {
-                    setBusy(false);
-                  }
-                }}
-              >
-                {item.auto_post ? "Publish now" : "Send reminder now"}
+            <div className="lp-item-primary-actions">
+              <button type="button" className="btn" disabled={busy} onClick={async () => {
+                await retryNow();
+              }}>
+                {busy ? "Publishing..." : item.status === "failed" ? "Retry now" : item.auto_post ? "Publish now" : "Send now"}
               </button>
-              <button className="btn btn-primary" disabled={busy} onClick={save}
+              <button type="button" className="btn btn-primary" disabled={busy} onClick={save}
                       title={reschedules ? "Save it and put it back on the calendar at this time" : undefined}>
-                {reschedules ? "Reschedule" : "Save"}
+                {reschedules ? "Reschedule" : "Save changes"}
               </button>
             </div>
           )}
-        </div>
+        </footer>
       </div>
       {picking && (
         <AttachPicker onClose={() => setPicking(false)} onPick={(a) => {
@@ -234,14 +353,18 @@ function ItemModal({
   );
 }
 
-const CONNECT: { id: "x" | "linkedin"; label: string; blurb: string }[] = [
-  { id: "linkedin", label: "LinkedIn", blurb: "Post and schedule to LinkedIn from your Library." },
+const CONNECT: { id: "x" | "facebook" | "instagram" | "threads" | "linkedin"; label: string }[] = [
+  { id: "x", label: "X" },
+  { id: "facebook", label: "Facebook" },
+  { id: "instagram", label: "Instagram" },
+  { id: "threads", label: "Threads" },
+  { id: "linkedin", label: "LinkedIn" },
 ];
 
-/** The right column: LinkedIn (X is switched off for now), connected (who, status, expiry, Reconnect / Disconnect) or a Connect button. */
+/** The right column: directly connected social accounts. */
 function ConnectionsPanel({ accounts, onConnect, onChanged }: {
   accounts: SocialAccounts | null;
-  onConnect: (platform: "x" | "linkedin") => void;
+  onConnect: (platform: "x" | "facebook" | "instagram" | "threads" | "linkedin") => void;
   onChanged: () => void;
 }) {
   const [disconnecting, setDisconnecting] = useState<SocialAccounts["accounts"][number] | null>(null);
@@ -265,58 +388,90 @@ function ConnectionsPanel({ accounts, onConnect, onChanged }: {
       setBusy(false);
     }
   };
+  const connected = accounts?.accounts ?? [];
+  const allChannelOptions: { brand: SocialBrand; label: string; connect: "x" | "facebook" | "instagram" | "threads" | "linkedin"; available: boolean }[] = accounts ? [
+    { brand: "facebook", label: "Facebook", connect: "facebook", available: accounts.available.facebook },
+    { brand: "instagram", label: "Instagram", connect: "instagram", available: accounts.available.instagram },
+    { brand: "threads", label: "Threads", connect: "threads", available: accounts.available.threads },
+    { brand: "linkedin", label: "LinkedIn", connect: "linkedin", available: accounts.available.linkedin },
+    { brand: "x", label: "X", connect: "x", available: accounts.available.x },
+  ] : [];
+  const channelOptions = allChannelOptions.filter((option) => accounts?.visible[option.connect]);
   return (
     <aside className="card stack lp-connections" aria-label="Connected accounts">
-      <h2>Connections</h2>
-      <p className="muted small">Posts go out through these accounts at their scheduled time.</p>
+      <div className="lp-connections-head">
+        <div>
+          <span className="eyebrow">Channels</span>
+          <h2>Connected apps</h2>
+        </div>
+        {accounts && <span className="lp-connection-count">{connected.filter((a) => a.status === "active").length} active</span>}
+      </div>
+      <p className="muted small lp-connections-copy">Choose where Notestack can publish and see the account used for every post.</p>
       {!accounts && <div className="loading-center inline"><Loading label="Loading your connections" /></div>}
-      {accounts && CONNECT.map((c) => {
-        const a = accounts.accounts.find((x) => x.platform === c.id);
-        const days = a?.expires_at ? Math.max(0, Math.ceil((new Date(a.expires_at).getTime() - Date.now()) / 864e5)) : null;
-        return (
-          <section key={c.id} className="lp-conn">
-            <div className="lp-conn-head">
-              <strong>{c.label}</strong>
-              {a && <StatusPill status={a.status === "active" ? "connected" : a.status === "revoked" ? "disconnected" : a.status} />}
-            </div>
-            {a ? (
-              <>
-                <div className="lp-conn-who">
-                  {a.avatar_url ? <img src={a.avatar_url} alt="" width={32} height={32} /> : <span className="lp-conn-dot" aria-hidden="true" />}
-                  <span className="lp-attach-text">
-                    <strong>{a.handle}</strong>
-                    <span className="muted small">
-                      {a.connected_at ? `Connected since ${formatDate(a.connected_at)}` : "Connected"}
-                      {a.status === "active" && a.expires_soon && days !== null ? ` · expires in ${days} days` : ""}
-                    </span>
+      {accounts && (
+        <div className="lp-connected-list">
+          {connected.length === 0 && <p className="muted small lp-no-connections">No channels connected yet.</p>}
+          {connected.map((a) => (
+            <section key={a.id} className="lp-connected-row">
+              <span className="lp-connected-avatar">
+                <span className={`lp-brand-tile brand-${a.platform}`}>
+                  {a.avatar_url ? <img src={a.avatar_url} alt="" /> : <SocialBrandIcon brand={a.platform} size={22} />}
+                </span>
+                {a.avatar_url && (
+                  <span className={`lp-connected-brand-badge brand-${a.platform}`} aria-hidden="true">
+                    <SocialBrandIcon brand={a.platform} size={13} />
                   </span>
-                </div>
-                {a.status === "active" && !a.can_post_media && (
-                  <p className="small lp-warn">Can't post images and videos yet: reconnect to allow it.</p>
                 )}
-                {a.status !== "active" && (
-                  <p className="small lp-warn">Its scheduled posts are paused until you reconnect.</p>
-                )}
-                <div className="row end">
-                  {a.needs_reconnect && (
-                    <button className="btn btn-small btn-primary" onClick={() => onConnect(c.id)}>Reconnect</button>
-                  )}
-                  {a.status === "active" && (
-                    <button className="btn btn-small" onClick={() => setDisconnecting(a)}>Disconnect</button>
-                  )}
-                </div>
-              </>
-            ) : (
-              <>
-                <p className="muted small">{c.blurb}</p>
-                <button className="btn btn-primary" disabled={!accounts.available[c.id]} onClick={() => onConnect(c.id)}>
-                  Connect with {c.label}
+              </span>
+              <span className="lp-connected-copy">
+                <strong>{a.handle}</strong>
+                <span className="muted small">{a.platform_label}</span>
+              </span>
+              <span className={`lp-connection-state${a.status === "active" ? " active" : ""}`}>
+                <i />{a.status === "active" ? "Connected" : "Needs attention"}
+              </span>
+              {CONNECT.some((c) => c.id === a.platform) && (a.needs_reconnect ? (
+                <button className="btn btn-small" onClick={() => onConnect(a.platform as "x" | "facebook" | "instagram" | "threads" | "linkedin")}>Reconnect</button>
+              ) : (
+                <button className="icon-btn lp-connection-menu" onClick={() => setDisconnecting(a)} aria-label={`Disconnect ${a.handle}`} title="Disconnect">×</button>
+              ))}
+              {a.status === "active" && !a.can_post_media && (
+                <span className="lp-connected-warning small">
+                  {a.platform === "threads" ? "Text only until public media hosting is configured."
+                    : a.platform === "instagram" ? "HTTPS-accessible media storage is required for direct Instagram publishing."
+                    : "Reconnect to enable media publishing."}
+                </span>
+              )}
+            </section>
+          ))}
+        </div>
+      )}
+      {accounts && (
+        <section className="lp-connect-more">
+          <div className="lp-connect-more-head">
+            <strong>Connect more channels</strong>
+            <span className="muted small">Add or reconnect</span>
+          </div>
+          <div className="lp-connect-tiles">
+            {channelOptions.map((option) => {
+              const alreadyActive = accounts.accounts.some((a) => a.platform === option.brand && a.status === "active");
+              if (alreadyActive) return null;
+              return (
+                <button key={option.brand} type="button" className={`lp-connect-tile brand-${option.brand}`}
+                        disabled={!option.available} onClick={() => onConnect(option.connect)} title={`Connect ${option.label}`}>
+                  <span><SocialBrandIcon brand={option.brand} size={22} /></span>
+                  <small>{option.label}</small>
                 </button>
-              </>
-            )}
-          </section>
-        );
-      })}
+              );
+            })}
+          </div>
+        </section>
+      )}
+      {accounts && CONNECT.some((c) => accounts.visible[c.id] && !accounts.available[c.id]
+        && !accounts.accounts.some((a) => a.platform === c.id)) && (
+        <p className="muted small lp-connect-note">Some channels are unavailable until their OAuth settings are configured.</p>
+      )}
+      {error && !disconnecting && <p className="error-text">{error}</p>}
       {disconnecting && (
         <Modal title={`Disconnect ${PLATFORMS.find((p) => p.id === disconnecting.platform)?.label ?? "account"}?`} onClose={closeDisconnect}>
           <div className="stack">
@@ -353,6 +508,7 @@ export default function Launchpad() {
   const navigate = useNavigate();
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const handledOAuthTicket = useRef<string | null>(null);
   // Success notices ("LinkedIn connected.") clear themselves after 3 seconds.
   useEffect(() => {
     if (!notice) return;
@@ -414,11 +570,15 @@ export default function Launchpad() {
     const ticket = params.get("link");
     const err = params.get("error");
     if (err) setError(err);
-    if (ticket) {
+    if (ticket && handledOAuthTicket.current !== ticket) {
+      handledOAuthTicket.current = ticket;
       launchpadApi.completeOAuth(ticket).then(
         (a) => {
           setAccounts(a);
-          setNotice(`${params.get("platform") === "x" ? "X" : "LinkedIn"} connected.`);
+          const platform = params.get("platform");
+          setNotice(`${platform === "x" ? "X" : platform === "instagram" ? "Instagram"
+            : platform === "threads" ? "Threads" : platform === "facebook" ? "Facebook"
+            : "LinkedIn"} connected.`);
         },
         (e) => setError(errorMessage(e)),
       );
@@ -429,7 +589,7 @@ export default function Launchpad() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const connect = async (platform: "x" | "linkedin") => {
+  const connect = async (platform: "x" | "facebook" | "instagram" | "threads" | "linkedin") => {
     setError(null);
     try {
       const { url } = await launchpadApi.startOAuth(platform);

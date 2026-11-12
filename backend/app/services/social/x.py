@@ -3,6 +3,7 @@ first post (v2 media upload: one call for an image, initialize / append / finali
 
 import base64
 import hashlib
+import hmac
 import secrets
 import time
 from urllib.parse import urlencode
@@ -31,8 +32,15 @@ def configured() -> bool:
     return bool(settings.x_enabled and settings.x_client_id and settings.x_client_secret)
 
 
-def pkce_pair() -> tuple[str, str]:
-    verifier = secrets.token_urlsafe(64)[:96]
+def pkce_verifier(nonce: str) -> str:
+    """Derive a request-specific verifier without putting it in X's size-limited OAuth state."""
+    key = (settings.social_token_key or f"social:{settings.jwt_secret}").encode()
+    digest = hmac.new(key, f"x-oauth:{nonce}".encode(), hashlib.sha256).digest()
+    return base64.urlsafe_b64encode(digest).decode().rstrip("=")
+
+
+def pkce_pair(nonce: str | None = None) -> tuple[str, str]:
+    verifier = pkce_verifier(nonce) if nonce else secrets.token_urlsafe(64)[:96]
     challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
     return verifier, challenge
 

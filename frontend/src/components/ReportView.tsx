@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Artifact, Citation, FlashcardData, MindNode, ReportBlock, ReportSuggestion } from "@notestack/shared/types";
 import { FlashcardDeck } from "./Flashcards";
 import { InfographicFrame } from "./Infographic";
+import { RocketIcon } from "./icons/Icons";
 import { Markdown } from "./Markdown";
 import { MindMapExplorer } from "./MindMap";
 
@@ -27,6 +28,8 @@ type Props = {
   /** The artifact's id, which a mind map uses to seed its layout. */
   artifactId: string;
   onCite?: (c: Citation) => void;
+  /** The owner's report page can turn a highlighted excerpt into a ready-to-edit post. */
+  onPostSelection?: (text: string) => void;
 };
 
 function MindMapBlock({ block, artifactId }: { block: Extract<ReportBlock, { type: "mind_map" }>; artifactId: string }) {
@@ -250,12 +253,58 @@ function SourcesSection({ content, onCite }: { content: Record<string, any>; onC
 
 /** A report's blocks, in order, with a numbered contents list beside them that follows the reader down the page. Used
  * in the app and, read only, on the shared page. */
-export function ReportView({ content, artifactId, onCite, editor }: Props & { editor?: ReportEditor }) {
+export function ReportView({ content, artifactId, onCite, onPostSelection, editor }: Props & { editor?: ReportEditor }) {
   const blocks = (content.blocks ?? []) as ReportBlock[];
   const suggestions = (content.suggestions ?? []) as ReportSuggestion[];
   const hasSources = ((content.sources ?? []) as unknown[]).length > 0 || Number(content.chat_count ?? (content.source?.chat_ids?.length ?? 0)) > 0;
   const toc = useMemo(() => contents(blocks, hasSources), [blocks, hasSources]);
   const [active, setActive] = useState<string | null>(toc[0]?.id ?? null);
+  const pathRef = useRef<HTMLElement>(null);
+  const [selectionAction, setSelectionAction] = useState<{ text: string; left: number; top: number; below: boolean } | null>(null);
+
+  /** Offer the composer only when both ends of a real text selection are inside this report. */
+  const readSelection = useCallback(() => {
+    if (!onPostSelection) return;
+    const selection = window.getSelection();
+    const article = pathRef.current;
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0 || !article
+      || !selection.anchorNode || !selection.focusNode
+      || !article.contains(selection.anchorNode) || !article.contains(selection.focusNode)) {
+      setSelectionAction(null);
+      return;
+    }
+    const text = selection.toString()
+      .replace(/\r/g, "")
+      .replace(/[ \t]+/g, " ")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+    if (!text) {
+      setSelectionAction(null);
+      return;
+    }
+    const range = selection.getRangeAt(0);
+    const rects = range.getClientRects();
+    const rect = rects.length ? rects[rects.length - 1] : range.getBoundingClientRect();
+    const left = Math.max(76, Math.min(window.innerWidth - 76, rect.left + rect.width / 2));
+    const below = rect.top < 64;
+    setSelectionAction({ text, left, top: below ? rect.bottom + 10 : rect.top - 10, below });
+  }, [onPostSelection]);
+
+  useEffect(() => {
+    if (!selectionAction) return;
+    const dismiss = () => setSelectionAction(null);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") dismiss();
+    };
+    window.addEventListener("scroll", dismiss, { passive: true });
+    window.addEventListener("resize", dismiss);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("scroll", dismiss);
+      window.removeEventListener("resize", dismiss);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [selectionAction]);
 
   // The section nearest the top of the window is the one the contents list marks.
   useEffect(() => {
@@ -277,7 +326,6 @@ export function ReportView({ content, artifactId, onCite, editor }: Props & { ed
   }, [toc]);
 
   // How far down the report the reader is, for the line that runs beside it.
-  const pathRef = useRef<HTMLElement>(null);
   const [progress, setProgress] = useState(0);
   useEffect(() => {
     const onScroll = () => {
@@ -322,7 +370,7 @@ export function ReportView({ content, artifactId, onCite, editor }: Props & { ed
           </ol>
         </nav>
       )}
-      <article className="rp" ref={pathRef}>
+      <article className="rp" ref={pathRef} onPointerUp={readSelection} onKeyUp={readSelection}>
         <div className="rp-path" aria-hidden="true">
           <div className="rp-path-fill" style={{ height: `${progress * 100}%` }} />
           <div className="rp-path-ship" style={{ top: `${progress * 100}%` }} />
@@ -383,6 +431,22 @@ export function ReportView({ content, artifactId, onCite, editor }: Props & { ed
         })}
         <SourcesSection content={content} onCite={onCite} />
       </article>
+      {selectionAction && onPostSelection && (
+        <button
+          type="button"
+          className={`rp-selection-post${selectionAction.below ? " below" : ""}`}
+          style={{ left: selectionAction.left, top: selectionAction.top }}
+          onPointerDown={(event) => event.preventDefault()}
+          onClick={() => {
+            onPostSelection(selectionAction.text);
+            setSelectionAction(null);
+            window.getSelection()?.removeAllRanges();
+          }}
+        >
+          <RocketIcon size={15} />
+          Post selection
+        </button>
+      )}
     </div>
   );
 }

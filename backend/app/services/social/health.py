@@ -1,12 +1,11 @@
-"""Keeping X and LinkedIn connected, and what happens to scheduled posts when a connection goes down.
+"""Keeping direct social accounts connected, and what happens when a connection goes down.
 
 A connection that is down (expired, revoked on the platform, or disconnected here) pauses every post scheduled through
 it: paused posts are never attempted (publish_due only takes "scheduled" ones). Reconnecting the same account resumes
 the ones still ahead; posts whose time passed meanwhile stay paused, for a new time to be picked.
 
-social_health (every 10 minutes, worker.PERIODIC) refreshes X tokens before they expire, refreshes LinkedIn tokens
-where LinkedIn gave a refresh token, marks expired LinkedIn connections down, and every 6 hours asks each platform
-once whether the connection still works (it catches access revoked on x.com or linkedin.com)."""
+social_health (every 10 minutes, worker.PERIODIC) refreshes tokens before they expire, marks expired connections down,
+and every 6 hours asks each platform once whether the connection still works."""
 
 import logging
 import time
@@ -41,6 +40,26 @@ def pause_account_posts(db: Session, account: SocialAccount, reason: str) -> int
     for item in items:
         item.status, item.error = "paused", reason
     return len(items)
+
+
+def erase_account(db: Session, account: SocialAccount, reason: str) -> int:
+    """Remove every stored credential and provider identifier while retaining a non-identifying schedule tombstone.
+
+    Keeping the row lets existing calendar history remain intact. Replacing the external id avoids retaining the
+    platform account id and also lets the same account be connected again later as a fresh grant.
+    The caller commits.
+    """
+    paused = pause_account_posts(db, account, reason)
+    account.status = "disconnected"
+    account.access_token = ""
+    account.refresh_token = None
+    account.expires_at = None
+    account.scopes = None
+    account.authorization_user_id = None
+    account.avatar_url = None
+    account.handle = "Deleted connection"
+    account.external_id = f"deleted:{account.id}"
+    return paused
 
 
 def mark_down(db: Session, account: SocialAccount, status: str, reason: str | None = None) -> None:
@@ -94,10 +113,11 @@ def check_account(db: Session, account: SocialAccount) -> None:
 
 
 def social_health(session_factory: Callable[[], Session] = SessionLocal) -> int:
-    """Every active X and LinkedIn connection, checked. Returns how many were looked at."""
+    """Every active OAuth connection, checked. Returns how many were looked at."""
     with session_factory() as db:
+        platforms = ("x", "facebook", "instagram", "threads", "linkedin")
         accounts = db.scalars(select(SocialAccount).where(SocialAccount.status == "active",
-                                                          SocialAccount.platform.in_(("x", "linkedin")))).all()
+                                                          SocialAccount.platform.in_(platforms))).all()
         for account in accounts:
             check_account(db, account)
         return len(accounts)

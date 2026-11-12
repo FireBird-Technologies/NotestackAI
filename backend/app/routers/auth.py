@@ -25,12 +25,13 @@ from app.auth import (
 )
 from app.config import settings
 from app.db import get_db
-from app.models import AuthProvider, User, VerificationPurpose
+from app.models import AuthProvider, SocialAccount, User, VerificationPurpose, Workspace
 from app.services import apple_auth as apple
 from app.services import auth_identity as ident
-from app.services.crypto import decrypt, encrypt
 from app.services import email_verification as ev
+from app.services.crypto import decrypt, encrypt
 from app.services.email import email_service
+from app.services.social.health import erase_account
 
 log = logging.getLogger(__name__)
 
@@ -665,6 +666,13 @@ def delete_account(user: User = Depends(get_current_user), db: Session = Depends
     from app.services.billing import end_subscriptions
 
     end_subscriptions(db, user)
+    # Social grants belong to workspaces. Erase only grants in workspaces this person owns so deleting a member
+    # account can never disconnect a shared workspace. The tombstone rows retain calendar history but no provider
+    # token, account id, handle, avatar, scope or app-scoped authorization identity.
+    owned_workspaces = select(Workspace.id).where(Workspace.owner_id == user.id)
+    accounts = db.scalars(select(SocialAccount).where(SocialAccount.workspace_id.in_(owned_workspaces))).all()
+    for account in accounts:
+        erase_account(db, account, "The Notestack account that owned this connection was deleted.")
     ident.soft_delete(db, user)
     db.commit()
     return {"ok": True}

@@ -6,6 +6,7 @@ but never finished."""
 
 import logging
 import time
+import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
@@ -22,15 +23,24 @@ GRACE = timedelta(days=1)  # a file or a pending upload younger than this may st
 
 
 def remove_upload_artifact(db: Session, a: Artifact) -> None:
-    """An `upload` artifact is being deleted: its upload record goes too (and with it the file), unless another
-    artifact still posts the same file. The caller commits."""
-    if a.type != "upload" or not a.storage_key:
+    """An uploaded file or uploaded carousel is being deleted: remove its upload records and files. Caller commits."""
+    if a.type == "carousel":
+        ids = []
+        for value in (a.content_json or {}).get("upload_ids") or []:
+            try:
+                ids.append(uuid.UUID(str(value)))
+            except (TypeError, ValueError):
+                continue
+        if ids:
+            for upload in db.scalars(select(Upload).where(Upload.id.in_(ids))):
+                db.delete(upload)
         return
-    shared = db.scalar(select(Artifact.id).where(Artifact.storage_key == a.storage_key, Artifact.id != a.id).limit(1))
-    if shared:
-        return
-    for up in db.scalars(select(Upload).where(Upload.key == a.storage_key)):
-        db.delete(up)
+    if a.type == "upload" and a.storage_key:
+        shared = db.scalar(select(Artifact.id).where(Artifact.storage_key == a.storage_key, Artifact.id != a.id).limit(1))
+        if shared:
+            return
+        for up in db.scalars(select(Upload).where(Upload.key == a.storage_key)):
+            db.delete(up)
 
 
 def sweep_orphan_uploads(session_factory: Callable[[], Session] = SessionLocal) -> int:

@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { ApiError } from "@notestack/shared/client";
 import { artifactsApi, launchpadApi, videoEditApi, videosApi } from "@notestack/shared/endpoints";
-import type { PostableArtifact } from "@notestack/shared/types";
+import type { Platform, PostableArtifact } from "@notestack/shared/types";
 import { ArrowRightIcon, DownloadIcon, FilmIcon, HeadphonesIcon, InfographicIcon, ReportIcon, SlidesIcon, SparkleIcon, UploadIcon } from "../icons/Icons";
 import { errorMessage, formatDate, Loading, Modal, Pager } from "../ui";
 import { finished, jobPercent } from "../video/jobState";
@@ -14,8 +14,16 @@ export const X_VIDEO_SECONDS = 140;
 
 export const fmtDuration = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
 
+const PLATFORM_MEDIA: Partial<Record<Platform, { label: string; images: number }>> = {
+  x: { label: "X", images: 4 },
+  facebook: { label: "Facebook", images: 10 },
+  instagram: { label: "Instagram", images: 10 },
+  threads: { label: "Threads", images: 10 },
+  linkedin: { label: "LinkedIn", images: 20 },
+};
+
 /** "4 images", "Video 1:12", "Text": what the post carries. */
-export function mediaLabel(a: PostableArtifact): string {
+export function mediaLabel(a: PostableArtifact, platform?: Platform): string {
   if (a.type === "upload") {
     return a.media === "video" ? `Your video${a.duration_s ? ` ${fmtDuration(a.duration_s)}` : ""}` : "Your image";
   }
@@ -24,14 +32,27 @@ export function mediaLabel(a: PostableArtifact): string {
   if (a.media === "video" && a.needs_render) return "Not rendered yet: render it first";
   if (a.media === "video") return a.duration_s ? `Video ${fmtDuration(a.duration_s)}` : "Video";
   if (a.type === "slide_deck") {
-    // X takes 4 images and LinkedIn 20 (backend app/services/social/media.py MAX_IMAGES): longer decks are cut there.
     const n = a.media_count;
+    const destination = platform ? PLATFORM_MEDIA[platform] : undefined;
+    if (destination) {
+      const sent = Math.min(n, destination.images);
+      return `${n} slide${n === 1 ? "" : "s"} as images · ${destination.label} posts ${sent === n ? "all" : `the first ${sent}`}`;
+    }
+    // Used outside the composer, where there is no selected destination yet.
     const cut = n > 20 ? " · X posts the first 4, LinkedIn the first 20" : n > 4 ? " · X posts the first 4" : "";
     return `${n} slide${n === 1 ? "" : "s"} as images${cut}`;
   }
   // A report goes as its text when it fits in a post, else as a PDF (LinkedIn); an infographic as one image.
   if (a.media === "document" || a.type === "report") return "PDF document · LinkedIn";
-  if (a.media === "image") return a.media_count === 1 ? "Image" : `${a.media_count} images`;
+  if (a.media === "image") {
+    if (a.media_count === 1) return "Image";
+    const destination = platform ? PLATFORM_MEDIA[platform] : undefined;
+    if (destination) {
+      const sent = Math.min(a.media_count, destination.images);
+      return `${a.media_count} images · ${destination.label} posts ${sent === a.media_count ? "all" : `the first ${sent}`}`;
+    }
+    return `${a.media_count} images`;
+  }
   return "Text";
 }
 
@@ -95,8 +116,9 @@ export function AudioOnlyModal({ title, downloadUrl, onClose }: { title: string;
 
 /** The attached item: thumbnail, title, what it carries, and Change / Remove. An uploaded file's thumbnail opens its
  * preview. */
-export function AttachmentChip({ a, onChange, onRemove }: {
+export function AttachmentChip({ a, platform, onChange, onRemove }: {
   a: PostableArtifact;
+  platform?: Platform;
   onChange?: () => void;
   onRemove?: () => void;
 }) {
@@ -112,7 +134,7 @@ export function AttachmentChip({ a, onChange, onRemove }: {
       {previewing && <AttachmentPreviewModal a={a} onClose={() => setPreviewing(false)} />}
       <span className="lp-attach-text">
         <strong>{a.title}</strong>
-        <span className="muted small">{a.type_label} · {mediaLabel(a)}</span>
+        <span className="muted small">{a.type_label} · {mediaLabel(a, platform)}</span>
       </span>
       <span className="lp-attach-actions">
         <button type="button" className="btn btn-xs" onClick={() => setPreviewing(true)}>Preview</button>
@@ -387,8 +409,8 @@ function uploadProblem(file: File): string | null {
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
   const video = file.type === "video/mp4" || ext === "mp4";
   const image = ["image/png", "image/jpeg", "image/gif"].includes(file.type) || ["png", "jpg", "jpeg", "gif"].includes(ext);
-  if (!video && !image) return "LinkedIn takes JPG, PNG or GIF images and MP4 videos.";
-  if (image && file.size > 36 * MB) return `This image is ${Math.round(file.size / MB)} MB; LinkedIn takes up to 36 MB.`;
+  if (!video && !image) return "Posts take JPG, PNG or GIF images and MP4 videos.";
+  if (image && file.size > 36 * MB) return `This image is ${Math.round(file.size / MB)} MB; images take up to 36 MB.`;
   if (video && file.size > 300 * MB) return `This video is ${Math.round(file.size / MB)} MB; uploads are limited to 300 MB.`;
   if (video && file.size < 75 * 1024) return "This video is too small for LinkedIn (at least 75 KB).";
   return null;
@@ -494,15 +516,26 @@ export function LibraryPicker({ onPick, onPickKit, onCreateKit, fill = false, on
   };
   const fileInput = useRef<HTMLInputElement>(null);
 
-  /** A file from the computer: uploaded, made postable, then picked like anything else. */
-  const upload = async (file: File) => {
-    const problem = uploadProblem(file);
-    if (problem) return setError(problem);
+  /** Files from the computer: one stays an upload; several images become one carousel attachment. */
+  const upload = async (files: File[]) => {
+    if (!files.length) return;
+    if (files.length > 20) return setError("Choose up to 20 images at a time.");
+    for (const file of files) {
+      const problem = uploadProblem(file);
+      if (problem) return setError(problem);
+      if (files.length > 1 && !(file.type.startsWith("image/") || /\.(png|jpe?g|gif)$/i.test(file.name))) {
+        return setError("A multi-file post can contain images only. Add a video on its own.");
+      }
+    }
     setError(null);
-    setUploading(file.name);
+    setUploading(files.length === 1 ? files[0].name : `${files.length} images`);
     try {
-      const seconds = file.type === "video/mp4" || file.name.toLowerCase().endsWith(".mp4") ? await videoDuration(file) : null;
-      const item = await launchpadApi.uploadToPost(file, seconds ?? undefined);
+      const file = files[0];
+      const seconds = files.length === 1 && (file.type === "video/mp4" || file.name.toLowerCase().endsWith(".mp4"))
+        ? await videoDuration(file) : null;
+      const item = files.length === 1
+        ? await launchpadApi.uploadToPost(file, seconds ?? undefined)
+        : await launchpadApi.uploadManyToPost(files);
       void load().catch(() => undefined);
       onPick(item);
     } catch (e) {
@@ -604,9 +637,9 @@ export function LibraryPicker({ onPick, onPickKit, onCreateKit, fill = false, on
           )}
         </div>
         {/* Uploads: a drop area for a file from the computer, above the files uploaded before */}
-        {kind === "uploads" && (
+        {(kind === "all" || kind === "uploads") && (
           <div className={`lp-drop${dragging ? " over" : ""}${uploading ? " busy" : ""}`} role="button" tabIndex={0}
-               aria-label="Upload an image or video from your computer" aria-disabled={uploading !== null}
+               aria-label="Upload images or a video from your computer" aria-disabled={uploading !== null}
                onClick={() => !uploading && fileInput.current?.click()}
                onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && !uploading && fileInput.current?.click()}
                onDragOver={(e) => {
@@ -618,8 +651,8 @@ export function LibraryPicker({ onPick, onPickKit, onCreateKit, fill = false, on
                onDrop={(e) => {
                  e.preventDefault();
                  setDragging(false);
-                 const file = e.dataTransfer.files[0];
-                 if (file && !uploading) void upload(file);
+                 const files = Array.from(e.dataTransfer.files);
+                 if (files.length && !uploading) void upload(files);
                }}>
             <span className="lp-drop-icon" aria-hidden="true">
               {uploading ? <span className="vw-spin" /> : <UploadIcon size={22} />}
@@ -628,17 +661,17 @@ export function LibraryPicker({ onPick, onPickKit, onCreateKit, fill = false, on
               <strong>Uploading {uploading}...</strong>
             ) : (
               <>
-                <strong>Drop a file here, or <span className="lp-drop-link">browse your computer</span></strong>
-                <span className="muted small">JPG, PNG or GIF up to 36 MB · MP4 video up to 300 MB</span>
+                <strong>Drop files here, or <span className="lp-drop-link">browse your computer</span></strong>
+                <span className="muted small">Up to 20 JPG, PNG or GIF images · or one MP4 video</span>
               </>
             )}
           </div>
         )}
         {/* Outside the drop area, so its click doesn't bubble back into the area's own click */}
-        <input ref={fileInput} type="file" accept={UPLOAD_ACCEPT} hidden onChange={(e) => {
-          const file = e.target.files?.[0];
+        <input ref={fileInput} type="file" accept={UPLOAD_ACCEPT} multiple hidden onChange={(e) => {
+          const files = Array.from(e.target.files ?? []);
           e.target.value = ""; // the same file can be picked again
-          if (file) void upload(file);
+          if (files.length) void upload(files);
         }} />
         <input className="input input-sm search" placeholder="Search by title" value={q}
                onChange={(e) => setQ(e.target.value)} aria-label="Search" />

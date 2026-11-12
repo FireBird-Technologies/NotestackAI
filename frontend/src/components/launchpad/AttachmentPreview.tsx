@@ -7,6 +7,7 @@ import { SlideFrame } from "../SlideDeck";
 import { errorMessage, Loading, Modal } from "../ui";
 import { PreviewFrame } from "../video/VideoCard";
 import { PdfPreview } from "../PdfPreview";
+import { CarouselSlider } from "./CarouselPreview";
 
 /** What a post's attachment looks like, in a modal: shown as the app shows that kind of thing (a report read through, an
  * infographic, the deck's slides, a video playing, the images), so it can be checked before it goes out. */
@@ -63,7 +64,7 @@ export function AttachmentPreviewModal({ a, onClose }: { a: PostableArtifact; on
     }
     if (art.type === "video" && art.url) return <video className="pub-video" src={art.url} controls playsInline />;
     if (art.type === "carousel" && art.slide_urls.length) {
-      return <div className="stack">{art.slide_urls.map((u, i) => <img key={i} className="lp-preview-img" src={u} alt={`Slide ${i + 1}`} />)}</div>;
+      return <CarouselSlider urls={art.slide_urls} title={a.title} />;
     }
     if (art.url && art.type === "quote_card") return <img className="lp-preview-img" src={art.url} alt={art.title} />;
     // Text (a summary, a mind map, a short report's words): what the post starts with
