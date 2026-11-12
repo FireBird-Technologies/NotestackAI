@@ -42,7 +42,11 @@ export default function AppBanner() {
     <div className="app-banner" role="region" aria-label="Get the Notestack app">
       <div className="container app-banner-inner">
         <p className="app-banner-text">
-          Get the Notestack mobile {stores.length > 1 ? "apps" : "app"} now, available on
+          <span className="app-banner-text-long">
+            Get the Notestack mobile {stores.length > 1 ? "apps" : "app"} now, available on
+          </span>
+          {/* Phones: short enough to share one line with the store button */}
+          <span className="app-banner-text-short">Get the Notestack App available on</span>
         </p>
         <div className="app-banner-stores">
           {stores.map((store) => (
