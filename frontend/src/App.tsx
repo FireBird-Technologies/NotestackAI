@@ -28,7 +28,7 @@ import Connector from "./pages/Connector";
 import Welcome from "./pages/Welcome";
 import { SupportWidget } from "./components/support/SupportWidget";
 import StartRoute from "./pages/StartRoute";
-import { PrivacyPolicy, SupportPage, TermsOfService } from "./pages/Legal";
+import { DeleteAccountPage, PrivacyPolicy, SupportPage, TermsOfService } from "./pages/Legal";
 
 export default function App() {
   return (
@@ -47,6 +47,7 @@ export default function App() {
       <Route path="/privacy" element={<PrivacyPolicy />} />
       <Route path="/terms" element={<TermsOfService />} />
       <Route path="/support" element={<SupportPage />} />
+      <Route path="/delete-account" element={<DeleteAccountPage />} />
       <Route path="/r/:token" element={<PublicReport />} />
       <Route path="/auth" element={<AuthPage />} />
       <Route path="/auth/callback" element={<AuthCallback />} />

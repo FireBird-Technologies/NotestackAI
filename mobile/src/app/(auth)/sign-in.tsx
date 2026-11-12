@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import { useState } from "react";
 
 import { useAuth } from "@/account/auth";
+import { LegalLinks } from "@/account/plans";
 import { SocialButtons } from "@/account/social-buttons";
 import { Brand, Button, ErrorText, Field, FormScreen } from "@/ui";
 
@@ -54,6 +55,7 @@ export default function SignIn() {
       <Button title="Sign in" onPress={submit} busy={busy} disabled={!email.trim() || !password} />
       <Button title="Forgot password?" variant="link" onPress={() => router.push("/forgot")} />
       <Button title="New here? Create an account" variant="link" onPress={() => router.navigate("/sign-up")} />
+      <LegalLinks />
     </FormScreen>
   );
 }

@@ -6,6 +6,7 @@ import PricingTiers from "../components/PricingTiers";
 import "../styles/showcase.css";
 import { PublicFooter, PublicNav } from "../components/PublicChrome";
 import { SocialBrandIcon, type SocialBrand } from "../components/SocialBrandIcon";
+import AppBanner from "../components/AppBanner";
 import { blogPosts } from "@notestack/shared/content/blogPosts";
 import { FEATURES, STEPS, type FeatureLabel } from "@notestack/shared/content/marketing";
 import { useAuth } from "../hooks/useAuth";
@@ -266,6 +267,7 @@ export default function Landing() {
   return (
     <div className="page">
       <SkyCanvas travel />
+      <AppBanner />
       <PublicNav connectAi />
 
       <main>
