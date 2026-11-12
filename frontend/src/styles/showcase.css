@@ -1090,3 +1090,109 @@
     animation: none;
   }
 }
+
+/* Landing "get the app" bar: white, above the nav, scrolls away while the nav stays stuck */
+.app-banner {
+  position: relative;
+  z-index: 11;
+  background: #fff;
+  color: #000;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+.app-banner .app-banner-inner {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 12px;
+  min-height: 48px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.app-banner-text {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.78);
+}
+.app-banner-stores {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.app-banner-store {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px 6px 12px;
+  border-radius: 999px;
+  background: #000;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
+  transition: background 0.15s ease;
+}
+.app-banner-store:hover {
+  background: #2a2a2a;
+}
+.app-banner-store:focus-visible,
+.app-banner-close:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+.app-banner-close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(0, 0, 0, 0.6);
+  cursor: pointer;
+}
+.app-banner-close:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #000;
+}
+/* Phones: the text on one row, the store buttons centred below it; close pinned top right */
+@media (max-width: 640px) {
+  .app-banner .app-banner-inner {
+    flex-direction: column;
+    /* A wrapping column sizes the text to one long line instead of wrapping it */
+    flex-wrap: nowrap;
+    gap: 5px;
+    min-height: 0;
+    padding-top: 7px;
+    padding-bottom: 7px;
+    /* Keeps the centred text clear of the close button */
+    padding-left: calc(var(--gutter) + 28px);
+    padding-right: calc(var(--gutter) + 28px);
+  }
+  .app-banner-text {
+    font-size: 13px;
+    line-height: 1.35;
+    text-align: center;
+  }
+  .app-banner-stores {
+    justify-content: center;
+  }
+  .app-banner-store {
+    padding: 4px 12px 4px 10px;
+    font-size: 12px;
+  }
+  .app-banner-store svg {
+    width: 14px;
+    height: 14px;
+  }
+  .app-banner-close {
+    position: absolute;
+    top: 2px;
+    right: calc(var(--gutter) - 8px);
+  }
+}
