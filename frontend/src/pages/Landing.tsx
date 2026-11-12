@@ -5,6 +5,7 @@ import FeatureShowcase from "../components/FeatureShowcase";
 import PricingTiers from "../components/PricingTiers";
 import "../styles/showcase.css";
 import { PublicFooter, PublicNav } from "../components/PublicChrome";
+import { SocialBrandIcon, type SocialBrand } from "../components/SocialBrandIcon";
 import AppBanner from "../components/AppBanner";
 import { blogPosts } from "@notestack/shared/content/blogPosts";
 import { FEATURES, STEPS, type FeatureLabel } from "@notestack/shared/content/marketing";
@@ -12,7 +13,9 @@ import { useAuth } from "../hooks/useAuth";
 import { SourceUrlHint, useSourceUrlCheck } from "../components/SourceUrlCheck";
 import {
   ArrowRightIcon,
+  CheckIcon,
   ConstellationIcon,
+  EyeIcon,
   HelmetIcon,
   LaunchWindowIcon,
   LaunchpadIcon,
@@ -37,6 +40,117 @@ const FEATURE_ICONS: Record<FeatureLabel, typeof TelescopeIcon> = {
   Memory: OrbitIcon,
   Launchpad: LaunchpadIcon,
 };
+
+const LAUNCH_CHANNELS: { brand: SocialBrand; label: string }[] = [
+  { brand: "x", label: "X" },
+  { brand: "facebook", label: "Facebook" },
+  { brand: "instagram", label: "Instagram" },
+  { brand: "threads", label: "Threads" },
+  { brand: "linkedin", label: "LinkedIn" },
+];
+
+const LAUNCH_STEPS = [
+  { label: "Create campaign", body: "Turn one source into posts tailored for every connected channel.", icon: RocketIcon },
+  { label: "Edit and preview", body: "Polish the copy, check character counts and attach media before it goes out.", icon: EyeIcon },
+  { label: "Schedule and measure", body: "Plan the calendar, publish automatically or get a reminder, then track clicks.", icon: LaunchpadIcon },
+] as const;
+
+/** A product-like preview of the Launchpad, kept concrete so visitors can see both what they can make and where it goes. */
+function LaunchArea({ signedIn }: { signedIn: boolean }) {
+  const [activeStep, setActiveStep] = useState(0);
+  const selectedStep = LAUNCH_STEPS[activeStep];
+  return (
+    <section id="launch" className="section landing-launch">
+      <div className="container">
+        <div className="landing-launch-heading arrive">
+          <div>
+            <p className="eyebrow">Launch from Notestack</p>
+            <h2 className="section-title">Turn one idea into a full campaign.</h2>
+          </div>
+          <p className="muted">
+            Start with one post. Create platform-ready posts, then choose where and when each one goes out.
+          </p>
+        </div>
+
+        <div className="landing-launch-layout">
+          <div className="card launch-console arrive" style={{ ["--i" as string]: 0 }}>
+            <header className="launch-console-bar">
+              <span className="launch-console-brand"><LaunchpadIcon size={19} /> Launchpad</span>
+              <span className="mono launch-console-status"><i /> 5 channels ready</span>
+            </header>
+
+            <div className="launch-console-body">
+              <aside className="launch-source">
+                <span className="mono muted">SOURCE POST</span>
+                <div className="launch-source-thumb" aria-hidden="true">
+                  <span /><span /><span />
+                </div>
+                <strong>Why price is a signal</strong>
+                <p className="muted">Every draft stays grounded in the claims from your original post.</p>
+                <span className="launch-grounded"><CheckIcon size={14} /> Source checked</span>
+              </aside>
+
+              <div className="launch-output-panel">
+                <div className="launch-output-head">
+                  <div>
+                    <span className="mono muted">PUBLISH TO</span>
+                    <h3>Choose one or more</h3>
+                  </div>
+                  <span className="launch-ready-pill">1 selected</span>
+                </div>
+                <div className="lp-channel-picker landing-channel-picker" role="list" aria-label="Publishing channels">
+                  {LAUNCH_CHANNELS.map(({ brand, label }) => (
+                    <div key={brand} role="listitem" className={`lp-channel-button connected${brand === "linkedin" ? " on" : ""}`}>
+                      <span className={`lp-channel-icon brand-${brand}`}>
+                        <SocialBrandIcon brand={brand} size={23} />
+                        <i className="lp-channel-live" aria-hidden="true" />
+                      </span>
+                      <span className="lp-channel-name">{label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <footer className="launch-console-footer">
+              <div className="launch-benefits" aria-label="Launchpad publishing features">
+                <span><CheckIcon size={14} /> Schedule ahead</span>
+                <span><CheckIcon size={14} /> Auto publish</span>
+                <span><CheckIcon size={14} /> Track links</span>
+              </div>
+              <span className="mono muted">One calendar · five channels</span>
+            </footer>
+          </div>
+
+          <aside className="card launch-actions arrive" style={{ ["--i" as string]: 1 }}>
+            <div className="launch-actions-brand">
+              <LaunchpadIcon />
+              <strong>Launch workflow</strong>
+            </div>
+            <nav className="launch-action-nav" aria-label="Launch workflow">
+              {LAUNCH_STEPS.map(({ label, icon: Icon }, i) => (
+                <button key={label} type="button" className={`launch-action${activeStep === i ? " active" : ""}`}
+                        aria-pressed={activeStep === i} onClick={() => setActiveStep(i)}>
+                  <Icon />
+                  <span>{label}</span>
+                </button>
+              ))}
+            </nav>
+            <div className="launch-action-detail" aria-live="polite">
+              <span className="mono muted">STEP {String(activeStep + 1).padStart(2, "0")}</span>
+              <strong>{selectedStep.label}</strong>
+              <p className="muted">{selectedStep.body}</p>
+            </div>
+            <Link to={signedIn ? "/app/launchpad" : "/auth?mode=signup"} className="btn btn-primary launch-cta">
+              {signedIn ? "Open Launchpad" : "Build your first launch"}
+              <ArrowRightIcon size={18} />
+            </Link>
+          </aside>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 /** The narrated demo. Browsers only autoplay muted, so a button turns the captain's log on. */
 function DemoVideo() {
@@ -213,6 +327,8 @@ export default function Landing() {
             <DemoVideo />
           </div>
         </section>
+
+        <LaunchArea signedIn={Boolean(user)} />
 
         <section id="features" className="section">
           <div className="container">

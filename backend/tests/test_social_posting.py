@@ -98,6 +98,34 @@ def test_x_and_linkedin_need_a_connected_account(client, auth, ws, db_session):
     assert schedule(client, auth, "bluesky").status_code == 200  # no API connection needed: an email reminder
 
 
+def test_post_assistant_generates_and_reworks_with_platform_limit(client, auth, monkeypatch):
+    from app.llm import run
+    from app.llm.signatures import SocialPostAssistant
+
+    calls = []
+
+    def predict(signature, **kwargs):
+        calls.append((signature, kwargs))
+        return {"text": "x" * 400 if kwargs["action"] == "generate" else "A clearer draft."}
+
+    monkeypatch.setattr(run, "predict", predict)
+    generated = client.post("/api/launchpad/assist", headers=auth, json={
+        "platform": "x", "action": "generate", "prompt": "Announce our new course",
+    })
+    assert generated.status_code == 200 and len(generated.json()["text"]) == 280
+    assert calls[0][0] is SocialPostAssistant
+    assert calls[0][1]["platform"] == "X" and calls[0][1]["character_limit"] == 280
+
+    reworked = client.post("/api/launchpad/assist", headers=auth, json={
+        "platform": "linkedin", "action": "formal", "text": "hey, we launched it",
+    })
+    assert reworked.status_code == 200 and reworked.json()["text"] == "A clearer draft."
+    assert calls[1][1]["current_text"] == "hey, we launched it"
+    assert client.post("/api/launchpad/assist", headers=auth, json={
+        "platform": "linkedin", "action": "shorten", "text": "",
+    }).status_code == 422
+
+
 def test_linkedin_scopes_are_read_with_commas_or_spaces(client, auth, ws, db_session):
     acct = account(db_session, ws, "linkedin", scopes="openid profile w_member_social")
     quote = made(db_session, ws, "quote_card", key="ws/q/q.png")
@@ -479,6 +507,124 @@ def test_a_file_from_the_computer_is_attached_and_posted(client, auth, ws, db_se
     assert brief["id"] not in {a["id"] for a in client.get("/api/artifacts", headers=auth).json()["items"]}
 
 
+def test_multiple_uploaded_images_become_one_carousel(client, auth, ws, db_session):
+    from app.models import Upload
+    from app.services.social import media
+    from app.services.storage import storage
+
+    images = [uploaded(db_session, ws, "one.png", "image/png", b"PNG-one"),
+              uploaded(db_session, ws, "two.jpg", "image/jpeg", b"JPEG-two"),
+              uploaded(db_session, ws, "three.gif", "image/gif", b"GIF-three")]
+    response = client.post("/api/launchpad/uploads", json={"upload_ids": [str(image.id) for image in images]},
+                           headers=auth)
+    assert response.status_code == 200, response.text
+    brief = response.json()
+    assert brief["type"] == "carousel" and brief["media"] == "image" and brief["media_count"] == 3
+    assert brief["thumb_url"] and brief["title"] == "3 uploaded images"
+    acct = account(db_session, ws, "linkedin")
+    scheduled = schedule(client, auth, "linkedin", acct, artifact_id=brief["id"])
+    assert scheduled.status_code == 200, scheduled.text
+    artifact = db_session.get(Artifact, uuid.UUID(brief["id"]))
+    with media.media_for(artifact, "linkedin") as files:
+        assert [(item.filename, item.content_type, item.read()) for item in files] == [
+            ("one.png", "image/png", b"PNG-one"), ("two.jpg", "image/jpeg", b"JPEG-two"),
+            ("three.gif", "image/gif", b"GIF-three")]
+    keys = [image.key for image in images]
+    assert client.delete(f"/api/artifacts/{brief['id']}", headers=auth).status_code == 200
+    db_session.expire_all()
+    assert all(db_session.get(Upload, image.id) is None for image in images)
+    assert all(not storage.exists(key) for key in keys)
+
+
+def test_multiple_uploads_reject_a_video(client, auth, ws, db_session):
+    image = uploaded(db_session, ws, "one.png", "image/png", b"PNG")
+    video = uploaded(db_session, ws, "clip.mp4", "video/mp4", b"v" * (80 * 1024))
+    response = client.post("/api/launchpad/uploads", json={"upload_ids": [str(image.id), str(video.id)]}, headers=auth)
+    assert response.status_code == 415 and "images only" in response.json()["detail"]
+
+
+def test_instagram_crops_uploaded_images_to_the_selected_square_position(ws, db_session):
+    import io
+
+    from PIL import Image
+
+    from app.services.social import media
+
+    source = io.BytesIO()
+    portrait = Image.new("RGB", (1290, 2796), "red")
+    portrait.paste("blue", (0, 1398, 1290, 2796))
+    portrait.save(source, "PNG")
+    upload = uploaded(db_session, ws, "portrait.png", "image/png", source.getvalue())
+    artifact = Artifact(workspace_id=ws.id, type="carousel", status="ready", content_json={
+        "title": "Portrait carousel", "slide_keys": [upload.key],
+        "slide_files": [{"key": upload.key, "filename": upload.filename, "content_type": upload.content_type}],
+        "instagram_positions": [1.0],
+    })
+    db_session.add(artifact)
+    db_session.commit()
+
+    with media.media_for(artifact, "instagram") as files:
+        image = Image.open(io.BytesIO(files[0].read()))
+        assert image.size == (1080, 1080)
+        assert image.getpixel((540, 540))[2] > image.getpixel((540, 540))[0]  # the selected bottom of the image
+        assert files[0].filename == "portrait.jpg" and files[0].content_type == "image/jpeg"
+    with media.media_for(artifact, "facebook") as files:
+        image = Image.open(io.BytesIO(files[0].read()))
+        assert image.size == (1290, 2796) and files[0].content_type == "image/png"
+
+
+def test_instagram_can_fit_a_portrait_image_with_black_side_bars(ws, db_session):
+    import io
+
+    from PIL import Image
+
+    from app.services.social import media
+
+    source = io.BytesIO()
+    Image.new("RGB", (600, 1200), "red").save(source, "PNG")
+    upload = uploaded(db_session, ws, "portrait.png", "image/png", source.getvalue())
+    artifact = Artifact(workspace_id=ws.id, type="carousel", status="ready", content_json={
+        "title": "Fitted portrait", "slide_keys": [upload.key],
+        "slide_files": [{"key": upload.key, "filename": upload.filename, "content_type": upload.content_type}],
+        "instagram_fits": [True],
+    })
+    db_session.add(artifact)
+    db_session.commit()
+
+    with media.media_for(artifact, "instagram") as files:
+        image = Image.open(io.BytesIO(files[0].read()))
+        assert image.size == (1080, 1080)
+        assert max(image.getpixel((20, 540))) < 10  # black padding on the left
+        assert max(image.getpixel((1060, 540))) < 10  # and on the right
+        assert image.getpixel((540, 540))[0] > 200  # full portrait remains centered
+
+
+def test_instagram_can_position_a_landscape_crop_horizontally(ws, db_session):
+    import io
+
+    from PIL import Image
+
+    from app.services.social import media
+
+    source = io.BytesIO()
+    landscape = Image.new("RGB", (1200, 600), "red")
+    landscape.paste("blue", (600, 0, 1200, 600))
+    landscape.save(source, "PNG")
+    upload = uploaded(db_session, ws, "landscape.png", "image/png", source.getvalue())
+    artifact = Artifact(workspace_id=ws.id, type="carousel", status="ready", content_json={
+        "title": "Positioned landscape", "slide_keys": [upload.key],
+        "slide_files": [{"key": upload.key, "filename": upload.filename, "content_type": upload.content_type}],
+        "instagram_x_positions": [1.0],
+    })
+    db_session.add(artifact)
+    db_session.commit()
+
+    with media.media_for(artifact, "instagram") as files:
+        image = Image.open(io.BytesIO(files[0].read()))
+        assert image.size == (1080, 1080)
+        assert image.getpixel((540, 540))[2] > image.getpixel((540, 540))[0]  # selected right side
+
+
 def test_an_uploaded_video_goes_out_from_a_temporary_file(client, auth, ws, db_session):
     from app.services.social import media
 
@@ -615,10 +761,19 @@ def test_a_slide_deck_is_listed_and_posts_its_slides_as_images(client, auth, ws,
         assert all(f.data.startswith(b"\x89PNG") for f in files)
     with media.media_for(art, "linkedin") as files:
         assert len(files) == 7 and all(f.content_type == "image/png" for f in files)
+    with media.media_for(art, "instagram") as files:
+        import io
+
+        from PIL import Image
+
+        image = Image.open(io.BytesIO(files[0].read()))
+        assert image.size == (1080, 1080)
+        assert max(image.getpixel((540, 20))) < 10  # slide decks fit by default instead of losing both sides
+        assert image.getpixel((540, 540))[2] > 40  # the complete navy slide remains centered
     acct = account(db_session, ws, "linkedin", scopes=LI_SCOPES)
     assert schedule(client, auth, "linkedin", acct, artifact_id=str(art.id)).status_code == 200
     r = schedule(client, auth, "bluesky", artifact_id=str(art.id))
-    assert r.status_code == 400 and "X and LinkedIn" in r.json()["detail"]  # images go to X and LinkedIn only
+    assert r.status_code == 400 and "Instagram, Threads and LinkedIn" in r.json()["detail"]
 
 
 def test_a_slide_deck_that_cannot_be_drawn_is_retried(ws, db_session, monkeypatch):
@@ -772,6 +927,399 @@ def test_linkedin_callback_redirect_fits_proxy_header_buffer(client, auth, ws, m
     ticket = parse_qs(urlparse(r.headers["location"]).query)["link"][0]
     r = client.post("/api/social/complete", json={"ticket": ticket}, headers=auth)
     assert r.status_code == 200 and any(a["handle"] == "Ada Lovelace" for a in r.json()["accounts"])
+
+
+def test_x_oauth_state_fits_x_limit_and_recovers_pkce_verifier(client, auth, ws, monkeypatch):
+    import base64
+    import hashlib
+    from urllib.parse import parse_qs, urlparse
+
+    from app.auth import decode_token_full
+    from app.services.social import x
+
+    monkeypatch.setattr(x, "configured", lambda: True)
+    exchanged = []
+    monkeypatch.setattr(x, "exchange_code", lambda code, verifier: exchanged.append((code, verifier)) or {
+        "access_token": "a", "refresh_token": "r", "expires_in": 7200, "scope": X_SCOPES,
+        "external_id": "x-oauth-1", "handle": "ada",
+    })
+
+    started = client.post("/api/social/x/start", headers=auth)
+    assert started.status_code == 200
+    query = parse_qs(urlparse(started.json()["url"]).query)
+    state = query["state"][0]
+    saved = decode_token_full(state, expected_type="social_state")
+    assert len(state) <= 500 and "verifier" not in saved
+    verifier = x.pkce_verifier(saved["nonce"])
+    expected_challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
+    assert query["code_challenge"] == [expected_challenge]
+
+    callback = client.get("/api/social/x/callback", params={"code": "code", "state": state}, follow_redirects=False)
+    assert callback.status_code == 302 and exchanged == [("code", verifier)]
+
+
+def test_threads_connects_directly_and_can_be_scheduled(client, auth, ws, db_session, monkeypatch):
+    from urllib.parse import parse_qs, urlparse
+
+    from app.services.social import threads
+
+    monkeypatch.setattr(threads, "configured", lambda: True)
+    monkeypatch.setattr(threads, "authorize_url", lambda state: f"https://www.threads.com/oauth/authorize?state={state}")
+    monkeypatch.setattr(threads, "exchange_code", lambda code: {
+        "access_token": "threads-access", "refresh_token": "threads-access", "expires_in": 5_184_000,
+        "scope": "threads_basic,threads_content_publish", "external_id": "threads-1", "handle": "ada.threads",
+    })
+
+    started = client.post("/api/social/threads/start", headers=auth)
+    assert started.status_code == 200
+    state = parse_qs(urlparse(started.json()["url"]).query)["state"][0]
+    callback = client.get("/api/social/threads/callback", params={"code": "code", "state": state},
+                          follow_redirects=False)
+    ticket = parse_qs(urlparse(callback.headers["location"]).query)["link"][0]
+    completed = client.post("/api/social/complete", json={"ticket": ticket}, headers=auth)
+    assert completed.status_code == 200
+    direct = next(a for a in completed.json()["accounts"] if a["platform"] == "threads")
+    assert direct["handle"] == "ada.threads"
+
+    connected = db_session.get(SocialAccount, uuid.UUID(direct["id"]))
+    assert schedule(client, auth, "threads", connected).status_code == 200
+
+
+def test_meta_channels_are_visible_and_callable_only_for_allowlisted_notestack_email(
+        client, auth, ws, db_session, monkeypatch):
+    from app.config import settings
+    from app.services.social import facebook, instagram, threads, x
+
+    connected = account(db_session, ws, "threads", external_id="threads-private")
+    connected_x = account(db_session, ws, "x", external_id="x-private")
+    for module in (x, facebook, instagram, threads):
+        monkeypatch.setattr(module, "configured", lambda: True)
+    monkeypatch.setattr(threads, "authorize_url", lambda state: f"https://threads.example/authorize?state={state}")
+
+    monkeypatch.setattr(settings, "social_review_allowed_emails", "somebody-else@example.com")
+    hidden = client.get("/api/social/accounts", headers=auth).json()
+    assert hidden["visible"]["facebook"] is False
+    assert hidden["visible"]["instagram"] is False
+    assert hidden["visible"]["threads"] is False
+    assert hidden["visible"]["x"] is False
+    assert not any(row["platform"] in ("x", "facebook", "instagram", "threads") for row in hidden["accounts"])
+    denied = client.post("/api/social/threads/start", headers=auth)
+    assert denied.status_code == 403 and denied.json()["detail"]["code"] == "not_available"
+    assert schedule(client, auth, "threads", connected).status_code == 403
+    assert client.post("/api/social/x/start", headers=auth).status_code == 403
+    assert schedule(client, auth, "x", connected_x).status_code == 403
+
+    # Matching is case-insensitive and ignores surrounding whitespace.
+    monkeypatch.setattr(settings, "social_review_allowed_emails", "  ADA@EXAMPLE.COM  ")
+    shown = client.get("/api/social/accounts", headers=auth).json()
+    assert all(shown["visible"][platform] and shown["available"][platform]
+               for platform in ("x", "facebook", "instagram", "threads"))
+    assert any(row["platform"] == "threads" for row in shown["accounts"])
+    assert client.post("/api/social/threads/start", headers=auth).status_code == 200
+
+
+def test_threads_publishes_a_direct_reply_chain(ws, db_session, monkeypatch):
+    from app.services.social import threads
+
+    acct = account(db_session, ws, "threads", refresh="threads-token")
+    created, published = [], []
+
+    def call(method, url, **kwargs):
+        if method == "POST" and url.endswith("/me/threads"):
+            created.append(kwargs["params"])
+            return reply(200, method, url, {"id": f"container-{len(created)}"})
+        if method == "POST" and url.endswith("/me/threads_publish"):
+            published.append(kwargs["params"])
+            return reply(200, method, url, {"id": f"thread-{len(published)}"})
+        if method == "GET" and url.endswith("/thread-1"):
+            return reply(200, method, url, {"permalink": "https://www.threads.net/@ada/post/one"})
+        raise AssertionError((method, url, kwargs))
+
+    monkeypatch.setattr(threads, "_call", call)
+    external_id, external_url = threads.publish(db_session, acct, ["First", "Second"], [])
+    assert (external_id, external_url) == ("thread-1", "https://www.threads.net/@ada/post/one")
+    assert created[0]["media_type"] == "TEXT" and "reply_to_id" not in created[0]
+    assert created[1]["reply_to_id"] == "thread-1"
+
+
+def test_instagram_unified_login_url_uses_configuration_not_scopes(monkeypatch):
+    from urllib.parse import parse_qs, urlparse
+
+    from app.config import settings
+    from app.services.social import instagram
+
+    monkeypatch.setattr(settings, "instagram_enabled", True)
+    monkeypatch.setattr(settings, "instagram_client_id", "meta-app-1")
+    monkeypatch.setattr(settings, "instagram_client_secret", "meta-secret")
+    monkeypatch.setattr(settings, "instagram_config_id", "unified-config-1")
+    monkeypatch.setattr(settings, "instagram_graph_version", "v26.0")
+
+    assert instagram.configured() is True
+    query = parse_qs(urlparse(instagram.authorize_url("signed-state")).query)
+    assert query == {
+        "client_id": ["meta-app-1"],
+        "redirect_uri": [instagram.redirect_uri()],
+        "state": ["signed-state"],
+        "response_type": ["code"],
+        "config_id": ["unified-config-1"],
+        "override_default_response_type": ["true"],
+    }
+    assert "scope" not in query
+
+
+def test_facebook_business_login_url_uses_configuration_not_scopes(monkeypatch):
+    from urllib.parse import parse_qs, urlparse
+
+    from app.config import settings
+    from app.services.social import facebook
+
+    monkeypatch.setattr(settings, "facebook_enabled", True)
+    monkeypatch.setattr(settings, "facebook_client_id", "meta-app-1")
+    monkeypatch.setattr(settings, "facebook_client_secret", "meta-secret")
+    monkeypatch.setattr(settings, "facebook_config_id", "pages-config-1")
+    monkeypatch.setattr(settings, "facebook_graph_version", "v26.0")
+
+    assert facebook.configured() is True
+    query = parse_qs(urlparse(facebook.authorize_url("signed-state")).query)
+    assert query == {
+        "client_id": ["meta-app-1"],
+        "redirect_uri": [facebook.redirect_uri()],
+        "state": ["signed-state"],
+        "response_type": ["code"],
+        "config_id": ["pages-config-1"],
+        "override_default_response_type": ["true"],
+    }
+    assert "scope" not in query
+
+
+def test_facebook_callback_links_the_selected_page(client, auth, ws, db_session, monkeypatch):
+    from urllib.parse import parse_qs, urlparse
+
+    from app.services.social import facebook
+
+    monkeypatch.setattr(facebook, "configured", lambda: True)
+    monkeypatch.setattr(facebook, "authorize_url",
+                        lambda state: f"https://www.facebook.com/dialog/oauth?state={state}")
+    monkeypatch.setattr(facebook, "exchange_code", lambda code: {
+        "access_token": "page-access-token",
+        "scope": "pages_show_list,pages_read_engagement,pages_manage_posts",
+        "authorization_user_id": "meta-user-42",
+        "external_id": "page-42",
+        "handle": "Ada's Studio",
+        "avatar_url": "https://cdn.example.com/page.jpg",
+    })
+
+    started = client.post("/api/social/facebook/start", headers=auth)
+    assert started.status_code == 200
+    state = parse_qs(urlparse(started.json()["url"]).query)["state"][0]
+    callback = client.get("/api/social/facebook/callback", params={"code": "meta-code", "state": state})
+    assert callback.status_code == 200
+    assert "Facebook connected" in callback.text and "Close this tab" in callback.text
+    assert "Return to Notestack" in callback.text and "/app/launchpad" in callback.text
+
+    stored = db_session.query(SocialAccount).filter_by(workspace_id=ws.id, platform="facebook").one()
+    assert stored.handle == "Ada's Studio"
+    assert stored.external_id == "page-42"
+    assert stored.authorization_user_id == "meta-user-42"
+
+
+def test_facebook_exchanges_code_and_discovers_selected_page(monkeypatch):
+    from app.config import settings
+    from app.services.social import facebook
+
+    monkeypatch.setattr(settings, "facebook_client_id", "meta-app-1")
+    monkeypatch.setattr(settings, "facebook_client_secret", "meta-secret")
+    calls = []
+
+    def call(method, url, **kwargs):
+        calls.append((method, url, kwargs.get("params") or {}))
+        if url.endswith("/oauth/access_token"):
+            return reply(200, method, url, {"access_token": "business-token"})
+        if url.endswith("/me"):
+            return reply(200, method, url, {"id": "meta-user-42"})
+        if url.endswith("/me/accounts"):
+            return reply(200, method, url, {"data": [{
+                "id": "page-42", "name": "Ada's Studio", "access_token": "page-token",
+                "picture": {"data": {"url": "https://cdn.example/page.jpg"}},
+            }]})
+        raise AssertionError((method, url, kwargs))
+
+    monkeypatch.setattr(facebook, "_call", call)
+    info = facebook.exchange_code("one-time-code")
+    assert info["access_token"] == "page-token" and info["external_id"] == "page-42"
+    assert info["authorization_user_id"] == "meta-user-42"
+    assert info["handle"] == "Ada's Studio" and info["avatar_url"] == "https://cdn.example/page.jpg"
+    assert calls[0][2]["client_secret"] == "meta-secret" and calls[0][2]["code"] == "one-time-code"
+
+
+def test_facebook_publishes_a_page_post(ws, db_session, monkeypatch):
+    from app.services.social import facebook
+
+    acct = account(db_session, ws, "facebook", scopes=facebook.SCOPES)
+    calls = []
+
+    def call(method, url, **kwargs):
+        calls.append((method, url, kwargs.get("params") or {}))
+        if method == "POST" and url.endswith(f"/{acct.external_id}/feed"):
+            return reply(200, method, url, {"id": "page-42_post-1"})
+        if method == "GET" and url.endswith("/page-42_post-1"):
+            return reply(200, method, url, {"permalink_url": "https://www.facebook.com/page-42/posts/post-1"})
+        raise AssertionError((method, url, kwargs))
+
+    monkeypatch.setattr(facebook, "_call", call)
+    external_id, external_url = facebook.publish(db_session, acct, ["Hello from Notestack"], [])
+    assert (external_id, external_url) == (
+        "page-42_post-1", "https://www.facebook.com/page-42/posts/post-1")
+    assert calls[0][2]["message"] == "Hello from Notestack" and calls[0][2]["access_token"] == "tok"
+
+
+def test_instagram_callback_links_the_selected_account(client, auth, ws, db_session, monkeypatch):
+    from urllib.parse import parse_qs, urlparse
+
+    from app.services.social import instagram
+
+    monkeypatch.setattr(instagram, "configured", lambda: True)
+    monkeypatch.setattr(instagram, "authorize_url",
+                        lambda state: f"https://www.facebook.com/dialog/oauth?state={state}")
+    monkeypatch.setattr(instagram, "exchange_code", lambda code: {
+        "access_token": "instagram-system-user-token",
+        "scope": "instagram_basic,instagram_content_publish",
+        "authorization_user_id": "meta-user-42",
+        "external_id": "ig-17841400000000000",
+        "handle": "ada.photos",
+        "avatar_url": "https://cdn.example.com/ada.jpg",
+    })
+
+    started = client.post("/api/social/instagram/start", headers=auth)
+    assert started.status_code == 200
+    state = parse_qs(urlparse(started.json()["url"]).query)["state"][0]
+    callback = client.get("/api/social/instagram/callback", params={"code": "meta-code", "state": state})
+    assert callback.status_code == 200
+    assert "Instagram connected" in callback.text and "close this tab" in callback.text
+    assert "Return to Notestack" in callback.text and "/app/launchpad" in callback.text
+
+    # The recipient only needs the shareable Meta URL. No Notestack session or /social/complete request is required.
+    stored = db_session.query(SocialAccount).filter_by(workspace_id=ws.id, platform="instagram").one()
+    assert stored.handle == "ada.photos"
+    assert stored.external_id == "ig-17841400000000000"
+    assert stored.authorization_user_id == "meta-user-42"
+
+
+def test_expired_instagram_link_shows_its_expiry_without_a_login(client, ws):
+    from app.auth import encode_signed
+
+    state = encode_signed({"typ": "social_state", "nonce": "n", "ws": str(ws.id), "platform": "instagram"},
+                          timedelta(seconds=-1))
+    response = client.get("/api/social/instagram/callback", params={"code": "unused", "state": state})
+    assert response.status_code == 410
+    assert "connection link expired" in response.text
+    assert "Ask the Notestack workspace owner" in response.text
+    assert 'id="expiry"' in response.text
+
+
+def test_instagram_exchanges_code_and_discovers_assigned_account(monkeypatch):
+    from app.config import settings
+    from app.services.social import instagram
+
+    monkeypatch.setattr(settings, "instagram_client_id", "meta-app-1")
+    monkeypatch.setattr(settings, "instagram_client_secret", "meta-secret")
+    calls = []
+
+    def call(method, url, **kwargs):
+        calls.append((method, url, kwargs.get("params") or {}))
+        if url.endswith("/oauth/access_token"):
+            return reply(200, method, url, {"access_token": "system-token"})
+        if url.endswith("/me"):
+            return reply(200, method, url, {"id": "meta-user-42"})
+        if url.endswith("/me/assigned_instagram_accounts"):
+            return reply(200, method, url, {"data": [{
+                "id": "ig-1", "username": "ada.photos", "profile_picture_url": "https://cdn.example/ada.jpg",
+            }]})
+        raise AssertionError((method, url, kwargs))
+
+    monkeypatch.setattr(instagram, "_call", call)
+    info = instagram.exchange_code("one-time-code")
+    assert info["access_token"] == "system-token" and info["external_id"] == "ig-1"
+    assert info["authorization_user_id"] == "meta-user-42"
+    assert calls[0][2]["client_secret"] == "meta-secret" and calls[0][2]["code"] == "one-time-code"
+
+
+def test_instagram_publishes_a_direct_image(ws, db_session, monkeypatch):
+    from app.services.social import instagram
+    from app.services.social.media import Media
+
+    acct = account(db_session, ws, "instagram", scopes="instagram_basic,instagram_content_publish")
+    uploaded = {}
+    monkeypatch.setattr(instagram.storage, "put_bytes",
+                        lambda key, data, content_type=None: uploaded.update({key: (data, content_type)}) or key)
+    monkeypatch.setattr(instagram.storage, "public_url", lambda key: f"https://media.example.com/{key}")
+    created = []
+
+    def call(method, url, **kwargs):
+        params = kwargs.get("params") or {}
+        if method == "POST" and url.endswith(f"/{acct.external_id}/media"):
+            created.append(params)
+            return reply(200, method, url, {"id": "container-1"})
+        if method == "GET" and url.endswith("/container-1"):
+            return reply(200, method, url, {"status_code": "FINISHED"})
+        if method == "POST" and url.endswith(f"/{acct.external_id}/media_publish"):
+            assert params["creation_id"] == "container-1"
+            return reply(200, method, url, {"id": "instagram-media-1"})
+        if method == "GET" and url.endswith("/instagram-media-1"):
+            return reply(200, method, url, {"permalink": "https://www.instagram.com/p/one/"})
+        raise AssertionError((method, url, kwargs))
+
+    monkeypatch.setattr(instagram, "_call", call)
+    external_id, external_url = instagram.publish(
+        db_session, acct, ["Photo caption"], [Media("image", "photo.jpg", "image/jpeg", data=b"JPEG")])
+    assert (external_id, external_url) == ("instagram-media-1", "https://www.instagram.com/p/one/")
+    assert created[0]["caption"] == "Photo caption"
+    assert created[0]["image_url"].startswith("https://media.example.com/ws/")
+    assert next(iter(uploaded.values())) == (b"JPEG", "image/jpeg")
+
+
+def test_instagram_preserves_the_original_caption_url(ws, db_session, monkeypatch):
+    from app.config import settings
+    from app.models import TrackedLink
+    from app.services import launchpad
+    from app.services.social import instagram
+
+    original = "Download it: https://play.google.com/store/apps/details?id=ai.notestack.app&pli=1"
+    acct = account(db_session, ws, "instagram", scopes="instagram_basic,instagram_content_publish")
+    image = made(db_session, ws, "quote_card", key="ws/q/instagram-link.png")
+    post = item(db_session, ws, acct, minutes=0, content=original, artifact_id=image.id)
+    sent = []
+    monkeypatch.setattr(settings, "api_url", "https://public.notestack.example")
+    monkeypatch.setattr(instagram, "can_post_media", lambda _account: True)
+    monkeypatch.setattr(instagram, "publish", lambda _db, _account, posts, _media: sent.extend(posts)
+                        or ("ig-post-1", "https://instagram.com/p/one"))
+
+    launchpad.publish_item(db_session, post)
+
+    assert post.status == "posted" and sent == [original]
+    assert db_session.query(TrackedLink).filter_by(calendar_item_id=post.id).count() == 0
+
+
+@pytest.mark.parametrize("platform", ["instagram", "threads"])
+def test_direct_meta_media_uses_signed_r2_url_without_public_bucket(platform, ws, db_session, monkeypatch):
+    from app.services.social import instagram, threads
+    from app.services.social.media import Media
+
+    module = instagram if platform == "instagram" else threads
+    acct = account(db_session, ws, platform)
+    uploaded = []
+    signed = []
+    monkeypatch.setattr(module.storage, "public_url", lambda key: None)
+    monkeypatch.setattr(module.storage, "put_bytes",
+                        lambda key, data, content_type=None: uploaded.append((key, data, content_type)) or key)
+    monkeypatch.setattr(module.storage, "presign_get",
+                        lambda key, ttl=None: signed.append((key, ttl)) or f"https://signed-r2.example/{key}?token=test")
+
+    media = module._public_media(acct, [Media("image", "photo.jpg", "image/jpeg", data=b"JPEG")])
+    assert module.can_post_media(acct) is True
+    assert media[0][0] == "image" and media[0][1].startswith("https://signed-r2.example/ws/")
+    assert uploaded[0][1:] == (b"JPEG", "image/jpeg")
+    assert signed[-1][1] == module.MEDIA_URL_TTL
 
 
 def test_linkedin_connect_from_the_app_returns_to_the_app(client, auth, ws, monkeypatch):

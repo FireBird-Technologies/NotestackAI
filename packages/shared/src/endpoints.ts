@@ -316,6 +316,13 @@ export type ItemBody = {
   publish_now?: boolean;
 };
 
+export type PostAssistBody = {
+  platform: Platform;
+  action: "generate" | "rephrase" | "shorten" | "expand" | "casual" | "formal";
+  prompt?: string;
+  text?: string;
+};
+
 export const launchpadApi = {
   items: (p: { start?: string; end?: string; status?: string } = {}) => api<CalendarItem[]>(`/api/calendar${qs(p)}`),
   create: (body: ItemBody) => post<CalendarItem>("/api/calendar", body),
@@ -327,10 +334,11 @@ export const launchpadApi = {
   connectBluesky: (handle: string, app_password: string) =>
     post<SocialAccounts>("/api/social/bluesky", { handle, app_password }),
   /** The provider's sign-in page. The mobile app passes client "app" so the sign-in returns to the app. */
-  startOAuth: (platform: "x" | "linkedin", client: "web" | "app" = "web") =>
-    post<{ url: string }>(`/api/social/${platform}/start${qs({ client: client === "app" ? "app" : undefined })}`),
+  startOAuth: (platform: "x" | "facebook" | "instagram" | "threads" | "linkedin", client: "web" | "app" = "web") =>
+    post<{ url: string; expires_at: string }>(`/api/social/${platform}/start${qs({ client: client === "app" ? "app" : undefined })}`),
   completeOAuth: (ticket: string) => post<SocialAccounts>("/api/social/complete", { ticket }),
   disconnect: (id: string) => del(`/api/social/accounts/${id}`),
+  assist: (body: PostAssistBody) => post<{ text: string }>("/api/launchpad/assist", body),
   /** What can be attached to a post (finished videos, quote cards, carousels, summaries, launch kits; not audio). */
   postable: (q = "") => api<PostableArtifact[]>(`/api/launchpad/postable${qs({ q: q || undefined })}`),
   /** One item to attach, however old (the Library's Post button). */
@@ -343,6 +351,12 @@ export const launchpadApi = {
   uploadToPost: async (file: UploadSource, duration_s?: number) => {
     const { upload_id } = await uploadFile(file);
     return post<PostableArtifact>("/api/launchpad/uploads", { upload_id, duration_s });
+  },
+  /** Several images from the user's computer become one carousel attachment. */
+  uploadManyToPost: async (files: UploadSource[]) => {
+    const upload_ids: string[] = [];
+    for (const file of files) upload_ids.push((await uploadFile(file)).upload_id);
+    return post<PostableArtifact>("/api/launchpad/uploads", { upload_ids });
   },
 };
 

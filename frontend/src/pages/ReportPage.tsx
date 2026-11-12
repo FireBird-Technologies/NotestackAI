@@ -7,6 +7,7 @@ import { ReportAddDialog } from "../components/ReportAddDialog";
 import { ShareDialog } from "../components/ShareDialog";
 import { Reader } from "../components/Reader";
 import { reportMarkdown, ReportView } from "../components/ReportView";
+import { ScheduleModal } from "../components/ScheduleModal";
 import { ConfirmDeleteModal, errorMessage, JobProgress, Loading } from "../components/ui";
 import { useJob } from "../hooks/useJob";
 import { ArrowLeftIcon, DownloadIcon, MarkdownIcon, PdfIcon, ShareIcon, TrashIcon } from "../components/icons/Icons";
@@ -27,6 +28,7 @@ export default function ReportPage() {
   const [savingPdf, setSavingPdf] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false); // the "Delete report?" warning is open
+  const [launchingText, setLaunchingText] = useState<string | null>(null);
 
   const load = useCallback(() => artifactsApi.get(id).then(setArtifact, () => setError("Report not found.")), [id]);
   useEffect(() => {
@@ -180,8 +182,15 @@ export default function ReportPage() {
       {artifact.status === "failed" && <p className="error-text">{(artifact.content.error as string | undefined) ?? job?.error ?? "The report could not be made."}</p>}
       {(addFailed ?? blockFailed) && <p className="error-text">{addFailed ?? blockFailed}</p>}
       {artifact.status === "ready" && (
-        <ReportView content={artifact.content} artifactId={artifact.id} onCite={cite}
+        <ReportView content={artifact.content} artifactId={artifact.id} onCite={cite} onPostSelection={setLaunchingText}
                     editor={{ onAdd: startAdd, onRemove: remove, adding: addingNow, removing: removingId }} />
+      )}
+      {launchingText && (
+        <ScheduleModal
+          platform="linkedin"
+          posts={[launchingText]}
+          onClose={() => setLaunchingText(null)}
+        />
       )}
       {sharing && <ShareDialog artifactId={artifact.id} onClose={() => setSharing(false)} />}
       {adding && <ReportAddDialog suggestion={adding.suggestion} existing={adding.existing} loading={adding.loading} busy={false} error={null}

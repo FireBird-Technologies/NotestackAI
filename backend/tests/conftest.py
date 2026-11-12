@@ -34,6 +34,7 @@ os.environ.setdefault("MCP_ENABLED", "true")
 # The addresses tests assume, whatever the developer's own .env says (it may point at an ngrok tunnel).
 os.environ["API_URL"] = "http://localhost:8000"
 os.environ["FRONTEND_URL"] = "http://localhost:5173"
+os.environ["SOCIAL_REVIEW_ALLOWED_EMAILS"] = "*"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

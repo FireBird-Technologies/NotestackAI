@@ -462,7 +462,7 @@ def patch_artifact(artifact_id: uuid.UUID, body: PatchIn, ctx: Ctx = Depends(get
     a = get_artifact_or_404(ctx, artifact_id)
     content = dict(a.content_json or {})
     if body.content is not None:
-        protected = {"slide_keys", "quote_card_ids", "segments", "voices"}
+        protected = {"slide_keys", "slide_files", "upload_ids", "quote_card_ids", "segments", "voices"}
         if a.type == "upload":  # what the file is, as posting reads it: only its title can change
             protected |= {"filename", "content_type", "media", "size_bytes", "duration_s"}
         content.update({k: v for k, v in body.content.items() if k not in protected})
@@ -484,7 +484,8 @@ def delete_artifact(artifact_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
         remove_video(ctx, a)
         return {"ok": True}
     storage.delete_prefix(f"ws/{ctx.workspace.id}/artifacts/{a.id}/")
-    if a.type == "upload":  # a file from the user's computer: its upload record (and file) go too
+    if a.type == "upload" or (a.type == "carousel" and (a.content_json or {}).get("upload_ids")):
+        # Files from the user's computer: their upload records (and files) go too.
         from app.services.uploads import remove_upload_artifact
 
         remove_upload_artifact(ctx.db, a)

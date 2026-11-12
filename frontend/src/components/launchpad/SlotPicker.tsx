@@ -13,6 +13,16 @@ function zoneOffset(): string {
 
 const WEEKDAYS = ["M", "T", "W", "T", "F", "S", "S"];
 
+const atTime = (from: Date, addDays: number, hour: number, minute = 0) =>
+  new Date(from.getFullYear(), from.getMonth(), from.getDate() + addDays, hour, minute, 0, 0);
+
+function friendlyDay(d: Date, now: Date): string {
+  const tomorrow = atTime(now, 1, 0);
+  if (dayKey(d) === dayKey(now)) return "Today";
+  if (dayKey(d) === dayKey(tomorrow)) return "Tomorrow";
+  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+}
+
 /** When a post goes out: a day on a small month calendar and one of the day's 48 half hours, in the user's own time
  * zone (named under it). Past days and past slots are disabled. */
 export function SlotPicker({ value, onChange }: { value: Wall; onChange: (w: Wall) => void }) {
@@ -41,16 +51,51 @@ export function SlotPicker({ value, onChange }: { value: Wall; onChange: (w: Wal
     if (time) onChange(`${day}T${time}`);
   };
 
-  const label = picked.toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric",
-                                                   minute: "2-digit" });
+  const pickQuick = (d: Date) => {
+    onChange(toWall(d));
+    setMonth(new Date(d.getFullYear(), d.getMonth(), 1));
+    setOpen(false);
+  };
+
+  const dayLabel = friendlyDay(picked, now);
+  const timeLabel = picked.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  const quick = [
+    { label: "Next available", detail: nextSlot(now).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }), at: nextSlot(now) },
+    { label: "Tomorrow morning", detail: "9:00 AM", at: atTime(now, 1, 9) },
+    { label: "Tomorrow afternoon", detail: "3:00 PM", at: atTime(now, 1, 15) },
+  ];
   return (
     <div className="slot-picker">
-      <button type="button" className="input input-sm slot-trigger" aria-expanded={open} onClick={() => setOpen(!open)}>
-        {label}
+      <button type="button" className="input input-sm slot-trigger" aria-expanded={open}
+              aria-label={`Schedule for ${dayLabel} at ${timeLabel}`} onClick={() => setOpen(!open)}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+          <rect x="3" y="5" width="18" height="16" rx="2.5" /><path d="M3 9h18M8 3v4M16 3v4" />
+          <path d="M12 13v3l2 1" />
+        </svg>
+        <span className="slot-trigger-copy">
+          <small>Schedule for</small>
+          <strong>{dayLabel} · {timeLabel}</strong>
+        </span>
+        <svg className="slot-trigger-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+          <path d="m6 9 6 6 6-6" />
+        </svg>
       </button>
       <span className="muted small">Your time zone: {userTimeZone()}{zoneOffset() ? ` (${zoneOffset()})` : ""}</span>
       {open && (
         <div className="slot-panel">
+          <div className="slot-panel-head">
+            <span><strong>Choose when to publish</strong><small>Times use your local time zone</small></span>
+            <button type="button" className="icon-btn" onClick={() => setOpen(false)} aria-label="Close time picker">×</button>
+          </div>
+          <div className="slot-quick" aria-label="Quick scheduling options">
+            {quick.map((q) => (
+              <button key={q.label} type="button" className="slot-quick-option" onClick={() => pickQuick(q.at)}>
+                <strong>{q.label}</strong>
+                <span>{q.detail}</span>
+              </button>
+            ))}
+          </div>
+          <div className="slot-panel-divider"><span>Or choose a date and time</span></div>
           <div className="slot-cal">
             <div className="slot-cal-head">
               <button type="button" className="btn btn-small" aria-label="Previous month"
@@ -91,6 +136,7 @@ export function SlotPicker({ value, onChange }: { value: Wall; onChange: (w: Wal
               );
             })}
           </div>
+          <div className="slot-panel-zone">{userTimeZone()}{zoneOffset() ? ` · ${zoneOffset()}` : ""}</div>
         </div>
       )}
     </div>
