@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "702433473052",
-    "project_id": "notestack-8909a",
-    "storage_bucket": "notestack-8909a.firebasestorage.app"
+    "project_number": "485242132925",
+    "project_id": "notestack-ai-apps",
+    "storage_bucket": "notestack-ai-apps.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:702433473052:android:c076da3a4a91a77e6ce5d9",
+        "mobilesdk_app_id": "1:485242132925:android:95b326cdc11fdac2181ad4",
         "android_client_info": {
           "package_name": "ai.notestack.app"
         }
@@ -15,7 +15,26 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyBOvtuEgKmf026nzK7iQISV0mgr90TOnDc"
+          "current_key": "AIzaSyD6yBDJq5pCueLIyw8o54oOLEGY1-9vTS8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:485242132925:android:1b36c20b47b2dc99181ad4",
+        "android_client_info": {
+          "package_name": "notestack.android.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD6yBDJq5pCueLIyw8o54oOLEGY1-9vTS8"
         }
       ],
       "services": {
