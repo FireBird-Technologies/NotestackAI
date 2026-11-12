@@ -1090,3 +1090,125 @@
     animation: none;
   }
 }
+
+/* Landing "get the app" bar: white, above the nav, scrolls away while the nav stays stuck */
+.app-banner {
+  position: relative;
+  z-index: 11;
+  background: #fff;
+  color: #000;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+.app-banner .app-banner-inner {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 10px;
+  min-height: 36px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+.app-banner-text {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.78);
+}
+.app-banner-stores {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.app-banner-store {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px 6px 12px;
+  border-radius: 999px;
+  background: #000;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
+  transition: background 0.15s ease;
+}
+.app-banner-store:hover {
+  background: #2a2a2a;
+}
+.app-banner-store:focus-visible,
+.app-banner-close:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+.app-banner-close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(0, 0, 0, 0.6);
+  cursor: pointer;
+}
+.app-banner-close:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #000;
+}
+.app-banner-text-short {
+  display: none;
+}
+/* Phones show one store, so text, button and close share one row; the text wraps if it must */
+@media (max-width: 640px) {
+  .app-banner .app-banner-inner {
+    flex-wrap: nowrap;
+    gap: 8px;
+    min-height: 0;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    padding-right: calc(var(--gutter) - 8px);
+  }
+  .app-banner-text {
+    min-width: 0;
+    font-size: 12.5px;
+    line-height: 1.3;
+  }
+  .app-banner-text-long {
+    display: none;
+  }
+  .app-banner-text-short {
+    display: inline;
+  }
+  .app-banner-stores {
+    flex: none;
+  }
+  .app-banner-store {
+    padding: 6px 12px 6px 10px;
+    font-size: 12px;
+  }
+  .app-banner-store svg {
+    width: 16px;
+    height: 16px;
+  }
+}
+/* Small phones (360px): a touch smaller so the line still fits beside the button */
+@media (max-width: 380px) {
+  .app-banner .app-banner-inner {
+    gap: 6px;
+  }
+  .app-banner-text {
+    font-size: 11.5px;
+  }
+  .app-banner-store {
+    padding: 6px 8px 6px 7px;
+  }
+  .app-banner-store svg {
+    width: 14px;
+    height: 14px;
+  }
+}
