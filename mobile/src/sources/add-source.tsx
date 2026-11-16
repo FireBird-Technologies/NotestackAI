@@ -1,10 +1,11 @@
 import { ApiError, type UploadSource } from "@notestack/shared/client";
 import { MAX_SOURCE_FILE_BYTES, MAX_SOURCE_FILE_LABEL, settingsApi, sourcesApi } from "@notestack/shared/endpoints";
-import { SAMPLE_DOCUMENT, SAMPLE_LINK, sampleDocumentBytes } from "@notestack/shared/content/samples";
+import { SAMPLE_DOCUMENT, SAMPLE_LINK } from "@notestack/shared/content/samples";
 import type { Job, Source } from "@notestack/shared/types";
 import { classifyUrl, looksLikeArticle } from "@notestack/shared/urlScrapability";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as DocumentPicker from "expo-document-picker";
+import * as WebBrowser from "expo-web-browser";
 import { File } from "expo-file-system";
 import { useState } from "react";
 import { Alert, Platform, StyleSheet, Text, TextInput, View } from "react-native";
@@ -175,15 +176,21 @@ export function AddSource({
     setFiles(room === null ? merged : merged.slice(0, room));
   };
 
-  /** The sample PDF, added to the list like a picked file; nothing is sent until Upload. */
-  const addSample = () => {
+  /** The sample PDF, downloaded from the site and added to the list like a picked file; nothing is sent until Upload. */
+  const addSample = async () => {
     setError("");
     setNotice("");
-    const bytes = sampleDocumentBytes();
-    const { name } = SAMPLE_DOCUMENT;
-    // No type: the shared upload works it out from the name (application/pdf) and sends these bytes as they are
-    const upload = { name, type: "", size: bytes.byteLength, arrayBuffer: async () => bytes.slice().buffer } as unknown as UploadSource;
-    addPicked([{ uri: `sample:${name}`, key: `${name}-${bytes.byteLength}`, name, size: bytes.byteLength, upload }]);
+    try {
+      const res = await fetch(SAMPLE_DOCUMENT.url);
+      if (!res.ok) throw new Error(String(res.status));
+      const buffer = await res.arrayBuffer();
+      const { name } = SAMPLE_DOCUMENT;
+      // No type: the shared upload works it out from the name (application/pdf) and sends these bytes as they are
+      const upload = { name, type: "", size: buffer.byteLength, arrayBuffer: async () => buffer } as unknown as UploadSource;
+      addPicked([{ uri: `sample:${name}`, key: `${name}-${buffer.byteLength}`, name, size: buffer.byteLength, upload }]);
+    } catch {
+      setError("We could not load the sample document. Check your connection and try again.");
+    }
   };
 
   /** Send every file in the list, one after another; the screen hears about them once all are in. */
@@ -307,9 +314,17 @@ export function AddSource({
       {samples ? (
         <Text style={styles.sample}>
           Instead, use a{" "}
-          <Text style={styles.sampleLink} accessibilityRole="button" onPress={() => !busy && addSample()}>
+          <Text style={styles.sampleLink} accessibilityRole="button" onPress={() => !busy && void addSample()}>
             sample document
+          </Text>{" "}
+          (
+          <Text
+            style={styles.sampleLink}
+            accessibilityRole="link"
+            onPress={() => void WebBrowser.openBrowserAsync(SAMPLE_DOCUMENT.url, { controlsColor: colors.blue })}>
+            preview
           </Text>
+          )
         </Text>
       ) : null}
       {files.length > 0 ? (
