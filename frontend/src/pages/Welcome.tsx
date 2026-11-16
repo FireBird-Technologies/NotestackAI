@@ -21,7 +21,7 @@ import {
   pendingNotebookLmTransfer,
   reportNotebookLmTransferStatus,
 } from "../lib/notebooklm";
-import { SAMPLE_DOCUMENT, SAMPLE_LINK, sampleDocumentBytes } from "@notestack/shared/content/samples";
+import { SAMPLE_DOCUMENT, SAMPLE_LINK } from "@notestack/shared/content/samples";
 import { firstNotebookName } from "@notestack/shared/notebook";
 import { classifyUrl, looksLikeArticle } from "@notestack/shared/urlScrapability";
 import { PENDING_SOURCE_KEY } from "./Landing";
@@ -196,6 +196,17 @@ export default function Welcome() {
     } else {
       setError(large.length ? tooLargeMessage(large.map((f) => f.name)) : null);
       setFiles(merged);
+    }
+  };
+
+  /** The sample PDF (public/samples), added to the list like a picked file; Upload still sends it. */
+  const addSampleDocument = async () => {
+    try {
+      const res = await fetch(SAMPLE_DOCUMENT.path);
+      if (!res.ok) throw new Error(String(res.status));
+      addFiles([new File([await res.blob()], SAMPLE_DOCUMENT.name, { type: SAMPLE_DOCUMENT.type })]);
+    } catch {
+      setError("We could not load the sample document. Try again in a moment.");
     }
   };
 
@@ -698,10 +709,15 @@ export default function Welcome() {
                         type="button"
                         className="link-btn"
                         disabled={busy}
-                        onClick={() => addFiles([new File([sampleDocumentBytes()], SAMPLE_DOCUMENT.name, { type: SAMPLE_DOCUMENT.type })])}
+                        onClick={() => void addSampleDocument()}
                       >
                         sample document
-                      </button>
+                      </button>{" "}
+                      (
+                      <a href={SAMPLE_DOCUMENT.path} target="_blank" rel="noreferrer" className="link-btn">
+                        preview
+                      </a>
+                      )
                     </p>
                   )}
                   {mode === "file" && files.length > 0 && (
