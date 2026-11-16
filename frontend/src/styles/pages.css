@@ -2487,6 +2487,30 @@ select.input option {
   padding: 0 24px;
 }
 
+/* The link box with "Use sample link" right under it; takes the input's place in the row */
+.welcome-field {
+  flex: 1 1 260px;
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.welcome-field .input {
+  width: 100%;
+}
+
+/* "Instead, use a sample link": only the link part is underlined (.link-btn) */
+.welcome-form .welcome-sample {
+  justify-self: start;
+  margin: 0;
+}
+
+/* Under the drop box: a row of its own */
+.welcome-form .welcome-sample-row {
+  flex: 1 1 100%;
+  text-align: left;
+}
+
 .welcome-drop {
   flex: 1 1 100%;
   display: grid;

@@ -5,7 +5,8 @@ import type { BillingCycle } from "@notestack/shared/endpoints";
 import type { Meter, PlanInfo } from "@notestack/shared/types";
 import { useUpgrade } from "../hooks/useUpgrade";
 import { CheckIcon } from "./icons/Icons";
-import { annualMonthly, annualTotal, money } from "@notestack/shared/content/marketing";
+import { Tabs } from "./ui";
+import { annualMonthly, annualTotal, groupFeatures, money } from "@notestack/shared/content/marketing";
 
 const ORDER = ["free", "starter", "writer", "studio"];
 
@@ -99,14 +100,36 @@ function FuelMeter({ meter }: { meter: Meter }) {
   );
 }
 
+/** A plan's limits first, then what every plan shares. */
+function PlanFeatures({ features }: { features: string[] }) {
+  const { limits, extras } = groupFeatures(features);
+  const row = (f: string) => (
+    <li key={f}>
+      <CheckIcon size={14} />
+      {f}
+    </li>
+  );
+  return (
+    <ul className="upg-features upg-plan-features">
+      {limits.map(row)}
+      {extras.map(row)}
+    </ul>
+  );
+}
+
 export default function UpgradeModal() {
   const { status, modal, close, checkout, manageBilling, busy, error } = useUpgrade();
   const [cycle, setCycle] = useState<BillingCycle>("annual");
+  // Phones show one plan at a time, behind tabs; every open starts on the most popular one.
+  const [tab, setTab] = useState<string>(POPULAR_PLAN);
   const panel = useRef<HTMLDivElement>(null);
 
   // Every open starts on annual.
   useEffect(() => {
-    if (modal) setCycle("annual");
+    if (modal) {
+      setCycle("annual");
+      setTab(POPULAR_PLAN);
+    }
   }, [modal]);
 
   useEffect(() => {
@@ -143,6 +166,8 @@ export default function UpgradeModal() {
   const showPlans = plansMode ? shown.length > 0 : canBuy;
   const paid = !elsewhere && !!current && current.price_monthly_usd > 0; // has a subscription to manage here
   const saving = shown.find((p) => p.annual_savings_pct > 0)?.annual_savings_pct ?? 0;
+  // The tab in view: the one picked, else the most popular plan, else the top one offered.
+  const activeTab = shown.some((p) => p.id === tab) ? tab : shown.some((p) => p.id === POPULAR_PLAN) ? POPULAR_PLAN : shown.at(-1)?.id;
   const title =
     modal.mode === "welcome"
       ? `Welcome to ${current?.name ?? "your new plan"}`
@@ -199,7 +224,7 @@ export default function UpgradeModal() {
         {modal.mode === "welcome" && current && (
           <>
             <ul className="upg-features">
-              {current.features.map((f) => (
+              {Object.values(groupFeatures(current.features)).flat().map((f) => (
                 <li key={f}>
                   <CheckIcon size={16} />
                   {f}
@@ -226,6 +251,15 @@ export default function UpgradeModal() {
                 ))}
               </div>
             </div>
+            {shown.length > 1 && activeTab && (
+              <Tabs
+                className="upg-plan-tabs"
+                label="Plans"
+                tabs={shown.map((p) => ({ id: p.id, label: p.name }))}
+                value={activeTab}
+                onChange={setTab}
+              />
+            )}
             <div className={`upg-plans${plansMode ? " upg-plans-all" : ""}`}>
               {shown.map((plan) => {
                 const pick = plan.id === POPULAR_PLAN;
@@ -237,7 +271,7 @@ export default function UpgradeModal() {
                 const flag = plansMode ? (isCurrent ? "Current plan" : pick ? "Recommended" : null)
                   : pick ? (limit ? "Refuels you" : "Recommended") : null;
                 return (
-                  <article key={plan.id} className={`upg-plan${pick ? " pick" : ""}`}>
+                  <article key={plan.id} className={`upg-plan${pick ? " pick" : ""}${plan.id === activeTab ? " is-active" : ""}`}>
                     {flag && <span className="badge upg-flag">{flag}</span>}
                     <h3>{plan.name}</h3>
                     <p className="muted small">{plan.tagline}</p>
@@ -254,14 +288,7 @@ export default function UpgradeModal() {
                       {free ? "Free forever" : annual ? `${money(annualTotal(plan))} billed yearly` : "Billed monthly"}
                     </p>
                     {plansMode ? (
-                      <ul className="upg-features upg-plan-features">
-                        {plan.features.map((f) => (
-                          <li key={f}>
-                            <CheckIcon size={14} />
-                            {f}
-                          </li>
-                        ))}
-                      </ul>
+                      <PlanFeatures features={plan.features} />
                     ) : (
                       <ul className="upg-boosts">
                         {boosts(plan, current).map((b) => (

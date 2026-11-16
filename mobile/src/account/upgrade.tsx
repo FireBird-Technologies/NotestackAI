@@ -10,7 +10,7 @@ import { Platform, StyleSheet, Text, View } from "react-native";
 import { planQuery } from "@/account/plan";
 import { track } from "@/lib/analytics";
 import { on } from "@/lib/platform";
-import { CycleToggle, PlanCard } from "@/account/plans";
+import { CycleToggle, defaultPlanTab, PlanCard, PlanTabs } from "@/account/plans";
 import { buy, getPackages, identify, isStorePlan, manageSubscriptions, purchasesReady, restore } from "@/account/purchases";
 import { colors } from "@/ui/theme";
 import { ErrorText, Loading } from "@/ui";
@@ -82,6 +82,8 @@ export function NestedPlansSheet({ visible, onClose }: { visible: boolean; onClo
 function Paywall({ opening }: { opening: Opening }) {
   const queryClient = useQueryClient();
   const [cycle, setCycle] = useState<Cycle>("annual");
+  // One plan at a time, behind tabs; null until picked, which opens on the most popular plan.
+  const [tab, setTab] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -101,6 +103,7 @@ function Paywall({ opening }: { opening: Opening }) {
   });
 
   const plans = plansQuery.data?.plans?.length ? plansQuery.data.plans : FALLBACK_PLANS;
+  const shownId = tab && plans.some((p) => p.id === tab) ? tab : defaultPlanTab(plans);
   if (!status.data) return status.error ? <ErrorText>{status.error.message}</ErrorText> : <Loading />;
   const s = status.data;
   const current = s.plan.id;
@@ -144,8 +147,9 @@ function Paywall({ opening }: { opening: Opening }) {
       {elsewhere ? <Text style={styles.elsewhere}>{elsewhere.text}</Text> : null}
 
       <CycleToggle cycle={cycle} onChange={setCycle} plans={plans} />
-      {/* Free isn't something to buy: only the paid plans, though `rank` still counts it as the lowest. */}
-      {plans.filter((plan) => plan.price_monthly_usd > 0).map((plan) => {
+      <PlanTabs plans={plans} value={shownId} onChange={setTab} />
+      {/* Free has no button: nothing below it to move down to, and it is never higher than the current plan. */}
+      {plans.filter((plan) => plan.id === shownId).map((plan) => {
         const pkg = isStorePlan(plan.id) ? packages.data?.[`${plan.id}_${cycle}`] : undefined;
         const isCurrent = plan.id === current;
         const higher = rank(plan.id) > rank(current);
