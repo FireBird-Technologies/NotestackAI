@@ -5,6 +5,7 @@ import { UpgradeProvider } from "../hooks/useUpgrade";
 import Logo from "./Logo";
 import { useMedia } from "./PaneResizer";
 import { FuelGauge, NudgeDock } from "./Nudges";
+import SidebarAppLinks from "./SidebarAppLinks";
 import SkyCanvas from "./SkyCanvas";
 import UpgradeModal from "./UpgradeModal";
 import {
@@ -185,6 +186,7 @@ export default function AppShell() {
               </span>
             </NavLink>
           </nav>
+          <SidebarAppLinks />
           <FuelGauge collapsed={collapsed} />
           <NavLink to="/app/settings" title={collapsed ? "Settings" : undefined} className={({ isActive }) => `side-link side-settings${isActive ? " active" : ""}`}>
             <GearIcon />

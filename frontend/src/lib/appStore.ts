@@ -22,3 +22,8 @@ export function detectDevice(): Device {
   if (/Android/i.test(ua)) return "android";
   return "desktop";
 }
+
+/** Live stores to offer: both on a computer, the device's own store on a phone or tablet (none if it isn't live yet). */
+export function availableStores(device: Device): Store[] {
+  return (device === "desktop" ? (["ios", "android"] as Store[]) : [device]).filter((s) => STORE_LIVE[s]);
+}

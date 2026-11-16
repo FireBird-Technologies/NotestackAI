@@ -810,8 +810,20 @@
 }
 
 @media (max-width: 560px) {
+  /* Phones: the fixed 16:11 frame is too short for five rows, so the calendar squeezed and the channels and footer
+     drew over it. Let the card grow to its content instead. */
+  #feature-pad .showcase-visual {
+    aspect-ratio: auto;
+  }
+
   .fx-pad {
+    grid-template-rows: auto;
     padding: 14px;
+  }
+
+  .fx-pad-foot {
+    flex-wrap: wrap;
+    gap: 6px 12px;
   }
 
   .fx-cal span {
