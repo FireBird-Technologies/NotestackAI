@@ -1,5 +1,6 @@
 import { ApiError, type UploadSource } from "@notestack/shared/client";
 import { MAX_SOURCE_FILE_BYTES, MAX_SOURCE_FILE_LABEL, settingsApi, sourcesApi } from "@notestack/shared/endpoints";
+import { SAMPLE_DOCUMENT, SAMPLE_LINK, sampleDocumentBytes } from "@notestack/shared/content/samples";
 import type { Job, Source } from "@notestack/shared/types";
 import { classifyUrl, looksLikeArticle } from "@notestack/shared/urlScrapability";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -67,6 +68,7 @@ export function AddSource({
   examples,
   initialMethod = "link",
   roomy,
+  samples,
 }: {
   onAdded: (source: Source, job: Job) => void;
   /** Every post the source brings in joins this notebook too. */
@@ -79,6 +81,8 @@ export function AddSource({
   initialMethod?: "link" | "upload";
   /** Onboarding: a taller drop box, as the screen has room for it. */
   roomy?: boolean;
+  /** Onboarding: "Use sample link" and "Use sample document", for someone with nothing to hand. */
+  samples?: boolean;
 }) {
   const [value, setValue] = useState("");
   const [method, setMethod] = useState<"link" | "upload">(initialMethod);
@@ -153,6 +157,11 @@ export function AddSource({
       const key = `${upload.name}-${size}`;
       if (!fresh.some((x) => x.key === key)) fresh.push({ uri: asset.uri, key, name: upload.name, size, upload });
     }
+    addPicked(fresh, large, unsupported);
+  };
+
+  /** Merge into the list, skipping files already in it and stopping at the plan's room, and say what was left out. */
+  const addPicked = (fresh: Picked[], large: string[] = [], unsupported = false) => {
     const merged = [...files, ...fresh.filter((x) => !files.some((y) => y.key === x.key))];
     if (room !== null && merged.length > room) {
       setError(
@@ -164,6 +173,17 @@ export function AddSource({
       setError(`${large.length === 1 ? large[0] : `${large.length} files`} ${large.length === 1 ? "is" : "are"} over ${MAX_SOURCE_FILE_LABEL}. Files can be up to ${MAX_SOURCE_FILE_LABEL}.`);
     } else if (unsupported) setError("This file type is not supported.");
     setFiles(room === null ? merged : merged.slice(0, room));
+  };
+
+  /** The sample PDF, added to the list like a picked file; nothing is sent until Upload. */
+  const addSample = () => {
+    setError("");
+    setNotice("");
+    const bytes = sampleDocumentBytes();
+    const { name } = SAMPLE_DOCUMENT;
+    // No type: the shared upload works it out from the name (application/pdf) and sends these bytes as they are
+    const upload = { name, type: "", size: bytes.byteLength, arrayBuffer: async () => bytes.slice().buffer } as unknown as UploadSource;
+    addPicked([{ uri: `sample:${name}`, key: `${name}-${bytes.byteLength}`, name, size: bytes.byteLength, upload }]);
   };
 
   /** Send every file in the list, one after another; the screen hears about them once all are in. */
@@ -209,6 +229,21 @@ export function AddSource({
         onSubmitEditing={connect}
         accessibilityLabel="Blog, newsletter or article link"
       />
+      {samples ? (
+        <Text style={styles.sample}>
+          Instead, use a{" "}
+          <Text
+            style={styles.sampleLink}
+            accessibilityRole="button"
+            onPress={() => {
+              if (busy) return;
+              setValue(SAMPLE_LINK);
+              setOverride(null);
+            }}>
+            sample link
+          </Text>
+        </Text>
+      ) : null}
       <Pressable
         onPress={connect}
         disabled={busy || !link}
@@ -269,6 +304,14 @@ export function AddSource({
         <Text style={styles.dropHint}>{`Markdown · text · VTT · HTML · PDF · up to ${MAX_SOURCE_FILE_LABEL} each`}</Text>
         {room !== null ? <Text style={styles.dropHint}>{`Room for ${room} ${room === 1 ? "file" : "files"} on your plan`}</Text> : null}
       </Pressable>
+      {samples ? (
+        <Text style={styles.sample}>
+          Instead, use a{" "}
+          <Text style={styles.sampleLink} accessibilityRole="button" onPress={() => !busy && addSample()}>
+            sample document
+          </Text>
+        </Text>
+      ) : null}
       {files.length > 0 ? (
         <View style={styles.fileList}>
           {files.map((f) => (
@@ -341,6 +384,8 @@ const styles = StyleSheet.create({
   compact: { padding: gutter, backgroundColor: colors.surface },
   body: { color: colors.text2, fontSize: 15, lineHeight: 22 },
   link: { color: colors.blue, textDecorationLine: "underline" },
+  sample: { alignSelf: "flex-start", marginTop: -4, color: colors.text3, fontSize: 14 },
+  sampleLink: { color: colors.text, textDecorationLine: "underline", textDecorationColor: colors.blue },
   linkInput: {
     color: colors.text,
     fontSize: 17,

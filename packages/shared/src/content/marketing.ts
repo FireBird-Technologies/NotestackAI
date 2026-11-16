@@ -177,3 +177,14 @@ export function savingsPct(plan: Plan): number {
 export function annualTotal(plan: Plan): number {
   return plan.price_annual_usd ?? Math.round(annualMonthly(plan) * 12 * 100) / 100;
 }
+
+// What sets plans apart, in the order a card lists it. "Launchpad calendar" and "voice cloning" match none of these.
+const LIMIT_ORDER = [/posts? per notebook/i, /audio/i, /video/i, /launch kit/i, /report/i, /infographic/i];
+
+/** A plan's features split into its limits (posts, audio, videos, Launch Kits, reports, infographics, in that order) and the extras every plan shares. */
+export function groupFeatures(features: string[]): { limits: string[]; extras: string[] } {
+  const rank = (f: string) => LIMIT_ORDER.findIndex((re) => re.test(f));
+  const limits = features.filter((f) => rank(f) >= 0).sort((a, b) => rank(a) - rank(b));
+  const extras = features.filter((f) => rank(f) < 0);
+  return { limits, extras };
+}

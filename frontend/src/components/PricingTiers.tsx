@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { POPULAR_PLAN } from "@notestack/shared/billing";
 import { api } from "@notestack/shared/client";
 import { useAuth } from "../hooks/useAuth";
-import { annualMonthly, annualTotal, FALLBACK_PLANS as FALLBACK, money, savingsPct, type Cycle, type Plan } from "@notestack/shared/content/marketing";
+import { annualMonthly, annualTotal, FALLBACK_PLANS as FALLBACK, groupFeatures, money, savingsPct, type Cycle, type Plan } from "@notestack/shared/content/marketing";
 import { CheckIcon } from "./icons/Icons";
 
 export default function PricingTiers() {
@@ -71,12 +71,21 @@ export default function PricingTiers() {
                 {free ? "Free forever" : annual ? `${money(annualTotal(plan))} billed yearly` : "Billed monthly"}
               </p>
               <ul className="tier-features">
-                {plan.features.map((f) => (
-                  <li key={f}>
-                    <CheckIcon size={16} />
-                    <span>{f}</span>
-                  </li>
-                ))}
+                {(() => {
+                  const { limits, extras } = groupFeatures(plan.features);
+                  const row = (f: string) => (
+                    <li key={f}>
+                      <CheckIcon size={16} />
+                      <span>{f}</span>
+                    </li>
+                  );
+                  return (
+                    <>
+                      {limits.map(row)}
+                      {extras.map(row)}
+                    </>
+                  );
+                })()}
               </ul>
               <Link
                 to={billingEnabled ? destination : "/auth?mode=signup"}

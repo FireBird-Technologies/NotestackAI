@@ -299,9 +299,10 @@
   font-size: 1.7rem;
 }
 
-.upg-plan-features {
+/* Both classes: .upg-features (later in this file) resets margin to 0, which left the longest list (Studio) touching its button */
+.upg-features.upg-plan-features {
   gap: 6px;
-  margin: 10px 0 14px;
+  margin: 10px 0 20px;
   font-size: 0.8rem;
 }
 
@@ -311,6 +312,53 @@
 
 .upg-plan-features .icon {
   margin-top: 2px;
+}
+
+/* Phones: one plan at a time, picked from these tabs (see the max-width: 639px block) */
+.upg-plan-tabs {
+  display: none;
+}
+
+@media (max-width: 639px) {
+  /* Never wider than the modal: equal tabs that shrink (and ellipsize at worst) instead of overflowing */
+  .upg-plan-tabs {
+    display: flex;
+    flex-wrap: nowrap;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    margin: 0 auto 14px;
+  }
+
+  .upg-plan-tabs .tab {
+    display: block;
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 7px 4px;
+    overflow: hidden;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 360px) {
+  .upg-plan-tabs {
+    gap: 2px;
+    padding: 3px;
+  }
+
+  .upg-plan-tabs .tab {
+    padding: 6px 2px;
+    font-size: 0.75rem;
+  }
+}
+
+@media (max-width: 639px) {
+
+  .upg-plans .upg-plan:not(.is-active) {
+    display: none;
+  }
 }
 
 .upg-plan.pick {

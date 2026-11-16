@@ -5,7 +5,7 @@ import { router } from "expo-router";
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 
-import { CycleToggle, LegalLinks, PlanCard } from "@/account/plans";
+import { CycleToggle, defaultPlanTab, LegalLinks, PlanCard, PlanTabs } from "@/account/plans";
 import { Eyebrow, PageTitle, PublicPage } from "@/shell/public-page";
 import { Button } from "@/ui";
 
@@ -16,11 +16,14 @@ import { Button } from "@/ui";
  */
 export default function Pricing() {
   const [cycle, setCycle] = useState<Cycle>("annual");
+  // One plan at a time, behind tabs; opens on the most popular plan.
+  const [tab, setTab] = useState<string | null>(null);
   const { data } = useQuery({
     queryKey: ["plans"],
     queryFn: () => api<{ billing_enabled: boolean; plans: Plan[] }>("/api/billing/plans"),
   });
   const plans = data?.plans?.length ? data.plans : FALLBACK_PLANS;
+  const shownId = tab && plans.some((p) => p.id === tab) ? tab : defaultPlanTab(plans);
 
   return (
     <PublicPage>
@@ -29,9 +32,12 @@ export default function Pricing() {
 
       <CycleToggle cycle={cycle} onChange={setCycle} plans={plans} />
 
-      {plans.map((plan) => (
-        <PlanCard key={plan.id} plan={plan} cycle={cycle} />
-      ))}
+      <PlanTabs plans={plans} value={shownId} onChange={setTab} />
+      {plans
+        .filter((plan) => plan.id === shownId)
+        .map((plan) => (
+          <PlanCard key={plan.id} plan={plan} cycle={cycle} />
+        ))}
 
       <View style={styles.cta}>
         <Button title="Start free" onPress={() => router.navigate("/sign-up")} />
