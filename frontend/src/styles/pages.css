@@ -2348,6 +2348,7 @@ select.input option {
   /* Collapsed: only the logo, which expands the sidebar again. */
   .shell.collapsed .sidebar-toggle,
   .shell.collapsed .sidebar nav,
+  .shell.collapsed .side-apps,
   .shell.collapsed .sidebar-user {
     display: none;
   }
