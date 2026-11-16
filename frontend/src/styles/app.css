@@ -1769,6 +1769,55 @@ button.side-link {
   display: none;
 }
 
+/* "Get the mobile app on" with icon-only store links, above the account */
+.side-apps {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  /* Same frame as the plan card below it (.fuel.low in upgrade.css) */
+  padding: 10px 12px;
+  border: 1px solid var(--blue-35);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--glow-sm);
+  color: var(--text-2);
+  font: 0.75rem var(--font-mono);
+}
+
+/* Ride on top of the plan card, which the sidebar pushes to the bottom */
+.sidebar .side-apps:has(+ .fuel) {
+  margin-top: auto;
+}
+
+.sidebar .side-apps + .fuel {
+  margin-top: 0;
+}
+
+.side-apps a {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  color: var(--white);
+  transition: background 0.15s ease;
+}
+
+/* A lone store icon gets a little room from the text */
+.side-apps a:only-of-type {
+  margin-left: 6px;
+}
+
+.side-apps a:hover {
+  background: var(--surface-2);
+}
+
+.side-apps a:focus-visible {
+  outline: 1px solid var(--blue-60);
+  outline-offset: 1px;
+}
+
 /* Phones: a slim top bar (menu button and the tab you are on); the whole sidebar slides in from the left as a drawer,
    with every tab (the current one highlighted), the plan, Settings, and the account with Sign out */
 .app-topbar {
