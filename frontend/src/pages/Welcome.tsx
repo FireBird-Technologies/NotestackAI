@@ -21,6 +21,7 @@ import {
   pendingNotebookLmTransfer,
   reportNotebookLmTransferStatus,
 } from "../lib/notebooklm";
+import { SAMPLE_DOCUMENT, SAMPLE_LINK, sampleDocumentBytes } from "@notestack/shared/content/samples";
 import { firstNotebookName } from "@notestack/shared/notebook";
 import { classifyUrl, looksLikeArticle } from "@notestack/shared/urlScrapability";
 import { PENDING_SOURCE_KEY } from "./Landing";
@@ -104,6 +105,8 @@ export default function Welcome() {
   const [dragging, setDragging] = useState(false);
   const earlierJobs = useRef<string[]>([]);
   const [url, setUrl] = useState(takePending);
+  // Only a link brought from the landing page connects by itself; anything typed or filled in here waits for Connect.
+  const landingUrl = useRef(url);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [source, setSource] = useState<Source | null>(null);
@@ -180,7 +183,7 @@ export default function Welcome() {
     }
   };
 
-  const addFiles = (list: FileList | null) => {
+  const addFiles = (list: FileList | File[] | null) => {
     const all = Array.from(list ?? []);
     if (!all.length) return;
     const large = all.filter((f) => f.size > MAX_SOURCE_FILE_BYTES);
@@ -206,12 +209,15 @@ export default function Welcome() {
 
   // A URL pasted on the landing page starts connecting straight away: its warning was confirmed there, but a link that
   // can't be added stops here.
+  // Runs once, when the user is first known: later user refreshes must not connect whatever is in the box by then.
   useEffect(() => {
-    if (url && !autoStarted.current && user) {
-      autoStarted.current = true;
-      const verdict = classifyUrl(url);
+    if (!user || autoStarted.current) return;
+    autoStarted.current = true;
+    const pending = landingUrl.current;
+    if (pending) {
+      const verdict = classifyUrl(pending);
       if (verdict.kind === "blocked") setError(verdict.message);
-      else void connect(url);
+      else void connect(pending);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
@@ -655,17 +661,48 @@ export default function Welcome() {
                       <span className="mono muted small">.md · .txt · .html · .pdf · up to {MAX_SOURCE_FILE_LABEL} each</span>
                     </label>
                   ) : (
-                    <input
-                      className="input"
-                      autoFocus
-                      placeholder="yourblog.com or an article link"
-                      value={url}
-                      onChange={(e) => {
-                        setUrl(e.target.value);
-                        setOverride(null);
-                      }}
-                      aria-label="Blog, newsletter or article link"
-                    />
+                    <div className="welcome-field">
+                      <input
+                        className="input"
+                        autoFocus
+                        placeholder="yourblog.com or an article link"
+                        value={url}
+                        onChange={(e) => {
+                          setUrl(e.target.value);
+                          setOverride(null);
+                        }}
+                        aria-label="Blog, newsletter or article link"
+                      />
+                      {/* Only fills the box: Connect still sends it */}
+                      <p className="muted small welcome-sample">
+                        Instead, use a{" "}
+                        <button
+                          type="button"
+                          className="link-btn"
+                          disabled={busy}
+                          onClick={() => {
+                            setUrl(SAMPLE_LINK);
+                            setOverride(null);
+                          }}
+                        >
+                          sample link
+                        </button>
+                      </p>
+                    </div>
+                  )}
+                  {mode === "file" && (
+                    // Only adds it to the list below: Upload still sends it
+                    <p className="muted small welcome-sample welcome-sample-row">
+                      Instead, use a{" "}
+                      <button
+                        type="button"
+                        className="link-btn"
+                        disabled={busy}
+                        onClick={() => addFiles([new File([sampleDocumentBytes()], SAMPLE_DOCUMENT.name, { type: SAMPLE_DOCUMENT.type })])}
+                      >
+                        sample document
+                      </button>
+                    </p>
                   )}
                   {mode === "file" && files.length > 0 && (
                     <ul className="welcome-files mono small">

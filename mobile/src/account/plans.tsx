@@ -1,4 +1,4 @@
-import { savingsPct, type Cycle, type Plan } from "@notestack/shared/content/marketing";
+import { groupFeatures, savingsPct, type Cycle, type Plan } from "@notestack/shared/content/marketing";
 import { POPULAR_PLAN } from "@notestack/shared/billing";
 import * as WebBrowser from "expo-web-browser";
 import type { ReactNode } from "react";
@@ -26,6 +26,37 @@ export function CycleToggle({ cycle, onChange, plans }: { cycle: Cycle; onChange
       ))}
     </View>
   );
+}
+
+/** One tab per plan, cheapest first (the pricing page and the upgrade sheet show one plan at a time). */
+export function PlanTabs({ plans, value, onChange }: { plans: Plan[]; value: string; onChange: (id: string) => void }) {
+  return (
+    <View style={styles.tabs} accessibilityRole="tablist">
+      {plans.map((p) => (
+        <Pressable
+          key={p.id}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: value === p.id }}
+          onPress={() => onChange(p.id)}
+          style={[styles.tab, value === p.id && styles.optionOn]}>
+          {/* Shrinks to fit narrow phones and large text sizes instead of spilling out of the bar */}
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
+            maxFontSizeMultiplier={1.4}
+            style={[styles.tabText, value === p.id && styles.optionTextOn]}>
+            {p.name}
+          </Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
+/** The plan to open on: the most popular one when it is listed, else the top one. */
+export function defaultPlanTab(plans: Plan[]): string {
+  return plans.some((p) => p.id === POPULAR_PLAN) ? POPULAR_PLAN : plans.at(-1)?.id ?? "";
 }
 
 /** The Terms of Service and Privacy Policy, opened in the app's browser (the upgrade sheet, the pricing page, settings, sign in). */
@@ -68,6 +99,14 @@ export function PlanCard({
 }) {
   const free = plan.price_monthly_usd === 0;
   const annual = cycle === "annual" && !free;
+  // Its limits first, then what every plan shares
+  const { limits, extras } = groupFeatures(plan.features);
+  const row = (f: string) => (
+    <View key={f} style={styles.feature}>
+      <Text style={styles.check}>✓</Text>
+      <Text style={publicText.bullet}>{f}</Text>
+    </View>
+  );
   return (
     <Card highlight={highlight}>
       <View style={styles.planHead}>
@@ -91,12 +130,8 @@ export function PlanCard({
         </>
       ) : null}
       <View style={styles.features}>
-        {plan.features.map((f) => (
-          <View key={f} style={styles.feature}>
-            <Text style={styles.check}>✓</Text>
-            <Text style={publicText.bullet}>{f}</Text>
-          </View>
-        ))}
+        {limits.map(row)}
+        {extras.map(row)}
       </View>
       {children}
     </Card>
@@ -135,5 +170,17 @@ const styles = StyleSheet.create({
   price: { color: colors.text, fontFamily: fonts.displayBold, fontSize: 38 },
   features: { gap: 8, marginTop: 8 },
   feature: { flexDirection: "row", gap: 10 },
+  tabs: {
+    flexDirection: "row",
+    alignSelf: "stretch",
+    padding: 4,
+    gap: 4,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.lineStrong,
+    backgroundColor: colors.surface2,
+  },
+  tab: { flex: 1, flexBasis: 0, minWidth: 0, alignItems: "center", paddingHorizontal: 4, paddingVertical: 9, borderRadius: 18 },
+  tabText: { color: colors.text2, fontSize: 15, fontWeight: "600" },
   check: { color: colors.blue, fontSize: 17, lineHeight: 26, fontWeight: "700" },
 });

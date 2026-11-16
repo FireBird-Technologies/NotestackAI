@@ -201,7 +201,7 @@ function Onboarding() {
                 returnKeyType="done"
               />
             ) : null}
-            <AddSource compact roomy initialMethod="upload" examples={EXAMPLES} onAdded={added} />
+            <AddSource compact roomy samples initialMethod="upload" examples={EXAMPLES} onAdded={added} />
           </View>
         ) : null}
 
