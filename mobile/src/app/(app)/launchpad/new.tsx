@@ -67,7 +67,7 @@ export default function ScheduleLaunch() {
         />
       </Section>
 
-      <Sheet visible={draft !== null} title="New post" onClose={() => setDraft(null)}>
+      <Sheet visible={draft !== null} title="Create post" onClose={() => setDraft(null)}>
         {draft ? (
           <Composer
             at={null}

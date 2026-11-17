@@ -84,8 +84,13 @@ export function SlotPicker({ value, onChange }: { value: Wall; onChange: (w: Wal
       {open && (
         <div className="slot-panel">
           <div className="slot-panel-head">
+            <button type="button" className="icon-btn slot-panel-back" onClick={() => setOpen(false)} aria-label="Back">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M19 12H5M11 6l-6 6 6 6" />
+              </svg>
+            </button>
             <span><strong>Choose when to publish</strong><small>Times use your local time zone</small></span>
-            <button type="button" className="icon-btn" onClick={() => setOpen(false)} aria-label="Close time picker">×</button>
+            <button type="button" className="icon-btn slot-panel-close" onClick={() => setOpen(false)} aria-label="Close time picker">×</button>
           </div>
           <div className="slot-quick" aria-label="Quick scheduling options">
             {quick.map((q) => (
@@ -96,46 +101,54 @@ export function SlotPicker({ value, onChange }: { value: Wall; onChange: (w: Wal
             ))}
           </div>
           <div className="slot-panel-divider"><span>Or choose a date and time</span></div>
-          <div className="slot-cal">
-            <div className="slot-cal-head">
-              <button type="button" className="btn btn-small" aria-label="Previous month"
-                      disabled={month <= thisMonth}
-                      onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}>‹</button>
-              <strong>{month.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</strong>
-              <button type="button" className="btn btn-small" aria-label="Next month"
-                      onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}>›</button>
+          <section className="slot-section slot-section-date" aria-label="Date">
+            <span className="slot-section-label">Date</span>
+            <div className="slot-cal">
+              <div className="slot-cal-head">
+                <button type="button" className="btn btn-small" aria-label="Previous month"
+                        disabled={month <= thisMonth}
+                        onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}>‹</button>
+                <strong>{month.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</strong>
+                <button type="button" className="btn btn-small" aria-label="Next month"
+                        onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}>›</button>
+              </div>
+              <div className="slot-days" role="grid">
+                {WEEKDAYS.map((w, i) => <span key={i} className="slot-weekday muted small">{w}</span>)}
+                {days.map((d) => {
+                  const key = dayKey(d);
+                  const past = key < today;
+                  return (
+                    <button key={key} type="button" disabled={past}
+                            className={`slot-day${d.getMonth() !== month.getMonth() ? " out" : ""}${key === today ? " today" : ""}${key === pickedDay ? " on" : ""}`}
+                            aria-pressed={key === pickedDay} onClick={() => pickDay(d)}>
+                      {d.getDate()}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-            <div className="slot-days" role="grid">
-              {WEEKDAYS.map((w, i) => <span key={i} className="slot-weekday muted small">{w}</span>)}
-              {days.map((d) => {
-                const key = dayKey(d);
-                const past = key < today;
+          </section>
+          <section className="slot-section slot-section-time" aria-label="Time">
+            <span className="slot-section-label">
+              Time <em>· {wallToDate(`${pickedDay}T00:00`).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</em>
+            </span>
+            <div className="slot-times" role="listbox" aria-label="Time" ref={times}>
+              {SLOTS.map((t) => {
+                const at = slotDate(pickedDay, t);
+                const on = t === pickedTime;
                 return (
-                  <button key={key} type="button" disabled={past}
-                          className={`slot-day${d.getMonth() !== month.getMonth() ? " out" : ""}${key === today ? " today" : ""}${key === pickedDay ? " on" : ""}`}
-                          aria-pressed={key === pickedDay} onClick={() => pickDay(d)}>
-                    {d.getDate()}
+                  <button key={t} type="button" role="option" aria-selected={on} disabled={at <= now}
+                          className={`slot-time${on ? " on" : ""}`}
+                          onClick={() => {
+                            onChange(`${pickedDay}T${t}`);
+                            setOpen(false);
+                          }}>
+                    {at.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
                   </button>
                 );
               })}
             </div>
-          </div>
-          <div className="slot-times" role="listbox" aria-label="Time" ref={times}>
-            {SLOTS.map((t) => {
-              const at = slotDate(pickedDay, t);
-              const on = t === pickedTime;
-              return (
-                <button key={t} type="button" role="option" aria-selected={on} disabled={at <= now}
-                        className={`slot-time${on ? " on" : ""}`}
-                        onClick={() => {
-                          onChange(`${pickedDay}T${t}`);
-                          setOpen(false);
-                        }}>
-                  {at.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
-                </button>
-              );
-            })}
-          </div>
+          </section>
           <div className="slot-panel-zone">{userTimeZone()}{zoneOffset() ? ` · ${zoneOffset()}` : ""}</div>
         </div>
       )}

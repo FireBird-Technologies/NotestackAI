@@ -172,7 +172,7 @@ function KitBody({ kit, onSaved }: { kit: Artifact; onSaved: (k: Artifact) => vo
         ) : null}
       </View>
 
-      <Sheet visible={schedule !== null} title="New post" onClose={() => setSchedule(null)}>
+      <Sheet visible={schedule !== null} title="Create post" onClose={() => setSchedule(null)}>
         {schedule !== null ? (
           <Composer
             at={null}
