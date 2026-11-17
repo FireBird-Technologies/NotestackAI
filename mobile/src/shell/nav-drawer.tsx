@@ -88,7 +88,7 @@ function SidePanel({ onClose }: { onClose: () => void }) {
         style={[styles.panel, { paddingTop: insets.top + 8, paddingBottom: Math.max(bottomInset, gutter) }]}
         accessibilityViewIsModal>
         <View style={styles.top}>
-          <Pressable onPress={() => go("notebooks")} style={styles.brand} accessibilityRole="link" accessibilityLabel="Your notebooks">
+          <Pressable sound onPress={() => go("notebooks")} style={styles.brand} accessibilityRole="link" accessibilityLabel="Your notebooks">
             <Image source={require("@/assets/images/logo.png")} style={styles.logo} accessibilityIgnoresInvertColors />
             <Text style={styles.wordmark}>Notestack</Text>
           </Pressable>

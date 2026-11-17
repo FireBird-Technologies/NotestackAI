@@ -768,3 +768,42 @@
   0% { box-shadow: 0 0 0 0 var(--blue-60); }
   100% { box-shadow: 0 0 0 12px transparent; }
 }
+
+/* ---------- Launch offer (landing pricing and the upgrade modal) ---------- */
+/* Launch offer: the usual price, small and dark grey, struck through beside the discounted one */
+.tier-was.offer-was {
+  margin-right: 8px;
+  color: var(--text-3);
+  font-size: 0.95rem;
+  text-decoration: line-through;
+  text-decoration-color: var(--text-3);
+}
+
+/* "Early supporters · x/10 left" on each paid card while the launch offer lasts */
+.offer-chip {
+  align-self: flex-start;
+  justify-self: start;
+  width: fit-content;
+  padding: 4px 11px;
+  border: 1.5px solid var(--blue);
+  border-radius: 999px;
+  background: var(--blue);
+  color: var(--white);
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  box-shadow: 0 0 14px var(--blue-60);
+  animation: offer-chip-glow 2.4s ease-in-out infinite;
+}
+
+@keyframes offer-chip-glow {
+  0%, 100% { box-shadow: 0 0 8px var(--blue-35); }
+  50% { box-shadow: 0 0 18px var(--blue-60); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .offer-chip {
+    animation: none;
+  }
+}

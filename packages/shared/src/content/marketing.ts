@@ -174,6 +174,32 @@ export function savingsPct(plan: Plan): number {
   return plan.annual_savings_pct ?? Math.round((1 - annualMonthly(plan) / plan.price_monthly_usd) * 100);
 }
 
+/** The launch offer on paid plans while its Stripe code has slots left (from /api/billing/plans and /status). */
+export type Offer = { percent_off: number };
+
+/**
+ * "Early supporters · x/10 left" on each paid plan card (web) while the launch offer is on. Fixed by design: the
+ * same numbers everywhere, never counted down, with one set for monthly and another for annual.
+ */
+export const EARLY_SUPPORTER_SLOTS = {
+  total: 10,
+  remaining: {
+    monthly: { starter: 4, writer: 2, studio: 3 },
+    annual: { starter: 3, writer: 5, studio: 2 },
+  } as Record<Cycle, Record<string, number>>,
+};
+
+export function earlySupporterLabel(planId: string, cycle: Cycle): string {
+  const left = EARLY_SUPPORTER_SLOTS.remaining[cycle][planId] ?? 3;
+  return `Early supporters · ${left}/${EARLY_SUPPORTER_SLOTS.total} left`;
+}
+
+/** A price after the launch offer, in whole cents as Stripe works it out: the discount rounded, then taken off. */
+export function offerPrice(amount: number, pct: number): number {
+  const cents = Math.round(amount * 100);
+  return (cents - Math.round((cents * pct) / 100)) / 100;
+}
+
 export function annualTotal(plan: Plan): number {
   return plan.price_annual_usd ?? Math.round(annualMonthly(plan) * 12 * 100) / 100;
 }

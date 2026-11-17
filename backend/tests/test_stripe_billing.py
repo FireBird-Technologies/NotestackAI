@@ -88,6 +88,8 @@ def stripe_on(monkeypatch):
     monkeypatch.setattr(settings, "stripe_secret_key", "sk_test_x")
     monkeypatch.setattr(settings, "stripe_webhook_secret", SECRET)
     monkeypatch.setattr(stripe_billing, "client", lambda: fake)
+    monkeypatch.setattr(settings, "launch_discount_code", "")  # no launch offer unless a test sets one
+    stripe_billing.clear_offer_cache()
     return fake
 
 

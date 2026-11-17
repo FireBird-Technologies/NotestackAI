@@ -44,6 +44,7 @@ export function Segments<T extends string>({
         const on = o.id === value;
         return (
           <Pressable
+            sound
             key={o.id}
             onPress={() => onChange(o.id)}
             accessibilityRole="radio"

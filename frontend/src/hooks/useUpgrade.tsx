@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { PLAN_LIMIT_EVENT, type PlanLimitDetail } from "@notestack/shared/client";
+import { ApiError, PLAN_LIMIT_EVENT, type PlanLimitDetail } from "@notestack/shared/client";
 import { billingApi, type BillingCycle } from "@notestack/shared/endpoints";
 import type { BillingStatus, Nudge } from "@notestack/shared/types";
 import { errorMessage } from "../components/ui";
@@ -169,8 +169,10 @@ export function UpgradeProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       setError(errorMessage(e));
       setBusy(false);
+      // The launch offer ended meanwhile: show plans at their usual prices again
+      if (e instanceof ApiError && e.code === "offer_ended") void refresh();
     }
-  }, []);
+  }, [refresh]);
 
   const value = useMemo<UpgradeState>(
     () => ({

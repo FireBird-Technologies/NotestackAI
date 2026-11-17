@@ -11,7 +11,7 @@ import { planQuery } from "@/account/plan";
 import { track } from "@/lib/analytics";
 import { on } from "@/lib/platform";
 import { CycleToggle, defaultPlanTab, PlanCard, PlanTabs } from "@/account/plans";
-import { buy, getPackages, identify, isStorePlan, manageSubscriptions, purchasesReady, restore } from "@/account/purchases";
+import { buy, getIntroOffers, getPackages, identify, type PlanIntroOffers, isStorePlan, manageSubscriptions, purchasesReady, restore } from "@/account/purchases";
 import { colors } from "@/ui/theme";
 import { ErrorText, Loading } from "@/ui";
 import { PillButton, Sheet } from "@/ui/widgets";
@@ -96,7 +96,10 @@ function Paywall({ opening }: { opening: Opening }) {
     queryKey: ["store", "packages", customerId],
     queryFn: async () => {
       await identify(customerId!);
-      return getPackages();
+      const plans = await getPackages();
+      // An early supporter discount that can't be read just leaves the usual prices
+      const intros: PlanIntroOffers = await getIntroOffers(plans).catch(() => ({}));
+      return { plans, intros };
     },
     enabled: purchasesReady && Boolean(customerId),
     staleTime: 10 * 60_000,
@@ -150,7 +153,9 @@ function Paywall({ opening }: { opening: Opening }) {
       <PlanTabs plans={plans} value={shownId} onChange={setTab} />
       {/* Free has no button: nothing below it to move down to, and it is never higher than the current plan. */}
       {plans.filter((plan) => plan.id === shownId).map((plan) => {
-        const pkg = isStorePlan(plan.id) ? packages.data?.[`${plan.id}_${cycle}`] : undefined;
+        const key = isStorePlan(plan.id) ? (`${plan.id}_${cycle}` as const) : null;
+        const pkg = key ? packages.data?.plans[key] : undefined;
+        const intro = key ? packages.data?.intros[key] : undefined;
         const isCurrent = plan.id === current;
         const higher = rank(plan.id) > rank(current);
         return (
@@ -159,7 +164,8 @@ function Paywall({ opening }: { opening: Opening }) {
             plan={plan}
             cycle={cycle}
             badge={isCurrent ? "Your plan" : plan.id === POPULAR_PLAN ? "Most popular" : null}
-            storePrice={pkg?.product.priceString ?? null}>
+            storePrice={intro?.renews ?? pkg?.product.priceString ?? null}
+            introPrice={sellable && higher ? intro?.price ?? null : null}>
             {sellable && pkg && higher ? (
               <View style={styles.buy}>
                 <PillButton

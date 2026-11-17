@@ -1,4 +1,4 @@
-import { groupFeatures, savingsPct, type Cycle, type Plan } from "@notestack/shared/content/marketing";
+import { earlySupporterLabel, groupFeatures, savingsPct, type Cycle, type Plan } from "@notestack/shared/content/marketing";
 import { POPULAR_PLAN } from "@notestack/shared/billing";
 import * as WebBrowser from "expo-web-browser";
 import type { ReactNode } from "react";
@@ -15,6 +15,7 @@ export function CycleToggle({ cycle, onChange, plans }: { cycle: Cycle; onChange
     <View style={styles.toggle} accessibilityRole="radiogroup">
       {(["monthly", "annual"] as const).map((c) => (
         <Pressable
+          sound
           key={c}
           accessibilityRole="radio"
           accessibilityState={{ checked: cycle === c }}
@@ -80,7 +81,9 @@ export function LegalLinks() {
  * One plan: its name, price and what it includes. `storePrice` is the App Store / Google Play price for this cycle
  * (localized, the whole period's). It is the only price the app shows for a paid plan: without it (signed out, or the
  * store's plans not loaded) the card has no price, since the stores don't allow pointing at other prices. `children`
- * go under the features (the upgrade sheet's buttons).
+ * go under the features (the upgrade sheet's buttons). `introPrice` is an early supporter discount on the first payment
+ * (a store offer this person can get): it takes the price's place, with the usual one struck through beside it and
+ * the price it renews at spelled out, as the stores require.
  */
 export function PlanCard({
   plan,
@@ -88,6 +91,7 @@ export function PlanCard({
   highlight = plan.id === POPULAR_PLAN,
   badge = plan.id === POPULAR_PLAN ? "Most popular" : null,
   storePrice,
+  introPrice,
   children,
 }: {
   plan: Plan;
@@ -95,10 +99,13 @@ export function PlanCard({
   highlight?: boolean;
   badge?: string | null;
   storePrice?: string | null;
+  introPrice?: string | null;
   children?: ReactNode;
 }) {
   const free = plan.price_monthly_usd === 0;
   const annual = cycle === "annual" && !free;
+  const intro = !free && storePrice ? introPrice : null;
+  const per = annual ? "/year" : "/month";
   // Its limits first, then what every plan shares
   const { limits, extras } = groupFeatures(plan.features);
   const row = (f: string) => (
@@ -121,12 +128,31 @@ export function PlanCard({
               <Text style={styles.price}>Free</Text>
             ) : (
               <>
-                <Text style={styles.price}>{storePrice}</Text>
-                <Text style={publicText.small}>{annual ? "/year" : "/month"}</Text>
+                {intro ? <Text style={styles.was}>{storePrice}</Text> : null}
+                {/* The price and its period stay together: a long price moves to its own row, never off the card */}
+                <View style={styles.priceMain}>
+                  <Text style={styles.price} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+                    {intro ?? storePrice}
+                  </Text>
+                  <Text style={publicText.small}>{per}</Text>
+                </View>
               </>
             )}
           </View>
-          <Text style={publicText.mono}>{free ? "Free forever" : annual ? "Billed yearly" : "Billed monthly"}</Text>
+          {intro ? (
+            <View style={styles.offer}>
+              <Text style={styles.offerText}>{earlySupporterLabel(plan.id, cycle)}</Text>
+            </View>
+          ) : null}
+          <Text style={publicText.mono}>
+            {free
+              ? "Free forever"
+              : intro
+                ? `First ${annual ? "year" : "month"}, then ${storePrice}${per}`
+                : annual
+                  ? "Billed yearly"
+                  : "Billed monthly"}
+          </Text>
         </>
       ) : null}
       <View style={styles.features}>
@@ -166,8 +192,26 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     textTransform: "uppercase",
   },
-  priceRow: { flexDirection: "row", alignItems: "baseline", gap: 6, marginTop: 4 },
-  price: { color: colors.text, fontFamily: fonts.displayBold, fontSize: 38 },
+  priceRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "flex-end", columnGap: 10, rowGap: 0, marginTop: 4 },
+  priceMain: { flexDirection: "row", alignItems: "baseline", gap: 6, flexShrink: 1, maxWidth: "100%" },
+  price: { flexShrink: 1, color: colors.text, fontFamily: fonts.displayBold, fontSize: 38 },
+  // An early supporter discount: the usual price small and struck through, a glowing blue pill under the price
+  was: { color: colors.text3, fontSize: 17, marginBottom: 8, textDecorationLine: "line-through" },
+  offer: {
+    alignSelf: "flex-start",
+    marginTop: 6,
+    marginBottom: 4,
+    paddingHorizontal: 11,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: colors.blue,
+    shadowColor: colors.blue,
+    shadowOpacity: 0.6,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 6,
+  },
+  offerText: { color: colors.white, fontFamily: fonts.mono, fontSize: 12, fontWeight: "600" },
   features: { gap: 8, marginTop: 8 },
   feature: { flexDirection: "row", gap: 10 },
   tabs: {

@@ -54,7 +54,7 @@ export function InfographicThumb({ artifact, onOpen }: { artifact: Artifact; onO
   return (
     <View style={styles.thumb} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
       {width > 0 ? <InfographicFrame html={html} width={width} layout="landscape" /> : null}
-      <Pressable style={StyleSheet.absoluteFill} onPress={onOpen} accessibilityRole="button" accessibilityLabel="Open the infographic" />
+      <Pressable silent style={StyleSheet.absoluteFill} onPress={onOpen} accessibilityRole="button" accessibilityLabel="Open the infographic" />
     </View>
   );
 }
@@ -163,7 +163,7 @@ export function InfographicViewer({ artifact, visible, onClose, feedback, downlo
           <View style={styles.stage} onLayout={(e) => setWidth(e.nativeEvent.layout.width - 2)}>
             {html && width > 0 ? <InfographicFrame key={layout} html={html} width={width} layout={layout} /> : null}
             {/* A tap on the page opens it full screen, to pinch closer */}
-            {html ? <Pressable style={StyleSheet.absoluteFill} onPress={() => setFull(true)} accessibilityRole="button" accessibilityLabel="Open full screen" /> : null}
+            {html ? <Pressable silent style={StyleSheet.absoluteFill} onPress={() => setFull(true)} accessibilityRole="button" accessibilityLabel="Open full screen" /> : null}
           </View>
         </ScrollView>
       </SafeAreaView>

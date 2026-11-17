@@ -289,7 +289,7 @@ export function LibraryPicker({ onPick, onPickKit, onCreateKit, onReschedule, on
           .join(" · ");
         return (
           <View key={a.id} style={styles.row}>
-            <Pressable onPress={go} accessibilityRole="button" accessibilityState={{ busy: opening }} style={({ pressed }) => [styles.main, pressed && styles.pressed]}>
+            <Pressable silent onPress={go} accessibilityRole="button" accessibilityState={{ busy: opening }} style={({ pressed }) => [styles.main, pressed && styles.pressed]}>
               <Thumb a={a} />
               <View style={styles.text}>
                 <Text style={styles.title} numberOfLines={1}>

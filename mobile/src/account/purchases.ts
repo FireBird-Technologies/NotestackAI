@@ -2,7 +2,7 @@ import type { Cycle } from "@notestack/shared/content/marketing";
 import { billingApi } from "@notestack/shared/endpoints";
 import type { BillingStatus } from "@notestack/shared/types";
 import { Platform } from "react-native";
-import Purchases, { PURCHASES_ERROR_CODE, type PurchasesPackage } from "react-native-purchases";
+import Purchases, { INTRO_ELIGIBILITY_STATUS, PURCHASES_ERROR_CODE, type PurchasesPackage } from "react-native-purchases";
 
 /**
  * In-app subscriptions (App Store, Google Play) through RevenueCat. The RevenueCat customer is the workspace
@@ -54,6 +54,58 @@ export async function getPackages(): Promise<PlanPackages> {
           out[`${plan}_${cycle}`] = pkg;
         }
       }
+    }
+  }
+  return out;
+}
+
+/** A first-payment discount this person can get on a plan: the store's offer price, and the price it renews at. */
+export type IntroOffer = { price: string; renews: string };
+export type PlanIntroOffers = Partial<Record<`${StorePlan}_${Cycle}`, IntroOffer>>;
+
+/**
+ * The early supporter discounts this person can get, by plan and cycle. They are set up in the stores themselves (a
+ * Google Play offer for new customers, an App Store introductory offer), so turning one off there removes it here.
+ * Google Play only hands over offers the person is eligible for, and the purchase sheet applies them on its own; the
+ * App Store lists its intro offer for everyone, so on iOS it counts only for people the store says are eligible.
+ */
+export async function getIntroOffers(packages: PlanPackages): Promise<PlanIntroOffers> {
+  const out: PlanIntroOffers = {};
+  const entries = Object.entries(packages) as [keyof PlanPackages, PurchasesPackage][];
+  let eligible: Record<string, { status: INTRO_ELIGIBILITY_STATUS }> = {};
+  if (Platform.OS === "ios") {
+    const ids = entries.filter(([, pkg]) => pkg.product.introPrice).map(([, pkg]) => pkg.product.identifier);
+    if (!ids.length) return out;
+    eligible = await Purchases.checkTrialOrIntroductoryPriceEligibility(ids).catch(() => ({}));
+  }
+  for (const [key, pkg] of entries) {
+    const product = pkg.product;
+    if (Platform.OS === "ios") {
+      const ok = eligible[product.identifier]?.status === INTRO_ELIGIBILITY_STATUS.INTRO_ELIGIBILITY_STATUS_ELIGIBLE;
+      if (ok && product.introPrice && product.introPrice.price > 0) {
+        out[key] = { price: product.introPrice.priceString, renews: product.priceString };
+      }
+      continue;
+    }
+    // Google Play: the default option is the offer the purchase will use (the base plan when there is none).
+    const option = product.defaultOption;
+    // TEMP (debugging the early supporter offer): what Google sent for each plan
+    if (__DEV__) {
+      console.log(
+        `[offers] ${key} product=${product.identifier} default=${option?.id ?? "none"}`,
+        JSON.stringify(
+          (product.subscriptionOptions ?? []).map((o) => ({
+            id: o.id,
+            tags: o.tags,
+            phases: o.pricingPhases.map((ph) => `${ph.price.formatted} x${ph.billingCycleCount ?? "∞"} ${ph.billingPeriod.iso8601}`),
+          })),
+        ),
+      );
+    }
+    const intro = option?.introPhase;
+    const full = option?.fullPricePhase;
+    if (option && !option.isBasePlan && intro && full && intro.price.amountMicros < full.price.amountMicros) {
+      out[key] = { price: intro.price.formatted, renews: full.price.formatted };
     }
   }
   return out;
