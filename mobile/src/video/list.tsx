@@ -89,7 +89,7 @@ export function VideosList() {
         const source = shortUrl(v.source_url);
         return (
           <View key={v.id} style={styles.row}>
-            <Pressable onPress={() => router.push({ pathname: "/library/videos/[id]", params: { id: v.id } })} accessibilityRole="button" style={({ pressed }) => [styles.main, pressed && styles.pressed]}>
+            <Pressable silent onPress={() => router.push({ pathname: "/library/videos/[id]", params: { id: v.id } })} accessibilityRole="button" style={({ pressed }) => [styles.main, pressed && styles.pressed]}>
               <Text style={styles.title} numberOfLines={2}>
                 {v.title}
               </Text>

@@ -388,8 +388,8 @@ export function ChatTab({ notebook, chatId, onStarted, onNextStep, onNeedPosts }
             )}
           </Pressable>
           {/* A field that can't be typed in takes no taps of its own: this catches them, to add posts or upgrade first. */}
-          {!posts ? <Pressable onPress={onNeedPosts} accessibilityRole="button" accessibilityLabel="Add posts to start asking" style={StyleSheet.absoluteFill} /> : null}
-          {posts && outOfChat && !busy ? <Pressable onPress={() => upgrade()} accessibilityRole="button" accessibilityLabel="Chat limit reached. See plans" style={StyleSheet.absoluteFill} /> : null}
+          {!posts ? <Pressable silent onPress={onNeedPosts} accessibilityRole="button" accessibilityLabel="Add posts to start asking" style={StyleSheet.absoluteFill} /> : null}
+          {posts && outOfChat && !busy ? <Pressable silent onPress={() => upgrade()} accessibilityRole="button" accessibilityLabel="Chat limit reached. See plans" style={StyleSheet.absoluteFill} /> : null}
         </View>
       </View>
     </KeyboardAvoidingView>

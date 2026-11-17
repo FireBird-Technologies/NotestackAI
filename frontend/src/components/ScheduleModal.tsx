@@ -11,66 +11,13 @@ import { SocialAccountAvatar, SocialBrandIcon } from "./SocialBrandIcon";
 import { errorMessage, Modal } from "./ui";
 
 import { PLATFORMS } from "@notestack/shared/schedule";
+import {
+  AI_REWORK, blockerFor, bulletEdit, COMPOSER_EMOJIS, COMPOSER_PLATFORMS, CONNECTED_ONLY, connectionFor, crossPostTexts,
+  hashtagEdit, insertAt, isReviewPlatform, linkEdit, MEDIA_PLATFORMS, normalLink, postsFor, prefillFor, seedFor,
+  textsWithAttachment, THREADED, type AiAction,
+} from "@notestack/shared/compose";
 
 export { PLATFORMS };
-
-/** These platforms accept the Library's images and videos. */
-const MEDIA_PLATFORMS: Platform[] = ["x", "facebook", "instagram", "threads", "linkedin"];
-const THREADED: Platform[] = ["x", "threads", "bluesky"];
-/** These post only through a live connection: no email fallback. */
-const CONNECTED_ONLY: Platform[] = ["x", "facebook", "instagram", "threads", "linkedin"];
-/** These platforms connect directly. */
-const COMPOSER_PLATFORMS: Platform[] = ["x", "facebook", "instagram", "threads", "linkedin"];
-const COMPOSER_EMOJIS = ["😀", "😊", "😍", "🤩", "😂", "👏", "👍", "🙌", "🔥", "✨", "💡", "🚀", "🎯", "✅", "👀", "💙"];
-
-const isReviewPlatform = (platform: Platform): platform is "x" | "facebook" | "instagram" | "threads" =>
-  platform === "x" || platform === "facebook" || platform === "instagram" || platform === "threads";
-
-/** The attachment's starting text for a platform: a thread for X/Threads, one post otherwise. */
-const prefillFor = (p: Platform, a: PostableArtifact): string[] =>
-  THREADED.includes(p) ? [...a.prefill.x] : [a.prefill.linkedin];
-
-const BULLET = /^(\s*)(?:[•◦▪‣]|[-*])\s+/;
-
-/** Toggle Unicode bullets on every selected line (or the current line when nothing is selected). */
-function bulletEdit(value: string, start: number, end: number) {
-  const from = value.lastIndexOf("\n", Math.max(0, start - 1)) + 1;
-  const endFrom = end > start && value[end - 1] === "\n" ? end - 1 : end;
-  const nextBreak = value.indexOf("\n", endFrom);
-  const to = nextBreak < 0 ? value.length : nextBreak;
-  const lines = value.slice(from, to).split("\n");
-  const words = lines.filter((line) => line.trim());
-  const remove = words.length > 0 && words.every((line) => BULLET.test(line));
-  const changed = lines.map((line) => {
-    if (!line.trim()) return line;
-    if (remove) return line.replace(BULLET, "$1");
-    if (BULLET.test(line)) return line.replace(BULLET, "$1• ");
-    return line.replace(/^(\s*)/, "$1• ");
-  }).join("\n");
-  return { value: value.slice(0, from) + changed + value.slice(to), from, to: from + changed.length };
-}
-
-function normalLink(raw: string): string | null {
-  const candidate = /^[a-z][a-z\d+.-]*:\/\//i.test(raw.trim()) ? raw.trim() : `https://${raw.trim()}`;
-  try {
-    const url = new URL(candidate);
-    return url.protocol === "http:" || url.protocol === "https:" ? url.toString() : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Social captions cannot hide a URL behind anchor text, so selected words become "words: https://...". */
-function linkEdit(value: string, start: number, end: number, url: string) {
-  const selected = value.slice(start, end).trim();
-  const insertion = selected && selected !== url ? `${selected}: ${url}` : url;
-  const before = value.slice(0, start);
-  const after = value.slice(end);
-  const leading = before && !/\s$/.test(before) ? " " : "";
-  const trailing = after && !/^\s/.test(after) ? " " : "";
-  const cursor = before.length + leading.length + insertion.length;
-  return { value: before + leading + insertion + trailing + after, cursor };
-}
 
 /** The composer: one post per selected social channel, with an optional shared Library attachment. */
 export function ScheduleModal({
@@ -130,8 +77,14 @@ export function ScheduleModal({
   const [linkUrl, setLinkUrl] = useState("");
   const [linkError, setLinkError] = useState<string | null>(null);
   const [sideMode, setSideMode] = useState<"preview" | "ai">("preview");
+  // Phones show one pane at a time: the editor, or the side panel's preview or AI.
+  const [pane, setPane] = useState<"write" | "preview" | "ai">("write");
+  const showSide = (mode: "preview" | "ai") => {
+    setSideMode(mode);
+    setPane(mode);
+  };
   const [aiPrompt, setAiPrompt] = useState("");
-  const [aiBusy, setAiBusy] = useState<"generate" | "rephrase" | "shorten" | "expand" | "casual" | "formal" | null>(null);
+  const [aiBusy, setAiBusy] = useState<AiAction | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
   const [infographicPreview, setInfographicPreview] = useState<{ html: string; layout: InfographicLayout } | null>(null);
 
@@ -172,18 +125,7 @@ export function ScheduleModal({
   };
   const carriesMedia = !!attached && attached.media !== "text";
   /** Why the selected destination can't be scheduled yet (connection, Instagram media, or public hosting). */
-  const blocker = (p: Platform): string | null => {
-    if (!CONNECTED_ONLY.includes(p) || accountsState !== "ready") return null;
-    const label = PLATFORMS.find((x) => x.id === p)!.label;
-    const any = accounts?.accounts.find((a) => a.platform === p);
-    const live = accountFor(p);
-    if (!live) return any ? `Your ${label} connection is down. Reconnect ${label}.` : `Connect ${label} to post there.`;
-    if (p === "instagram" && !carriesMedia) return "Instagram needs an image or video. Attach one first.";
-    if (carriesMedia && !live.can_post_media) return p === "instagram" || p === "threads"
-      ? `Public media hosting isn't configured for ${label} yet.`
-      : `Reconnect ${label} to post images and videos.`;
-    return null;
-  };
+  const blocker = (p: Platform): string | null => blockerFor(p, accounts, accountsState === "ready", attached);
   const blocked = selected.map(blocker).filter(Boolean) as string[];
   const checking = accountsState !== "ready" && selected.some((p) => CONNECTED_ONLY.includes(p));
   const remindable = selected.some((p) => !CONNECTED_ONLY.includes(p));
@@ -207,9 +149,7 @@ export function ScheduleModal({
     setPreviewPlatform(p);
     setExpandedPlatform(p);
     if (!texts[p]?.some((t) => t.trim())) {
-      const from = selected.map((s) => texts[s] ?? []).find((t) => t.some((x) => x.trim())) ?? [""];
-      // A newly selected destination begins with the copy already on screen, so cross-post text stays identical.
-      const start = THREADED.includes(p) ? [...from] : [from.join("\n\n")];
+      const start = seedFor(p, selected, texts);
       setTexts((cur) => ({ ...cur, [p]: start }));
     }
   };
@@ -218,27 +158,10 @@ export function ScheduleModal({
   const attach = (a: PostableArtifact) => {
     setAttached(a);
     setPicking(false);
-    setTexts((cur) => {
-      const next = { ...cur };
-      const seed = selected.map((p) => next[p] ?? []).find((parts) => parts.some((text) => text.trim()))
-        ?? prefillFor(selected[0] ?? first, a);
-      for (const p of selected) {
-        if (!next[p]?.some((text) => text.trim())) next[p] = THREADED.includes(p) ? [...seed] : [seed.join("\n\n")];
-      }
-      return next;
-    });
+    setTexts((cur) => textsWithAttachment(cur, selected, first, a));
   };
 
-  const setText = (p: Platform, i: number, value: string) => setTexts((cur) => {
-    const source = (cur[p] ?? [""]).map((text, index) => (index === i ? value : text));
-    const combined = source.join("\n\n");
-    const next = { ...cur, [p]: source };
-    for (const destination of selected) {
-      if (destination === p) continue;
-      next[destination] = THREADED.includes(destination) && THREADED.includes(p) ? [...source] : [combined];
-    }
-    return next;
-  });
+  const setText = (p: Platform, i: number, value: string) => setTexts((cur) => crossPostTexts(cur, selected, p, i, value));
 
   const toggleBullets = (p: Platform, i: number, value: string) => {
     const textarea = textareas.current[`${p}:${i}`];
@@ -251,8 +174,7 @@ export function ScheduleModal({
   };
 
   const insertInline = (p: Platform, i: number, value: string, start: number, end: number, insertion: string) => {
-    const next = value.slice(0, start) + insertion + value.slice(end);
-    const cursor = start + insertion.length;
+    const { value: next, cursor } = insertAt(value, start, end, insertion);
     const textarea = textareas.current[`${p}:${i}`];
     setText(p, i, next);
     requestAnimationFrame(() => {
@@ -277,10 +199,12 @@ export function ScheduleModal({
   const insertHashtag = (p: Platform, i: number, value: string) => {
     const textarea = textareas.current[`${p}:${i}`];
     const start = textarea?.selectionStart ?? 0;
-    const end = textarea?.selectionEnd ?? start;
-    const selectedText = value.slice(start, end).trim();
-    const hashtag = selectedText ? `#${selectedText.replace(/\s+/g, "")}` : "#";
-    insertInline(p, i, value, start, end, hashtag);
+    const edit = hashtagEdit(value, start, textarea?.selectionEnd ?? start);
+    setText(p, i, edit.value);
+    requestAnimationFrame(() => {
+      textarea?.focus();
+      textarea?.setSelectionRange(edit.cursor, edit.cursor);
+    });
   };
 
   const openLink = (p: Platform, i: number) => {
@@ -310,9 +234,6 @@ export function ScheduleModal({
     });
   };
 
-  const connectionFor = (p: Platform): "facebook" | "instagram" | "linkedin" | "threads" | "x" | null =>
-    p === "x" || p === "facebook" || p === "instagram" || p === "threads" || p === "linkedin" ? p : null;
-
   const connect = async (p: Platform) => {
     const provider = connectionFor(p);
     if (!provider) return;
@@ -334,8 +255,7 @@ export function ScheduleModal({
     try {
       for (const p of PLATFORMS.map((x) => x.id).filter((id) => selected.includes(id))) {
         const meta = PLATFORMS.find((x) => x.id === p)!;
-        const clean = (texts[p] ?? []).map((t) => t.trim()).filter(Boolean);
-        const merged = THREADED.includes(p) ? clean : [clean.join("\n\n")];
+        const merged = postsFor(p, texts);
         const account = meta.auto ? accountFor(p) : null;
         const item = await launchpadApi.create({
           platform: p,
@@ -367,7 +287,7 @@ export function ScheduleModal({
   const activeAccount = accountFor(activePlatform);
   const previewText = (texts[activePlatform] ?? [""]).filter(Boolean).join("\n\n");
 
-  const runAi = async (action: "generate" | "rephrase" | "shorten" | "expand" | "casual" | "formal") => {
+  const runAi = async (action: AiAction) => {
     if (action === "generate" && !aiPrompt.trim()) {
       setAiError("Describe what you want the post to say.");
       return;
@@ -386,7 +306,8 @@ export function ScheduleModal({
         text: action === "generate" ? "" : previewText,
       });
       setText(activePlatform, 0, result.text);
-      setSideMode("preview");
+      showSide("preview");
+      // Desktop keeps the editor beside the preview; on phones it is hidden, so this does nothing there.
       requestAnimationFrame(() => textareas.current[`${activePlatform}:0`]?.focus());
     } catch (e) {
       setAiError(errorMessage(e));
@@ -398,7 +319,25 @@ export function ScheduleModal({
   return (
     <Modal title="Create post" onClose={onClose} wide>
       <form onSubmit={(e) => submit(false, e)} className="lp-compose">
-        <div className="lp-compose-grid">
+        <div className="lp-compose-pane-tabs" role="tablist" aria-label="Composer view">
+          {([["write", "Write"], ["preview", "Preview"], ["ai", "AI"]] as const).map(([id, label]) => (
+            <button key={id} type="button" role="tab" aria-selected={pane === id} className={pane === id ? "on" : ""}
+                    onClick={() => (id === "write" ? setPane("write") : showSide(id))}>
+              {id === "preview" && (
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
+                  <path d="M1.5 8s2.4-4 6.5-4 6.5 4 6.5 4-2.4 4-6.5 4S1.5 8 1.5 8Z" /><circle cx="8" cy="8" r="2" />
+                </svg>
+              )}
+              {id === "ai" && (
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden="true">
+                  <path d="m8 1 .8 2.2L11 4l-2.2.8L8 7l-.8-2.2L5 4l2.2-.8L8 1ZM12.5 7l.6 1.6 1.4.6-1.4.6-.6 1.7-.6-1.7-1.4-.6 1.4-.6.6-1.6ZM4 8l.8 2.2L7 11l-2.2.8L4 14l-.8-2.2L1 11l2.2-.8L4 8Z" />
+                </svg>
+              )}
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="lp-compose-grid" data-pane={pane}>
           <main className="lp-compose-main">
             <div className="lp-compose-topline">
               <div>
@@ -519,7 +458,7 @@ export function ScheduleModal({
                         <div className="lp-editor-footer">
                           <span className="lp-format-tools" role="toolbar" aria-label="Post tools">
                             <button type="button" className={`lp-format-button${emojiTarget?.platform === p && emojiTarget.index === i ? " is-active" : ""}`}
-                                    aria-label="Insert emoji" title="Emoji"
+                                    aria-label="Insert emoji" data-tip="Emoji"
                                     onMouseDown={(e) => e.preventDefault()} onClick={() => openEmoji(p, i)}>
                               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
                                 <circle cx="8" cy="8" r="6" /><path d="M5.3 9.3c.5 1.3 1.4 2 2.7 2s2.2-.7 2.7-2" />
@@ -527,7 +466,7 @@ export function ScheduleModal({
                               </svg>
                               <span className="sr-only">Insert emoji</span>
                             </button>
-                            <button type="button" className="lp-format-button" aria-label="Toggle bulleted list" title="Bulleted list"
+                            <button type="button" className="lp-format-button" aria-label="Toggle bulleted list" data-tip="Bulleted list"
                                     onMouseDown={(e) => e.preventDefault()} onClick={() => toggleBullets(p, i, t)}>
                               <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
                                 <circle cx="2.5" cy="4" r="1" fill="currentColor" stroke="none" />
@@ -537,14 +476,14 @@ export function ScheduleModal({
                               </svg>
                               <span className="sr-only">Bulleted list</span>
                             </button>
-                            <button type="button" className="lp-format-button" aria-label="Insert hashtag" title="Hashtag"
+                            <button type="button" className="lp-format-button" aria-label="Insert hashtag" data-tip="Hashtag"
                                     onMouseDown={(e) => e.preventDefault()} onClick={() => insertHashtag(p, i, t)}>
                               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
                                 <path d="M6 2 4.5 14M11.5 2 10 14M2.5 6h11M2 10h11" />
                               </svg>
                               <span className="sr-only">Insert hashtag</span>
                             </button>
-                            <button type="button" className="lp-format-button" aria-label="Insert link" title="Insert link"
+                            <button type="button" className="lp-format-button" aria-label="Insert link" data-tip="Insert link"
                                     onMouseDown={(e) => e.preventDefault()} onClick={() => openLink(p, i)}>
                               <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
                                 <path d="M6.4 9.6 9.6 6.4M5.1 11.9l-1 .9a2.8 2.8 0 0 1-4-4l2.2-2.2a2.8 2.8 0 0 1 4 0M10.9 4.1l1-.9a2.8 2.8 0 0 1 4 4l-2.2 2.2a2.8 2.8 0 0 1-4 0" />
@@ -552,15 +491,13 @@ export function ScheduleModal({
                               <span className="sr-only">Insert link</span>
                             </button>
                             {i === 0 && (
-                              <button type="button" className={`lp-format-button${attached ? " has-media" : ""}`}
-                                      aria-label={attached ? "Change media" : "Add media"} title={attached ? "Change media" : "Add media"}
+                              <button type="button" className={`lp-format-button lp-format-attach${attached ? " has-media" : ""}`}
+                                      aria-label={attached ? "Change attachment from your Library" : "Attach from your Library"}
                                       onMouseDown={(e) => e.preventDefault()} onClick={() => setPicking(true)}>
-                                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
-                                  <rect x="1.5" y="2.5" width="13" height="11" rx="2" />
-                                  <circle cx="11.2" cy="5.7" r="1.2" />
-                                  <path d="m2.5 11 3.3-3.2 2.7 2.5 1.7-1.6 3.3 3.1" />
+                                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                  <path d="m13.6 7.6-5.5 5.5a3.6 3.6 0 0 1-5.1-5.1l5.7-5.7a2.4 2.4 0 0 1 3.4 3.4l-5.7 5.7a1.2 1.2 0 0 1-1.7-1.7l5.2-5.2" />
                                 </svg>
-                                <span className="sr-only">{attached ? "Change media" : "Add media"}</span>
+                                <span>{attached ? "Change" : "Attach"}</span>
                               </button>
                             )}
                           </span>
@@ -606,14 +543,14 @@ export function ScheduleModal({
           <aside className="lp-post-preview" aria-label={sideMode === "preview" ? `${activeMeta.label} preview` : "AI writing assistant"}>
             <div className="lp-compose-side-tabs" role="tablist" aria-label="Composer side panel">
               <button type="button" role="tab" aria-selected={sideMode === "preview"}
-                      className={sideMode === "preview" ? "on" : ""} onClick={() => setSideMode("preview")}>
+                      className={sideMode === "preview" ? "on" : ""} onClick={() => showSide("preview")}>
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
                   <path d="M1.5 8s2.4-4 6.5-4 6.5 4 6.5 4-2.4 4-6.5 4S1.5 8 1.5 8Z" /><circle cx="8" cy="8" r="2" />
                 </svg>
                 Preview
               </button>
               <button type="button" role="tab" aria-selected={sideMode === "ai"}
-                      className={sideMode === "ai" ? "on" : ""} onClick={() => setSideMode("ai")}>
+                      className={sideMode === "ai" ? "on" : ""} onClick={() => showSide("ai")}>
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" aria-hidden="true">
                   <path d="m8 1 .8 2.2L11 4l-2.2.8L8 7l-.8-2.2L5 4l2.2-.8L8 1ZM12.5 7l.6 1.6 1.4.6-1.4.6-.6 1.7-.6-1.7-1.4-.6 1.4-.6.6-1.6ZM4 8l.8 2.2L7 11l-2.2.8L4 14l-.8-2.2L1 11l2.2-.8L4 8Z" />
                 </svg>
@@ -701,13 +638,10 @@ export function ScheduleModal({
 
                 <div className="lp-ai-divider"><span>Or refine your draft</span></div>
                 <div className="lp-ai-rework">
-                  {(["rephrase", "shorten", "expand", "casual", "formal"] as const).map((action) => (
-                    <button key={action} type="button" className="btn btn-small"
-                            disabled={aiBusy !== null || !previewText.trim()} onClick={() => runAi(action)}>
-                      {aiBusy === action ? "Working..." : {
-                        rephrase: "Rephrase", shorten: "Shorten", expand: "Expand",
-                        casual: "More casual", formal: "More formal",
-                      }[action]}
+                  {AI_REWORK.map(({ id, label }) => (
+                    <button key={id} type="button" className="btn btn-small"
+                            disabled={aiBusy !== null || !previewText.trim()} onClick={() => runAi(id)}>
+                      {aiBusy === id ? "Working..." : label}
                     </button>
                   ))}
                 </div>

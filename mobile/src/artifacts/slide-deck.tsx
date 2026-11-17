@@ -649,6 +649,7 @@ export function SlideDeckViewer({ artifact, visible, shareable, feedback, onClos
                         <SlideView key={version} html={html} width={slideWidth} />
                         {/* Viewing, a tap presents from the slide; editing, it opens the slide on its own to edit */}
                         <Pressable
+                          silent
                           style={StyleSheet.absoluteFill}
                           onPress={() => (editing ? setEditingSlide(k) : void present(k))}
                           disabled={editing && busy}

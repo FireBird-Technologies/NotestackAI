@@ -19,6 +19,8 @@ Hard parts handled here:
 """
 
 import logging
+import threading
+import time
 import uuid
 from datetime import UTC, datetime
 
@@ -120,6 +122,67 @@ def plan_for_price(price) -> str | None:
     return plan_id if plan_id in PLANS else None
 
 
+# Launch offer (settings.launch_discount_code)
+
+OFFER_CACHE_SECONDS = 60
+_offer: dict = {"at": 0.0, "value": None}
+_offer_lock = threading.Lock()
+
+
+def _read_offer() -> dict | None:
+    """The launch promotion code as {"percent_off", "promotion_code_id"}, or None when it is unset, inactive, expired
+    or its coupon is no longer valid. Redemptions aren't counted: it lasts until it is disabled in Stripe or unset."""
+    code = settings.launch_discount_code.strip()
+    if not code or not settings.billing_enabled or not settings.stripe_secret_key:
+        return None
+    try:
+        sc = client()
+        found = sc.v1.promotion_codes.list({"code": code, "active": True, "limit": 1}).data
+        if not found:
+            return None
+        promo = found[0]
+        expires = _get(promo, "expires_at")
+        if expires and int(expires) <= time.time():
+            return None
+        # The coupon: under promotion.coupon on newer API versions (clover), or coupon on older ones; an id or expanded.
+        coupon = _get(_get(promo, "promotion", {}), "coupon") or _get(promo, "coupon")
+        if isinstance(coupon, str):
+            coupon = sc.v1.coupons.retrieve(coupon)
+        pct = _get(coupon, "percent_off")
+        if not coupon or not _get(coupon, "valid", False) or not pct:
+            return None
+        return {"percent_off": float(pct), "promotion_code_id": _get(promo, "id")}
+    except (stripe.StripeError, HTTPException) as exc:
+        log.warning("launch offer lookup failed: %s", exc)
+        return None
+
+
+def launch_offer() -> dict | None:
+    """The live launch offer, cached for OFFER_CACHE_SECONDS (every plan card asks for it)."""
+    now = time.monotonic()
+    if now - _offer["at"] < OFFER_CACHE_SECONDS:
+        return _offer["value"]
+    with _offer_lock:
+        if now - _offer["at"] >= OFFER_CACHE_SECONDS:
+            _offer["value"] = _read_offer()
+            _offer["at"] = time.monotonic()
+    return _offer["value"]
+
+
+def clear_offer_cache() -> None:
+    """The code was refused at checkout: read it from Stripe again on the next request."""
+    _offer["at"] = 0.0
+
+
+def public_offer() -> dict | None:
+    """What the apps see: the percent off only, never the code."""
+    offer = launch_offer()
+    if not offer:
+        return None
+    pct = offer["percent_off"]
+    return {"percent_off": int(pct) if pct.is_integer() else pct}
+
+
 # Customers and subscriptions
 
 
@@ -209,20 +272,35 @@ def start_checkout(db: Session, user: User, workspace: Workspace, plan: Plan, cy
         return change_plan(sc, db, workspace, row, price, success_url)
     customer = ensure_customer(sc, db, user, workspace)
     meta = {"workspace_id": str(workspace.id), "plan": plan.id, "cycle": cycle}
-    session = sc.v1.checkout.sessions.create({
+    offer = launch_offer()
+    params = {
         "mode": "subscription",
         "customer": customer,
         "client_reference_id": str(workspace.id),
         "line_items": [{"price": price, "quantity": 1}],
         "metadata": meta,
         "subscription_data": {"metadata": meta},
-        "allow_promotion_codes": True,
         "billing_address_collection": "auto",
         "customer_update": {"address": "auto", "name": "auto"},
         # 3D Secure: Checkout asks the bank whenever it wants it (SCA, Radar rules), nothing to force here.
         "success_url": success_url + "&session_id={CHECKOUT_SESSION_ID}",
         "cancel_url": cancel_url,
-    })
+    }
+    # The launch offer is applied for them (Stripe allows a set discount or a code box, not both).
+    if offer:
+        params["discounts"] = [{"promotion_code": offer["promotion_code_id"]}]
+    else:
+        params["allow_promotion_codes"] = True
+    try:
+        session = sc.v1.checkout.sessions.create(params)
+    except stripe.InvalidRequestError as exc:
+        if not offer:
+            raise
+        # It was disabled in Stripe between the page load and this click
+        log.info("launch offer refused at checkout: %s", exc)
+        clear_offer_cache()
+        raise HTTPException(409, {"code": "offer_ended", "message": "The early supporter offer has ended, so prices "
+                                  "are back to normal. Reopen plans to see them."}) from exc
     return session.url
 
 
