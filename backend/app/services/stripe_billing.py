@@ -130,7 +130,8 @@ _offer_lock = threading.Lock()
 
 
 def _read_offer() -> dict | None:
-    """The launch promotion code as {"percent_off", "promotion_code_id"}, or None when it can't be redeemed."""
+    """The launch promotion code as {"percent_off", "promotion_code_id"}, or None when it is unset, inactive, expired
+    or its coupon is no longer valid. Redemptions aren't counted: it lasts until it is disabled in Stripe or unset."""
     code = settings.launch_discount_code.strip()
     if not code or not settings.billing_enabled or not settings.stripe_secret_key:
         return None
@@ -142,9 +143,6 @@ def _read_offer() -> dict | None:
         promo = found[0]
         expires = _get(promo, "expires_at")
         if expires and int(expires) <= time.time():
-            return None
-        limit = _get(promo, "max_redemptions")
-        if limit is not None and int(_get(promo, "times_redeemed", 0)) >= int(limit):
             return None
         # The coupon: under promotion.coupon on newer API versions (clover), or coupon on older ones; an id or expanded.
         coupon = _get(_get(promo, "promotion", {}), "coupon") or _get(promo, "coupon")
@@ -172,12 +170,12 @@ def launch_offer() -> dict | None:
 
 
 def clear_offer_cache() -> None:
-    """A checkout finished (or the code was refused): read the slots from Stripe again on the next request."""
+    """The code was refused at checkout: read it from Stripe again on the next request."""
     _offer["at"] = 0.0
 
 
 def public_offer() -> dict | None:
-    """What the apps see: the percent off only, never the code or how many slots are left."""
+    """What the apps see: the percent off only, never the code."""
     offer = launch_offer()
     if not offer:
         return None
@@ -298,11 +296,11 @@ def start_checkout(db: Session, user: User, workspace: Workspace, plan: Plan, cy
     except stripe.InvalidRequestError as exc:
         if not offer:
             raise
-        # Its last slot went between the page load and this click (Stripe counts redemptions, not us)
+        # It was disabled in Stripe between the page load and this click
         log.info("launch offer refused at checkout: %s", exc)
         clear_offer_cache()
-        raise HTTPException(409, {"code": "offer_ended", "message": "The launch offer just filled up, so prices are "
-                                  "back to normal. Reopen plans to see them."}) from exc
+        raise HTTPException(409, {"code": "offer_ended", "message": "The early supporter offer has ended, so prices "
+                                  "are back to normal. Reopen plans to see them."}) from exc
     return session.url
 
 
@@ -357,7 +355,6 @@ def confirm_checkout(db: Session, workspace: Workspace, session_id: str) -> Subs
         return None
     if isinstance(stripe_sub, str):
         stripe_sub = sc.v1.subscriptions.retrieve(stripe_sub)
-    clear_offer_cache()  # a launch offer slot may just have been used
     return sync_subscription(db, workspace.id, stripe_sub)
 
 
@@ -423,7 +420,6 @@ def handle_event(db: Session, event) -> str:
         ws = _get(obj, "client_reference_id") or _get(_get(obj, "metadata", {}), "workspace_id")
         if not ws:
             return "no workspace"
-        clear_offer_cache()  # a launch offer slot may just have been used
         sync_subscription(db, uuid.UUID(ws), sc.v1.subscriptions.retrieve(_get(obj, "subscription")))
         return "synced"
 

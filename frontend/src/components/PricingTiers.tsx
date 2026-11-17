@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { POPULAR_PLAN } from "@notestack/shared/billing";
 import { api } from "@notestack/shared/client";
 import { useAuth } from "../hooks/useAuth";
-import { annualMonthly, annualTotal, FALLBACK_PLANS as FALLBACK, groupFeatures, money, offerPrice, type Offer, savingsPct, type Cycle, type Plan } from "@notestack/shared/content/marketing";
+import { annualMonthly, annualTotal, FALLBACK_PLANS as FALLBACK, earlySupporterLabel, groupFeatures, money, offerPrice, type Offer, savingsPct, type Cycle, type Plan } from "@notestack/shared/content/marketing";
 import { CheckIcon } from "./icons/Icons";
 
 export default function PricingTiers() {
@@ -74,7 +74,7 @@ export default function PricingTiers() {
                   </>
                 )}
               </p>
-              {pct > 0 && <span className="offer-chip mono">{pct}% off · Limited slots</span>}
+              {pct > 0 && <span className="offer-chip mono">{earlySupporterLabel(plan.id, cycle)}</span>}
               <p className="mono muted tier-billing">
                 {free ? "Free forever" : annual ? `${money(pct > 0 ? offerPrice(annualTotal(plan), pct) : annualTotal(plan))} billed yearly` : "Billed monthly"}
               </p>

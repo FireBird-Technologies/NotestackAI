@@ -293,6 +293,7 @@ export function MindMapExplorer({
       {/* In a report the map is at rest: a tap opens it full screen, and a drag scrolls the report. */}
       {embedded ? (
         <Pressable
+          silent
           onPress={onExpand}
           accessibilityRole="button"
           accessibilityLabel="Open the map full screen"

@@ -779,26 +779,26 @@
   text-decoration-color: var(--text-3);
 }
 
-/* "Limited slots" on each paid card while the launch offer lasts */
+/* "Early supporters · x/10 left" on each paid card while the launch offer lasts */
 .offer-chip {
   align-self: flex-start;
   justify-self: start;
   width: fit-content;
   padding: 4px 11px;
-  border: 1px solid var(--blue);
+  border: 1.5px solid var(--blue);
   border-radius: 999px;
   background: var(--blue);
   color: var(--white);
-  font-size: 0.68rem;
+  font-size: 0.74rem;
   font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
   box-shadow: 0 0 14px var(--blue-60);
   animation: offer-chip-glow 2.4s ease-in-out infinite;
 }
 
 @keyframes offer-chip-glow {
-  0%, 100% { box-shadow: 0 0 10px var(--blue-35); }
+  0%, 100% { box-shadow: 0 0 8px var(--blue-35); }
   50% { box-shadow: 0 0 18px var(--blue-60); }
 }
 

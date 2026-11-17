@@ -540,6 +540,7 @@ function Option({
 }) {
   return (
     <Pressable
+      silent
       onPress={onPress}
       disabled={disabled || !onPress}
       accessibilityRole={onPress ? "button" : undefined}

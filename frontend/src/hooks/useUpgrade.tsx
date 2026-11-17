@@ -169,7 +169,7 @@ export function UpgradeProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       setError(errorMessage(e));
       setBusy(false);
-      // The launch offer's last slot went meanwhile: show plans at their usual prices again
+      // The launch offer ended meanwhile: show plans at their usual prices again
       if (e instanceof ApiError && e.code === "offer_ended") void refresh();
     }
   }, [refresh]);

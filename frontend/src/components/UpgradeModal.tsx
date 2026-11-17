@@ -6,7 +6,7 @@ import type { Meter, PlanInfo } from "@notestack/shared/types";
 import { useUpgrade } from "../hooks/useUpgrade";
 import { CheckIcon } from "./icons/Icons";
 import { Tabs } from "./ui";
-import { annualMonthly, annualTotal, groupFeatures, money, offerPrice } from "@notestack/shared/content/marketing";
+import { annualMonthly, annualTotal, earlySupporterLabel, groupFeatures, money, offerPrice } from "@notestack/shared/content/marketing";
 
 const ORDER = ["free", "starter", "writer", "studio"];
 
@@ -287,7 +287,7 @@ export default function UpgradeModal() {
                         </>
                       )}
                     </p>
-                    {pct > 0 && <span className="offer-chip mono">{pct}% off · Limited slots</span>}
+                    {pct > 0 && <span className="offer-chip mono">{earlySupporterLabel(plan.id, cycle)}</span>}
                     <p className="mono muted small">
                       {free ? "Free forever" : annual ? `${money(pct > 0 ? offerPrice(annualTotal(plan), pct) : annualTotal(plan))} billed yearly` : "Billed monthly"}
                     </p>

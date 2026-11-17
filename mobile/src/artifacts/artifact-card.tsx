@@ -245,6 +245,7 @@ export function ArtifactCard({ artifact: a, onRemoved, onChanged }: { artifact: 
   return (
     <View style={styles.card}>
       <Pressable
+        silent
         onPress={viewable ? open : undefined}
         disabled={!viewable}
         accessibilityRole={viewable ? "button" : undefined}

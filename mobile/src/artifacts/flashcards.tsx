@@ -85,6 +85,7 @@ export function FlashcardDeck({ cards, deck: given, fill = false }: {
         }}>
         <Animated.View style={[spin, fill && styles.grow]}>
           <Pressable
+            silent
             onPress={flip}
             accessibilityRole="button"
             accessibilityLabel={flipped ? "Show the front" : "Show the answer"}
