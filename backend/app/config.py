@@ -260,6 +260,10 @@ class Settings(BaseSettings):
     stripe_price_writer_annual: str = ""
     stripe_price_studio_monthly: str = ""
     stripe_price_studio_annual: str = ""
+    # Launch offer: a Stripe promotion code (the code customers would type, e.g. LAUNCH50). While it is set, active and
+    # has redemptions left, the web shows paid plans at its percent off with "Limited slots", and new checkouts apply it.
+    # Set the cap on the code itself in Stripe ("Limit to N redemptions"): Stripe then refuses the N+1th. Empty = off.
+    launch_discount_code: str = ""
     # In-app purchases (App Store, Google Play) through RevenueCat: its secret REST key, and the Authorization header
     # value its webhook sends (set both in the RevenueCat dashboard).
     revenuecat_secret_key: str = ""

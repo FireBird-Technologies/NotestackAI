@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { POPULAR_PLAN } from "@notestack/shared/billing";
 import { api } from "@notestack/shared/client";
 import { useAuth } from "../hooks/useAuth";
-import { annualMonthly, annualTotal, FALLBACK_PLANS as FALLBACK, groupFeatures, money, savingsPct, type Cycle, type Plan } from "@notestack/shared/content/marketing";
+import { annualMonthly, annualTotal, FALLBACK_PLANS as FALLBACK, groupFeatures, money, offerPrice, type Offer, savingsPct, type Cycle, type Plan } from "@notestack/shared/content/marketing";
 import { CheckIcon } from "./icons/Icons";
 
 export default function PricingTiers() {
@@ -11,10 +11,12 @@ export default function PricingTiers() {
   const [plans, setPlans] = useState<Plan[]>(FALLBACK);
   const [billingEnabled, setBillingEnabled] = useState(false);
   const [cycle, setCycle] = useState<Cycle>("annual");
+  // The launch discount, while its Stripe code has slots left
+  const [offer, setOffer] = useState<Offer | null>(null);
   const bestSaving = Math.max(0, ...plans.map(savingsPct));
 
   useEffect(() => {
-    api<{ billing_enabled: boolean; plans: Plan[] }>("/api/billing/plans")
+    api<{ billing_enabled: boolean; plans: Plan[]; offer?: Offer | null }>("/api/billing/plans")
       .then((r) => {
         if (Array.isArray(r.plans) && r.plans.length > 0) {
           // An older plans table may still return only Free, Writer and Studio. Keep the new catalog visible until
@@ -22,6 +24,7 @@ export default function PricingTiers() {
           setPlans(r.plans.some((plan) => plan.id === "starter") ? r.plans : FALLBACK);
         }
         setBillingEnabled(r.billing_enabled);
+        setOffer(r.offer ?? null);
       })
       .catch(() => {
         /* keep fallback */
@@ -45,6 +48,9 @@ export default function PricingTiers() {
           const featured = plan.id === POPULAR_PLAN;
           const free = plan.price_monthly_usd === 0;
           const annual = cycle === "annual" && !free;
+          const price = annual ? annualMonthly(plan) : plan.price_monthly_usd;
+          // The launch offer: the usual price struck through, the discounted one in its place
+          const pct = !free ? offer?.percent_off ?? 0 : 0;
           const upgradePath = `/app/notebooks?upgrade=${plan.id}`;
           const destination = free
             ? "/auth?mode=signup"
@@ -61,14 +67,16 @@ export default function PricingTiers() {
                   <span className="tier-amount">Free</span>
                 ) : (
                   <>
-                    {annual && <span className="tier-was muted">{money(plan.price_monthly_usd)}</span>}
-                    <span className="tier-amount">{money(annual ? annualMonthly(plan) : plan.price_monthly_usd)}</span>
+                    {pct > 0 ? <span className="tier-was offer-was">{money(price)}</span>
+                      : annual && <span className="tier-was muted">{money(plan.price_monthly_usd)}</span>}
+                    <span className="tier-amount">{money(pct > 0 ? offerPrice(price, pct) : price)}</span>
                     <span className="muted">/month</span>
                   </>
                 )}
               </p>
+              {pct > 0 && <span className="offer-chip mono">{pct}% off · Limited slots</span>}
               <p className="mono muted tier-billing">
-                {free ? "Free forever" : annual ? `${money(annualTotal(plan))} billed yearly` : "Billed monthly"}
+                {free ? "Free forever" : annual ? `${money(pct > 0 ? offerPrice(annualTotal(plan), pct) : annualTotal(plan))} billed yearly` : "Billed monthly"}
               </p>
               <ul className="tier-features">
                 {(() => {

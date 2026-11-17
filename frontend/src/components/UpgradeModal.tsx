@@ -6,7 +6,7 @@ import type { Meter, PlanInfo } from "@notestack/shared/types";
 import { useUpgrade } from "../hooks/useUpgrade";
 import { CheckIcon } from "./icons/Icons";
 import { Tabs } from "./ui";
-import { annualMonthly, annualTotal, groupFeatures, money } from "@notestack/shared/content/marketing";
+import { annualMonthly, annualTotal, groupFeatures, money, offerPrice } from "@notestack/shared/content/marketing";
 
 const ORDER = ["free", "starter", "writer", "studio"];
 
@@ -268,6 +268,8 @@ export default function UpgradeModal() {
                 const free = plan.price_monthly_usd === 0;
                 const annual = cycle === "annual" && !free;
                 const price = annual ? annualMonthly(plan) : plan.price_monthly_usd;
+                // The launch offer: the usual price struck through, the discounted one in its place
+                const pct = !free ? status?.offer?.percent_off ?? 0 : 0;
                 const flag = plansMode ? (isCurrent ? "Current plan" : pick ? "Recommended" : null)
                   : pick ? (limit ? "Refuels you" : "Recommended") : null;
                 return (
@@ -278,14 +280,16 @@ export default function UpgradeModal() {
                     <p className="upg-price">
                       {free ? <span className="tier-amount">Free</span> : (
                         <>
-                          {annual && <span className="tier-was muted">{money(plan.price_monthly_usd)}</span>}
-                          <span className="tier-amount">{money(price)}</span>
+                          {pct > 0 ? <span className="tier-was offer-was">{money(price)}</span>
+                            : annual && <span className="tier-was muted">{money(plan.price_monthly_usd)}</span>}
+                          <span className="tier-amount">{money(pct > 0 ? offerPrice(price, pct) : price)}</span>
                           <span className="muted">/month</span>
                         </>
                       )}
                     </p>
+                    {pct > 0 && <span className="offer-chip mono">{pct}% off · Limited slots</span>}
                     <p className="mono muted small">
-                      {free ? "Free forever" : annual ? `${money(annualTotal(plan))} billed yearly` : "Billed monthly"}
+                      {free ? "Free forever" : annual ? `${money(pct > 0 ? offerPrice(annualTotal(plan), pct) : annualTotal(plan))} billed yearly` : "Billed monthly"}
                     </p>
                     {plansMode ? (
                       <PlanFeatures features={plan.features} />

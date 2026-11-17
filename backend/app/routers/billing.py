@@ -24,7 +24,10 @@ class CheckoutIn(BaseModel):
 
 @router.get("/plans")
 def list_plans():
-    return {"billing_enabled": settings.billing_enabled, "plans": [plan_dict(p) for p in PLANS.values()]}
+    from app.services.stripe_billing import public_offer
+
+    return {"billing_enabled": settings.billing_enabled, "plans": [plan_dict(p) for p in PLANS.values()],
+            "offer": public_offer()}
 
 
 @router.get("/me")

@@ -168,7 +168,15 @@ def billing_status(db: Session, workspace: Workspace) -> dict:
         "since": used["since"],
         "videos_resets_at": videos["resets_at"],
         "nudges": build_nudges(db, workspace, plan, meters, can_upgrade),
+        # The launch discount on paid plans ({"percent_off"}), while its Stripe code has redemptions left
+        "offer": _offer(),
     }
+
+
+def _offer() -> dict | None:
+    from app.services.stripe_billing import public_offer
+
+    return public_offer()
 
 
 def billed_by(sub: Subscription | None) -> str | None:

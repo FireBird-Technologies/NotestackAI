@@ -629,6 +629,8 @@ export type Nudge = {
 
 export type BillingStatus = {
   billing_enabled: boolean;
+  /** The launch discount on paid plans, while its Stripe code has redemptions left (web only). */
+  offer?: { percent_off: number } | null;
   plan: PlanInfo;
   plans: PlanInfo[];
   next_plan: string | null;

@@ -174,6 +174,15 @@ export function savingsPct(plan: Plan): number {
   return plan.annual_savings_pct ?? Math.round((1 - annualMonthly(plan) / plan.price_monthly_usd) * 100);
 }
 
+/** The launch offer on paid plans while its Stripe code has slots left (from /api/billing/plans and /status). */
+export type Offer = { percent_off: number };
+
+/** A price after the launch offer, in whole cents as Stripe works it out: the discount rounded, then taken off. */
+export function offerPrice(amount: number, pct: number): number {
+  const cents = Math.round(amount * 100);
+  return (cents - Math.round((cents * pct) / 100)) / 100;
+}
+
 export function annualTotal(plan: Plan): number {
   return plan.price_annual_usd ?? Math.round(annualMonthly(plan) * 12 * 100) / 100;
 }
