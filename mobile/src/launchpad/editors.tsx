@@ -1,42 +1,56 @@
 import { ApiError } from "@notestack/shared/client";
+import {
+  activeAccount, blockerFor, bulletEdit, COMPOSER_PLATFORMS, CONNECTED_ONLY, connectionFor, crossPostTexts, hashtagEdit,
+  insertAt, isReviewPlatform, linkEdit, MEDIA_PLATFORMS, normalLink, platformMeta, postsFor, seedFor, textsWithAttachment,
+  THREADED, type AiAction, type ConnectProvider, type Texts,
+} from "@notestack/shared/compose";
 import { launchpadApi } from "@notestack/shared/endpoints";
 import { nextSlot, PLATFORMS, toWall, userTimeZone, wallToDate } from "@notestack/shared/schedule";
-import type { CalendarItem, PostableArtifact, SocialAccounts } from "@notestack/shared/types";
+import type { CalendarItem, Platform, PostableArtifact, SocialAccounts } from "@notestack/shared/types";
 import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
-import { useEffect, useState } from "react";
-import { StyleSheet, Text, TextInput, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { StyleSheet, Text, TextInput, View, type TextInputInstance } from "react-native";
+import Svg, { Path, Rect } from "react-native-svg";
 import { Pressable } from "@/ui/pressable";
 
 import { AttachmentChip } from "@/launchpad/attachment";
+import { BrandIcon } from "@/launchpad/brand-icon";
+import { ChannelPicker, ComposeToolbar, EmojiRow, LinkBar, PaneTabs } from "@/launchpad/compose-tools";
 import { AttachSheet } from "@/launchpad/library-picker";
+import { AiPanel, PostPreview } from "@/launchpad/post-preview";
 import { SlotPicker } from "@/launchpad/slot-picker";
 import { colors, fonts, radius } from "@/ui/theme";
 import { ErrorText, formatDate } from "@/ui";
+import { ChevronIcon, EyeIcon, SparkleIcon } from "@/ui/icons";
 import { confirm, pageStyles, PillButton, StatusPill } from "@/ui/widgets";
 
 const LINKEDIN = PLATFORMS.find((p) => p.id === "linkedin")!;
 
 /**
- * Connect (or reconnect) LinkedIn from the app: its sign-in opens in the in-app browser and returns to the app with a
- * ticket, which links the account (backend: /api/social/{platform}/start?client=app). Returns what to tell the person.
+ * Connect (or reconnect) a social account from the app: its sign-in opens in the in-app browser and returns to the app
+ * with a ticket, which links the account (backend: /api/social/{platform}/start?client=app). Returns what to tell the
+ * person.
  */
-export async function connectLinkedIn(): Promise<{ accounts?: SocialAccounts; error?: string }> {
+export async function connectPlatform(p: ConnectProvider): Promise<{ accounts?: SocialAccounts; error?: string }> {
+  const label = PLATFORMS.find((x) => x.id === p)?.label ?? "The";
   try {
-    const { url } = await launchpadApi.startOAuth("linkedin", "app");
+    const { url } = await launchpadApi.startOAuth(p, "app");
     const result = await WebBrowser.openAuthSessionAsync(url, "notestack://launchpad");
     if (result.type !== "success") return {};
     const back = new URL(result.url);
     const error = back.searchParams.get("error");
     if (error) return { error };
     const ticket = back.searchParams.get("link");
-    if (!ticket) return { error: "LinkedIn connection failed. Try again." };
+    if (!ticket) return { error: `${label} connection failed. Try again.` };
     return { accounts: await launchpadApi.completeOAuth(ticket) };
   } catch (e) {
-    return { error: e instanceof ApiError ? e.message : "LinkedIn connection failed. Try again." };
+    return { error: e instanceof ApiError ? e.message : `${label} connection failed. Try again.` };
   }
 }
+
+export const connectLinkedIn = () => connectPlatform("linkedin");
 
 /** A post's text with its "n / limit" counter (red past the limit). */
 function PostField({ label, value, onChange, limit, locked }: { label: string; value: string; onChange: (v: string) => void; limit: number; locked?: boolean }) {
@@ -94,7 +108,13 @@ function AttachField({ attached, picking, setPicking, setAttached, locked, onCre
   );
 }
 
-/** A new LinkedIn post (web: ScheduleModal, which offers LinkedIn only for now): attachment, text and when. */
+type Pane = "write" | "preview" | "ai";
+type Sel = { start: number; end: number };
+
+/**
+ * The composer (web: ScheduleModal): one post per selected channel, an optional Library attachment, a live preview and
+ * AI help, then when it goes out. Write, Preview and AI are panes, one at a time, as on the web on a phone.
+ */
 export function Composer({
   at,
   artifactId,
@@ -104,6 +124,7 @@ export function Composer({
   onCancel,
   initialText,
   kit,
+  platform: initialPlatform = "linkedin",
 }: {
   at: Date | null;
   /** Launched from a card: this item opens attached, its text filled in (web: ScheduleModal artifactId). */
@@ -112,35 +133,43 @@ export function Composer({
   initialText?: string;
   /** Written from a launch kit: the post is filed under it and its source post, as the web's ScheduleModal does. */
   kit?: { id: string; title: string; documentId: string | null };
+  /** The channel to start on; more can be added before posting. */
+  platform?: Platform;
+  /** The connections; null while they load. */
   accounts: SocialAccounts | null;
   onAccounts: (a: SocialAccounts) => void;
   onDone: () => void;
   onCancel: () => void;
 }) {
-  const [text, setText] = useState(initialText ?? "");
+  const first: Platform = COMPOSER_PLATFORMS.includes(initialPlatform) ? initialPlatform : "linkedin";
+  const [selected, setSelected] = useState<Platform[]>([first]);
+  const [previewPlatform, setPreviewPlatform] = useState<Platform>(first);
+  const [expanded, setExpanded] = useState<Platform | null>(first);
+  const [texts, setTexts] = useState<Texts>(() => ({ [first]: [initialText ?? ""] }));
   const [attached, setAttached] = useState<PostableArtifact | null>(null);
   const [picking, setPicking] = useState(false);
   const [when, setWhen] = useState(() => toWall(at ?? nextSlot()));
+  const [pane, setPane] = useState<Pane>("write");
+  const [tool, setTool] = useState<{ key: string; kind: "emoji" | "link" } | null>(null);
+  const [linkUrl, setLinkUrl] = useState("");
+  const [linkError, setLinkError] = useState<string | null>(null);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiBusy, setAiBusy] = useState<AiAction | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
   const [busy, setBusy] = useState<"schedule" | "now" | null>(null);
   const [error, setError] = useState("");
+  const inputs = useRef<Record<string, TextInputInstance | null>>({});
+  const selections = useRef<Record<string, Sel>>({});
 
-  const account = accounts?.accounts.find((a) => a.platform === "linkedin" && a.status === "active") ?? null;
-  const any = accounts?.accounts.find((a) => a.platform === "linkedin");
-  const carriesMedia = Boolean(attached && attached.media !== "text");
-  // LinkedIn only posts through a live connection: no email fallback.
-  const blocker = !accounts
-    ? null
-    : !account
-      ? any
-        ? "Your LinkedIn connection is down. Reconnect LinkedIn."
-        : "Connect LinkedIn to post there."
-      : carriesMedia && !account.can_post_media
-        ? "Reconnect LinkedIn to post images and videos."
-        : null;
+  const ready = accounts !== null;
+  const blocker = (p: Platform) => blockerFor(p, accounts, ready, attached);
+  const blocked = selected.map(blocker).filter(Boolean) as string[];
+  const checking = !ready && selected.some((p) => CONNECTED_ONLY.includes(p));
 
-  const attach = (a: PostableArtifact | null) => {
+  const attach = (a: PostableArtifact) => {
     setAttached(a);
-    if (a && !text.trim()) setText(a.prefill.linkedin);
+    setPicking(false);
+    setTexts((cur) => textsWithAttachment(cur, selected, first, a));
   };
 
   useEffect(() => {
@@ -150,19 +179,90 @@ export function Composer({
     // can't be posted.
     launchpadApi.postableOne(artifactId).then(
       (found) => {
-        if (!live || found.type === "launch_kit" || found.media === "audio") return;
-        setAttached(found);
-        setText((t) => t || found.prefill.linkedin);
+        if (live && found.type !== "launch_kit" && found.media !== "audio") attach(found);
       },
       () => undefined,
     );
     return () => {
       live = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [artifactId]);
 
-  const connect = async () => {
-    const res = await connectLinkedIn();
+  /** Toggle a destination; a newly selected one starts from the copy already written. */
+  const pick = (p: Platform) => {
+    if (selected.includes(p)) {
+      if (selected.length === 1) {
+        setPreviewPlatform(p);
+        setExpanded(p);
+        return;
+      }
+      const remaining = selected.filter((x) => x !== p);
+      setSelected(remaining);
+      if (previewPlatform === p) setPreviewPlatform(remaining[0]);
+      if (expanded === p) setExpanded(remaining[0]);
+      return;
+    }
+    setSelected([...selected, p]);
+    setPreviewPlatform(p);
+    setExpanded(p);
+    if (!texts[p]?.some((t) => t.trim())) setTexts((cur) => ({ ...cur, [p]: seedFor(p, selected, cur) }));
+  };
+
+  const setText = (p: Platform, i: number, value: string) => setTexts((cur) => crossPostTexts(cur, selected, p, i, value));
+
+  /** Apply a toolbar edit and put the cursor (or selection) where it belongs. */
+  const applyEdit = (p: Platform, i: number, value: string, sel: Sel) => {
+    const key = `${p}:${i}`;
+    setText(p, i, value);
+    selections.current[key] = sel;
+    requestAnimationFrame(() => {
+      inputs.current[key]?.focus();
+      inputs.current[key]?.setSelection(sel.start, sel.end);
+    });
+  };
+
+  const selectionOf = (p: Platform, i: number, value: string): Sel => selections.current[`${p}:${i}`] ?? { start: value.length, end: value.length };
+
+  const onTool = (p: Platform, i: number, value: string, t: "emoji" | "bullets" | "hashtag" | "link") => {
+    const key = `${p}:${i}`;
+    const sel = selectionOf(p, i, value);
+    if (t === "emoji" || t === "link") {
+      setTool((cur) => (cur?.key === key && cur.kind === t ? null : { key, kind: t }));
+      setLinkUrl("");
+      setLinkError(null);
+      return;
+    }
+    if (t === "bullets") {
+      const edit = bulletEdit(value, sel.start, sel.end);
+      return applyEdit(p, i, edit.value, { start: edit.from, end: edit.to });
+    }
+    const edit = hashtagEdit(value, sel.start, sel.end);
+    applyEdit(p, i, edit.value, { start: edit.cursor, end: edit.cursor });
+  };
+
+  const insertEmoji = (p: Platform, i: number, value: string, emoji: string) => {
+    const sel = selectionOf(p, i, value);
+    const edit = insertAt(value, sel.start, sel.end, emoji);
+    applyEdit(p, i, edit.value, { start: edit.cursor, end: edit.cursor });
+    setTool(null);
+  };
+
+  const insertLink = (p: Platform, i: number, value: string) => {
+    const url = normalLink(linkUrl);
+    if (!url) return setLinkError("Enter a valid web address.");
+    const sel = selectionOf(p, i, value);
+    const edit = linkEdit(value, sel.start, sel.end, url);
+    setTool(null);
+    setLinkUrl("");
+    applyEdit(p, i, edit.value, { start: edit.cursor, end: edit.cursor });
+  };
+
+  const connect = async (p: Platform) => {
+    const provider = connectionFor(p);
+    if (!provider) return;
+    setError("");
+    const res = await connectPlatform(provider);
     if (res.accounts) onAccounts(res.accounts);
     if (res.error) setError(res.error);
   };
@@ -176,69 +276,250 @@ export function Composer({
   };
 
   const submit = async (now: boolean) => {
-    if (blocker) return setError(blocker);
+    if (!selected.length) return setError("Pick where to post.");
+    if (blocked.length) return setError(blocked[0]);
     if (!now && wallToDate(when) <= new Date()) return setError("Pick a time that is still ahead.");
     setBusy(now ? "now" : "schedule");
     setError("");
+    const done: string[] = [];
+    const carriesMedia = Boolean(attached && attached.media !== "text");
     try {
-      await launchpadApi.create({
-        platform: "linkedin",
-        // Post now: published by this request. Scheduled: the half hour picked, in the phone's zone (made UTC there).
-        ...(now ? { publish_now: true } : { local_time: when, timezone: userTimeZone() }),
-        content: text.trim(),
-        thread: [],
-        artifact_id: attached?.id ?? null,
-        document_id: kit?.documentId ?? null,
-        kit_id: kit?.id ?? null,
-        social_account_id: account?.id ?? null,
-        remind_by_email: false,
-      });
+      for (const p of PLATFORMS.map((x) => x.id).filter((id) => selected.includes(id))) {
+        const meta = platformMeta(p);
+        const merged = postsFor(p, texts);
+        await launchpadApi.create({
+          platform: p,
+          // Post now: published by this request. Scheduled: the half hour picked, in the phone's zone (made UTC there).
+          ...(now ? { publish_now: true } : { local_time: when, timezone: userTimeZone() }),
+          content: merged[0] ?? "",
+          thread: merged.slice(1),
+          // Media goes only where it can; a text-only item can seed any post.
+          artifact_id: attached && (!carriesMedia || MEDIA_PLATFORMS.includes(p)) ? attached.id : null,
+          document_id: kit?.documentId ?? null,
+          kit_id: kit?.id ?? null,
+          social_account_id: (meta.auto ? activeAccount(accounts, p)?.id : null) ?? null,
+          remind_by_email: false,
+        });
+        done.push(meta.label);
+      }
       onDone();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Could not schedule it. Try again.");
+      const msg = e instanceof ApiError ? e.message : "Could not schedule it. Try again.";
+      setError(done.length ? `${done.join(" and ")} done; then: ${msg}` : msg);
     } finally {
       setBusy(null);
     }
   };
 
+  const activePlatform = selected.includes(previewPlatform) ? previewPlatform : (selected[0] ?? first);
+  const previewText = (texts[activePlatform] ?? [""]).filter(Boolean).join("\n\n");
+
+  const runAi = async (action: AiAction) => {
+    if (action === "generate" && !aiPrompt.trim()) return setAiError("Describe what you want the post to say.");
+    if (action !== "generate" && !previewText.trim()) return setAiError("Write something first, then choose how AI should rework it.");
+    setAiBusy(action);
+    setAiError(null);
+    try {
+      const result = await launchpadApi.assist({
+        platform: activePlatform,
+        action,
+        prompt: action === "generate" ? aiPrompt.trim() : "",
+        text: action === "generate" ? "" : previewText,
+      });
+      setText(activePlatform, 0, result.text);
+      setPane("preview");
+    } catch (e) {
+      setAiError(e instanceof ApiError ? e.message : "AI couldn't write that. Try again.");
+    } finally {
+      setAiBusy(null);
+    }
+  };
+
+  const shown = PLATFORMS.filter((p) => selected.includes(p.id) && (!isReviewPlatform(p.id) || accounts?.visible[p.id] !== false));
+
   return (
     <View style={styles.stack}>
-      <View style={styles.field}>
-        <Text style={pageStyles.label}>Post to</Text>
-        <View style={[styles.platform, styles.platformOn]}>
-          <Text style={styles.platformText}>LinkedIn</Text>
-        </View>
-      </View>
-      {kit ? <Text style={pageStyles.mono}>Written from the launch kit: {kit.title}</Text> : <AttachField attached={attached} picking={picking} setPicking={setPicking} setAttached={attach} onCreateKit={createKit} />}
-      <View style={styles.platformBox}>
-        <View style={styles.platformHead}>
-          <Text style={styles.platformName}>LinkedIn</Text>
-          <Text style={[pageStyles.mono, blocker && styles.warn]}>
-            {blocker ?? (!accounts ? "Checking your connection..." : `Posting as ${account?.handle}`)}
-          </Text>
-          {blocker && accounts?.available.linkedin ? (
-            <PillButton title={`${any ? "Reconnect" : "Connect"} LinkedIn`} variant="primary" small onPress={() => void connect()} />
+      <PaneTabs<Pane>
+        value={pane}
+        onChange={(v) => {
+          setTool(null);
+          setPane(v);
+        }}
+        tabs={[
+          { id: "write", label: "Write" },
+          { id: "preview", label: "Preview", icon: (color) => <EyeIcon size={17} color={color} /> },
+          { id: "ai", label: "AI", icon: (color) => <SparkleIcon size={16} color={color} /> },
+        ]}
+      />
+
+      {pane === "write" ? (
+        <>
+          <ChannelPicker accounts={accounts} selected={selected} onPick={pick} />
+          {kit ? <Text style={pageStyles.mono}>From launch kit: {kit.title}</Text> : null}
+          {shown.map((meta) => {
+            const p = meta.id;
+            const list = texts[p] ?? [""];
+            const account = meta.auto ? activeAccount(accounts, p) : null;
+            const provider = connectionFor(p);
+            const canConnect = provider ? Boolean(accounts?.available[provider]) : false;
+            const problem = blocker(p);
+            const open = expanded === p;
+            const threaded = THREADED.includes(p);
+            const toggle = () => {
+              setTool(null);
+              setExpanded(open ? null : p);
+              if (!open) setPreviewPlatform(p);
+            };
+            return (
+              <View key={p} style={styles.editor}>
+                <View style={styles.accountRow}>
+                  <Pressable onPress={toggle} style={styles.accountCopy} accessibilityRole="button" accessibilityState={{ expanded: open }}>
+                    <BrandIcon brand={p} size={18} color={colors.text2} />
+                    <View style={styles.flex}>
+                      <Text style={styles.accountName} numberOfLines={1}>
+                        {account?.handle ?? `${meta.label} account`}
+                      </Text>
+                      <Text style={[styles.accountState, problem ? styles.warn : null]}>
+                        {problem ?? (!ready ? "Checking connection..." : account ? "Connected" : "Not connected")}
+                      </Text>
+                    </View>
+                  </Pressable>
+                  <Pressable onPress={toggle} hitSlop={8} style={styles.chevron} accessibilityRole="button" accessibilityLabel={`${open ? "Collapse" : "Expand"} ${meta.label} editor`}>
+                    <View style={open ? styles.chevronUp : null}>
+                      <ChevronIcon size={16} color={colors.text3} />
+                    </View>
+                  </Pressable>
+                </View>
+                {problem && canConnect ? (
+                  <View style={styles.connectRow}>
+                    <PillButton small title={`${accounts?.accounts.some((a) => a.platform === p) ? "Reconnect" : "Connect"} ${meta.label}`} onPress={() => void connect(p)} />
+                  </View>
+                ) : null}
+                {problem && ready && !canConnect ? <Text style={[pageStyles.mono, styles.connectRow]}>{meta.label} posting isn&apos;t set up yet.</Text> : null}
+
+                {open ? (
+                  <View style={styles.canvas}>
+                    {list.map((t, i) => {
+                      const key = `${p}:${i}`;
+                      return (
+                        <View key={i} style={styles.field}>
+                          <Text style={styles.fieldLabel}>{threaded && list.length > 1 ? `Post ${i + 1}` : "Post text"}</Text>
+                          <TextInput
+                            ref={(node) => {
+                              inputs.current[key] = node;
+                            }}
+                            style={styles.composeText}
+                            value={t}
+                            onChangeText={(v) => setText(p, i, v)}
+                            onSelectionChange={(e) => {
+                              selections.current[key] = e.nativeEvent.selection;
+                            }}
+                            multiline
+                            textAlignVertical="top"
+                            placeholder={`Write your ${meta.label} post...`}
+                            placeholderTextColor={colors.text3}
+                            accessibilityLabel={`${meta.label} ${threaded && list.length > 1 ? `post ${i + 1}` : "post"}`}
+                          />
+                          {tool?.key === key && tool.kind === "link" ? (
+                            <LinkBar
+                              value={linkUrl}
+                              error={linkError}
+                              onChange={(v) => {
+                                setLinkUrl(v);
+                                setLinkError(null);
+                              }}
+                              onAdd={() => insertLink(p, i, t)}
+                              onCancel={() => setTool(null)}
+                            />
+                          ) : null}
+                          {tool?.key === key && tool.kind === "emoji" ? <EmojiRow onPick={(e) => insertEmoji(p, i, t, e)} /> : null}
+                          <ComposeToolbar
+                            active={tool?.key === key ? tool.kind : null}
+                            onTool={(x) => onTool(p, i, t, x)}
+                            attach={i === 0 ? { attached: Boolean(attached), onPress: () => setPicking(true) } : undefined}
+                            count={t.length}
+                            limit={meta.limit}
+                          />
+                        </View>
+                      );
+                    })}
+                    {attached ? <AttachmentChip a={attached} onChange={() => setPicking(true)} onRemove={() => setAttached(null)} /> : null}
+                    {threaded ? (
+                      <View style={pageStyles.row}>
+                        <PillButton small title="+ Add to thread" onPress={() => setTexts({ ...texts, [p]: [...list, ""] })} />
+                        {list.length > 1 ? <PillButton small title="Remove last" onPress={() => setTexts({ ...texts, [p]: list.slice(0, -1) })} /> : null}
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
+              </View>
+            );
+          })}
+        </>
+      ) : pane === "preview" ? (
+        <>
+          {selected.length > 1 ? (
+            <View style={pageStyles.row}>
+              {selected.map((p) => (
+                <Pressable key={p} onPress={() => setPreviewPlatform(p)} style={[styles.previewSwitch, p === activePlatform && styles.previewSwitchOn]} accessibilityRole="button" accessibilityState={{ selected: p === activePlatform }}>
+                  <BrandIcon brand={p} size={15} color={p === activePlatform ? colors.white : colors.text2} />
+                  <Text style={styles.previewSwitchText}>{platformMeta(p).label}</Text>
+                </Pressable>
+              ))}
+            </View>
           ) : null}
-          {blocker && accounts && !accounts.available.linkedin ? <Text style={pageStyles.mono}>LinkedIn posting isn&apos;t set up yet.</Text> : null}
+          <PostPreview platform={activePlatform} account={activeAccount(accounts, activePlatform)} text={previewText} attached={attached} />
+        </>
+      ) : (
+        <AiPanel
+          platform={activePlatform}
+          prompt={aiPrompt}
+          onPrompt={(v) => {
+            setAiPrompt(v);
+            setAiError(null);
+          }}
+          busy={aiBusy}
+          error={aiError}
+          hasDraft={Boolean(previewText.trim())}
+          onRun={(a) => void runAi(a)}
+        />
+      )}
+
+      <View style={styles.schedule}>
+        <View style={styles.scheduleHead}>
+          <View style={styles.scheduleIcon}>
+            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={colors.blue} strokeWidth={1.8}>
+              <Rect x="3" y="5" width="18" height="16" rx="2.5" />
+              <Path d="M8 3v4M16 3v4M3 10h18" />
+            </Svg>
+          </View>
+          <View style={styles.flex}>
+            <Text style={styles.scheduleTitle}>Publishing time</Text>
+            <Text style={styles.scheduleSub}>Choose when this post should go live.</Text>
+          </View>
         </View>
-        <PostField label="Post" value={text} onChange={setText} limit={LINKEDIN.limit} />
-      </View>
-      <View style={styles.field}>
-        <Text style={pageStyles.label}>When</Text>
         <SlotPicker value={when} onChange={setWhen} />
       </View>
+
       <ErrorText>{error}</ErrorText>
-      <View style={pageStyles.row}>
-        <PillButton title="Cancel" onPress={onCancel} />
-        <PillButton title={busy === "now" ? "Posting..." : "Post now"} busy={busy === "now"} disabled={busy !== null || Boolean(blocker) || !accounts} onPress={() => void submit(true)} />
+      <View style={styles.actions}>
         <PillButton
-          title={busy === "schedule" ? "Scheduling..." : "Schedule"}
+          style={styles.flex}
+          title={busy === "now" ? "Posting..." : selected.length > 1 ? `Post to ${selected.length} now` : "Post now"}
+          busy={busy === "now"}
+          disabled={busy !== null || blocked.length > 0 || checking}
+          onPress={() => void submit(true)}
+        />
+        <PillButton
+          style={styles.flex}
           variant="primary"
+          title={busy === "schedule" ? "Scheduling..." : selected.length > 1 ? `Schedule ${selected.length} posts` : "Schedule post"}
           busy={busy === "schedule"}
-          disabled={busy !== null || Boolean(blocker) || !accounts}
+          disabled={busy !== null || blocked.length > 0 || checking}
           onPress={() => void submit(false)}
         />
       </View>
+      <AttachSheet visible={picking} onClose={() => setPicking(false)} onPick={attach} onCreateKit={createKit} />
     </View>
   );
 }
@@ -453,5 +734,25 @@ const styles = StyleSheet.create({
   platformHead: { gap: 6 },
   platformName: { color: colors.text, fontSize: 16, fontWeight: "700" },
   warn: { color: "#f5b041" },
+  editor: { borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: "#0a0a0a", overflow: "hidden" },
+  accountRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 12, backgroundColor: "rgba(255, 255, 255, 0.02)" },
+  accountCopy: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10 },
+  accountName: { color: colors.text, fontSize: 15.5, fontWeight: "700" },
+  accountState: { color: colors.text3, fontSize: 13.5, marginTop: 1 },
+  chevron: { width: 32, height: 32, alignItems: "center", justifyContent: "center" },
+  chevronUp: { transform: [{ rotate: "180deg" }] },
+  connectRow: { paddingHorizontal: 14, paddingBottom: 12, backgroundColor: "rgba(255, 255, 255, 0.02)", alignItems: "flex-start" },
+  canvas: { gap: 12, padding: 14, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.lineStrong },
+  fieldLabel: { color: colors.text3, fontSize: 13.5 },
+  composeText: { minHeight: 150, color: colors.text, fontSize: 16.5, lineHeight: 23, paddingVertical: 4 },
+  previewSwitch: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: colors.lineStrong },
+  previewSwitchOn: { borderColor: colors.blue, backgroundColor: colors.blue10 },
+  previewSwitchText: { color: colors.text, fontSize: 13.5, fontWeight: "600" },
+  schedule: { gap: 10, paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.lineStrong },
+  scheduleHead: { flexDirection: "row", alignItems: "center", gap: 12 },
+  scheduleIcon: { width: 40, height: 40, alignItems: "center", justifyContent: "center", borderRadius: 11, borderWidth: 1, borderColor: "rgba(79, 151, 255, 0.3)", backgroundColor: colors.blue10 },
+  scheduleTitle: { color: colors.text, fontSize: 16, fontWeight: "700" },
+  scheduleSub: { color: colors.text3, fontSize: 13.5 },
+  actions: { flexDirection: "row", gap: 10 },
   paused: { gap: 8, padding: 12, borderRadius: radius.md, borderWidth: 1, borderColor: "rgba(245, 176, 65, 0.4)", backgroundColor: "rgba(245, 176, 65, 0.06)" },
 });
