@@ -1,13 +1,14 @@
-import { pad, SLOTS, toWall, wallToDate, type Wall } from "@notestack/shared/schedule";
-import { useState } from "react";
+import { dayKey, monthGrid, SLOTS, userTimeZone, wallToDate, type Wall } from "@notestack/shared/schedule";
+import { useMemo, useState } from "react";
 import { Modal, ScrollView, StyleSheet, Text, View } from "react-native";
-import { Pressable } from "@/ui/pressable";
+import Svg, { Path, Rect } from "react-native-svg";
+import { SafeAreaView } from "react-native-safe-area-context";
 
+import { ArrowLeftIcon } from "@/ui/icons";
+import { Pressable } from "@/ui/pressable";
 import { colors, fonts, radius } from "@/ui/theme";
 
-const ITEM = 44;
-const VISIBLE = 6;
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const WEEKDAYS = ["M", "T", "W", "T", "F", "S", "S"];
 
 /** "GMT+5" for the zone right now. */
 function zoneName(): string {
@@ -15,174 +16,212 @@ function zoneName(): string {
   return part?.value ?? "";
 }
 
-type Parts = { year: number; month: number; day: number; hour: number; minute: number };
+const atTime = (from: Date, addDays: number, hour: number) => new Date(from.getFullYear(), from.getMonth(), from.getDate() + addDays, hour, 0, 0, 0);
+const timeOf = (d: Date) => d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+const shortDay = (d: Date) => d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
-function parts(w: Wall): Parts {
-  const [date, time] = w.split("T");
-  const [year, month, day] = date.split("-").map(Number);
-  const [hour, minute] = time.split(":").map(Number);
-  return { year, month, day, hour, minute };
+function friendlyDay(d: Date, now: Date): string {
+  if (dayKey(d) === dayKey(now)) return "Today";
+  if (dayKey(d) === dayKey(atTime(now, 1, 0))) return "Tomorrow";
+  return shortDay(d);
 }
-
-const daysIn = (year: number, month: number) => new Date(year, month, 0).getDate();
-const firstAhead = (day: string, now: Date) => SLOTS.map((s) => wallToDate(`${day}T${s}`)).find((x) => x > now);
 
 /**
- * When a post goes out (web: launchpad/SlotPicker.tsx), as six boxes in one row: day, month, year, hour, minute
- * (:00 or :30) and AM/PM, in the phone's own time zone. A pick that lands in the past moves to the next half hour.
+ * When a post goes out (web: launchpad/SlotPicker.tsx): a "Schedule for" pill that opens a full-screen month calendar
+ * and the day's half hours, each in its own card (no quick picks, as on the web on a phone), in the phone's time zone.
+ * Past days and past slots are disabled; the back arrow closes it.
  */
 export function SlotPicker({ value, onChange }: { value: Wall; onChange: (w: Wall) => void }) {
-  const p = parts(value);
   const picked = wallToDate(value);
-  const thisYear = new Date().getFullYear();
-  // A post saved earlier (paused, failed) keeps its own year in the list, even when it has passed.
-  const years = Array.from(new Set([Math.min(p.year, thisYear), thisYear, thisYear + 1]));
-
-  const set = (change: Partial<Parts>) => {
-    const n = { ...p, ...change };
-    n.day = Math.min(n.day, daysIn(n.year, n.month));
-    const wall: Wall = `${n.year}-${pad(n.month)}-${pad(n.day)}T${pad(n.hour)}:${pad(n.minute)}`;
-    const now = new Date();
-    if (wallToDate(wall) > now) return onChange(wall);
-    // In the past: that day's next half hour still ahead, else the next one from now.
-    const next = firstAhead(wall.split("T")[0], now) ?? firstAhead(toWall(now).split("T")[0], now);
-    onChange(toWall(next ?? new Date(now.getTime() + 30 * 60e3)));
-  };
-
-  const hour12 = p.hour % 12 || 12;
-  const pm = p.hour >= 12;
-
-  return (
-    <View style={styles.wrap}>
-      <View style={styles.row}>
-        <Wheel
-          label="Day"
-          items={Array.from({ length: daysIn(p.year, p.month) }, (_, i) => ({ value: i + 1, label: String(i + 1) }))}
-          value={p.day}
-          onChange={(day) => set({ day })}
-        />
-        <Wheel label="Month" items={MONTHS.map((m, i) => ({ value: i + 1, label: m }))} value={p.month} onChange={(month) => set({ month })} />
-        <Wheel label="Year" wide items={years.map((y) => ({ value: y, label: String(y) }))} value={p.year} onChange={(year) => set({ year })} />
-        <Wheel
-          label="Hour"
-          items={Array.from({ length: 12 }, (_, i) => ({ value: i + 1, label: String(i + 1) }))}
-          value={hour12}
-          onChange={(h) => set({ hour: (h % 12) + (pm ? 12 : 0) })}
-        />
-        <Wheel
-          label="Min"
-          items={[
-            { value: 0, label: "00" },
-            { value: 30, label: "30" },
-          ]}
-          value={p.minute}
-          onChange={(minute) => set({ minute })}
-        />
-        <Wheel
-          label=" "
-          items={[
-            { value: 0, label: "AM" },
-            { value: 1, label: "PM" },
-          ]}
-          value={pm ? 1 : 0}
-          onChange={(v) => set({ hour: (p.hour % 12) + (v ? 12 : 0) })}
-        />
-      </View>
-      <Text style={styles.zone}>
-        {picked.toLocaleString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })} ·{" "}
-        {zoneName()}
-      </Text>
-    </View>
-  );
-}
-
-/** A plain box showing its value; tapping it opens a list of the choices to pick from. */
-function Wheel({
-  label,
-  items,
-  value,
-  onChange,
-  wide,
-}: {
-  label: string;
-  items: { value: number; label: string }[];
-  value: number;
-  onChange: (v: number) => void;
-  wide?: boolean;
-}) {
   const [open, setOpen] = useState(false);
-  const index = Math.max(0, items.findIndex((i) => i.value === value));
-  const name = label.trim() || "AM or PM";
+  const [month, setMonth] = useState(() => new Date(picked.getFullYear(), picked.getMonth(), 1));
+  const days = useMemo(() => monthGrid(month), [month]);
+  const now = new Date();
+  const today = dayKey(now);
+  const [pickedDay, pickedTime] = value.split("T");
+  const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const slotDate = (day: string, time: string) => wallToDate(`${day}T${time}`);
+
+  /** A day keeps its slot when it's still ahead there, else takes the day's first one still ahead. */
+  const pickDay = (d: Date) => {
+    const day = dayKey(d);
+    const time = slotDate(day, pickedTime) > now ? pickedTime : SLOTS.find((t) => slotDate(day, t) > now);
+    if (time) onChange(`${day}T${time}`);
+  };
+  const label = `${friendlyDay(picked, now)} · ${timeOf(picked)}`;
 
   return (
-    <View style={[styles.col, wide && styles.wide]}>
-      <Text style={styles.label}>{label}</Text>
+    <>
       <Pressable
-        onPress={() => setOpen(true)}
-        style={({ pressed }) => [styles.box, pressed && styles.pressed]}
+        onPress={() => {
+          setMonth(new Date(picked.getFullYear(), picked.getMonth(), 1));
+          setOpen(true);
+        }}
+        style={({ pressed }) => [styles.trigger, pressed && styles.pressed]}
         accessibilityRole="button"
-        accessibilityLabel={`${name}: ${items[index]?.label}. Change`}>
-        <Text style={styles.value}>{items[index]?.label}</Text>
+        accessibilityLabel={`Schedule for ${label}. Change`}>
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={colors.blue} strokeWidth={1.7}>
+          <Rect x="3" y="5" width="18" height="16" rx="2.5" />
+          <Path d="M3 9h18M8 3v4M16 3v4M12 13v3l2 1" />
+        </Svg>
+        <View style={styles.triggerCopy}>
+          <Text style={styles.triggerSmall}>SCHEDULE FOR</Text>
+          <Text style={styles.triggerStrong} numberOfLines={1}>
+            {label}
+          </Text>
+        </View>
+        <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={colors.text3} strokeWidth={2}>
+          <Path d="m6 9 6 6 6-6" />
+        </Svg>
       </Pressable>
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable silent style={styles.backdrop} onPress={() => setOpen(false)} accessibilityLabel="Close">
-          <Pressable silent style={styles.menu} onPress={() => {}}>
-            <Text style={styles.menuTitle}>{name}</Text>
-            <ScrollView style={styles.list} contentOffset={{ x: 0, y: Math.max(0, index - 2) * ITEM }}>
-              {items.map((it, i) => {
-                const on = i === index;
-                return (
-                  <Pressable
-                    key={it.value}
-                    onPress={() => {
-                      onChange(it.value);
-                      setOpen(false);
-                    }}
-                    style={({ pressed }) => [styles.option, on && styles.optionOn, pressed && styles.pressed]}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: on }}>
-                    <Text style={[styles.optionText, on && styles.optionTextOn]}>{it.label}</Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </Pressable>
-        </Pressable>
+
+      <Modal visible={open} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setOpen(false)}>
+        <SafeAreaView edges={["top", "bottom"]} style={styles.screen}>
+          <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+            <View style={styles.head}>
+              <Pressable onPress={() => setOpen(false)} hitSlop={12} style={styles.back} accessibilityRole="button" accessibilityLabel="Back">
+                <ArrowLeftIcon size={22} color={colors.text} />
+              </Pressable>
+              <View style={styles.flex}>
+                <Text style={styles.title}>Choose when to publish</Text>
+                <Text style={styles.sub}>Times use your local time zone</Text>
+              </View>
+            </View>
+
+            <View style={styles.card}>
+              <Text style={styles.cardLabel}>DATE</Text>
+              <View style={styles.monthHead}>
+                <Pressable
+                  disabled={month <= thisMonth}
+                  onPress={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}
+                  style={[styles.monthBtn, month <= thisMonth && styles.off]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Previous month">
+                  <Text style={styles.monthArrow}>‹</Text>
+                </Pressable>
+                <Text style={styles.monthName}>{month.toLocaleDateString("en-US", { month: "long", year: "numeric" })}</Text>
+                <Pressable
+                  onPress={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}
+                  style={styles.monthBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel="Next month">
+                  <Text style={styles.monthArrow}>›</Text>
+                </Pressable>
+              </View>
+              <View style={styles.grid}>
+                {WEEKDAYS.map((w, i) => (
+                  <Text key={`w${i}`} style={[styles.cell, styles.weekday]}>
+                    {w}
+                  </Text>
+                ))}
+                {days.map((d) => {
+                  const key = dayKey(d);
+                  const past = key < today;
+                  const on = key === pickedDay;
+                  return (
+                    <Pressable
+                      key={key}
+                      disabled={past}
+                      onPress={() => pickDay(d)}
+                      style={[styles.cell, styles.day, key === today && styles.today, on && styles.on, past && styles.off]}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: on, disabled: past }}
+                      accessibilityLabel={d.toDateString()}>
+                      <Text style={[styles.dayText, d.getMonth() !== month.getMonth() && styles.outText, on && styles.onText]}>{d.getDate()}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View style={styles.card}>
+              <Text style={styles.cardLabel}>
+                TIME <Text style={styles.cardLabelDay}>· {shortDay(wallToDate(`${pickedDay}T00:00`))}</Text>
+              </Text>
+              <View style={styles.times}>
+                {SLOTS.map((t) => {
+                  const at = slotDate(pickedDay, t);
+                  if (at <= now) return null;
+                  const on = t === pickedTime;
+                  return (
+                    <Pressable
+                      key={t}
+                      onPress={() => {
+                        onChange(`${pickedDay}T${t}`);
+                        setOpen(false);
+                      }}
+                      style={({ pressed }) => [styles.time, on && styles.on, pressed && styles.pressed]}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: on }}>
+                      <Text style={[styles.timeText, on && styles.onText]}>{timeOf(at)}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            <Text style={styles.zone}>
+              {userTimeZone()}
+              {zoneName() ? ` · ${zoneName()}` : ""}
+            </Text>
+          </ScrollView>
+        </SafeAreaView>
       </Modal>
-    </View>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: 10 },
-  row: { flexDirection: "row", gap: 6 },
-  col: { flex: 1, gap: 4, minWidth: 0 },
-  wide: { flex: 1.35 },
-  label: { color: colors.text3, fontFamily: fonts.mono, fontSize: 11, textAlign: "center" },
-  box: {
-    height: 48,
+  flex: { flex: 1 },
+  pressed: { opacity: 0.7 },
+  off: { opacity: 0.3 },
+  trigger: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    minHeight: 56,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.lineStrong,
+    backgroundColor: "rgba(0, 0, 0, 0.28)",
+  },
+  triggerCopy: { flex: 1, minWidth: 0, gap: 3 },
+  triggerSmall: { color: colors.text3, fontSize: 11, fontWeight: "500", letterSpacing: 0.6 },
+  triggerStrong: { color: colors.text, fontSize: 15.5, fontWeight: "600" },
+  screen: { flex: 1, backgroundColor: colors.black },
+  body: { padding: 16, gap: 14 },
+  head: { flexDirection: "row", alignItems: "center", gap: 10 },
+  back: { width: 36, height: 36, marginLeft: -6, alignItems: "center", justifyContent: "center" },
+  title: { color: colors.text, fontSize: 17, fontWeight: "700" },
+  sub: { color: colors.text3, fontSize: 13.5, marginTop: 2 },
+  card: { gap: 10, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface },
+  cardLabel: { color: colors.text3, fontSize: 11.5, fontWeight: "600", letterSpacing: 1.2 },
+  cardLabelDay: { color: colors.text2, letterSpacing: 0 },
+  monthHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  monthBtn: { width: 38, height: 38, alignItems: "center", justifyContent: "center", borderRadius: 19, borderWidth: 1, borderColor: colors.lineStrong },
+  monthArrow: { color: colors.text, fontSize: 20, lineHeight: 22 },
+  monthName: { color: colors.text, fontSize: 16, fontWeight: "700" },
+  grid: { flexDirection: "row", flexWrap: "wrap" },
+  cell: { width: `${100 / 7}%`, height: 40, alignItems: "center", justifyContent: "center", textAlign: "center" },
+  weekday: { color: colors.text3, fontSize: 12.5, lineHeight: 40 },
+  day: { borderRadius: radius.sm, borderWidth: 1, borderColor: "transparent" },
+  dayText: { color: colors.text, fontSize: 15 },
+  outText: { color: colors.text3 },
+  today: { borderColor: colors.lineStrong },
+  on: { borderColor: colors.blue, backgroundColor: colors.blue10 },
+  onText: { color: colors.white, fontWeight: "700" },
+  times: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  time: {
+    width: "31.9%",
+    minHeight: 40,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: radius.md,
+    borderRadius: 999,
     borderWidth: 1,
-    borderColor: colors.lineStrong,
+    borderColor: colors.line,
   },
-  value: { color: colors.text, fontSize: 16, fontWeight: "600" },
-  pressed: { opacity: 0.7 },
-  backdrop: { flex: 1, backgroundColor: "rgba(0, 0, 0, 0.6)", alignItems: "center", justifyContent: "center", padding: 32 },
-  menu: {
-    width: 220,
-    paddingVertical: 12,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.lineStrong,
-    backgroundColor: "#111214",
-  },
-  menuTitle: { color: colors.text3, fontFamily: fonts.mono, fontSize: 12, textAlign: "center", paddingBottom: 8 },
-  list: { maxHeight: ITEM * VISIBLE },
-  option: { height: ITEM, marginHorizontal: 8, borderRadius: radius.sm, alignItems: "center", justifyContent: "center" },
-  optionOn: { backgroundColor: colors.blue10 },
-  optionText: { color: colors.text2, fontSize: 17 },
-  optionTextOn: { color: colors.blue, fontWeight: "700" },
-  zone: { color: colors.text3, fontFamily: fonts.mono, fontSize: 12.5 },
+  timeText: { color: colors.text, fontSize: 14, fontVariant: ["tabular-nums"] },
+  zone: { color: colors.text3, fontFamily: fonts.mono, fontSize: 12, textAlign: "right" },
 });

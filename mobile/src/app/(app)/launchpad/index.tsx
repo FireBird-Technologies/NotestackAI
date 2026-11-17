@@ -197,7 +197,7 @@ export default function Launchpad() {
 
       <Connections now={now} accounts={accounts.data ?? null} onConnect={() => void connect()} onChanged={reload} />
 
-      <Sheet visible={composing} title="New post" onClose={() => setComposing(false)}>
+      <Sheet visible={composing} title="Create post" onClose={() => setComposing(false)}>
         <Composer
           at={composeAt}
           accounts={accounts.data ?? null}
