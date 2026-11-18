@@ -28,6 +28,16 @@ export async function identify(customerId: string): Promise<void> {
   customer = customerId;
 }
 
+/**
+ * Read-only access for someone not signed in (the public Pricing page): RevenueCat set up as an anonymous user, which
+ * is enough to read the store's prices. Never touches an identified customer; when this person signs in, identify()
+ * logs the anonymous user in as their workspace.
+ */
+export async function ensureConfigured(): Promise<void> {
+  if (!API_KEY || !purchasesReady || (await Purchases.isConfigured())) return;
+  Purchases.configure({ apiKey: API_KEY });
+}
+
 /** Sign out: the next person on this phone starts as nobody, not as the last workspace. */
 export function forgetCustomer() {
   if (!customer) return;
