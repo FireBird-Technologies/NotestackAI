@@ -344,7 +344,7 @@ class FakeReAct:
 def agent(monkeypatch, tmp_path):
     FakeReAct.built, FakeReAct.cite = [], None
     monkeypatch.setattr(r.dspy, "ReAct", FakeReAct)
-    monkeypatch.setattr(r, "main_lm", lambda *a: dspy.LM("openai/x", api_key="k"))
+    monkeypatch.setattr(r, "agent_lm", lambda *a: dspy.LM("openai/x", api_key="k"))
 
     @contextmanager
     def usage(lm):

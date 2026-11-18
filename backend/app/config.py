@@ -126,6 +126,10 @@ class Settings(BaseSettings):
     llm_max_concurrent: int = 6  # model calls in flight at once across all jobs: quizzes and flashcards run two at a time per job
     # GLM-5.x always reasons (it cannot be disabled); this sets how hard. low | high | max
     llm_reasoning_effort: str = "low"
+    # Seconds before a model request is given up (LiteLLM's own default is 600). Chat calls use the shorter ones.
+    llm_timeout_seconds: float = 300.0
+    chat_llm_timeout_seconds: float = 90.0  # research agent and answer writer
+    chat_fast_timeout_seconds: float = 25.0  # triage, query expansion
 
     # Corpus: posts as markdown files. R2 is the source of truth; each process keeps a disk cache.
     corpus_cache_dir: str = ".corpus-cache"
@@ -158,6 +162,27 @@ class Settings(BaseSettings):
     # Log what the research agent is given on every chat message (conversation, writer notes, chat memory). The logs
     # then hold writers' text, so it is on only in development unless CHAT_CONTEXT_LOG=true. None follows ENV.
     chat_context_log: bool | None = None
+
+    # Langfuse tracing for the notebook chat (app/observability/langfuse.py): one trace per message with every stage,
+    # the outcome code, user ratings and judge scores. Empty keys = off. LANGFUSE_HOST: cloud or a self-hosted URL.
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+    langfuse_host: str = ""
+    # Send only sizes, never writers' text (questions, answers, passages), unless this is false. Turn it off only
+    # with a self-hosted Langfuse.
+    langfuse_mask_text: bool = True
+    # Share of archive answers scored by the LLM judge in the worker (relevance, faithfulness, false refusals).
+    chat_judge_sample_rate: float = 0.2
+
+    # Retrieval (docs/plan: post cards + long context). CHAT_ROUTER replaces the keyword prefetch / fast path with
+    # tiers: Tier A puts the whole notebook in the prompt when it fits CHAT_FULL_NOTEBOOK_TOKENS, Tier B picks posts
+    # with card + passage BM25 up to CHAT_EVIDENCE_TOKENS, Tier C is the research agent when neither is answered.
+    chat_router: bool = False
+    chat_full_notebook_tokens: int = 60_000
+    chat_evidence_tokens: int = 30_000
+    chat_query_expansion: bool = True
+    # Post cards: one fast-model call per post at ingest (summary, topics, names, synonyms, questions it answers).
+    post_cards_enabled: bool = True
 
     # ElevenLabs (premade voices by default; a consented clone can replace host A)
     elevenlabs_api_key: str = ""

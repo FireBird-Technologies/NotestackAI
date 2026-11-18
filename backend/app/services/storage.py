@@ -56,6 +56,13 @@ def workspace_owns_key(workspace_id: uuid.UUID, key: str) -> bool:
     return key.startswith(f"ws/{workspace_id}/") and ".." not in key
 
 
+def is_not_found(exc: BaseException) -> bool:
+    """True when a read failed because the object does not exist (R2 or the local stand in)."""
+    if isinstance(exc, FileNotFoundError):
+        return True
+    return isinstance(exc, ClientError) and exc.response.get("Error", {}).get("Code") in {"404", "NoSuchKey", "NotFound"}
+
+
 class Storage:
     def __init__(self, bucket: str | None = None):
         self.bucket = bucket or settings.r2_bucket
@@ -101,7 +108,7 @@ class Storage:
         try:
             return self.client.head_object(Bucket=self.bucket, Key=self._k(key))
         except ClientError as exc:
-            if exc.response.get("Error", {}).get("Code") in {"404", "NoSuchKey", "NotFound"}:
+            if is_not_found(exc):
                 return None
             raise
 

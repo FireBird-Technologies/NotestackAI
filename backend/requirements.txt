@@ -24,6 +24,8 @@ stripe==13.*
 jinja2==3.*
 cryptography>=44,<51
 composio>=0.22.1,<1
+# Chat tracing and evaluation (app/observability/langfuse.py). Optional at runtime: no keys = no-op.
+langfuse==5.1.0
 
 # Dev tools (tests, lint)
 pytest==8.*

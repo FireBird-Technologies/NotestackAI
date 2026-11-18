@@ -49,6 +49,8 @@ from app.models import (
     WorkspaceMember,
 )
 from app.pipeline import compound_action, flashcards, generate, infographic, launchkit, media, quiz, report, slides
+from app.pipeline.cards import cards_for_documents
+from app.pipeline.chat_judge import judge_message
 from app.pipeline.generate import NothingToDo
 from app.pipeline.ingest import FeedNotFound, UnreadableFile, entry_from_upload, extract_article, ingest_source, store_entries
 from app.pipeline.memory import learn_from_message
@@ -94,6 +96,8 @@ def _after_import(db: Session, job: Job, workspace_id: uuid.UUID, changed: list[
         return
     create_job(db, workspace_id, "topics", {"document_ids": changed}, max_attempts=2)
     create_job(db, workspace_id, "ideas", {"document_ids": changed}, max_attempts=2)
+    if settings.post_cards_enabled:
+        create_job(db, workspace_id, "post_cards", {"document_ids": changed}, max_attempts=2)
     if not pending_job(db, workspace_id, "resurface_scan"):
         create_job(db, workspace_id, "resurface_scan", {}, max_attempts=2)
     vp = db.scalar(select(VoiceProfile).where(VoiceProfile.workspace_id == workspace_id))
@@ -162,6 +166,26 @@ def handle_chat_memory(db: Session, job: Job):
         return Done({"rounds": 0}, "Chat no longer exists")
     result = organize_chat(db, job, chat)
     return Done(result, f"Filed {result['rounds']} rounds" if result["rounds"] else "Nothing new to file")
+
+
+def handle_post_cards(db: Session, job: Job):
+    """Write post cards (app/pipeline/cards.py). Params: document_ids (omit for every post in the workspace), force."""
+    ids = job.params.get("document_ids")
+    result = cards_for_documents(db, job.workspace_id, ids, bool(job.params.get("force")))
+    if result["failed"] and not result["made"]:
+        raise RuntimeError(f"no post card could be made ({result['failed']} failed)")  # retried by the queue
+    return Done(result, f"Post cards: {result['made']} new, {result['up_to_date']} up to date"
+                        + (f", {result['failed']} failed" if result["failed"] else ""))
+
+
+def handle_chat_judge(db: Session, job: Job):
+    """Score one chat answer (relevance, faithfulness) or refusal (false_refusal) for Langfuse. Params: message_id."""
+    msg = db.get(Message, uuid.UUID(job.params["message_id"]))
+    chat = db.get(Chat, msg.chat_id) if msg else None
+    if not msg or not chat or chat.workspace_id != job.workspace_id:
+        return Done({"skipped": "message gone"}, "Message no longer exists")
+    result = judge_message(db, msg.id)
+    return Done(result, "Answer scored")
 
 
 def handle_chat_memory_rebuild(db: Session, job: Job):
@@ -345,6 +369,8 @@ HANDLERS: dict[str, Callable[[Session, Job], object]] = {
     "memory_update": handle_memory,
     "chat_memory": handle_chat_memory,
     "chat_memory_rebuild": handle_chat_memory_rebuild,
+    "chat_judge": handle_chat_judge,
+    "post_cards": handle_post_cards,
     "chat_memory_cleanup": handle_chat_memory_cleanup,
     "voice_profile": handle_voice_profile,
     "voice_clone": handle_voice_clone,

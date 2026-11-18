@@ -5,11 +5,15 @@ API: POST {TYPESAFE_URL}/v1/systemone with {"state", "model", "questions"}; answ
 question id with "choice", "confidence" and "probabilities". https://docs.typesafe.ai/primitives/choice
 """
 
+import time
 from dataclasses import dataclass
 
 import httpx
 
 from app.config import settings
+
+ATTEMPTS = 2
+RETRY_DELAY = 0.3
 
 
 class JevError(RuntimeError):
@@ -36,11 +40,20 @@ def decide(state: str | dict, questions: dict[str, dict], timeout: float = 6.0) 
         "model": settings.typesafe_model,
         "questions": {qid: {"type": "choice", **q} for qid, q in questions.items()},
     }
-    try:
-        resp = httpx.post(f"{settings.typesafe_url.rstrip('/')}/v1/systemone", json=body, timeout=timeout,
-                          headers={"Authorization": f"Bearer {settings.typesafe_api_key}"})
-    except httpx.HTTPError as exc:
-        raise JevError(f"Jev unreachable: {exc}") from exc
+    resp = None
+    for attempt in range(1, ATTEMPTS + 1):  # a dropped connection or a 5xx gets one more try before the LLM fallback
+        try:
+            resp = httpx.post(f"{settings.typesafe_url.rstrip('/')}/v1/systemone", json=body, timeout=timeout,
+                              headers={"Authorization": f"Bearer {settings.typesafe_api_key}"})
+        except httpx.HTTPError as exc:
+            if attempt < ATTEMPTS:
+                time.sleep(RETRY_DELAY)
+                continue
+            raise JevError(f"Jev unreachable: {exc}") from exc
+        if resp.status_code >= 500 and attempt < ATTEMPTS:
+            time.sleep(RETRY_DELAY)
+            continue
+        break
     if resp.status_code >= 400:
         raise JevError(f"Jev {resp.status_code}: {resp.text[:300]}")
     answers = resp.json().get("answers") or {}
