@@ -29,14 +29,17 @@ def _extra_kwargs(effort: str | None) -> dict:
     return {"extra_body": {"thinking": {"type": "enabled"}, "reasoning_effort": effort}}
 
 
-def _build(model: str, *, effort: str | None, temperature: float | None, max_tokens: int | None) -> dspy.LM:
+def _build(model: str, *, effort: str | None, temperature: float | None, max_tokens: int | None,
+           cache: bool = True, timeout: float | None = None) -> dspy.LM:
+    # timeout: LiteLLM's default is 600s, so one stuck request used to hold a chat for ten minutes.
     return dspy.LM(
         model,
         api_base=settings.llm_api_base or None,
         api_key=settings.llm_api_key or None,
         temperature=settings.llm_temperature if temperature is None else temperature,
         max_tokens=max_tokens or settings.llm_max_tokens,
-        cache=True,
+        cache=cache,
+        timeout=timeout or settings.llm_timeout_seconds,
         **_extra_kwargs(effort),
     )
 
@@ -45,6 +48,14 @@ def _build(model: str, *, effort: str | None, temperature: float | None, max_tok
 def main_lm(effort: str | None = None) -> dspy.LM:
     """effort overrides LLM_REASONING_EFFORT per module, e.g. main_lm("high") for the groundedness judge."""
     return _build(settings.llm_model, effort=effort, temperature=None, max_tokens=None)
+
+
+@lru_cache
+def agent_lm() -> dspy.LM:
+    """The chat research agent: the main model, never cached (a retried question must not replay the same failing
+    steps) and with the chat's own timeout."""
+    return _build(settings.llm_model, effort=None, temperature=None, max_tokens=None, cache=False,
+                  timeout=settings.chat_llm_timeout_seconds)
 
 
 @lru_cache

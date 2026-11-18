@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import random
 import re
 import time
 import uuid
@@ -40,8 +41,17 @@ from app.models import (
     Source,
     Topic,
 )
+from app.observability import langfuse_client as lf
 from app.pipeline.generate import ideas_fresh
-from app.pipeline.research import LastAnswer, ResearchResult, Turn, VerifiedCitation, refers_back, research
+from app.pipeline.research import (
+    LastAnswer,
+    ResearchResult,
+    Turn,
+    VerifiedCitation,
+    outcome_of,
+    refers_back,
+    research,
+)
 from app.pipeline.trace import ChatTrace, use_trace
 from app.routers.sources import list_columns, serialize_list_rows
 from app.services import report_suggestions
@@ -501,6 +511,9 @@ def rate_message(message_id: uuid.UUID, body: FeedbackIn, ctx: Ctx = Depends(get
     row.comment = (body.comment or "").strip() or None
     row.question, row.answer, row.sources, row.recall = question, msg.content, sources, msg.recall_json or {}
     db.commit()
+    note = ", ".join(reasons) + (f": {row.comment}" if row.comment and not settings.langfuse_mask_text else "")
+    lf.score((msg.recall_json or {}).get("trace_id"), "user_feedback", float(row.rating), comment=note or None,
+             score_id=f"{msg.id}-user_feedback")
     return {"feedback": _feedback_out(row)}
 
 
@@ -545,7 +558,8 @@ CHAT_KEEPALIVE_SECONDS = 15.0
 _detached_streams: set[asyncio.Task] = set()  # the loop only holds tasks weakly: these must not be collected mid-answer
 
 
-def _detached(stream: AsyncIterator[str], keepalive: float = CHAT_KEEPALIVE_SECONDS) -> AsyncIterator[str]:
+def _detached(stream: AsyncIterator[str], keepalive: float = CHAT_KEEPALIVE_SECONDS,
+              on_leave=None) -> AsyncIterator[str]:
     """Runs a stream on its own, so a phone that locks or loses signal stops only the reading: the answer is still
     researched and saved, for the app to find when it comes back. Long silences send an SSE comment, which clients
     ignore, so that nothing along the way takes the quiet connection for a dead one."""
@@ -563,15 +577,21 @@ def _detached(stream: AsyncIterator[str], keepalive: float = CHAT_KEEPALIVE_SECO
     task.add_done_callback(_detached_streams.discard)
 
     async def read() -> AsyncIterator[str]:
-        while True:
-            try:
-                chunk = await asyncio.wait_for(chunks.get(), timeout=keepalive)
-            except TimeoutError:
-                yield ": keepalive\n\n"
-                continue
-            if chunk is None:
-                return
-            yield chunk
+        finished = False
+        try:
+            while True:
+                try:
+                    chunk = await asyncio.wait_for(chunks.get(), timeout=keepalive)
+                except TimeoutError:
+                    yield ": keepalive\n\n"
+                    continue
+                if chunk is None:
+                    finished = True
+                    return
+                yield chunk
+        finally:
+            if not finished and on_leave is not None:  # the client stopped reading before the stream ended
+                on_leave()
 
     return read()
 
@@ -616,12 +636,18 @@ def _saved_step_messages(recall: dict | None) -> list[str]:
     return messages
 
 
+# Part of every answer cache key: raise it when retrieval changes, so answers from the old pipeline are not reused.
+PIPELINE_VERSION = "2"
+
+
 def answer_cache_key(notebook_id: uuid.UUID, question: str, docs: list[Document], profile: str) -> str:
-    """Same notebook, same question (case, spacing and end punctuation aside), same post versions, same writer notes."""
+    """Same notebook, same question (case, spacing and end punctuation aside), same post versions, same writer notes,
+    same retrieval pipeline (PIPELINE_VERSION and whether the router is on)."""
     q = re.sub(r"\s+", " ", question.lower()).strip().rstrip("?!. ")
     posts = "\n".join(sorted(f"{d.path}\t{d.content_hash or ''}\t{d.updated_at.isoformat() if d.updated_at else ''}"
                              for d in docs))
-    return hashlib.sha256(f"{notebook_id}\n{q}\n{posts}\n{profile}".encode()).hexdigest()
+    pipeline = f"{PIPELINE_VERSION}:{'router' if settings.chat_router else 'prefetch'}"
+    return hashlib.sha256(f"{notebook_id}\n{q}\n{posts}\n{profile}\n{pipeline}".encode()).hexdigest()
 
 
 def _cached_answer(db, key: str) -> tuple[Message, ResearchResult] | None:
@@ -687,6 +713,19 @@ async def _learn(db, workspace_id: uuid.UUID, message_id: uuid.UUID, kind: str,
     return []
 
 
+def _size_bucket(posts: int) -> str:
+    return "0" if posts == 0 else "1-10" if posts <= 10 else "11-50" if posts <= 50 else "51-200" if posts <= 200 else "200+"
+
+
+JUDGED_OUTCOMES = {"answered", "writer_uncovered", "refused_no_cites", "cites_dropped"}
+
+
+def should_judge(outcome: str) -> bool:
+    """A sample of archive answers (and of refusals, to catch false ones) is scored by the LLM judge in the worker."""
+    return (outcome in JUDGED_OUTCOMES and lf.enabled() and bool(settings.llm_api_key)
+            and random.random() < settings.chat_judge_sample_rate)
+
+
 @router.post("/{notebook_id}/chat")
 async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)):
     nb = _get(ctx, notebook_id)
@@ -727,14 +766,20 @@ async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)
                             body.retry_message_id, chat_row.id)
         chat_row.updated_at = datetime.now(UTC)  # keeps the history list newest first
         trace.chat_id = str(chat_row.id)
+        trace.start_langfuse(user=ctx.user.id, session=str(chat_row.id),
+                             metadata={"notebook_id": str(nb.id), "retry": retrying})
         yield _sse("status", {"chat_id": str(chat_row.id), "message": "Preparing research"})
         # Memory: the chat so far (before this message), oldest first, capped to the last few turns.
-        with trace.stage("db-history+notes"):
+        # Two stages, not one: the first query of the stream also waits for a database connection (the request's own
+        # was given back before the stream started), so a slow "db-history" next to a fast "db-notes" means the time
+        # went on connecting (network distance, a database waking up), not on the queries.
+        with trace.stage("db-history"):
             prior = db.scalars(
                 select(Message).where(Message.chat_id == chat_row.id).order_by(Message.created_at.desc()).limit(8)
             ).all()
             history = [Turn(m.role, m.content, (m.recall_json or {}).get("background_status"))
                        for m in reversed(prior)]
+        with trace.stage("db-notes"):
             facts = list_facts(db, ctx.workspace.id)
             profile = profile_text(facts)
         # Chat memory (topic summaries and exact quotes from earlier in this notebook's chats), loaded here so the
@@ -753,6 +798,7 @@ async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)
             ).all()
         allowed = {d.path: d.title for d in docs}
         by_path = {d.path: d for d in docs}
+        trace.tag(f"posts:{_size_bucket(len(docs))}")
         corpus = Corpus(ctx.workspace.id)
         last_answer = _last_answer(db, prior)
         external_bundle = load_external_tools(ctx.workspace.id, ctx.user.id, db, notebook_id=nb.id)
@@ -812,6 +858,7 @@ async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)
                 external_destinations=[destination.as_dict() for destination in external_bundle.destinations],
                 workspace_id=ctx.workspace.id,
                 notebook_id=nb.id,
+                fresh=retrying,
                 **({"chat_memory": chat_memory} if chat_memory is not None else {})))
             await asyncio.sleep(0)  # let the research thread start before the commit below holds this loop
             with trace.stage("save-question(while research runs)"):
@@ -831,13 +878,23 @@ async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)
                     yield _sse("step", {"kind": kind, "message": _step_message(kind, detail)})
             try:
                 result = task.result()
-            except Exception:
+            except Exception as exc:
                 log.exception("Research failed for chat %s: %r", chat_row.id, body.question[:200])  # cause, not just "lost signal"
-                trace.error = "research raised (see the traceback above); no answer was saved"
-                yield _sse("error", {"message": "Something went wrong while researching. Try again."})
+                timed_out = "timeout" in type(exc).__name__.lower()
+                trace.error = ("a model request timed out" if timed_out
+                               else "research raised (see the traceback above)") + "; no answer was saved"
+                trace.set_outcome("timeout" if timed_out else "exception")
+                yield _sse("error", {"message": "That took too long to answer. Try again in a moment." if timed_out
+                                     else "Something went wrong while researching. Try again."})
                 return
 
-        save_started = time.perf_counter()
+        end_save = trace.begin("save-answer")
+        outcome = "cache_hit" if cached is not None else outcome_of(result)
+        trace.set_outcome(outcome)
+        trace.tag(f"kind:{result.kind}", f"path:{'cache' if cached is not None else (result.recall or {}).get('path') or result.kind}")
+        if result.kind == "archive" and cached is None and not ((result.recall or {}).get("prefetch") or {}).get("passages"):
+            trace.tag("retrieval_empty")
+        trace.output = result.text
         cacheable = result.kind == "archive" and not result.unsupported and bool(result.citations)
         initial_background = ({
             "state": "working",
@@ -846,7 +903,8 @@ async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)
         msg = Message(chat_id=chat_row.id, role="assistant", content=result.text,
                       cache_key=cache_key if cacheable else None,
                       recall_json={**result.recall, "kind": result.kind, "unsupported": result.unsupported,
-                                   "topic": result.topic,
+                                   "topic": result.topic, "outcome": outcome,
+                                   **({"trace_id": trace.trace_id} if trace.trace_id else {}),
                                    "external_sources": result.external_sources,
                                    "external_widgets": result.external_widgets,
                                    "created_artifacts": result.created_artifacts,
@@ -909,6 +967,13 @@ async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)
                 log.warning("Could not queue chat memory", exc_info=True)
                 db.rollback()
                 trace.add("save", "chat-memory filing job: could not be queued (see the warning above)")
+        if cached is None and should_judge(outcome):
+            try:
+                create_job(db, ctx.workspace.id, "chat_judge", {"message_id": str(msg.id)}, max_attempts=1)
+                trace.add("save", "judge job queued: relevance, faithfulness or false refusal goes to Langfuse")
+            except Exception:  # scoring is a bonus: never cost the writer their answer
+                log.warning("Could not queue the chat judge", exc_info=True)
+                db.rollback()
         if result.prompt_tokens or result.completion_tokens:
             record_usage(
                 db,
@@ -919,8 +984,9 @@ async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)
                 quantity=result.prompt_tokens + result.completion_tokens,
                 unit="tokens",
             )
-        trace.stages.append(("save-answer", (time.perf_counter() - save_started) * 1000))
+        end_save()
         trace.mark("answer")
+        answer_sent["yes"] = True  # set first: from here on a failure must never replace the answer on screen
         yield _sse("answer", {
             "message_id": str(msg.id),
             "text": result.text,
@@ -935,12 +1001,14 @@ async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)
             # How many questions the plan has left ({used, limit, left}), or None when chat is unlimited.
             "quota": chat_quota(db, ctx.workspace) if plan.chat_messages >= 0 else None,
         })
-        wait_started = time.perf_counter()
+        end_wait = trace.begin("notes-wait(after answer)")
         saved = await _learn(db, ctx.workspace.id, user_msg.id, result.kind, trace)
-        trace.stages.append(("notes-wait(after answer)", (time.perf_counter() - wait_started) * 1000))
+        end_wait()
         if saved:
             yield _sse("memory", {"saved": saved})
         yield _sse("done", {})
+
+    answer_sent = {"yes": False}
 
     async def stream():
         try:
@@ -950,11 +1018,18 @@ async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)
             log.exception("Chat failed for notebook %s: %r", nb.id, body.question[:200])
             trace.error = trace.error or "the chat stream raised (see the traceback above)"
             db.rollback()
-            yield _sse("error", {"message": "Something went wrong while researching. Try again."})
+            if answer_sent["yes"]:  # the answer is saved and shown: only the after-answer extras failed
+                trace.tag("error_after_answer")
+                yield _sse("done", {})
+            else:
+                if not trace.outcome:
+                    trace.set_outcome("exception")
+                yield _sse("error", {"message": "Something went wrong while researching. Try again."})
         finally:
             trace.emit()  # one block per message, also when the client left or research failed
             db.commit()  # gives the connection back: this outlives the request, whose cleanup ran before the stream began
 
     # X-Accel-Buffering: nginx would otherwise hold the streamed answer back until the response ends.
-    return StreamingResponse(_detached(stream()), media_type="text/event-stream",
+    return StreamingResponse(_detached(stream(), on_leave=lambda: trace.tag("client_left")),
+                             media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})

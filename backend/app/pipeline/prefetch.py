@@ -11,7 +11,7 @@ import re
 from dataclasses import dataclass, field
 
 from app.chat_memory.search import Bm25, tokenize
-from app.corpus import Corpus, CorpusError
+from app.corpus import Corpus, CorpusError, card_rel
 from app.pipeline.passages import _body_start
 
 # Passages follow the post's sections and are sized by characters, not lines: a line here is anything from a heading
@@ -21,7 +21,7 @@ BLOCK_CHARS = 1_200  # a longer section is cut at paragraph breaks into passages
 TAIL_CHARS = 300  # a leftover this small joins the passage before it; a section this small joins the next one
 CONTEXT_BUDGET_CHARS = 12_000  # the passages handed over, with the rest of their sections added, stay under this
 SECTION_WHOLE_CHARS = 6_000  # a matching section up to this size is sent whole; a longer one, the match and its neighbours
-BLOCKS_VERSION = 2  # in the index cache key: a change to how passages are cut never reuses an old index
+BLOCKS_VERSION = 3  # in the index cache key: a change to how passages are cut never reuses an old index
 TOP_K = 6
 PER_POST = 2  # at most this many passages from one post, so a long post cannot crowd out the others
 DEEP_TOP_K = 10  # a synthesis question gets more evidence
@@ -29,7 +29,9 @@ DEEP_PER_POST = 3
 OVERVIEW_BUDGET_CHARS = 24_000  # opening passages for a question about the whole notebook
 OVERVIEW_LIST_CHARS = 12_000  # the post list given with them
 # Words that say what kind of question it is, not what it is about. They would make coverage look worse than it is.
-_QUESTION_WORDS = frozenset("written write wrote writing think thought post blog article tell explain mean view take "
+# "write", "writing" and "intro" are left out on purpose: for writers they are often the subject ("how do I write
+# a better intro").
+_QUESTION_WORDS = frozenset("written wrote think thought post blog article tell explain mean view take "
                             "opinion summarize summarise summary talk talked mention mentioned any ever how why often "
                             "much many where who whom whose can could would should will just really also mine myself "
                             "give show list find".split())
@@ -37,7 +39,7 @@ _QUESTION_WORDS = frozenset("written write wrote writing think thought post blog
 # A question made only of these has no subject to search for: it gets the overview instead.
 _GENERIC = frozenset("strongest strong best main key biggest important interesting ideas idea themes theme topics "
                      "topic across overall general common recurring archive notebook these those all everything most "
-                     "brief intro introduction short quick detail detailed overview".split())
+                     "brief short quick detail detailed overview".split())
 # Words too vague to say what the question is about. Left in, they lower coverage without finding anything.
 _WEAK = frozenset("into help use using used make made get got thing way lot really very also".split())
 _HEADING = re.compile(r"^#{2,6}\s")
@@ -221,7 +223,7 @@ def _blocks(body: list[Line]) -> list[list[Line]]:
     return blocks
 
 
-def _passage(rel: str, title: str, heading: str, block: list[Line]) -> Passage:
+def _passage(rel: str, title: str, heading: str, block: list[Line], extra: list[str] | None = None) -> Passage:
     text: dict[int, str] = {}
     for n, t in block:  # pieces of one long line become that line again
         text[n] = f"{text[n]} {t}" if n in text else t
@@ -229,18 +231,28 @@ def _passage(rel: str, title: str, heading: str, block: list[Line]) -> Passage:
     lines = [text.get(n, "") for n in range(first, last + 1)]
     # The title and the heading on every passage: the details under "## Getting featured" are about getting featured
     # even when their own lines never say so.
-    tokens = _terms(" ".join(t for _, t in block)) + _terms(title) + _terms(heading)
+    # extra: the post card's topics, names and synonyms (document expansion), so a question in other words still lands.
+    tokens = _terms(" ".join(t for _, t in block)) + _terms(title) + _terms(heading) + (extra or [])
     return Passage(rel, first, last, title, lines, tokens, heading=heading)
 
 
-def passages_of(corpus: Corpus, rel: str, title: str) -> list[Passage]:
+def card_expansion(card: dict | None) -> list[str]:
+    """The card words added to every passage of its post: topics, names and synonyms (not the summary, which would
+    make every passage of a post look alike)."""
+    if not card:
+        return []
+    return _terms(" ".join(" ".join(card.get(f) or []) for f in ("topics", "entities", "synonyms")))
+
+
+def passages_of(corpus: Corpus, rel: str, title: str, card: dict | None = None) -> list[Passage]:
     try:
         lines = corpus.read_lines(rel)
     except CorpusError:
         return []
     out: list[Passage] = []
+    extra = card_expansion(card)
     for heading, body in _sections(lines, _body_start(lines)):
-        section = [_passage(rel, title, heading, b) for b in _blocks(body) if any(t.strip() for _, t in b)]
+        section = [_passage(rel, title, heading, b, extra) for b in _blocks(body) if any(t.strip() for _, t in b)]
         for a, b in zip(section, section[1:], strict=False):
             a.next = b  # only within the section: the next section is another topic
         for a in section:
@@ -259,24 +271,126 @@ class _PostIndex(Bm25):
 _cache: dict[str, _PostIndex] = {}
 
 
-def _index(corpus: Corpus, allowed: dict[str, str], manifest: dict[str, str]) -> _PostIndex:
-    """One index per notebook and file version: rebuilt only when a post in it changes."""
-    sig = "\n".join(f"{p}\t{manifest.get(p, '')}" for p in sorted(allowed))
-    key = hashlib.sha1(f"v{BLOCKS_VERSION}\n{corpus.root}\n{sig}".encode()).hexdigest()
+def _signature(corpus: Corpus, allowed: dict[str, str], manifest: dict[str, str], cards: dict | None,
+               kind: str) -> str:
+    """Cache key: the notebook's posts and cards at their current versions."""
+    sig = "\n".join(f"{p}\t{manifest.get(p, '')}\t{manifest.get(card_rel(p), '') if p in (cards or {}) else ''}"
+                    for p in sorted(allowed))
+    return hashlib.sha1(f"{kind}v{BLOCKS_VERSION}\n{corpus.root}\n{sig}".encode()).hexdigest()
+
+
+def _cached(key: str, build):
     if key not in _cache:
         if len(_cache) >= 16:
             _cache.pop(next(iter(_cache)))
-        _cache[key] = _PostIndex([p for rel, title in allowed.items() for p in passages_of(corpus, rel, title)])
+        _cache[key] = build()
     return _cache[key]
 
 
+def _index(corpus: Corpus, allowed: dict[str, str], manifest: dict[str, str],
+           cards: dict[str, dict] | None = None) -> _PostIndex:
+    """One index per notebook and file version: rebuilt only when a post (or its card) in it changes."""
+    cards = cards or {}
+    return _cached(_signature(corpus, allowed, manifest, cards, "posts"),
+                   lambda: _PostIndex([p for rel, title in allowed.items()
+                                       for p in passages_of(corpus, rel, title, cards.get(rel))]))
+
+
+# "What did I write about X", "have I ever written": the writer's own writing, not a subject. "How do I write X" keeps
+# "write", because there writing is the subject.
+_SELF_WRITE = re.compile(r"\b((did|have|had)\s+i\s+(ever\s+)?(write|written)|i\s*('ve|\s+have|\s+had)?\s*(ever\s+)?"
+                         r"(written|wrote))\b", re.IGNORECASE)
+
+
+def content_words(question: str) -> list[str]:
+    """The question's subject words, stemmed: what is searched for. Empty for a question about the whole notebook."""
+    words = [t for t in tokenize(_SELF_WRITE.sub(" ", question))
+             if t not in _QUESTION_WORDS and t not in _GENERIC and t not in _WEAK]
+    return list(dict.fromkeys(_stem(t) for t in words))
+
+
+def notebook_mentions(corpus: Corpus, allowed: dict[str, str], manifest: dict[str, str], question: str,
+                      cards: dict[str, dict] | None = None) -> list[str]:
+    """The question's subject words that occur somewhere in the notebook's posts (or their cards). Milliseconds, no
+    model: used to overrule an "off topic" triage that only saw the post titles."""
+    words = content_words(question)
+    if not words or not allowed:
+        return []
+    index = _index(corpus, allowed, manifest, cards)
+    return [t for t in words if t in index.idf]
+
+
+@dataclass
+class CardUnit:
+    path: str
+    title: str
+    tokens: list[str]
+    last: str = ""
+
+
+def _card_index(corpus: Corpus, allowed: dict[str, str], manifest: dict[str, str], cards: dict[str, dict]) -> Bm25:
+    """BM25 over whole posts, each one its title plus its card: finds a post by what it is about."""
+    from app.pipeline.cards import card_terms
+
+    return _cached(_signature(corpus, allowed, manifest, cards, "cards"),
+                   lambda: Bm25([CardUnit(p, allowed[p], _terms(f"{allowed[p]} {card_terms(c)}"))
+                                 for p, c in cards.items() if p in allowed]))
+
+
+RRF_K = 60
+
+
+@dataclass
+class Retrieval:
+    posts: list[str] = field(default_factory=list)  # best post first (card and passage rankings fused)
+    passages: dict[str, list[Passage]] = field(default_factory=dict)  # per post, its matching passages, best first
+    queries: int = 0
+    terms: int = 0  # content words, over all queries, that occur in the notebook
+
+    @property
+    def passage_count(self) -> int:
+        return sum(len(v) for v in self.passages.values())
+
+
+def retrieve(corpus: Corpus, allowed: dict[str, str], manifest: dict[str, str], cards: dict[str, dict],
+             queries: list[str], per_query: int = 30) -> Retrieval:
+    """Rank posts for a question and its rewordings: BM25 over passages (with card words) and BM25 over cards, one
+    ranking per query and index, fused by reciprocal rank (a post high in several rankings wins)."""
+    index = _index(corpus, allowed, manifest, cards)
+    card_index = _card_index(corpus, allowed, manifest, cards) if cards else None
+    score: dict[str, float] = {}
+    best: dict[int, tuple[float, Passage]] = {}
+    found: set[str] = set()
+    queries = list(dict.fromkeys(q for q in queries if q and q.strip()))
+    for q in queries:
+        words = content_words(q)
+        terms = [t for t in words if t in index.idf]
+        found.update(terms)
+        ranked = index.search_terms(terms)[:per_query] if terms else []
+        for rank, path in enumerate(dict.fromkeys(p.path for _, p in ranked)):
+            score[path] = score.get(path, 0.0) + 1 / (RRF_K + rank + 1)
+        for sc, p in ranked:
+            if id(p) not in best or best[id(p)][0] < sc:
+                best[id(p)] = (sc, p)
+        card_words = [t for t in words if card_index is not None and t in card_index.idf]
+        found.update(card_words)
+        if card_words:
+            for rank, (_, unit) in enumerate(card_index.search_terms(card_words)[:per_query]):
+                score[unit.path] = score.get(unit.path, 0.0) + 1 / (RRF_K + rank + 1)
+    by_post: dict[str, list[tuple[float, Passage]]] = {}
+    for sc, p in best.values():
+        by_post.setdefault(p.path, []).append((sc, p))
+    return Retrieval(sorted(score, key=lambda p: -score[p]),
+                     {p: [x for _, x in sorted(v, key=lambda e: -e[0])] for p, v in by_post.items()},
+                     len(queries), len(found))
+
+
 def prefetch(corpus: Corpus, allowed: dict[str, str], manifest: dict[str, str], question: str,
-             k: int = TOP_K, per_post_max: int = PER_POST) -> Prefetch:
-    words = [t for t in tokenize(question) if t not in _QUESTION_WORDS and t not in _GENERIC and t not in _WEAK]
-    asked = list(dict.fromkeys(_stem(t) for t in words))
+             k: int = TOP_K, per_post_max: int = PER_POST, cards: dict[str, dict] | None = None) -> Prefetch:
+    asked = content_words(question)
     if not asked or not allowed:
         return Prefetch(asked=asked)
-    index = _index(corpus, allowed, manifest)
+    index = _index(corpus, allowed, manifest, cards)
     # A word that occurs in no post (a typo like "waht", or a word the writer never used) cannot be found, so it
     # neither counts against coverage nor is searched for.
     terms = [t for t in asked if t in index.idf]

@@ -1,5 +1,6 @@
 import hashlib
 import json
+import logging
 import uuid
 from datetime import datetime
 from typing import Literal
@@ -27,6 +28,8 @@ from app.services.jobs import create_job, pending_job, serialize_job
 from app.services.plans import effective_plan, plan_limit_error, post_room
 from app.services.storage import storage
 from app.services.url_policy import classify_url
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/sources", tags=["sources"])
 
@@ -423,6 +426,8 @@ def _queue_notebooklm_processing(ctx: Ctx, changed: list[uuid.UUID]) -> None:
     ids = [str(doc_id) for doc_id in changed]
     create_job(ctx.db, ctx.workspace.id, "topics", {"document_ids": ids}, max_attempts=2)
     create_job(ctx.db, ctx.workspace.id, "ideas", {"document_ids": ids}, max_attempts=2)
+    if settings.post_cards_enabled:
+        create_job(ctx.db, ctx.workspace.id, "post_cards", {"document_ids": ids}, max_attempts=2)
     if not pending_job(ctx.db, ctx.workspace.id, "resurface_scan"):
         create_job(ctx.db, ctx.workspace.id, "resurface_scan", {}, max_attempts=2)
 
@@ -654,6 +659,9 @@ def get_document(document_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
                 corpus.sync()
             lines = corpus.read_lines(doc.path)
         except CorpusError:
+            lines = []
+        except Exception:  # storage trouble: the post's own text is in the database, show that instead of a 500
+            log.exception("document %s: corpus read failed, showing clean_text", doc.id)
             lines = []
     if not lines:
         lines = [f"# {doc.title}", "", *(doc.clean_text or "").splitlines()]

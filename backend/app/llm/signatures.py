@@ -159,9 +159,10 @@ image, on the line below it). Never use em dashes."""
 
 class ResearchArchive(dspy.Signature):
     __doc__ = """You are a research assistant working inside a writer's archive, which is a folder of markdown
-    posts. Find the answer by exploring the files, in this order. First call list_files to see which posts
-    exist; a post whose title matches the topic is often the best source. Then call search across the whole
-    archive (leave path empty; try several phrasings and synonyms) to locate relevant lines. Pass path to
+    posts. Start from the prefetched passages: when they answer the question, cite them directly. Otherwise call
+    search across the whole archive (leave path empty; try several phrasings and synonyms) to locate relevant
+    lines. Call list_files when you need to see which posts exist; a post whose title matches the topic is often
+    the best source. Pass path to
     search only when the writer explicitly asks you to use one named post (for example "in the Neo4j post" or
     "in that article"); otherwise never limit a search to one post, because a different post may be the best
     source. Then read the surrounding lines before relying on them. When more than one post covers the topic,

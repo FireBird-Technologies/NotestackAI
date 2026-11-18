@@ -34,9 +34,9 @@ from app.chat_memory.files import SMALL_TALK
 from app.chat_memory.logs import context_log, text_enabled
 from app.chat_memory.tools import ChatTools, is_chat_path
 from app.config import settings
-from app.corpus import Corpus, ScopedTools
+from app.corpus import Corpus, CorpusError, ScopedTools
 from app.llm.postprocess import strip_em_dashes
-from app.llm.provider import fast_lm, main_lm, track_usage, triage_lm
+from app.llm.provider import agent_lm, fast_lm, track_usage, triage_lm, writer_lm
 from app.llm.signatures import (
     ResearchArchive,
     ResearchArchiveWithMemory,
@@ -45,7 +45,18 @@ from app.llm.signatures import (
     TriageMessage,
     TriageWithMemory,
 )
+from app.observability import langfuse_client as lf
 from app.pipeline import writer
+from app.pipeline.cards import load_cards
+from app.pipeline.context_router import (
+    AGENT_PREFETCH_CHARS,
+    CHARS_PER_TOKEN,
+    expand_query,
+    notebook_tokens,
+    overview_evidence,
+    tier_a_evidence,
+    tier_b_evidence,
+)
 from app.pipeline.create_intent import parse_create
 from app.pipeline.external_delivery import adapter_for_tools
 from app.pipeline.internal_artifact_tools import TRANSFERABLE_ARTIFACTS, start_from_chat
@@ -54,9 +65,12 @@ from app.pipeline.prefetch import (
     DEEP_TOP_K,
     OVERVIEW_BUDGET_CHARS,
     OVERVIEW_LIST_CHARS,
+    content_words,
+    notebook_mentions,
     openings,
     passages_of,
     prefetch,
+    retrieve,
 )
 from app.pipeline.trace import MEMORY_GIVES, ChatTrace, arguments_shape, current_trace, probs_text
 from app.services import jev
@@ -129,6 +143,7 @@ class VerifiedCitation:
     line_start: int
     line_end: int
     quote: str
+    repaired: bool = False  # the model's line numbers were off; the lines were found again from the cited sentence
 
 
 def _route_info(route: "Triage") -> dict:
@@ -156,6 +171,31 @@ class ResearchResult:
     background_action: dict | None = None
 
 
+def outcome_of(result: "ResearchResult") -> str:
+    """Why this message ended the way it did: one of trace.OUTCOMES (cache hits and exceptions are set by the router)."""
+    if result.kind == "error":
+        return "agent_malformed"
+    if result.kind == "off_topic":
+        return "triage_off_topic"
+    if result.kind in {"chitchat", "about_app", "create"}:
+        return "triage_other"
+    if result.kind == "external_action":
+        return "external_failed" if result.unsupported else "external_done"
+    recall = result.recall or {}
+    if recall.get("refused"):
+        return "cites_dropped" if recall.get("proposed_cites") else "refused_no_cites"
+    if result.unsupported or not result.citations:
+        return "writer_uncovered"
+    return "answered"
+
+
+def writer_model() -> str:
+    try:
+        return str(writer_lm().model)
+    except Exception:
+        return ""
+
+
 @dataclass
 class Turn:
     role: str  # user | assistant
@@ -167,7 +207,7 @@ HISTORY_TURNS = 8
 HISTORY_CHARS = 700  # per older message: half from the start, half from the end
 RECENT_TURNS = 2  # the newest messages (the last question and answer) are kept whole, up to RECENT_CHARS
 RECENT_CHARS = 4000  # safety ceiling for those, the same as the longest question a writer can send
-QUICK_STEPS = 4
+QUICK_STEPS = 6  # a lookup: a search, a read or two, and room for one more phrasing
 
 _CHITCHAT = SMALL_TALK  # greetings and thanks: the same pattern chat memory uses to decide what may be skipped
 _GREETING = re.compile(r"^\s*(hi|hey|hello|yo|hiya|good (morning|afternoon|evening))", re.IGNORECASE)
@@ -468,9 +508,22 @@ _NOTEBOOK_WORDS = re.compile(r"\b(this|these|those|that|my|the|all|all of)\s+(po
                              r"articles?|essays?|newsletters?|writing)\b", re.IGNORECASE)
 
 
+_LEADING_REF = re.compile(r"^\s*(and |but |so |ok(ay)?,? |also )?(what about|how about|why|it|its|that|this|these|"
+                          r"those|they|them|their|he|she|him|his|her)\b", re.IGNORECASE)
+_EXPLICIT_REF = re.compile(r"\b(you (said|mentioned|wrote)|that (post|one|point|answer|part|article)|the (last|previous|"
+                           r"first|second|third) (one|point|answer|post|part)|above|earlier|again|more on|tell me more|"
+                           r"say more|go on)\b", re.IGNORECASE)
+REFERS_SHORT_WORDS = 7
+
+
 def refers_back(message: str) -> bool:
-    """The message only makes sense with the conversation ("explain how to use it", "a brief intro of him")."""
-    return bool(_REFERS.search(_NOTEBOOK_WORDS.sub(" ", message)))
+    """The message only makes sense with the conversation ("explain how to use it", "a brief intro of him", "why?").
+    A pronoun inside a longer, self-contained question ("how do I price it when I have 1,000 readers") is not
+    enough: such a question used to get the previous question mixed into its search and was never cached."""
+    text = _NOTEBOOK_WORDS.sub(" ", message)
+    if _EXPLICIT_REF.search(text) or _LEADING_REF.match(text):
+        return True
+    return len(re.findall(r"[\w']+", text)) <= REFERS_SHORT_WORDS and bool(_REFERS.search(text))
 
 
 _NOTESTACK_NAME = re.compile(
@@ -597,7 +650,8 @@ def _phrase_rules(route: Triage, message: str, history: list[Turn]) -> Triage:
     return route
 
 
-def triage(message: str, history: list[Turn], notebook: str, mem: ChatMemory | None = None) -> Triage:
+def triage(message: str, history: list[Turn], notebook: str, mem: ChatMemory | None = None,
+           fresh: bool = False) -> Triage:
     """Decide whether a message is worth researching. Jev when configured (fast, typed, no generation),
     otherwise one cheap call on the triage LLM."""
     why = "Jev is not configured (no TYPESAFE_API_KEY)"
@@ -607,22 +661,25 @@ def triage(message: str, history: list[Turn], notebook: str, mem: ChatMemory | N
         except jev.JevError as exc:
             log.warning("Jev triage failed, falling back to the LLM", exc_info=True)
             why = f"Jev failed: {exc}"
-    route = triage_llm(message, history, notebook, mem)
+    route = triage_llm(message, history, notebook, mem, **({"fresh": True} if fresh else {}))
     route.engine = f"llm triage ({why})"
     return _phrase_rules(route, message, history)
 
 
-def triage_llm(message: str, history: list[Turn], notebook: str, mem: ChatMemory | None = None) -> Triage:
-    """One cheap LLM call: is this worth researching, and what exactly should be researched?"""
+def triage_llm(message: str, history: list[Turn], notebook: str, mem: ChatMemory | None = None,
+               fresh: bool = False) -> Triage:
+    """One cheap LLM call: is this worth researching, and what exactly should be researched? `fresh` (a retried
+    question) skips the LM cache so the same reply is not replayed."""
     lm = triage_lm()
+    config = {"timeout": settings.chat_fast_timeout_seconds, **({"cache": False} if fresh else {})}
     try:
         with track_usage(lm) as usage, dspy.context(lm=lm):
             if mem is not None:
                 pred = dspy.Predict(TriageWithMemory)(conversation=conversation_text(history), message=message,
-                                                      notebook=notebook, topics=topics_digest(mem.tf))
+                                                      notebook=notebook, topics=topics_digest(mem.tf), config=config)
             else:
                 pred = dspy.Predict(TriageMessage)(conversation=conversation_text(history), message=message,
-                                                   notebook=notebook)
+                                                   notebook=notebook, config=config)
     except Exception as exc:
         # If triage fails, fall back to researching the raw message rather than failing the chat.
         log.warning("LLM triage failed, researching the raw message", exc_info=True)
@@ -660,14 +717,19 @@ RECHECK_INSTRUCTIONS = (
 )
 
 
-def notebook_brief_full(title: str, allowed: dict[str, str], corpus: Corpus) -> str:
-    """Every post title, each with the first two paragraphs of the post (until the budget is used)."""
+def notebook_brief_full(title: str, allowed: dict[str, str], corpus: Corpus,
+                        cards: dict[str, dict] | None = None) -> str:
+    """Every post title, each with its card (what the whole post is about: a post's opening often is not) and the
+    first two paragraphs of the post (until the budget is used)."""
     lines, used = [], 0
     for rel, post_title in allowed.items():
         opening = ""
         if used < RECHECK_BUDGET_CHARS:
+            card = (cards or {}).get(rel)
+            about = (f"about: {card.get('summary', '')} names: {', '.join(card.get('entities') or [])}; topics: "
+                     f"{', '.join(card.get('topics') or [])}. " if card else "")
             paragraphs = [" ".join(t.strip() for t in p.lines if t.strip()) for p in passages_of(corpus, rel, post_title)[:2]]
-            opening = shorten(" ".join(x for x in paragraphs if x), RECHECK_OPENING_CHARS)
+            opening = about + shorten(" ".join(x for x in paragraphs if x), RECHECK_OPENING_CHARS)
             used += len(opening)
         lines.append(f"- {post_title}" + (f": {opening}" if opening else ""))
     return f"Notebook: {title}. {len(allowed)} posts:\n" + "\n".join(lines)
@@ -721,16 +783,20 @@ def verify_citations(tools: ScopedTools, answer: str, citations,
     for c in sorted(citations, key=lambda c: c.marker):
         if c.marker in remap:
             continue
+        start, end, repaired = c.line_start, c.line_end, False
         if is_chat_path(c.path):
-            quote = chat_tools.quote(c.path, c.line_start, c.line_end) if chat_tools else None
+            quote = chat_tools.quote(c.path, start, end) if chat_tools else None
         else:
-            quote = tools.quote(c.path, c.line_start, c.line_end)
+            quote = tools.quote(c.path, start, end)
+            if not quote and (found := repair_lines(tools, answer, c)):
+                (start, end), repaired = found, True
+                quote = tools.quote(c.path, start, end)
         if not quote:
             continue
         new = len(verified) + 1
         remap[c.marker] = new
-        end = max(c.line_start, min(c.line_end, c.line_start + 40))
-        verified.append(VerifiedCitation(new, c.path, c.line_start, end, quote[:600]))
+        end = max(start, min(end, start + 40))
+        verified.append(VerifiedCitation(new, c.path, start, end, quote[:600], repaired))
 
     def swap(m: re.Match) -> str:
         n = remap.get(int(m.group(1)))
@@ -749,6 +815,36 @@ _STOP = {"that", "this", "with", "from", "have", "your", "they", "them", "then",
 
 def _words(text: str) -> set[str]:
     return {w for w in _WORD.findall(text.lower()) if w not in _STOP}
+
+
+REPAIR_MIN_WORDS = 3  # content words a cited sentence must share with a line of the post
+REPAIR_MIN_SHARE = 0.3  # and the share of the sentence's content words that line must hold
+_CLAIMS = re.compile(r"(?<=[.!?])\s+|\n+")
+
+
+def repair_lines(tools: ScopedTools, answer: str, c) -> tuple[int, int] | None:
+    """New lines for a citation whose path is right but whose line numbers do not exist (a common slip on long posts):
+    the line of that post that shares the most words with the sentences carrying its [n] marker. None when nothing
+    matches well enough, so a wrong source is never invented."""
+    corpus = getattr(tools, "corpus", None)
+    if corpus is None:
+        return None
+    try:
+        lines = corpus.read_lines(tools._check(c.path))
+    except CorpusError:
+        return None
+    marker = f"[{c.marker}]"
+    claim = _words(" ".join(_MARKER.sub(" ", part) for part in _CLAIMS.split(answer) if marker in part))
+    if len(claim) < REPAIR_MIN_WORDS:
+        return None
+    best, at = 0, -1
+    for i, line in enumerate(lines):
+        shared = len(claim & _words(line))
+        if shared > best:
+            best, at = shared, i
+    if best < REPAIR_MIN_WORDS or best / len(claim) < REPAIR_MIN_SHARE:
+        return None
+    return at + 1, at + 1
 
 
 def ensure_markers(text: str, cites: list[VerifiedCitation]) -> str:
@@ -858,6 +954,7 @@ class _Stream:
         self.sent = False
         self.prompt_tokens = self.completion_tokens = 0
         self.topic = ""  # from the last write that succeeded
+        self.last_failure = ""  # why the last write returned None: uncovered | context | error
 
     def _emit(self, text: str) -> None:
         self.sent = True
@@ -875,14 +972,26 @@ class _Stream:
         prompt is over the context window (it raises ValueError when there is nothing left to cut). stop_if_uncovered:
         a one-call path stops at the model's first line when it says the material does not answer the question."""
         why = "unknown"
-        for _ in range(3):
+        self.last_failure = "error"
+        for attempt in range(3):
             try:
-                res = writer.stream_answer(inputs, evidence, self._emit, length, stop_if_uncovered)
+                with self.trace.observe(f"writer: {label}", as_type="generation", model=writer_model(),
+                                        input=lf.text(evidence),
+                                        metadata={"answer_length": length, "attempt": attempt + 1,
+                                                  "stop_if_uncovered": stop_if_uncovered,
+                                                  "evidence_chars": len(evidence)}) as gen:
+                    res = writer.stream_answer(inputs, evidence, self._emit, length, stop_if_uncovered)
+                    gen.update(output=lf.text(res.answer),
+                               usage_details={"input": res.prompt_tokens, "output": res.completion_tokens},
+                               metadata={"citations": len(res.citations), "unsupported": res.unsupported,
+                                         "chunks": res.chunks})
             except writer.WriterUncovered:
                 why = "the model's first line said these passages do not answer it, so it stopped before any text"
+                self.last_failure = "uncovered"
                 break
             except ContextWindowExceededError:
                 why = "over the context window"
+                self.last_failure = "context"
                 if self.sent or shrink is None:
                     break
                 try:
@@ -1052,6 +1161,7 @@ def research(
     external_destinations: list[dict] | None = None,
     workspace_id=None,
     notebook_id=None,
+    fresh: bool = False,
 ) -> ResearchResult:
     """on_delta gets the answer text as it is written (None = take back what was sent, a different path writes it).
     The returned text is the verified answer, which replaces whatever was streamed."""
@@ -1124,14 +1234,33 @@ def research(
     synced = pool.submit(contextvars.copy_context().run, corpus.sync, tuple(allowed))
     pool.shutdown(wait=False)
     with trace.stage("triage"):
-        route = triage(question, history, notebook_brief(notebook_title, allowed), chat_memory)
+        route = triage(question, history, notebook_brief(notebook_title, allowed), chat_memory,
+                       **({"fresh": True} if fresh else {}))
+    early_cards: dict[str, dict] = {}
+    if route.kind == "off_topic" and allowed:
+        # Triage saw only the post titles. If the question's own subject words occur anywhere in the posts (a resume
+        # titled "Muhammad Mehdi Resume" that mentions Blog2Video), it is about the notebook: research it.
+        with trace.stage("off-topic-guard"):
+            try:
+                manifest_now = synced.result() or {}
+                early_cards = load_cards(corpus, allowed) if settings.post_cards_enabled else {}
+                mentioned = notebook_mentions(corpus, allowed, manifest_now, f"{question} {route.question}",
+                                              early_cards or None)
+            except Exception:
+                logging.getLogger(__name__).warning("The off topic keyword check failed", exc_info=True)
+                mentioned = []
+        if mentioned:
+            route.notes.append(f"off_topic, but the posts mention {', '.join(mentioned[:6])} -> archive "
+                               "(keyword check over the whole notebook)")
+            route.kind, route.reply = "archive", ""
     if route.kind == "off_topic" and route.engine == "jev":
         with trace.stage("recheck-off-topic"):
             try:
                 synced.result()  # the openings are read from the synced posts
             except Exception:
                 logging.getLogger(__name__).warning("Posts sync failed before the off topic recheck", exc_info=True)
-            route = recheck_off_topic(route, question, history, notebook_brief_full(notebook_title, allowed, corpus))
+            route = recheck_off_topic(route, question, history,
+                                      notebook_brief_full(notebook_title, allowed, corpus, early_cards))
     named_external_app = (
         names_external_app(question, external_aliases or set())
         if route.kind in {"create", "external_action"} and external_tools else None
@@ -1359,7 +1488,7 @@ def research(
         signature, inputs["chat_memory"] = ResearchArchiveWithMemory, notes or "(nothing filed yet)"
     else:
         signature = ResearchArchive
-    lm = main_lm()
+    lm = agent_lm()  # uncached: a retried question researches again instead of replaying the same steps
     recall = {
         "route": _route_info(route),
         "triage_detail": _triage_detail(route),
@@ -1423,7 +1552,9 @@ def research(
             steps=steps,
             kind="external_action" if external_only else "archive",
             question=route.question,
-            recall={**recall, "path": path},
+            recall={**recall, "path": path, "refused": refused, "model_unsupported": bool(model_unsupported),
+                    "proposed_cites": len(proposed), "verified_cites": len(cites),
+                    "repaired_cites": sum(1 for c in cites if c.repaired)},
             topic=(stream.topic if stream and not refused else ""),
             external_sources=used_external,
             external_widgets=used_widgets,
@@ -1449,24 +1580,117 @@ def research(
             trace.sections.pop("citations", None)
             trace.sections.pop("result", None)
 
-    # 2. Keyword prefetch: the best passages go to the agent (and the writer) before any model call. A follow up
-    # ("explain how to use it") is searched together with the question before it, which names what "it" is.
+    # Post cards (app/pipeline/cards.py): their topics, names and synonyms go into the keyword index with the posts.
+    cards: dict[str, dict] = {}
+    if not external_only and settings.post_cards_enabled and allowed:
+        with trace.stage("load-cards"):
+            try:
+                cards = load_cards(corpus, allowed)
+            except Exception:
+                logging.getLogger(__name__).warning("Could not load the post cards", exc_info=True)
+        trace.add("context", f"post cards: {len(cards)} of {len(allowed)} posts have one")
+        trace.tag("cards:" + ("all" if cards and len(cards) == len(allowed) else "some" if cards else "none"))
     query = route.question
     earlier = next((t.text for t in reversed(history) if t.role == "user"), "")
     if earlier and refers_back(route.question):
         query = f"{route.question} {earlier}"
+
+    # 2r. The router (CHAT_ROUTER): Tier A reads the whole notebook when it fits, Tier B the best posts found by
+    # keyword and card search. A miss goes on to the research agent (Tier C, step 6); steps 2 to 5 are skipped.
+    use_router = settings.chat_router and stream is not None and not external_only and chat_tools is None and allowed
+    if use_router:
+        tokens = notebook_tokens(corpus, allowed)
+        router: dict = {"notebook_tokens": tokens, "cards": len(cards), "posts": len(allowed), "tier": "B"}
+        recall["router"] = router
+        if tokens <= settings.chat_full_notebook_tokens:
+            router["tier"] = "A"
+            recall["prefetch"] = {"passages": len(allowed), "tier": "A"}
+            trace.tag("tier:A")
+            log("think", f"Reading all {len(allowed)} posts")
+            with trace.stage("tier A"):
+                res = stream.write(inputs, tier_a_evidence(corpus, allowed), route.detail, "tier A (whole notebook)",
+                                   stop_if_uncovered=True)
+            if res is not None and not res.unsupported:
+                result = finish(res.answer, res.citations, res.unsupported, "tier A")
+                if result.citations:
+                    return result
+                trace.sections.pop("citations", None)
+                trace.sections.pop("result", None)
+                miss = "no citation survived verification"
+            elif stream.last_failure == "uncovered" or res is not None:
+                # The model read every post and none of them answers it: say so plainly, no agent needed.
+                stream.reset()
+                trace.add("writer", "tier A: the whole notebook was read and does not cover the question")
+                return finish("The posts in this notebook do not cover that.", [], True, "tier A")
+            else:
+                miss = f"the writer failed ({stream.last_failure})"
+            stream.reset()
+            trace.add("writer", f"tier A: miss ({miss}) -> tier B")
+            router["tier"] = "A>B"
+        trace.tag("tier:B")
+        queries = [route.question] + ([query] if query != route.question else [])
+        if settings.chat_query_expansion:
+            with trace.stage("expand-query"):
+                try:
+                    more, p_tok, c_tok = expand_query(route.question, conversation_text(history, limit=4))
+                    queries += more
+                    extra_prompt, extra_completion = extra_prompt + p_tok, extra_completion + c_tok
+                except Exception as exc:
+                    trace.add("context", f"query expansion failed ({type(exc).__name__}): the message alone is searched")
+        with trace.stage("retrieve"):
+            found = retrieve(corpus, allowed, manifest, cards, queries)
+        overview = not content_words(route.question)
+        budget_chars = settings.chat_evidence_tokens * CHARS_PER_TOKEN
+        if overview:
+            evidence, label = overview_evidence(corpus, allowed, cards, budget_chars), "tier B overview"
+        else:
+            picked = tier_b_evidence(corpus, allowed, found, budget_chars)
+            evidence, label = picked.text, "tier B"
+            router.update(evidence_posts=len(picked.posts), whole_posts=picked.whole)
+        router["queries"] = len(queries)
+        recall["prefetch"] = {"passages": found.passage_count, "posts": len(found.posts), "queries": len(queries),
+                              "terms": found.terms}
+        trace.add("context", f"{label}: {len(queries)} search(es), {len(found.posts)} post(s) ranked, "
+                             f"{found.passage_count} passage(s) matched, evidence {len(evidence)} chars"
+                             f"  [BM25 over passages + post cards, fused]")
+        if evidence:
+            log("think", "Found matching posts" if found.posts else "Looking across the notebook")
+            with trace.stage(label):
+                res = stream.write(inputs, evidence, route.detail, label, stop_if_uncovered=True)
+            if res is not None and not res.unsupported:
+                result = finish(res.answer, res.citations, res.unsupported, label)
+                if result.citations:
+                    return result
+                trace.sections.pop("citations", None)
+                trace.sections.pop("result", None)
+            stream.reset()
+            inputs["prefetched"] = evidence[:AGENT_PREFETCH_CHARS]
+        trace.add("writer", f"{label}: miss ({stream.last_failure or 'no verified citation'}) -> research agent "
+                            "(tier C)")
+        router["tier"] += ">C"
+        trace.tag("tier:C")
+
+    # 2. Keyword prefetch: the best passages go to the agent (and the writer) before any model call. A follow up
+    # ("explain how to use it") is searched together with the question before it, which names what "it" is.
     deep = route.depth == "deep"
     pre = None
-    if not external_only:
+    if use_router:
+        pass  # the router above already gathered the evidence
+    elif not external_only:
         with trace.stage("prefetch"):
             try:
-                pre = prefetch(corpus, allowed, manifest, query, *((DEEP_TOP_K, DEEP_PER_POST) if deep else ()))
+                pre = prefetch(corpus, allowed, manifest, query, *((DEEP_TOP_K, DEEP_PER_POST) if deep else ()),
+                               **({"cards": cards} if cards else {}))
             except Exception:  # a ranking problem only costs the head start
                 logging.getLogger(__name__).warning("Prefetch failed", exc_info=True)
                 pre = None
     else:
         trace.add("context", "archive prefetch skipped: Jev classified the request as an external action, "
                   "so only enabled external tools are available")
+    if not use_router:
+        recall["prefetch"] = ({"passages": len(pre.passages), "posts": len({p.path for _, p in pre.passages}),
+                               "coverage": round(pre.coverage, 2), "terms": len(pre.terms), "asked": len(pre.asked)}
+                              if pre is not None else {"passages": 0, "skipped": external_only})
     if pre is not None:
         inputs["prefetched"] = pre.text
         trace.add("context", f"prefetch: {len(pre.passages)} passage(s) from "
@@ -1518,7 +1742,7 @@ def research(
     # 3. Overview: a question about the notebook as a whole (no subject to search for) is answered in one call from
     # the post list and the opening passage of the newest posts.
     one_call = (not external_only and stream is not None and settings.chat_fast_path
-                and route.detail != "in_depth" and chat_tools is None)
+                and route.detail != "in_depth" and chat_tools is None and not use_router)
     if one_call and pre is not None and pre.overview:
         listing = tools.list_files()  # shows as the one step: scanning the archive
         listed = [(row.split("|")[1].strip(), row.split("|")[2].strip()) for row in listing.splitlines()
@@ -1559,7 +1783,7 @@ def research(
                             f"chat tools {'given' if chat_tools else 'not given'})")
 
     # 5. A question about several separate subjects: research the parts at once, then write one answer.
-    if (stream and settings.chat_parallel_parts and route.depth == "deep" and chat_tools is None
+    if (stream and settings.chat_parallel_parts and route.depth == "deep" and chat_tools is None and not use_router
             and not external_tools
             and looks_multipart(route.question)):
         with trace.stage("split"):

@@ -19,6 +19,8 @@ class MemoryStore:
         return key
 
     def get_bytes(self, key):
+        if key not in self.objects:
+            raise FileNotFoundError(key)  # as LocalStorage does; R2 raises NoSuchKey
         return self.objects[key]
 
     def exists(self, key):
@@ -64,6 +66,41 @@ def test_sync_mirrors_r2_into_a_fresh_cache(corpus_pair):
     reader, p1, _ = corpus_pair
     assert reader.exists(p1) and reader.exists(INDEX)
     assert "# On pricing" in reader.read_lines(p1)
+
+
+def test_sync_skips_and_drops_manifest_entries_with_no_object(tmp_path):
+    """A lost update left a deleted post listed in the manifest (prod, 2026-11-18): reads must not 500 on it."""
+    store = MemoryStore()
+    ws = uuid.uuid4()
+    writer = Corpus(ws, store=store, cache_dir=str(tmp_path / "worker"))
+    writer.write_files({"sources/a/keep.md": "# Keep\n", "sources/a/gone.md": "# Gone\n", INDEX: "index\n"})
+    store.delete(writer._key("sources/a/gone.md"))  # object gone, manifest still lists it
+
+    reader = Corpus(ws, store=store, cache_dir=str(tmp_path / "api"))
+    synced = reader.sync()
+
+    assert reader.exists("sources/a/keep.md") and not reader.exists("sources/a/gone.md")
+    assert "sources/a/gone.md" not in synced
+    assert "sources/a/gone.md" not in reader._read_manifest(remote=True)  # healed for every process
+    assert "sources/a/keep.md" in reader._read_manifest(remote=True)
+    assert reader.sync() == synced  # stable: nothing left to trip over
+
+
+def test_removed_files_leave_the_manifest_before_their_objects(tmp_path):
+    """A reader that syncs between the two steps must never see a listed file whose object is already gone."""
+    store = MemoryStore()
+    ws = uuid.uuid4()
+    corpus = Corpus(ws, store=store, cache_dir=str(tmp_path / "c"))
+    corpus.write_files({"sources/a/x.md": "# X\n"})
+    order: list[str] = []
+    put, delete = store.put_text, store.delete
+    store.put_text = lambda key, *a, **k: (order.append(f"put {key.rsplit('/', 1)[-1]}"), put(key, *a, **k))[1]
+    store.delete = lambda key: (order.append(f"delete {key.rsplit('/', 1)[-1]}"), delete(key))[1]
+
+    corpus.write_files({INDEX: "index\n"}, remove={"sources/a/x.md"})
+
+    assert order.index("put manifest.json") < order.index("delete x.md")
+    assert "sources/a/x.md" not in corpus._read_manifest(remote=True)
 
 
 def test_tools_search_read_and_scope(corpus_pair):
@@ -123,7 +160,7 @@ def test_react_agent_end_to_end_with_scripted_model(corpus_pair, monkeypatch):
          "citations": [{"marker": 1, "path": p1, "line_start": line, "line_end": line}],
          "unsupported": False},
     ])
-    monkeypatch.setattr(research_mod, "main_lm", lambda: lm)
+    monkeypatch.setattr(research_mod, "agent_lm", lambda: lm)
     monkeypatch.setattr(research_mod, "track_usage", _no_usage)
     monkeypatch.setattr(research_mod, "triage", lambda *a: research_mod.Triage("archive", "What did I charge?",
                                                                                 "deep", ""))

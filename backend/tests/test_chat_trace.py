@@ -102,7 +102,7 @@ def test_the_archive_trace_lists_what_the_agent_was_given(monkeypatch, tmp_path)
         return run
 
     monkeypatch.setattr(r.dspy, "ReAct", fake_react)
-    monkeypatch.setattr(r, "main_lm", lambda: SimpleNamespace(model="glm-test"))
+    monkeypatch.setattr(r, "agent_lm", lambda: SimpleNamespace(model="glm-test"))
     monkeypatch.setattr(r, "track_usage", no_usage)
     monkeypatch.setattr(r, "triage", lambda *a: r.Triage("archive", "q", "quick", "", engine="jev"))
     corpus = Corpus(uuid.uuid4(), cache_dir=str(tmp_path))
@@ -114,7 +114,7 @@ def test_the_archive_trace_lists_what_the_agent_was_given(monkeypatch, tmp_path)
                history=[r.Turn("user", "hi there"), r.Turn("assistant", "hello")], trace=t)
     text = t.render()
     assert "ARCHIVE: the message needs the writer's posts" in text
-    assert "signature: ResearchArchive | model glm-test | up to 4 reasoning steps (quick)" in text
+    assert "signature: ResearchArchive | model glm-test | up to 6 reasoning steps (quick)" in text
     assert "tools    : list_files, search, read" in text
     assert "conversation: 2 turn(s)" in text and "writer notes: 2 line(s)" in text
     assert "chat memory: OFF (CHAT_MEMORY_READ=false)" in text
@@ -133,7 +133,7 @@ def test_external_trace_lists_every_compact_definition(monkeypatch, tmp_path):
         yield SimpleNamespace(prompt_tokens=0, completion_tokens=0)
 
     def fake_react(_signature, tools, max_iters):
-        assert len(tools) == 1 and max_iters == 4
+        assert len(tools) == 1 and max_iters == 6
         return lambda **_inputs: SimpleNamespace(answer="not run", citations=[], unsupported=True)
 
     tool = CompactExternalTool(
@@ -144,7 +144,7 @@ def test_external_trace_lists_every_compact_definition(monkeypatch, tmp_path):
         required_args={"channel", "message"},
     )
     monkeypatch.setattr(r.dspy, "ReAct", fake_react)
-    monkeypatch.setattr(r, "main_lm", lambda: SimpleNamespace(model="glm-test"))
+    monkeypatch.setattr(r, "agent_lm", lambda: SimpleNamespace(model="glm-test"))
     monkeypatch.setattr(r, "track_usage", no_usage)
     monkeypatch.setattr(r, "triage", lambda *a: r.Triage("external_action", "send it", "quick", "", engine="jev"))
     corpus = Corpus(uuid.uuid4(), cache_dir=str(tmp_path))
@@ -186,7 +186,7 @@ def test_the_chat_endpoint_writes_one_trace_block_per_message(client, monkeypatc
     assert "[2 PATH]" in text and "ARCHIVE: fake" in text
     assert "answer sent after" in text and "assistant message saved to Postgres" in text
     assert "workspace notes: not updated (no LLM_API_KEY)" in text
-    assert "[TIMING]  db-history+notes" in text and "save-answer" in text
+    assert "[TIMING]  db-history" in text and "db-notes" in text and "save-answer" in text
 
 
 def test_the_trace_hides_the_message_when_text_logging_is_off(client, monkeypatch, caplog):
@@ -300,7 +300,7 @@ def test_an_answer_step_that_stays_malformed_saves_a_plain_reply_and_is_not_file
         yield SimpleNamespace(prompt_tokens=0, completion_tokens=0)
 
     monkeypatch.setattr(r.dspy, "ReAct", fake_react)
-    monkeypatch.setattr(r, "main_lm", lambda: SimpleNamespace(model="m"))
+    monkeypatch.setattr(r, "agent_lm", lambda: SimpleNamespace(model="m"))
     monkeypatch.setattr(r, "track_usage", no_usage)
     monkeypatch.setattr(r, "triage", lambda *a: r.Triage("archive", "q", "quick", "", engine="jev"))
     corpus = Corpus(uuid.uuid4(), cache_dir=str(tmp_path))

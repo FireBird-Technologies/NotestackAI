@@ -325,7 +325,8 @@ def test_the_recorder_writes_down_calls_and_keeps_what_the_agent_is_shown(tmp_pa
 
 def test_the_prompts_tell_the_agent_to_look_wide():
     base = " ".join(ResearchArchive.__doc__.split())
-    assert "First call list_files to see which posts exist" in base
+    assert "Start from the prefetched passages: when they answer the question, cite them directly" in base
+    assert "Call list_files when you need to see which posts exist" in base
     assert "call search across the whole archive (leave path empty" in base
     assert "Pass path to search only when the writer explicitly asks you to use one named post" in base
     assert "otherwise never limit a search to one post" in base

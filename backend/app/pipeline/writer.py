@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 
 import litellm
 
+from app.config import settings
 from app.llm.postprocess import strip_em_dashes
 from app.llm.provider import writer_lm
 from app.llm.signatures import ANSWER_INSTRUCTIONS, ANSWER_LENGTHS, FileCitation
@@ -198,6 +199,7 @@ def stream_answer(inputs: dict, evidence: str, on_delta: Callable[[str], None],
     it), and LiteLLM's errors (ContextWindowExceededError included) as they are."""
     lm = writer_lm()
     kwargs = dict(lm.kwargs)
+    kwargs["timeout"] = settings.chat_llm_timeout_seconds
     cap = WRITER_MAX_TOKENS.get(answer_length if answer_length in ANSWER_LENGTHS else "standard")
     if cap:
         key = "max_completion_tokens" if "max_completion_tokens" in kwargs else "max_tokens"

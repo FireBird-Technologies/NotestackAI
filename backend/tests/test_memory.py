@@ -132,7 +132,7 @@ def test_research_gives_the_profile_to_the_agent(monkeypatch, tmp_path):
         yield SimpleNamespace(prompt_tokens=0, completion_tokens=0)
 
     monkeypatch.setattr(r.dspy, "ReAct", fake_react)
-    monkeypatch.setattr(r, "main_lm", lambda: None)
+    monkeypatch.setattr(r, "agent_lm", lambda: None)
     monkeypatch.setattr(r, "track_usage", no_usage)
     monkeypatch.setattr(r, "triage", lambda *a: r.Triage("archive", "q", "quick", ""))
     corpus = Corpus(uuid.uuid4(), cache_dir=str(tmp_path))
