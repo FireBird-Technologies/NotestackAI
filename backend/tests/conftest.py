@@ -97,6 +97,20 @@ def never_reach_stripe(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def never_reach_langfuse(monkeypatch):
+    """No test sends traces or scores to a real Langfuse project, even when .env holds LANGFUSE keys. A test that needs
+    Langfuse swaps in a fake client (tests/test_chat_observability.py)."""
+    from app.config import settings
+    from app.observability import langfuse_client
+
+    monkeypatch.setattr(settings, "langfuse_public_key", "")
+    monkeypatch.setattr(settings, "langfuse_secret_key", "")
+    langfuse_client.reset_for_tests()
+    yield
+    langfuse_client.reset_for_tests()
+
+
+@pytest.fixture(autouse=True)
 def offline_dns(monkeypatch):
     """Names resolve to a public address and nothing touches the network: tests use hosts like ada.example.com."""
     import ipaddress

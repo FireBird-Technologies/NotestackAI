@@ -385,7 +385,7 @@ def test_external_action_calls_mcp_instead_of_archive(db_session, auth, monkeypa
         research_module, "triage",
         lambda *a: research_module.Triage("external_action", "find GitHub issues", "quick", ""),
     )
-    monkeypatch.setattr(research_module, "main_lm", lambda: SimpleNamespace(model="test"))
+    monkeypatch.setattr(research_module, "agent_lm", lambda: SimpleNamespace(model="test"))
 
     @contextmanager
     def usage(_lm):

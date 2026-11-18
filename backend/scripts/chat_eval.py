@@ -10,11 +10,16 @@ Setup (once):
 
 1. A labelled question set (each question written by GLM from one passage, so the right lines are known):
   .venv/bin/python scripts/chat_eval.py make-questions --notebook <id> --n 40 --out eval/synthetic.csv
+  Add --paraphrase to also write each question in other words (ids p...): the wording-gap set, compared by the
+  same metrics. A post found for s007 but not for p007 is a miss caused by vocabulary, not by the question.
   Read it and delete bad or ambiguous questions: this matters more than anything else for a trustworthy result.
 
 2. A smoke test (a few minutes):
   .venv/bin/python scripts/chat_eval.py run --notebook <id> --questions eval/questions.csv --limit 3 --repeats 1 \\
       --no-judge --no-ragas
+
+Router vs today's chat (post cards must exist: scripts/build_post_cards.py):
+  .venv/bin/python scripts/chat_eval.py run --notebook <id> --questions eval/synthetic.csv --baseline current --router
 
 3. The full run (about 1 to 1.5 hours, real GLM tokens; run at a quiet time and do not chat meanwhile):
   .venv/bin/python scripts/chat_eval.py run --notebook <id> --questions eval/questions.csv eval/synthetic.csv --repeats 3
@@ -60,6 +65,11 @@ from app.services import jev  # noqa: E402
 from app.services.memory import list_facts, profile_text  # noqa: E402
 
 MODES = ("old", "new")
+# What "old" and "new" mean (set from the run arguments). BASELINE "agent": old is the research agent alone (the
+# original comparison). BASELINE "current": old is the chat as it runs today (keyword prefetch, fast path). ROUTER:
+# new runs with CHAT_ROUTER on (tiers A/B/C, post cards, query expansion).
+BASELINE = "agent"
+ROUTER = False
 NO_RESEARCH = ("chitchat", "off_topic", "about_app", "error")  # replies that never touch the posts
 FIELDS = ("id", "group", "question", "expected_fact", "reference_answer", "gold_path", "gold_lines")
 log = logging.getLogger("chat_eval")
@@ -169,6 +179,17 @@ class WriteQuestion(dspy.Signature):
     answer: str = dspy.OutputField(desc="One or two sentences, only from the passage")
 
 
+class ParaphraseQuestion(dspy.Signature):
+    """Rewrite a writer's question so it asks for exactly the same thing in different words: replace the passage's
+    key terms with synonyms or plain descriptions a reader would use (e.g. "pricing" -> "what to charge"), keep any
+    proper names. This tests whether the assistant finds the answer when the question does not share the post's
+    vocabulary. Return only the rewritten question."""
+
+    question: str = dspy.InputField()
+    passage: str = dspy.InputField(desc="The passage that answers it: avoid its distinctive words")
+    paraphrase: str = dspy.OutputField()
+
+
 def make_questions(args) -> None:
     models_without_cache()
     _, allowed, corpus, manifest, _, _ = load_notebook(args.notebook)
@@ -182,6 +203,7 @@ def make_questions(args) -> None:
             seen_posts.add(p.path)
     picked += [p for p in passages if p not in picked]
     rows, lm = [], provider.main_lm()
+    paraphrases: list[dict] = []
     for p in picked:
         if len(rows) >= args.n:
             break
@@ -198,12 +220,25 @@ def make_questions(args) -> None:
         rows.append({"id": f"s{i:03d}", "group": f"s{i:03d}", "question": q, "expected_fact": "",
                      "reference_answer": a, "gold_path": p.path, "gold_lines": f"{p.start}-{p.end}"})
         print(f"  {i:3d}. {q}")
+        if args.paraphrase:
+            try:
+                with dspy.context(lm=lm):
+                    para = (dspy.Predict(ParaphraseQuestion)(question=q, passage="\n".join(p.lines)).paraphrase
+                            or "").strip()
+            except Exception as exc:
+                print(f"       paraphrase skipped: {type(exc).__name__}")
+                para = ""
+            if para and para.lower() != q.lower():
+                # Its own group: a paraphrase is a separate first question, not a follow up in the same chat.
+                paraphrases.append({**rows[-1], "id": f"p{i:03d}", "group": f"p{i:03d}", "question": para})
+                print(f"       ~ {para}")
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     with open(args.out, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=FIELDS)
         w.writeheader()
-        w.writerows(rows)
-    print(f"Wrote {len(rows)} questions to {args.out}. Read them and delete bad or ambiguous ones before a run.")
+        w.writerows(rows + paraphrases)
+    print(f"Wrote {len(rows)} questions" + (f" and {len(paraphrases)} paraphrases (ids p...)" if paraphrases else "")
+          + f" to {args.out}. Read them and delete bad or ambiguous ones before a run.")
 
 
 # Instrumentation: what each run did
@@ -222,7 +257,8 @@ class Probe:
     def watch(self, mode: str):
         saved = {"completion": writer._completion, "stream": writer.stream_answer, "decide": jev.decide,
                  "read": ScopedTools.read, "prefetch": rs.prefetch,
-                 "flags": (settings.chat_fast_path, settings.chat_stream_answers, settings.chat_parallel_parts)}
+                 "flags": (settings.chat_fast_path, settings.chat_stream_answers, settings.chat_parallel_parts),
+                 "router": settings.chat_router}
         probe = self
 
         def completion(**kw):
@@ -251,11 +287,13 @@ class Probe:
             return probe.prefetch
 
         writer._completion, writer.stream_answer, jev.decide, ScopedTools.read = completion, stream_answer, decide, read
-        if mode == "old":
+        if mode == "old" and BASELINE == "agent":
             settings.chat_fast_path = settings.chat_stream_answers = settings.chat_parallel_parts = False
+            settings.chat_router = False
             rs.prefetch = lambda *a, **k: pf.Prefetch()
         else:
             settings.chat_fast_path = settings.chat_stream_answers = settings.chat_parallel_parts = True
+            settings.chat_router = ROUTER and mode == "new"
             rs.prefetch = prefetch
         try:
             yield self
@@ -263,6 +301,7 @@ class Probe:
             writer._completion, writer.stream_answer, jev.decide = saved["completion"], saved["stream"], saved["decide"]
             ScopedTools.read, rs.prefetch = saved["read"], saved["prefetch"]
             settings.chat_fast_path, settings.chat_stream_answers, settings.chat_parallel_parts = saved["flags"]
+            settings.chat_router = saved["router"]
 
 
 def history_entries(clear: bool = False) -> int:
@@ -478,6 +517,8 @@ def mean(xs: list) -> float | str:
 
 
 def run(args) -> None:
+    global BASELINE, ROUTER
+    BASELINE, ROUTER = args.baseline, args.router
     models_without_cache()
     rows = read_questions(args.questions, args.limit)
     nb, allowed, corpus, manifest, profile, setup = load_notebook(args.notebook)
@@ -679,6 +720,8 @@ def main() -> None:
     mq.add_argument("--n", type=int, default=40)
     mq.add_argument("--seed", type=int, default=7)
     mq.add_argument("--out", default="eval/synthetic.csv")
+    mq.add_argument("--paraphrase", action="store_true",
+                    help="also write each question in different words (ids p...), to measure the wording gap")
     rn = sub.add_parser("run", help="run old and new on the questions and write the CSVs")
     rn.add_argument("--notebook")
     rn.add_argument("--questions", nargs="+", default=["eval/questions.csv"])
@@ -686,6 +729,9 @@ def main() -> None:
     rn.add_argument("--limit", type=int, help="only the first N question groups (a smoke test)")
     rn.add_argument("--no-judge", action="store_true")
     rn.add_argument("--no-ragas", action="store_true")
+    rn.add_argument("--baseline", choices=("agent", "current"), default="agent",
+                    help="what 'old' is: the research agent alone, or the chat as it runs today")
+    rn.add_argument("--router", action="store_true", help="run 'new' with CHAT_ROUTER on (tiers, cards, expansion)")
     rn.add_argument("--out", help="results folder (default chat_eval_results/<timestamp>)")
     args = ap.parse_args()
     {"notebooks": list_notebooks, "make-questions": make_questions, "run": run}[args.cmd](args)

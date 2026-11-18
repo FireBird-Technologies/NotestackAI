@@ -227,7 +227,7 @@ def _no_usage(lm):
 def _archive(monkeypatch, depth="quick", detail="standard", reuse="new_research"):
     monkeypatch.setattr(r, "triage", lambda *a: r.Triage("archive", a[0], depth, "", detail=detail, reuse=reuse,
                                                         engine="jev"))
-    monkeypatch.setattr(r, "main_lm", lambda: SimpleNamespace(model="glm-test"))
+    monkeypatch.setattr(r, "agent_lm", lambda: SimpleNamespace(model="glm-test"))
     monkeypatch.setattr(r, "track_usage", _no_usage)
     monkeypatch.setattr(settings, "chat_stream_answers", True)
     monkeypatch.setattr(settings, "chat_memory_read", False)
