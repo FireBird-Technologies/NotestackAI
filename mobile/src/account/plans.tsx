@@ -2,7 +2,7 @@ import { earlySupporterLabel, groupFeatures, savingsPct, type Cycle, type Plan }
 import { POPULAR_PLAN } from "@notestack/shared/billing";
 import * as WebBrowser from "expo-web-browser";
 import type { ReactNode } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Platform, StyleSheet, Text, View } from "react-native";
 import { Pressable } from "@/ui/pressable";
 
 import { Card, publicText } from "@/shell/public-page";
@@ -78,9 +78,32 @@ export function LegalLinks() {
 }
 
 /**
+ * The subscription terms the stores ask to see wherever the plans are shown with prices (the upgrade sheet, the
+ * pricing page): automatic renewal, where it is charged and how to cancel, with the Terms and Privacy links.
+ */
+export function SubscriptionTerms() {
+  const ios = Platform.OS === "ios";
+  const open = (path: string) => void WebBrowser.openBrowserAsync(`https://notestack.ai${path}`, { controlsColor: colors.blue });
+  return (
+    <Text style={styles.terms}>
+      Plans renew automatically at the price shown, monthly or yearly, until you cancel. Payment is charged to your{" "}
+      {ios ? "Apple ID" : "Google account"} at confirmation. Cancel at least 24 hours before the period ends in your{" "}
+      {ios ? "App Store account settings" : "Google Play subscriptions"}.{" "}
+      <Text style={styles.termsLink} onPress={() => open("/terms")}>
+        Terms of Service
+      </Text>{" "}
+      ·{" "}
+      <Text style={styles.termsLink} onPress={() => open("/privacy")}>
+        Privacy Policy
+      </Text>
+    </Text>
+  );
+}
+
+/**
  * One plan: its name, price and what it includes. `storePrice` is the App Store / Google Play price for this cycle
- * (localized, the whole period's). It is the only price the app shows for a paid plan: without it (signed out, or the
- * store's plans not loaded) the card has no price, since the stores don't allow pointing at other prices. `children`
+ * (localized, the whole period's). It is the only price the app shows for a paid plan: without it (the store's plans
+ * not loaded, or a build that cannot sell plans) the card has no price, since the stores don't allow pointing at other prices. `children`
  * go under the features (the upgrade sheet's buttons). `introPrice` is an early supporter discount on the first payment
  * (a store offer this person can get): it takes the price's place, with the usual one struck through beside it and
  * the price it renews at spelled out, as the stores require.
@@ -165,6 +188,8 @@ export function PlanCard({
 }
 
 const styles = StyleSheet.create({
+  terms: { color: colors.text3, fontSize: 12.5, lineHeight: 18 },
+  termsLink: { color: colors.blue },
   legal: { flexDirection: "row", gap: 8, marginTop: 6, paddingTop: 16, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.lineStrong },
   legalItem: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   legalLink: { flexShrink: 1, color: colors.white, fontSize: 13.5, lineHeight: 20 },

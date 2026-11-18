@@ -3,20 +3,19 @@ import { api, PLAN_LIMIT_EVENT, type PlanLimitDetail } from "@notestack/shared/c
 import { FALLBACK_PLANS, type Cycle, type Plan } from "@notestack/shared/content/marketing";
 import type { BillingStatus } from "@notestack/shared/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import * as WebBrowser from "expo-web-browser";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Platform, StyleSheet, Text, View } from "react-native";
 
 import { planQuery } from "@/account/plan";
 import { track } from "@/lib/analytics";
 import { on } from "@/lib/platform";
-import { CycleToggle, defaultPlanTab, PlanCard, PlanTabs } from "@/account/plans";
-import { buy, getIntroOffers, getPackages, identify, type PlanIntroOffers, isStorePlan, manageSubscriptions, purchasesReady, restore } from "@/account/purchases";
+import { CycleToggle, defaultPlanTab, PlanCard, PlanTabs, SubscriptionTerms } from "@/account/plans";
+import { buy, identify, isStorePlan, manageSubscriptions, purchasesReady, restore } from "@/account/purchases";
+import { useStorePrices } from "@/account/store-prices";
 import { colors } from "@/ui/theme";
 import { ErrorText, Loading } from "@/ui";
 import { PillButton, Sheet } from "@/ui/widgets";
 
-const SITE = "https://notestack.ai";
 const STORE = Platform.OS === "ios" ? "the App Store" : "Google Play";
 /** Where this app sells and manages plans: its phone's store. */
 const HERE: BillingPlace = Platform.OS === "ios" ? "app_store" : "play_store";
@@ -92,18 +91,9 @@ function Paywall({ opening }: { opening: Opening }) {
   const status = useQuery(planQuery);
   const plansQuery = useQuery({ queryKey: ["plans"], queryFn: () => api<{ billing_enabled: boolean; plans: Plan[] }>("/api/billing/plans") });
   const customerId = status.data?.store_customer_id;
-  const packages = useQuery({
-    queryKey: ["store", "packages", customerId],
-    queryFn: async () => {
-      await identify(customerId!);
-      const plans = await getPackages();
-      // An early supporter discount that can't be read just leaves the usual prices
-      const intros: PlanIntroOffers = await getIntroOffers(plans).catch(() => ({}));
-      return { plans, intros };
-    },
-    enabled: purchasesReady && Boolean(customerId),
-    staleTime: 10 * 60_000,
-  });
+  // Signed in, prices are read as this workspace's customer, never anonymously: a purchase must land on the workspace.
+  // No customer id yet (or none) keeps the query off.
+  const packages = useStorePrices(customerId || undefined);
 
   const plans = plansQuery.data?.plans?.length ? plansQuery.data.plans : FALLBACK_PLANS;
   const shownId = tab && plans.some((p) => p.id === tab) ? tab : defaultPlanTab(plans);
@@ -229,18 +219,7 @@ function Paywall({ opening }: { opening: Opening }) {
       ) : null}
 
       {/* The subscription terms the stores ask to see wherever the plans are shown */}
-      <Text style={styles.terms}>
-        Plans renew automatically at the price shown, monthly or yearly, until you cancel. Payment is charged to your{" "}
-        {Platform.OS === "ios" ? "Apple ID" : "Google account"} at confirmation. Cancel at least 24 hours before the
-        period ends in your {Platform.OS === "ios" ? "App Store account settings" : "Google Play subscriptions"}.{" "}
-        <Text style={styles.link} onPress={() => void WebBrowser.openBrowserAsync(`${SITE}/terms`, { controlsColor: colors.blue })}>
-          Terms of Service
-        </Text>{" "}
-        ·{" "}
-        <Text style={styles.link} onPress={() => void WebBrowser.openBrowserAsync(`${SITE}/privacy`, { controlsColor: colors.blue })}>
-          Privacy Policy
-        </Text>
-      </Text>
+      <SubscriptionTerms />
     </View>
   );
 }
@@ -272,6 +251,4 @@ const styles = StyleSheet.create({
   notice: { color: colors.blue, fontSize: 15, fontWeight: "600" },
   buy: { marginTop: 12, gap: 10, alignItems: "flex-start" },
   row: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  terms: { color: colors.text3, fontSize: 12.5, lineHeight: 18 },
-  link: { color: colors.blue },
 });
