@@ -34,3 +34,6 @@ backend/chat_eval_results/
 
 # NotebookLM transfer extension: published via the Chrome Web Store, not this repo
 browser-extension/
+
+# Chat benchmark (backend/scripts/chat_benchmark.py): its notebook, worktree and results
+.bench/
