@@ -296,9 +296,15 @@ def start_checkout(db: Session, user: User, workspace: Workspace, plan: Plan, cy
     except stripe.InvalidRequestError as exc:
         if not offer:
             raise
+        clear_offer_cache()
+        if launch_offer():
+            # The offer is still live, so Stripe refused something else (e.g. the coupon doesn't cover this price's
+            # product). Don't tell the user the offer ended.
+            log.error("checkout refused for %s/%s with the launch offer live: %s", plan.id, cycle, exc)
+            raise HTTPException(503, {"code": "checkout_failed", "message": "Checkout couldn't start. "
+                                      "Please try again soon."}) from exc
         # It was disabled in Stripe between the page load and this click
         log.info("launch offer refused at checkout: %s", exc)
-        clear_offer_cache()
         raise HTTPException(409, {"code": "offer_ended", "message": "The early supporter offer has ended, so prices "
                                   "are back to normal. Reopen plans to see them."}) from exc
     return session.url
