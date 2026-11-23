@@ -1,4 +1,5 @@
 import type { ConfigContext, ExpoConfig } from "expo/config";
+import { type ConfigPlugin, withAndroidManifest } from "expo/config-plugins";
 
 // development: the dev client against a local API over plain HTTP; production: the store app.
 const VARIANT =
@@ -15,6 +16,20 @@ const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
 const GOOGLE_IOS_URL_SCHEME = GOOGLE_IOS_CLIENT_ID
   ? `com.googleusercontent.apps.${GOOGLE_IOS_CLIENT_ID.replace(/\.apps\.googleusercontent\.com$/, "")}`
   : null;
+
+// orientation "portrait" makes Android infer a required android.hardware.screen.portrait feature, which Google Play
+// reads as "won't install on devices without one" (some tablets, Chromebooks, Android XR). Declared optional, the app
+// stays portrait-locked where it runs but installs everywhere.
+const withOptionalPortraitScreen: ConfigPlugin = (config) =>
+  withAndroidManifest(config, (mod) => {
+    const manifest = mod.modResults.manifest;
+    const features = (manifest["uses-feature"] ??= []);
+    const name = "android.hardware.screen.portrait";
+    const existing = features.find((f) => f.$["android:name"] === name);
+    if (existing) existing.$["android:required"] = "false";
+    else features.push({ $: { "android:name": name, "android:required": "false" } });
+    return mod;
+  });
 
 const MICROPHONE =
   "Notestack records your voice sample when you set up your voice profile.";
@@ -130,5 +145,5 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       reactCompiler: true,
     },
   };
-  return app;
+  return withOptionalPortraitScreen(app);
 };
