@@ -5,6 +5,7 @@ import { settingsApi, type SettingsPatch } from "@notestack/shared/endpoints";
 import type { Settings as SettingsData } from "@notestack/shared/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { Trans, useTranslation } from "react-i18next";
 import { Alert, Platform, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 
 import { analyticsEnabled, resetAnalytics, setAnalyticsEnabled } from "@/lib/analytics";
@@ -15,6 +16,8 @@ import { planQuery } from "@/account/plan";
 import { LegalLinks } from "@/account/plans";
 import { manageSubscriptions } from "@/account/purchases";
 import { useUpgrade } from "@/account/upgrade";
+import { Select } from "@/create/fields";
+import { getLanguagePref, LANGUAGES, type LanguagePref, setLanguagePref, systemLanguage } from "@/i18n";
 import { ConnectedApps } from "@/sources/connected-apps";
 import { colors } from "@/ui/theme";
 import { ErrorText, Loading, formatDate } from "@/ui";
@@ -22,6 +25,7 @@ import { confirm, Meter, Page, PageHead, pageStyles, PillButton, Section } from 
 
 /** Station settings (web: pages/Settings.tsx): profile, connected apps, privacy and email, plan and usage, account. */
 export default function Settings() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { logout } = useAuth();
   const { withdraw: withdrawAi } = useAiConsent();
@@ -41,10 +45,11 @@ export default function Settings() {
   const [deleting, setDeleting] = useState(false);
   const [sounds, setSounds] = useState(soundsEnabled);
   const [analytics, setAnalytics] = useState(analyticsEnabled);
+  const [language, setLanguage] = useState<LanguagePref>(getLanguagePref);
   const confirmDelete = () =>
     confirm(
-      "Delete account for good?",
-      "Delete account",
+      t("settings.account.deleteTitle"),
+      t("settings.account.delete"),
       async () => {
         setDeleting(true);
         try {
@@ -53,22 +58,22 @@ export default function Settings() {
           tokens.clear();
           await logout();
         } catch (e) {
-          setError(e instanceof ApiError ? e.message : "Could not delete the account. Try again.");
+          setError(e instanceof ApiError ? e.message : t("settings.account.deleteFailed"));
           setDeleting(false);
         }
       },
-      `Your account is closed now, and your notebooks, sources and everything you made are permanently deleted within 30 days. This can't be undone.${planWarning ? `\n\n${planWarning}` : ""}`,
+      `${t("settings.account.deleteMessage")}${planWarning ? `\n\n${planWarning}` : ""}`,
     );
 
   // An App Store subscription outlives the account unless the person cancels it (only they can): offer that first.
   const cancelAppleFirst = () =>
     Alert.alert(
-      "Cancel your subscription first",
-      "Apple keeps charging you for Notestack until you cancel your App Store subscription, even after the account is deleted. We can't cancel it for you.",
+      t("settings.account.cancelFirstTitle"),
+      t("settings.account.cancelFirstMessage"),
       [
-        { text: "Cancel subscription", onPress: () => void manageSubscriptions() },
-        { text: "I've cancelled it, delete", style: "destructive", onPress: confirmDelete },
-        { text: "Back", style: "cancel" },
+        { text: t("settings.account.cancelSubscription"), onPress: () => void manageSubscriptions() },
+        { text: t("settings.account.cancelledDelete"), style: "destructive", onPress: confirmDelete },
+        { text: t("common.back"), style: "cancel" },
       ],
     );
   // What is being typed, until it is saved; otherwise the fields show what is saved.
@@ -92,7 +97,7 @@ export default function Settings() {
       queryClient.setQueryData<SettingsData>(["settings"], next);
       setSaved(what);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Could not save that. Try again.");
+      setError(e instanceof ApiError ? e.message : t("common.couldNotSave"));
     }
   };
 
@@ -100,8 +105,8 @@ export default function Settings() {
   if (!s) {
     return (
       <Page>
-        <ErrorText>Could not load settings.</ErrorText>
-        <PillButton title="Try again" onPress={() => void settings.refetch()} />
+        <ErrorText>{t("settings.loadFailed")}</ErrorText>
+        <PillButton title={t("common.tryAgain")} onPress={() => void settings.refetch()} />
       </Page>
     );
   }
@@ -115,46 +120,74 @@ export default function Settings() {
     setWorkspaceDraft(null);
   };
   const u = s.usage;
-  const savedNote = (what: string) => (saved === what ? <Text style={pageStyles.mono}>Saved</Text> : null);
+  const savedNote = (what: string) => (saved === what ? <Text style={pageStyles.mono}>{t("common.saved")}</Text> : null);
 
   return (
     <Page>
-      <PageHead eyebrow="Settings" title="Station settings" />
+      <PageHead eyebrow={t("settings.eyebrow")} title={t("settings.title")} />
       <ErrorText>{error}</ErrorText>
 
-      <Section title="Profile" aside={savedNote("profile")}>
+      <Section title={t("settings.profile.title")} aside={savedNote("profile")}>
         <View style={styles.field}>
-          <Text style={pageStyles.label}>Name</Text>
+          <Text style={pageStyles.label}>{t("settings.profile.name")}</Text>
           <TextInput style={pageStyles.input} value={name} onChangeText={setNameDraft} onBlur={() => void saveProfile()} returnKeyType="done" />
         </View>
         <Text style={pageStyles.mono}>
-          {s.user.email} · signed in with {s.user.auth_provider === "google" ? "Google" : s.user.auth_provider === "apple" ? "Apple" : "email and password"}
+          {t("settings.profile.signedInWith", {
+            email: s.user.email,
+            provider:
+              s.user.auth_provider === "google"
+                ? t("settings.profile.providerGoogle")
+                : s.user.auth_provider === "apple"
+                  ? t("settings.profile.providerApple")
+                  : t("settings.profile.providerEmail"),
+          })}
         </Text>
         <View style={styles.field}>
-          <Text style={pageStyles.label}>Workspace name</Text>
+          <Text style={pageStyles.label}>{t("settings.profile.workspace")}</Text>
           <TextInput style={pageStyles.input} value={workspace} onChangeText={setWorkspaceDraft} onBlur={() => void saveProfile()} returnKeyType="done" />
         </View>
       </Section>
 
-      <Section title="Connected apps">
+      <Section title={t("settings.language.title")} aside={savedNote("language")}>
+        <View style={styles.field}>
+          <Text style={pageStyles.label}>{t("settings.language.label")}</Text>
+          <Select<LanguagePref>
+            label={t("settings.language.label")}
+            value={language}
+            onChange={(next) => {
+              setLanguage(next);
+              setLanguagePref(next);
+              setSaved("language");
+            }}
+            options={[
+              { value: "system", label: t("settings.language.system", { language: LANGUAGES[systemLanguage()] }) },
+              ...(Object.keys(LANGUAGES) as (keyof typeof LANGUAGES)[]).map((code) => ({ value: code, label: LANGUAGES[code] })),
+            ]}
+          />
+        </View>
+        <Text style={pageStyles.mono}>{t("settings.language.hint")}</Text>
+      </Section>
+
+      <Section title={t("settings.connectedApps")}>
         <ConnectedApps />
       </Section>
 
-      <Section title="Privacy and email" aside={savedNote("privacy")}>
+      <Section title={t("settings.privacy.title")} aside={savedNote("privacy")}>
         <Toggle
           value={s.workspace.training_opt_in}
           onChange={(v) => save({ training_opt_in: v }, "privacy")}
-          label="Let Notestack use my generations to improve its prompts. Off by default."
+          label={t("settings.privacy.training")}
         />
         <Toggle
           value={s.workspace.allow_public_links}
           onChange={(v) => save({ allow_public_links: v }, "privacy")}
-          label="Allow public report links. Turn this off and no report can be shared, and links you already made stop working."
+          label={t("settings.privacy.publicLinks")}
         />
         <Toggle
           value={!s.user.email_unsubscribed}
           onChange={(v) => save({ email_unsubscribed: !v }, "privacy")}
-          label="Product updates by email. Reminders for scheduled posts always send."
+          label={t("settings.privacy.email")}
         />
         <Toggle
           value={analytics}
@@ -162,7 +195,7 @@ export default function Settings() {
             setAnalyticsEnabled(v);
             setAnalytics(v);
           }}
-          label="Share how I use the app, linked to my account, through Google Analytics (this phone). Never what I write."
+          label={t("settings.privacy.analytics")}
         />
         <Toggle
           value={sounds}
@@ -170,48 +203,48 @@ export default function Settings() {
             setSoundsEnabled(v);
             setSounds(v);
           }}
-          label="Soft click sounds on buttons (this phone)."
+          label={t("settings.privacy.sounds")}
         />
         <View style={pageStyles.row}>
           <PillButton
             small
-            title="Withdraw AI permission"
+            title={t("settings.privacy.withdrawAi")}
             onPress={() =>
               confirm(
-                "Withdraw AI permission?",
-                "Withdraw",
+                t("settings.privacy.withdrawAiTitle"),
+                t("settings.privacy.withdraw"),
                 withdrawAi,
-                "Notestack can't work without its AI services, so you'll be asked again before you can keep using the app.",
+                t("settings.privacy.withdrawAiMessage"),
               )
             }
           />
         </View>
       </Section>
 
-      <Section title="Plan and usage">
+      <Section title={t("settings.plan.title")}>
         <Text style={styles.plan}>
-          <Text style={styles.planName}>{s.plan.name}</Text> plan
+          <Trans i18nKey="settings.plan.planName" values={{ name: s.plan.name }} components={[<Text key="name" style={styles.planName} />]} />
         </Text>
         {u.limits.audio_overviews >= 0 ? (
-          <Meter label="Audio overviews" used={u.used.audio_overviews} limit={u.limits.audio_overviews} unit="" />
+          <Meter label={t("settings.plan.audioOverviews")} used={u.used.audio_overviews} limit={u.limits.audio_overviews} unit="" />
         ) : (
-          <Meter label="Audio overviews" used={u.used.audio_minutes} limit={u.limits.audio_minutes} unit="min" />
+          <Meter label={t("settings.plan.audioOverviews")} used={u.used.audio_minutes} limit={u.limits.audio_minutes} unit={t("settings.plan.minutesUnit")} />
         )}
-        <Meter label="Videos" used={u.used.videos} limit={u.limits.videos} unit="" />
-        <Meter label="Launch Kits" used={u.used.launch_kits} limit={u.limits.launch_kits} unit="" />
-        <Meter label="Reports" used={u.used.reports} limit={u.limits.reports} unit="" />
-        <Meter label="Infographics" used={u.used.infographics} limit={u.limits.infographics} unit="" />
-        <Meter label="Indexed posts" used={u.used.indexed_posts} limit={u.limits.indexed_posts} unit="" />
+        <Meter label={t("settings.plan.videos")} used={u.used.videos} limit={u.limits.videos} unit="" />
+        <Meter label={t("settings.plan.launchKits")} used={u.used.launch_kits} limit={u.limits.launch_kits} unit="" />
+        <Meter label={t("settings.plan.reports")} used={u.used.reports} limit={u.limits.reports} unit="" />
+        <Meter label={t("settings.plan.infographics")} used={u.used.infographics} limit={u.limits.infographics} unit="" />
+        <Meter label={t("settings.plan.indexedPosts")} used={u.used.indexed_posts} limit={u.limits.indexed_posts} unit="" />
         <Text style={pageStyles.mono}>
-          Refills on the 1st of every month.
-          {u.videos_resets_at ? ` Videos refill on ${formatDate(u.videos_resets_at)}.` : ""}
+          {t("settings.plan.refills")}
+          {u.videos_resets_at ? t("settings.plan.videosRefill", { date: formatDate(u.videos_resets_at) }) : ""}
         </Text>
         {billing.data?.billing_enabled ? (
           <View style={pageStyles.row}>
             {billing.data.can_upgrade && !elsewhere ? (
-              <PillButton small variant="primary" title="Upgrade" onPress={() => upgrade()} />
+              <PillButton small variant="primary" title={t("settings.plan.upgrade")} onPress={() => upgrade()} />
             ) : null}
-            {storeBilled ? <PillButton small title="Manage subscription" onPress={() => void manageSubscriptions()} /> : null}
+            {storeBilled ? <PillButton small title={t("settings.plan.manage")} onPress={() => void manageSubscriptions()} /> : null}
           </View>
         ) : null}
         {billing.data?.billing_enabled && elsewhere ? (
@@ -219,11 +252,11 @@ export default function Settings() {
         ) : null}
       </Section>
 
-      <Section title="Account">
-        {planWarning ? <Text style={styles.warning}>Deleting your account: {planWarning}</Text> : null}
+      <Section title={t("settings.account.title")}>
+        {planWarning ? <Text style={styles.warning}>{t("settings.account.deletingWarning", { warning: planWarning })}</Text> : null}
         <View style={pageStyles.row}>
           <PillButton
-            title="Sign out everywhere"
+            title={t("settings.account.signOutEverywhere")}
             busy={leaving}
             disabled={deleting}
             onPress={() => {
@@ -232,7 +265,7 @@ export default function Settings() {
             }}
           />
           <PillButton
-            title={deleting ? "Deleting account..." : "Delete account"}
+            title={deleting ? t("settings.account.deleting") : t("settings.account.delete")}
             variant="danger"
             busy={deleting}
             disabled={leaving}

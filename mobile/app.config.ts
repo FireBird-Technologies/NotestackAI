@@ -74,6 +74,16 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     plugins: [
       "expo-router",
       "expo-secure-store",
+      // The phone's own per-app language setting (iOS Settings › Notestack › Language, Android 13+ App languages),
+      // and right-to-left layout for Arabic and Urdu. Keep in step with LANGUAGES in src/i18n/index.ts.
+      [
+        "expo-localization",
+        {
+          supportsRTL: true,
+          allowDynamicLocaleChangesAndroid: true,
+          supportedLocales: ["en", "es", "fr", "de", "pt", "ar", "ur", "zh-Hans", "ja", "ko"],
+        },
+      ],
       ["expo-audio", { microphonePermission: MICROPHONE }],
       // A video scene's own picture, picked from the library (no camera, no recording).
       [

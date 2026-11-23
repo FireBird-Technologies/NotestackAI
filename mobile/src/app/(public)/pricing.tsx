@@ -9,6 +9,7 @@ import { CycleToggle, defaultPlanTab, LegalLinks, PlanCard, PlanTabs, Subscripti
 import { introFor, priceFor, useStorePrices } from "@/account/store-prices";
 import { Eyebrow, PageTitle, PublicPage } from "@/shell/public-page";
 import { Button } from "@/ui";
+import i18n from "@/i18n";
 
 /**
  * The plans, as on the landing page's pricing section, for people not signed in: what each plan includes, its price,
@@ -31,8 +32,8 @@ export default function Pricing() {
 
   return (
     <PublicPage>
-      <Eyebrow>Pricing</Eyebrow>
-      <PageTitle>Pick your trajectory</PageTitle>
+      <Eyebrow>{i18n.t("marketing.pricing")}</Eyebrow>
+      <PageTitle>{i18n.t("marketing.pricingTitle")}</PageTitle>
 
       <CycleToggle cycle={cycle} onChange={setCycle} plans={plans} />
 
@@ -50,7 +51,7 @@ export default function Pricing() {
         ))}
 
       <View style={styles.cta}>
-        <Button title="Start free" onPress={() => router.navigate("/sign-up")} />
+        <Button title={i18n.t("marketing.startFree")} onPress={() => router.navigate("/sign-up")} />
       </View>
 
       {/* Prices are shown: so are the subscription terms the stores ask for beside them */}

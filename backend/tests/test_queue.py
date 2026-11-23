@@ -137,3 +137,31 @@ def test_watch_job_streams_changes_until_done(factory, ws):
     seen = asyncio.run(collect())
     assert [s["status"] for s in seen] == ["queued", "running", "done"]
     assert seen[1]["message"] == "halfway"
+
+
+def test_imports_are_claimed_before_older_background_work(factory, ws):
+    topics = enqueue(factory, ws, "topics")
+    upload = enqueue(factory, ws, "import_upload")
+    with factory() as db:
+        assert q.claim_next(db, "w1") == upload
+        assert q.claim_next(db, "w1") == topics
+
+
+def test_per_post_jobs_fold_into_one_still_queued(factory, ws):
+    with factory() as db:
+        first = q.queue_for_documents(db, ws, "topics", ["a"], max_attempts=2)
+        again = q.queue_for_documents(db, ws, "topics", ["b", "a"], max_attempts=2)
+        assert again.id == first.id
+    assert get(factory, first.id).params["document_ids"] == ["a", "b"]
+    # Once a worker has it, the next posts get a job of their own
+    with factory() as db:
+        assert q.claim_next(db, "w1") == first.id
+        third = q.queue_for_documents(db, ws, "topics", ["c"], max_attempts=2)
+    assert third.id != first.id and get(factory, third.id).params["document_ids"] == ["c"]
+
+
+def test_per_post_jobs_keep_different_options_apart(factory, ws):
+    with factory() as db:
+        everything = q.create_job(db, ws, "post_cards", {"force": True})
+        mine = q.queue_for_documents(db, ws, "post_cards", ["a"])
+    assert mine.id != everything.id

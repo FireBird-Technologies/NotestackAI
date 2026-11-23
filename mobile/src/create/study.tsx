@@ -1,4 +1,4 @@
-import { CARD_LEVELS, QUIZ_LEVELS, QUIZ_TYPES } from "@notestack/shared/create-options";
+import { CARD_LEVELS, QUIZ_LEVELS, QUIZ_TYPES } from "@/create/options";
 import type { GenerateBody } from "@notestack/shared/endpoints";
 import type { ChatPreset, ChatSummary, Notebook, QuizQuestionType } from "@notestack/shared/types";
 import { SymbolView } from "expo-symbols";
@@ -9,6 +9,7 @@ import { Pressable } from "@/ui/pressable";
 import { Check, createStyles, Foot, Label, Pills, Select, SourceFocusFields, type SourceSelection, TextArea } from "@/create/fields";
 import { colors, radius } from "@/ui/theme";
 import { PillButton } from "@/ui/widgets";
+import i18n from "@/i18n";
 
 export type CreateBody = Omit<GenerateBody, "type">;
 export type DialogProps = {
@@ -42,18 +43,18 @@ export function QuizDialog({ notebook, chats, currentChatId, initial, onCreate }
     <View style={createStyles.stack}>
       <View style={styles.row}>
         <View style={[createStyles.field, styles.half]}>
-          <Label>Difficulty</Label>
-          <Select label="Level of difficulty" value={level} onChange={setLevel} options={QUIZ_LEVELS.map((l) => ({ value: l.id, label: l.label }))} />
+          <Label>{i18n.t("dialogs.difficulty")}</Label>
+          <Select label={i18n.t("dialogs.levelOfDifficulty")} value={level} onChange={setLevel} options={QUIZ_LEVELS.map((l) => ({ value: l.id, label: l.label }))} />
         </View>
         <View style={[createStyles.field, styles.half]}>
-          <Label>Question types</Label>
+          <Label>{i18n.t("dialogs.questionTypes")}</Label>
           <Select<QuizQuestionType>
-            label="Question types"
+            label={i18n.t("dialogs.questionTypes")}
             multiple
             value={first.id}
             isOn={(t) => types.has(t)}
             onChange={toggleType}
-            display={types.size === 1 ? first.label : `${types.size} types`}
+            display={types.size === 1 ? first.label : i18n.t("dialogs.typesCount", { count: types.size })}
             options={QUIZ_TYPES.map((t) => ({ value: t.id, label: t.label }))}
           />
         </View>
@@ -69,9 +70,9 @@ export function QuizDialog({ notebook, chats, currentChatId, initial, onCreate }
         what="quiz"
         onChange={setSel}
       />
-      <Foot note={!sel?.ready && "Select at least one post or chat to generate a quiz."}>
+      <Foot note={!sel?.ready && i18n.t("dialogs.quizNote")}>
         <PillButton
-          title="Generate Quiz"
+          title={i18n.t("dialogs.generateQuiz")}
           variant="primary"
           disabled={!sel?.ready || sel.loading}
           onPress={() => sel && onCreate({ ...sel.request, difficulty: level, question_types: QUIZ_TYPES.map((t) => t.id).filter((t) => types.has(t)) })}
@@ -88,7 +89,7 @@ export function FlashcardsDialog({ notebook, chats, currentChatId, initial, onCr
   return (
     <View style={createStyles.stack}>
       <View style={createStyles.field}>
-        <Label>Level of difficulty</Label>
+        <Label>{i18n.t("dialogs.levelOfDifficulty")}</Label>
         <Pills value={level} options={CARD_LEVELS} onChange={setLevel} />
       </View>
       <SourceFocusFields
@@ -102,9 +103,9 @@ export function FlashcardsDialog({ notebook, chats, currentChatId, initial, onCr
         what="flashcard set"
         onChange={setSel}
       />
-      <Foot note={!sel?.ready && "Select at least one post or chat to generate flashcards."}>
+      <Foot note={!sel?.ready && i18n.t("dialogs.cardsNote")}>
         <PillButton
-          title="Generate Flashcards"
+          title={i18n.t("dialogs.generateCards")}
           variant="primary"
           disabled={!sel?.ready || sel.loading}
           onPress={() => sel && onCreate({ ...sel.request, difficulty: level })}
@@ -132,7 +133,7 @@ export function MindMapDialog({ notebook, initial, onClose, onCreate }: DialogPr
   return (
     <View style={createStyles.stack}>
       <View style={createStyles.field}>
-        <Text style={styles.h}>Sources</Text>
+        <Text style={styles.h}>{i18n.t("dialogs.sources")}</Text>
         <Pressable onPress={() => setOpen((v) => !v)} accessibilityRole="button" accessibilityState={{ expanded: open }} style={styles.toggle}>
           <Text style={styles.toggleText}>
             {picked.size} of {docs.length} posts
@@ -147,7 +148,7 @@ export function MindMapDialog({ notebook, initial, onClose, onCreate }: DialogPr
               accessibilityState={{ checked: all }}
               style={[styles.item, styles.itemAll]}>
               <Check on={all} />
-              <Text style={styles.itemText}>Select all</Text>
+              <Text style={styles.itemText}>{i18n.t("dialogs.selectAll")}</Text>
             </Pressable>
             {docs.map((d) => (
               <Pressable key={d.id} onPress={() => toggle(d.id)} accessibilityRole="checkbox" accessibilityState={{ checked: picked.has(d.id) }} style={styles.item}>
@@ -161,19 +162,19 @@ export function MindMapDialog({ notebook, initial, onClose, onCreate }: DialogPr
         ) : null}
       </View>
       <View style={createStyles.field}>
-        <Text style={styles.h}>What should the topic be?</Text>
+        <Text style={styles.h}>{i18n.t("dialogs.topicQuestion")}</Text>
         <TextArea
           value={focus}
           onChange={setFocus}
           max={500}
           rows={5}
-          placeholder={'Things to try\n- Centre it on one idea (e.g. "how I price my work")\n- Focus only on the arguments I changed my mind about\n- Help me study the key concepts across these posts'}
+          placeholder={i18n.t("dialogs.topicPlaceholder")}
         />
       </View>
       <Foot>
-        <PillButton title="Cancel" onPress={onClose} />
+        <PillButton title={i18n.t("common.cancel")} onPress={onClose} />
         <PillButton
-          title="Generate"
+          title={i18n.t("dialogs.generate")}
           variant="primary"
           disabled={picked.size === 0}
           onPress={() =>

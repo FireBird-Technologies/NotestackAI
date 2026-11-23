@@ -14,22 +14,24 @@ import { colors, fonts, radius } from "@/ui/theme";
 import { ErrorText, Loading, formatDate } from "@/ui";
 import { Composer, connectLinkedIn, PostEditor } from "@/launchpad/editors";
 import { confirm, Page, PageHead, pageStyles, PillButton, Section, Sheet, StatusPill } from "@/ui/widgets";
+import i18n, { endChevron, locale, startChevron } from "@/i18n";
 
-const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+// Monday first, in the app language (1 January 2024 was a Monday).
+const WEEKDAYS = Array.from({ length: 7 }, (_, i) => new Date(2024, 0, 1 + i).toLocaleDateString(locale(), { weekday: "short" }));
 const sameDay = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 const clock = (iso: string) =>
-  new Date(iso).toLocaleTimeString("en-US", {
+  new Date(iso).toLocaleTimeString(locale(), {
     hour: "numeric",
     minute: "2-digit",
   });
 
 /** What a post carries, as the agenda's tag (web: kindLabel). */
 function kindLabel(i: CalendarItem): string {
-  if (i.artifact?.media === "video") return "Video";
-  if (i.artifact?.type === "slide_deck") return "Slides";
-  if (i.artifact?.media === "image") return "Image";
-  if (!i.artifact && i.kit_id) return "Kit";
-  return "Text";
+  if (i.artifact?.media === "video") return i18n.t("launchpad.kindVideo");
+  if (i.artifact?.type === "slide_deck") return i18n.t("launchpad.kindSlides");
+  if (i.artifact?.media === "image") return i18n.t("launchpad.kindImage");
+  if (!i.artifact && i.kit_id) return i18n.t("launchpad.kindKit");
+  return i18n.t("launchpad.kindText");
 }
 
 /** The launch calendar (web: pages/Launchpad.tsx): a month or agenda of scheduled posts, and the LinkedIn connection. */
@@ -91,7 +93,7 @@ export default function Launchpad() {
     const res = await connectLinkedIn();
     if (res.accounts) {
       setAccounts(res.accounts);
-      setNotice("LinkedIn connected.");
+      setNotice(i18n.t("launchpad.linkedinConnected"));
       setTimeout(() => setNotice(""), 3000);
       reload();
     }
@@ -101,8 +103,8 @@ export default function Launchpad() {
   return (
     <Page
       refresh={<RefreshControl refreshing={items.isRefetching && !items.isPlaceholderData} onRefresh={reload} tintColor={colors.blue} />}>
-      <PageHead eyebrow="Launchpad" title="Launch calendar">
-        <PillButton title="Schedule a launch" variant="primary" onPress={() => router.push("/launchpad/new")} />
+      <PageHead eyebrow={i18n.t("launchpad.eyebrow")} title={i18n.t("launchpad.title")}>
+        <PillButton title={i18n.t("launchpad.schedule")} variant="primary" onPress={() => router.push("/launchpad/new")} />
       </PageHead>
       {notice ? <Text style={styles.notice}>{notice}</Text> : null}
       <ErrorText>{error}</ErrorText>
@@ -111,7 +113,7 @@ export default function Launchpad() {
         <View style={styles.calHead}>
           <MonthArrow back onPress={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))} />
           <Text style={styles.month}>
-            {month.toLocaleDateString("en-US", {
+            {month.toLocaleDateString(locale(), {
               month: "long",
               year: "numeric",
             })}
@@ -120,14 +122,14 @@ export default function Launchpad() {
         </View>
         <Segments
           options={[
-            { id: "month", label: "Month" },
-            { id: "agenda", label: "Agenda" },
+            { id: "month", label: i18n.t("launchpad.month") },
+            { id: "agenda", label: i18n.t("launchpad.agenda") },
           ]}
           value={view}
           onChange={setView}
         />
         {loading && !items.error ? <Loading /> : null}
-        {loaded && list.length === 0 && view === "month" ? <Text style={pageStyles.body}>Nothing scheduled this month.</Text> : null}
+        {loaded && list.length === 0 && view === "month" ? <Text style={pageStyles.body}>{i18n.t("launchpad.nothingMonth")}</Text> : null}
 
         {view === "month" ? (
           <View>
@@ -150,7 +152,7 @@ export default function Launchpad() {
                       key={d.toISOString()}
                       disabled={!ahead}
                       onPress={() => compose(startOn(d))}
-                      accessibilityLabel={`Schedule a launch on ${d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}`}
+                      accessibilityLabel={i18n.t("launchpad.scheduleOn", { date: d.toLocaleDateString(locale(), { weekday: "long", month: "long", day: "numeric" }) })}
                       style={[styles.day, sameDay(d, today) && styles.today, !ahead && styles.past]}>
                       <Text style={[styles.date, sameDay(d, today) && styles.todayText]}>{d.getDate()}</Text>
                       {dayItems.slice(0, 2).map((i) => (
@@ -180,24 +182,24 @@ export default function Launchpad() {
                 <View style={pageStyles.row}>
                   <Text style={styles.agendaPlatform}>{i.platform_label}</Text>
                   <Text style={styles.tag}>{kindLabel(i)}</Text>
-                  {i.clicks > 0 ? <Text style={pageStyles.mono}>{i.clicks} clicks</Text> : null}
+                  {i.clicks > 0 ? <Text style={pageStyles.mono}>{i18n.t("launchpad.clicks", { count: i.clicks })}</Text> : null}
                 </View>
                 <Text style={pageStyles.body} numberOfLines={2}>
                   {i.content}
                 </Text>
               </Pressable>
             ))}
-            {list.length === 0 ? <Text style={pageStyles.body}>Nothing scheduled. Quiet moon tonight.</Text> : null}
+            {list.length === 0 ? <Text style={pageStyles.body}>{i18n.t("launchpad.nothing")}</Text> : null}
           </View>
         ) : null}
 
       </Section>
       {/* Under the calendar, outside its card; only the month has days to tap (web: .lp-cal-foot) */}
-      {loaded && view === "month" ? <Text style={styles.hint}>Tap a day to schedule a launch, or a post to edit it.</Text> : null}
+      {loaded && view === "month" ? <Text style={styles.hint}>{i18n.t("launchpad.tapHint")}</Text> : null}
 
       <Connections now={now} accounts={accounts.data ?? null} onConnect={() => void connect()} onChanged={reload} />
 
-      <Sheet visible={composing} title="Create post" onClose={() => setComposing(false)}>
+      <Sheet visible={composing} title={i18n.t("launchpad.createPost")} onClose={() => setComposing(false)}>
         <Composer
           at={composeAt}
           accounts={accounts.data ?? null}
@@ -209,7 +211,7 @@ export default function Launchpad() {
           }}
         />
       </Sheet>
-      <Sheet visible={Boolean(open)} title={open ? `${open.platform_label} post` : ""} onClose={() => setOpen(null)}>
+      <Sheet visible={Boolean(open)} title={open ? i18n.t("launchpad.platformPost", { platform: open.platform_label }) : ""} onClose={() => setOpen(null)}>
         {open ? (
           <PostEditor
             item={open}
@@ -231,10 +233,10 @@ function MonthArrow({ back, onPress }: { back?: boolean; onPress: () => void }) 
       onPress={onPress}
       hitSlop={6}
       accessibilityRole="button"
-      accessibilityLabel={back ? "Previous month" : "Next month"}
+      accessibilityLabel={back ? i18n.t("launchpad.previousMonth") : i18n.t("launchpad.nextMonth")}
       style={({ pressed }) => [styles.arrow, pressed && styles.pressed]}>
       <SymbolView
-        name={back ? { ios: "chevron.left", android: "chevron_left" } : { ios: "chevron.right", android: "chevron_right" }}
+        name={back ? startChevron : endChevron}
         size={18}
         tintColor={colors.text}
       />
@@ -257,8 +259,8 @@ function Connections({
   const a = accounts?.accounts.find((x) => x.platform === "linkedin");
   const days = a?.expires_at ? Math.max(0, Math.ceil((new Date(a.expires_at).getTime() - now) / 864e5)) : null;
   return (
-    <Section title="Connections">
-      <Text style={pageStyles.body}>Posts go out through these accounts at their scheduled time.</Text>
+    <Section title={i18n.t("launchpad.connections")}>
+      <Text style={pageStyles.body}>{i18n.t("launchpad.connectionsBody")}</Text>
       {!accounts ? <Loading /> : null}
       {accounts ? (
         <View style={styles.conn}>
@@ -277,30 +279,30 @@ function Connections({
                 <View style={styles.flex}>
                   <Text style={styles.handle}>{a.handle}</Text>
                   <Text style={pageStyles.mono}>
-                    {a.connected_at ? `Connected since ${formatDate(a.connected_at)}` : "Connected"}
-                    {a.status === "active" && a.expires_soon && days !== null ? ` · expires in ${days} days` : ""}
+                    {a.connected_at ? i18n.t("launchpad.connectedSince", { date: formatDate(a.connected_at) }) : i18n.t("launchpad.connected")}
+                    {a.status === "active" && a.expires_soon && days !== null ? i18n.t("launchpad.expiresIn", { count: days }) : ""}
                   </Text>
                 </View>
               </View>
               {a.status === "active" && !a.can_post_media ? (
-                <Text style={styles.warn}>Can&apos;t post images and videos yet: reconnect to allow it.</Text>
+                <Text style={styles.warn}>{i18n.t("launchpad.noMedia")}</Text>
               ) : null}
-              {a.status !== "active" ? <Text style={styles.warn}>Its scheduled posts are paused until you reconnect.</Text> : null}
+              {a.status !== "active" ? <Text style={styles.warn}>{i18n.t("launchpad.paused")}</Text> : null}
               <View style={pageStyles.row}>
-                {a.needs_reconnect ? <PillButton small variant="primary" title="Reconnect" onPress={onConnect} /> : null}
+                {a.needs_reconnect ? <PillButton small variant="primary" title={i18n.t("launchpad.reconnect")} onPress={onConnect} /> : null}
                 {a.status === "active" ? (
                   <PillButton
                     small
-                    title="Disconnect"
+                    title={i18n.t("launchpad.disconnect")}
                     onPress={() =>
                       confirm(
-                        "Disconnect LinkedIn?",
-                        "Disconnect",
+                        i18n.t("launchpad.disconnectTitle"),
+                        i18n.t("launchpad.disconnect"),
                         async () => {
                           await launchpadApi.disconnect(a.id);
                           onChanged();
                         },
-                        `${a.handle} will be disconnected and removed from here. Its scheduled posts pause until you connect an account again (this one or another), which then posts them.`,
+                        i18n.t("launchpad.disconnectBody", { handle: a.handle }),
                       )
                     }
                   />
@@ -309,10 +311,10 @@ function Connections({
             </>
           ) : (
             <>
-              <Text style={pageStyles.body}>Post and schedule to LinkedIn from your Library.</Text>
-              <PillButton title="Connect with LinkedIn" variant="primary" disabled={!accounts.available.linkedin} onPress={onConnect} />
+              <Text style={pageStyles.body}>{i18n.t("launchpad.linkedinBody")}</Text>
+              <PillButton title={i18n.t("launchpad.connectLinkedin")} variant="primary" disabled={!accounts.available.linkedin} onPress={onConnect} />
               {!accounts.available.linkedin ? (
-                <Text style={pageStyles.mono}>LinkedIn posting isn&apos;t set up on this server yet.</Text>
+                <Text style={pageStyles.mono}>{i18n.t("launchpad.linkedinOff")}</Text>
               ) : null}
             </>
           )}

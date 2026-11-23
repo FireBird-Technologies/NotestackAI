@@ -13,6 +13,7 @@ import { PillButton, StatusPill } from "@/ui/widgets";
 import { BackLink } from "./back";
 import { pendingVideo } from "./pending";
 import { vstyles } from "./ui";
+import i18n, { tKey } from "@/i18n";
 
 /**
  * "Making your video", as the web's: one card in the middle, the steps as circles wired together in a row, each label
@@ -22,9 +23,9 @@ import { vstyles } from "./ui";
 export function MakingVideo({ step, status }: { step: number; status?: string }) {
   return (
     <View style={[vstyles.card, styles.making]}>
-      <Text style={[vstyles.h2, styles.centered]}>Making your video</Text>
-      <View style={styles.steps} accessibilityLabel={`Step ${step} of ${STEPS.length}`}>
-        {STEPS.map((s, i) => {
+      <Text style={[vstyles.h2, styles.centered]}>{i18n.t("making.title")}</Text>
+      <View style={styles.steps} accessibilityLabel={i18n.t("making.stepOf", { step, total: STEPS.length })}>
+        {STEPS.map((english, i) => tKey(`shared.videoSteps.${i}`, english)).map((s, i) => {
           const n = i + 1;
           const done = n < step;
           const on = n === step;
@@ -40,7 +41,7 @@ export function MakingVideo({ step, status }: { step: number; status?: string })
           );
         })}
       </View>
-      <Text style={[vstyles.muted, styles.centered, styles.note]}>You can leave this screen; the video keeps going.</Text>
+      <Text style={[vstyles.muted, styles.centered, styles.note]}>{i18n.t("making.leave")}</Text>
       {status ? <StatusPill status={status} /> : null}
     </View>
   );
@@ -53,7 +54,7 @@ export function MakingPage({ title, children }: { title: string; children?: Reac
   return (
     <ScrollView contentContainerStyle={styles.page}>
       <BackLink />
-      <Text style={styles.eyebrow}>VIDEOS</Text>
+      <Text style={styles.eyebrow}>{i18n.t("editor.eyebrow")}</Text>
       <Text style={styles.title}>{title}</Text>
       {children ?? <MakingVideo step={1} status="generating" />}
     </ScrollView>
@@ -82,12 +83,12 @@ export function PendingVideo({ id }: { id: string }) {
         if (!live) return;
         if (e instanceof ApiError && e.status === 402) setFailure("limit");
         else if (e instanceof ApiError && (e.status === 503 || e.status === 502)) {
-          Alert.alert("Oops, we are sorry!", "We have faced some issue generating your video. Please try again in a while, or contact support for help.", [
-            { text: "Contact support", onPress: () => void Linking.openURL("mailto:arslan@firebird-technologies.com?subject=Notestack%20video") },
-            { text: "OK", style: "cancel" },
+          Alert.alert(i18n.t("misc.oops"), i18n.t("misc.videoIssue"), [
+            { text: i18n.t("misc.contactSupport"), onPress: () => void Linking.openURL("mailto:arslan@firebird-technologies.com?subject=Notestack%20video") },
+            { text: i18n.t("editor.ok"), style: "cancel" },
           ]);
           goBack();
-        } else setFailure(e instanceof Error ? e.message : "Could not start the video.");
+        } else setFailure(e instanceof Error ? e.message : i18n.t("misc.startFailed"));
       },
     );
     return () => {
@@ -97,33 +98,31 @@ export function PendingVideo({ id }: { id: string }) {
 
   if (failure === "lost") {
     return (
-      <MakingPage title="Video not found">
-        <PillButton title="Back to videos" onPress={() => router.replace("/library")} />
+      <MakingPage title={i18n.t("editor.notFound")}>
+        <PillButton title={i18n.t("editor.backToVideos")} onPress={() => router.replace("/library")} />
       </MakingPage>
     );
   }
   if (failure === "limit") {
     return (
-      <MakingPage title="Video limit reached">
-        <Text style={vstyles.body}>
-          You have used all of the videos included in your current plan. Upgrade to a bigger plan to keep turning your posts and chats into videos.
-        </Text>
-        <PillButton title="Upgrade" variant="primary" onPress={() => upgrade()} />
+      <MakingPage title={i18n.t("videoCreate.limit")}>
+        <Text style={vstyles.body}>{i18n.t("videoCreate.limitBody")}</Text>
+        <PillButton title={i18n.t("settings.plan.upgrade")} variant="primary" onPress={() => upgrade()} />
       </MakingPage>
     );
   }
   if (failure) {
     return (
-      <MakingPage title="New video">
+      <MakingPage title={i18n.t("editor.newVideo")}>
         <View style={vstyles.card}>
-          <Text style={vstyles.h2}>This video could not be started</Text>
+          <Text style={vstyles.h2}>{i18n.t("misc.notStarted")}</Text>
           <Text style={vstyles.error}>{failure}</Text>
-          <PillButton title="Back" onPress={goBack} />
+          <PillButton title={i18n.t("common.back")} onPress={goBack} />
         </View>
       </MakingPage>
     );
   }
-  return <MakingPage title="New video" />;
+  return <MakingPage title={i18n.t("editor.newVideo")} />;
 }
 
 const styles = StyleSheet.create({

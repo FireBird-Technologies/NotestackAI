@@ -14,6 +14,7 @@ import { Starfield } from "@/shell/starfield";
 import { colors, fonts, gutter } from "@/ui/theme";
 import { Body, Centered, ErrorText, Loading, formatDate } from "@/ui";
 import { CARD_RADIUS, JobProgress, Pager, StatusPill } from "@/ui/widgets";
+import i18n from "@/i18n";
 
 const PAGE = 10; // posts on one page of the list, as on the web
 
@@ -92,7 +93,7 @@ export default function Sources() {
   if (sources.error && !sources.data) {
     return (
       <Centered>
-        <Body muted>Could not load your sources. Pull to try again.</Body>
+        <Body muted>{i18n.t("sources.loadFailed")}</Body>
       </Centered>
     );
   }
@@ -109,9 +110,9 @@ export default function Sources() {
         refreshControl={<RefreshControl refreshing={sources.isRefetching} onRefresh={reload} tintColor={colors.blue} />}>
         <SourcesNav current="posts" />
 
-        <Text style={styles.eyebrow}>Sources</Text>
+        <Text style={styles.eyebrow}>{i18n.t("sources.eyebrow")}</Text>
         <Text style={styles.title} accessibilityRole="header">
-          Your knowledge, in orbit
+          {i18n.t("sources.title")}
         </Text>
 
         <AddSource onAdded={added} />
@@ -121,31 +122,29 @@ export default function Sources() {
         ))}
         {list.length === 0 ? (
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>No sources yet</Text>
-            <Text style={styles.body}>
-              A lone satellite, waiting for signal. Connect a blog or site above, or upload your markdown files.
-            </Text>
+            <Text style={styles.cardTitle}>{i18n.t("sources.none")}</Text>
+            <Text style={styles.body}>{i18n.t("sources.noneBody")}</Text>
           </View>
         ) : null}
 
         {list.length > 0 ? (
           <View style={styles.card}>
             <Text style={styles.postsTitle}>
-              Posts <Text style={styles.postsCount}>{total}</Text>
+              {i18n.t("sources.postsHeading")} <Text style={styles.postsCount}>{total}</Text>
             </Text>
             <TextInput
               style={styles.search}
               value={q}
               onChangeText={setQ}
-              placeholder="Search titles and text"
+              placeholder={i18n.t("sources.search")}
               placeholderTextColor={colors.text3}
               clearButtonMode="while-editing"
               autoCapitalize="none"
-              accessibilityLabel="Search posts"
+              accessibilityLabel={i18n.t("sources.searchLabel")}
             />
             {docsLoading && !docs.error ? <Loading /> : null}
             {!docsLoading ? (docs.data?.items ?? []).map((d) => <PostRow key={d.id} doc={d} onRemoved={reload} />) : null}
-            {!docsLoading && docs.data && docs.data.items.length === 0 ? <Body muted>No posts match.</Body> : null}
+            {!docsLoading && docs.data && docs.data.items.length === 0 ? <Body muted>{i18n.t("sources.noMatch")}</Body> : null}
             <Pager page={page} pages={Math.ceil(total / PAGE)} onChange={setPage} />
           </View>
         ) : null}
@@ -170,10 +169,10 @@ function SourceCard({
   const posts = Math.max(s.document_count - s.locked_count, 0);
 
   const remove = () =>
-    Alert.alert("Delete this source?", s.title ?? s.feed_url, [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(i18n.t("sources.deleteSource"), s.title ?? s.feed_url, [
+      { text: i18n.t("common.cancel"), style: "cancel" },
       {
-        text: "Delete",
+        text: i18n.t("common.delete"),
         style: "destructive",
         onPress: async () => {
           await sourcesApi.remove(s.id);
@@ -188,8 +187,8 @@ function SourceCard({
         <View style={styles.sourceTitle}>
           <Text style={styles.cardTitle}>{s.title ?? s.feed_url}</Text>
           <Text style={styles.mono}>
-            {s.is_imports ? "imports" : s.platform} · {posts} posts
-            {s.last_synced_at ? ` · synced ${formatDate(s.last_synced_at, true)}` : ""}
+            {s.is_imports ? i18n.t("sources.imports") : s.platform} · {i18n.t("notebooks.posts", { count: posts })}
+            {s.last_synced_at ? i18n.t("sources.syncedAt", { date: formatDate(s.last_synced_at, true) }) : ""}
           </Text>
         </View>
         {s.is_imports ? <StatusPill status={active ? "syncing" : s.sync_status} /> : null}
@@ -206,8 +205,8 @@ function SourceCard({
       {job && (active || job.status === "failed") ? <JobProgress job={job} /> : null}
       {s.locked_count > 0 && !active ? (
         <View style={styles.locked}>
-          <Text style={styles.lockedTitle}>{s.locked_count} posts not indexed</Text>
-          <Text style={styles.body}>Your plan only indexes your latest posts.</Text>
+          <Text style={styles.lockedTitle}>{i18n.t("sources.notIndexedCount", { count: s.locked_count })}</Text>
+          <Text style={styles.body}>{i18n.t("sources.planLatest")}</Text>
         </View>
       ) : null}
       {s.sync_status === "error" && s.sync_error && !active ? <ErrorText>{s.sync_error}</ErrorText> : null}
@@ -221,11 +220,11 @@ function SourceCard({
               const res = await sourcesApi.sync(s.id);
               onSync(s.id, res.job);
             }}>
-            <Text style={styles.outlineText}>Sync now</Text>
+            <Text style={styles.outlineText}>{i18n.t("sources.syncNow")}</Text>
           </Pressable>
           {failed ? (
             <Pressable accessibilityRole="button" style={[styles.outline, styles.danger]} onPress={remove}>
-              <Text style={[styles.outlineText, styles.dangerText]}>Delete</Text>
+              <Text style={[styles.outlineText, styles.dangerText]}>{i18n.t("common.delete")}</Text>
             </Pressable>
           ) : null}
         </View>
@@ -236,10 +235,10 @@ function SourceCard({
 
 function PostRow({ doc: d, onRemoved }: { doc: Doc; onRemoved: () => void }) {
   const remove = () =>
-    Alert.alert("Delete this post?", d.title, [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(i18n.t("sources.deletePost"), d.title, [
+      { text: i18n.t("common.cancel"), style: "cancel" },
       {
-        text: "Delete",
+        text: i18n.t("common.delete"),
         style: "destructive",
         onPress: async () => {
           await docsApi.remove(d.id);
@@ -257,11 +256,11 @@ function PostRow({ doc: d, onRemoved }: { doc: Doc; onRemoved: () => void }) {
           {d.title}
         </Text>
         <Text style={styles.mono}>
-          {d.locked ? "Not indexed · " : ""}
-          {d.source_title ?? ""} · {formatDate(d.published_at)} · {d.words} words
+          {d.locked ? i18n.t("sources.notIndexedPrefix") : ""}
+          {d.source_title ?? ""} · {formatDate(d.published_at)} · {i18n.t("notebooks.words", { count: d.words })}
         </Text>
       </View>
-      <Pressable onPress={remove} hitSlop={10} accessibilityRole="button" accessibilityLabel={`Delete ${d.title}`}>
+      <Pressable onPress={remove} hitSlop={10} accessibilityRole="button" accessibilityLabel={i18n.t("sources.deleteNamed", { title: d.title })}>
         <SymbolView name={{ ios: "trash", android: "delete" }} size={18} tintColor={colors.text2} />
       </Pressable>
     </View>

@@ -2,7 +2,7 @@ import { ApiError } from "@notestack/shared/client";
 import { mapOutline, mapSvg } from "@notestack/shared/mindLayout";
 import { reportMarkdown } from "@notestack/shared/report";
 import { deckOf } from "@notestack/shared/slideDeck";
-import { AUDIO_STYLES, INFOGRAPHIC_THEMES, sourceSummary } from "@notestack/shared/create-options";
+import { sourceSummary } from "@notestack/shared/create-options";
 import { artifactsApi, launchpadApi, videosApi } from "@notestack/shared/endpoints";
 import type { AnswerFeedback, Artifact, MindNode, Segment } from "@notestack/shared/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -47,6 +47,8 @@ import { colors, fonts, gutter, radius } from "@/ui/theme";
 import { ErrorText, formatDate } from "@/ui";
 import { VideoPreview } from "@/artifacts/video-preview";
 import { CARD_RADIUS, JobProgress, PillButton, PopMenu, Sheet, StatusPill } from "@/ui/widgets";
+import i18n, { tKey } from "@/i18n";
+import { AUDIO_STYLES, INFOGRAPHIC_THEMES } from "@/create/options";
 
 const SITE = "https://notestack.ai";
 
@@ -63,10 +65,13 @@ const STYLE_NAMES: Record<string, string> = Object.fromEntries(AUDIO_STYLES.map(
 
 /** The eyebrow over the title, as each web card names itself. */
 const EYEBROW: Record<string, string> = {
-  audio_overview: "Audio overview",
-  slide_deck: "Slide deck",
-  mind_map: "Mind Constellation",
+  audio_overview: i18n.t("card.eyebrow.audio_overview"),
+  slide_deck: i18n.t("card.eyebrow.slide_deck"),
+  mind_map: i18n.t("card.eyebrow.mind_map"),
 };
+
+/** A card's kind in the app language: its eyebrow, else the server's label. */
+const kindLabel = (a: Artifact) => EYEBROW[a.type] ?? tKey(`card.eyebrow.${a.type}`, a.type_label);
 
 function canPost(a: Artifact): boolean {
   if (a.type === "audio_overview") return a.status === "ready";
@@ -89,7 +94,8 @@ function clock(seconds: number | undefined): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+const PLURAL_KEYS = { slide: "card.slides", source: "card.sources", post: "notebooks.posts", section: "card.sections", visual: "card.visuals" } as const;
+const plural = (n: number, word: keyof typeof PLURAL_KEYS) => i18n.t(PLURAL_KEYS[word], { count: n });
 
 /** Open something on the web app (the in-app browser) until the app has its own screen for it. */
 const openWeb = (path: string) => WebBrowser.openBrowserAsync(`${SITE}${path}`, { controlsColor: colors.blue });
@@ -103,7 +109,7 @@ function viewPath(a: Artifact): string {
 
 /** The title without the kind it already says in the eyebrow ("Slide deck: Pricing" reads "Pricing"). */
 function cardTitle(a: Artifact, running: boolean): string {
-  if (a.type === "slide_deck") return running ? "Generating slide deck..." : a.title.replace(/^Slide deck: /, "");
+  if (a.type === "slide_deck") return running ? i18n.t("card.generatingDeck") : a.title.replace(/^Slide deck: /, "");
   if (a.type === "mind_map") return a.title.replace(/^(?:Mind map|Idea Galaxy|Idea Constellation|Mind Constellation): /, "");
   return a.title;
 }
@@ -115,36 +121,36 @@ function detailLine(a: Artifact, running: boolean, failed: boolean): string | nu
   switch (a.type) {
     case "audio_overview":
       return (
-        [c.duration_s ? clock(c.duration_s) : "", c.hosts === 1 ? "1 host" : c.hosts === 2 ? "2 hosts" : "", STYLE_NAMES[c.format as string] ?? ""]
+        [c.duration_s ? clock(c.duration_s) : "", c.hosts === 1 ? i18n.t("card.oneHost") : c.hosts === 2 ? i18n.t("card.twoHosts") : "", STYLE_NAMES[c.format as string] ?? ""]
           .filter(Boolean)
-          .join(" · ") || (running ? "Making the audio..." : null)
+          .join(" · ") || (running ? i18n.t("card.makingAudio") : null)
       );
     case "slide_deck": {
       const count = (c.source?.count as number | undefined) ?? 0;
-      if (!ready) return failed ? "Could not be made" : `Generating slide deck... based on ${count || "your"} source${count === 1 ? "" : "s"}`;
+      if (!ready) return failed ? i18n.t("card.couldNotBeMade") : count ? i18n.t("card.deckBased", { count }) : i18n.t("card.deckBasedYour");
       const slides = Array.isArray(c.deck?.slides) ? (c.deck.slides as unknown[]).length : 0;
-      return `${c.format === "presenter" ? "Presenter" : "Detailed"} · ${plural(slides, "slide")} · ${plural(count, "source")}`;
+      return `${c.format === "presenter" ? i18n.t("card.presenter") : i18n.t("card.detailed")} · ${plural(slides, "slide")} · ${plural(count, "source")}`;
     }
     case "mind_map":
-      return ready ? `${c.node_count ?? 0} stars${c.post_count ? ` · from ${plural(c.post_count, "post")}` : ""}` : null;
+      return ready ? `${i18n.t("card.stars", { count: c.node_count ?? 0 })}${c.post_count ? i18n.t("card.fromPosts", { count: c.post_count }) : ""}` : null;
     case "quiz":
-      return ready ? `${c.question_count ?? 0} questions · ${c.difficulty ?? "medium"} · from ${sourceSummary(c.source)}` : null;
+      return ready ? `${i18n.t("card.questions", { count: c.question_count ?? 0 })} · ${tKey(`card.difficulty.${c.difficulty ?? "medium"}`, String(c.difficulty ?? "medium"))} · ${i18n.t("card.from", { what: sourceSummary(c.source) })}` : null;
     case "flashcards":
-      return ready ? `${c.card_count ?? 0} cards · from ${sourceSummary(c.source)}` : null;
+      return ready ? `${i18n.t("card.cards", { count: c.card_count ?? 0 })} · ${i18n.t("card.from", { what: sourceSummary(c.source) })}` : null;
     case "report": {
       if (!ready) return null;
       const blocks = (c.blocks ?? []) as { type: string }[];
       const visuals = blocks.filter((b) => b.type !== "prose").length;
-      return `${c.format === "interactive" ? "Interactive" : "Document"} · ${plural(blocks.length, "section")}${visuals ? ` · ${plural(visuals, "visual")}` : ""}`;
+      return `${c.format === "interactive" ? i18n.t("card.interactive") : i18n.t("card.document")} · ${plural(blocks.length, "section")}${visuals ? ` · ${plural(visuals, "visual")}` : ""}`;
     }
     case "infographic":
-      return ready ? `${c.theme ? `${INFOGRAPHIC_THEMES.find((t) => t.id === c.theme)?.name ?? c.theme} look · ` : ""}from ${sourceSummary(c.source)}` : null;
+      return ready ? `${c.theme ? i18n.t("card.look", { name: INFOGRAPHIC_THEMES.find((t) => t.id === c.theme)?.name ?? c.theme }) : ""}${i18n.t("card.from", { what: sourceSummary(c.source) })}` : null;
     case "summary": {
       const themes = (c.themes as string[] | undefined) ?? [];
-      return ready && themes.length ? `${themes.length} themes · ${(c.citations ?? []).length} citations` : null;
+      return ready && themes.length ? `${i18n.t("card.themes", { count: themes.length })} · ${i18n.t("card.citations", { count: (c.citations ?? []).length })}` : null;
     }
     case "launch_kit":
-      return ready ? `${c.claims?.length ?? 0} claims, ${c.hooks?.length ?? 0} hooks, posts for 4 platforms, SEO pack and carousel.` : null;
+      return ready ? i18n.t("card.kit", { claims: c.claims?.length ?? 0, hooks: c.hooks?.length ?? 0 }) : null;
     default:
       return null;
   }
@@ -174,7 +180,7 @@ export function ArtifactCard({ artifact: a, onRemoved, onChanged }: { artifact: 
   const deckArtifact = saved && saved.id === a.id ? saved : a;
   const running = Boolean(isMaking(a) && a.job && (a.job.status === "queued" || a.job.status === "running"));
   const ready = a.status === "ready";
-  const failed = a.status === "failed" ? String(a.content?.error ?? a.job?.error ?? "Could not be made.") : null;
+  const failed = a.status === "failed" ? String(a.content?.error ?? a.job?.error ?? `${i18n.t("card.couldNotBeMade")}.`) : null;
   // A video's pill is its own status (blog2video's states); the others show their job's.
   const pill = a.type !== "video" && running ? (a.job!.status === "queued" ? "queued" : "working") : a.status;
   // A launch kit opens while it is being written too: its page shows the progress.
@@ -223,12 +229,12 @@ export function ArtifactCard({ artifact: a, onRemoved, onChanged }: { artifact: 
       setDeck(false);
       onRemoved(a.id);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Could not delete it. Try again.");
+      setError(e instanceof ApiError ? e.message : i18n.t("card.deleteFailed"));
     }
   };
   const remove = () =>
-    Alert.alert(`Delete ${(EYEBROW[a.type] ?? a.type_label).toLowerCase()}?`, a.title, [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(i18n.t("card.deleteTitle", { kind: kindLabel(a).toLowerCase() }), a.title, [
+      { text: i18n.t("common.cancel"), style: "cancel" },
       { text: "Delete", style: "destructive", onPress: () => void destroy() },
     ]);
 
@@ -238,7 +244,7 @@ export function ArtifactCard({ artifact: a, onRemoved, onChanged }: { artifact: 
       await artifactsApi.retry(a.id);
       onChanged();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Could not retry. Try again.");
+      setError(e instanceof ApiError ? e.message : i18n.t("card.retryFailed"));
     }
   };
 
@@ -251,7 +257,7 @@ export function ArtifactCard({ artifact: a, onRemoved, onChanged }: { artifact: 
         accessibilityRole={viewable ? "button" : undefined}
         style={({ pressed }) => [styles.head, pressed && styles.pressed]}>
         <View style={styles.headText}>
-          <Text style={styles.eyebrow}>{(EYEBROW[a.type] ?? a.type_label).toUpperCase()}</Text>
+          <Text style={styles.eyebrow}>{kindLabel(a).toUpperCase()}</Text>
           <Text style={styles.title} numberOfLines={3}>
             {cardTitle(a, running)}
           </Text>
@@ -267,12 +273,12 @@ export function ArtifactCard({ artifact: a, onRemoved, onChanged }: { artifact: 
       {audioSrc ? <AudioPlayer player={player} duration={a.content?.duration_s} /> : null}
       {a.type === "audio_overview" && ready && segments.length > 0 ? (
         <Pressable onPress={() => setTranscript(true)} accessibilityRole="button" style={styles.transcriptLink}>
-          <Text style={styles.transcriptText}>View transcript ({segments.length} lines)</Text>
+          <Text style={styles.transcriptText}>{i18n.t("card.transcript", { count: segments.length })}</Text>
           <ChevronRightIcon size={13} color={colors.blue} />
         </Pressable>
       ) : null}
       {a.type === "infographic" && ready ? <InfographicThumb artifact={a} onOpen={view} /> : null}
-      {a.type === "quote_card" && ready && a.url ? <Still uri={a.url} label={String(a.content?.quote ?? "Quote card")} /> : null}
+      {a.type === "quote_card" && ready && a.url ? <Still uri={a.url} label={String(a.content?.quote ?? i18n.t("card.quoteCard"))} /> : null}
       {a.type === "carousel" && ready && a.slide_urls?.length ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.gallery}>
           {a.slide_urls.map((u, i) => (
@@ -286,14 +292,14 @@ export function ArtifactCard({ artifact: a, onRemoved, onChanged }: { artifact: 
 
       {/* The web card's buttons, in its order: view, download, present, share, launch, retry, delete; thumbs on the right */}
       <View style={styles.actions}>
-        {viewable ? <IconButton label={VIEW_LABEL[a.type] ?? "View"} glyph={<EyeIcon size={15} />} onPress={view} /> : null}
+        {viewable ? <IconButton label={VIEW_LABEL[a.type] ?? i18n.t("card.view")} glyph={<EyeIcon size={15} />} onPress={view} /> : null}
         {a.type === "slide_deck" && ready ? <DownloadMenu artifact={deckArtifact} round /> : null}
         {ready && files.length > 0 ? <FileMenu items={files} onError={setError} /> : null}
-        {a.type === "slide_deck" && ready ? <IconButton label="Present" glyph={<DesktopIcon size={15} />} onPress={() => setPresenting(true)} /> : null}
-        {canShare(a) ? <IconButton label="Share" glyph={<ShareIcon size={15} />} onPress={() => setSharing(true)} /> : null}
-        {canPost(a) ? <IconButton label="Launch" glyph={<RocketIcon size={15} />} onPress={launch} /> : null}
-        {failed && !isVideo ? <IconButton label="Retry" glyph={<RetryIcon size={15} />} onPress={retry} /> : null}
-        <IconButton label={`Delete ${a.title}`} glyph={<TrashIcon size={15} />} onPress={remove} />
+        {a.type === "slide_deck" && ready ? <IconButton label={i18n.t("misc.present")} glyph={<DesktopIcon size={15} />} onPress={() => setPresenting(true)} /> : null}
+        {canShare(a) ? <IconButton label={i18n.t("misc.share")} glyph={<ShareIcon size={15} />} onPress={() => setSharing(true)} /> : null}
+        {canPost(a) ? <IconButton label={i18n.t("card.launch")} glyph={<RocketIcon size={15} />} onPress={launch} /> : null}
+        {failed && !isVideo ? <IconButton label={i18n.t("card.retry")} glyph={<RetryIcon size={15} />} onPress={retry} /> : null}
+        <IconButton label={i18n.t("card.deleteNamed", { title: a.title })} glyph={<TrashIcon size={15} />} onPress={remove} />
         {RATEABLE.has(a.type) && (ready || (a.type === "video" && Boolean(a.content?.video_url))) ? (
           <View style={styles.thumbs}>
             <CardFeedback artifact={a} />
@@ -379,7 +385,7 @@ export function ArtifactCard({ artifact: a, onRemoved, onChanged }: { artifact: 
       {a.type === "audio_overview" ? (
         <AudioOnlyDialog title={a.title} downloadUrl={a.download_url} visible={launching === "audio"} onClose={() => setLaunching(null)} />
       ) : (
-        <Sheet visible={launching === "post"} title="New post" onClose={() => setLaunching(null)}>
+        <Sheet visible={launching === "post"} title={i18n.t("misc.newPost")} onClose={() => setLaunching(null)}>
           {launching === "post" ? (
             <Composer
               at={null}
@@ -398,7 +404,7 @@ export function ArtifactCard({ artifact: a, onRemoved, onChanged }: { artifact: 
       {a.type === "audio_overview" ? (
         <Sheet visible={transcript} title={a.title} onClose={() => setTranscript(false)}>
           {audioSrc ? <AudioPlayer player={player} duration={a.content?.duration_s} /> : null}
-          <Text style={styles.transcriptLabel}>TRANSCRIPT · {segments.length} LINES</Text>
+          <Text style={styles.transcriptLabel}>{i18n.t("card.transcriptHead", { count: segments.length })}</Text>
           {segments.map((s, i) => (
             <View key={i} style={styles.line}>
               <Pressable
@@ -409,7 +415,7 @@ export function ArtifactCard({ artifact: a, onRemoved, onChanged }: { artifact: 
                 }}
                 hitSlop={6}
                 accessibilityRole="button"
-                accessibilityLabel={`Play from ${clock(s.start)}`}>
+                accessibilityLabel={i18n.t("card.playFrom", { time: clock(s.start) })}>
                 <Text style={styles.lineTime}>{clock(s.start)}</Text>
               </Pressable>
               <Text style={[styles.speaker, s.speaker === "host_b" && styles.speakerB]}>{s.speaker === "host_b" ? "B" : "A"}</Text>
@@ -444,7 +450,7 @@ function AudioPlayer({ player, duration: known }: { player: AudioPlayerInstance;
       <Pressable
         onPress={() => (status.playing ? player.pause() : player.play())}
         accessibilityRole="button"
-        accessibilityLabel={status.playing ? "Pause" : "Play"}
+        accessibilityLabel={status.playing ? i18n.t("card.pause") : i18n.t("card.play")}
         style={styles.playButton}>
         <SymbolView name={status.playing ? { ios: "pause.fill", android: "pause" } : { ios: "play.fill", android: "play_arrow" }} size={15} tintColor={colors.white} />
       </Pressable>
@@ -454,13 +460,13 @@ function AudioPlayer({ player, duration: known }: { player: AudioPlayerInstance;
         onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
         onPress={(e) => width && duration && void player.seekTo((e.nativeEvent.locationX / width) * duration)}
         accessibilityRole="adjustable"
-        accessibilityLabel="Position">
+        accessibilityLabel={i18n.t("card.position")}>
         <View style={styles.seekTrack}>
           <View style={[styles.seekFill, { width: `${pct}%` }]} />
         </View>
       </Pressable>
       <Text style={styles.time}>{clock(duration)}</Text>
-      <Pressable onPress={nextSpeed} accessibilityRole="button" accessibilityLabel={`Speed ${speed}x`} style={styles.speed}>
+      <Pressable onPress={nextSpeed} accessibilityRole="button" accessibilityLabel={i18n.t("card.speed", { speed })} style={styles.speed}>
         <Text style={styles.speedText}>{speed}x</Text>
       </Pressable>
     </View>
@@ -470,13 +476,13 @@ function AudioPlayer({ player, duration: known }: { player: AudioPlayerInstance;
 
 /** Each card's eye, named as the web names it. */
 const VIEW_LABEL: Record<string, string> = {
-  summary: "Open summary",
-  quiz: "Start quiz",
-  flashcards: "Study cards",
-  mind_map: "Open Mind Constellation",
-  launch_kit: "Open Launch Kit",
-  audio_overview: "Preview",
-  video: "Preview",
+  summary: i18n.t("card.viewLabel.summary"),
+  quiz: i18n.t("card.viewLabel.quiz"),
+  flashcards: i18n.t("card.viewLabel.flashcards"),
+  mind_map: i18n.t("card.viewLabel.mind_map"),
+  launch_kit: i18n.t("card.viewLabel.launch_kit"),
+  audio_overview: i18n.t("card.viewLabel.audio_overview"),
+  video: i18n.t("card.viewLabel.video"),
 };
 
 type FileItem = { label: string; icon?: ReactNode; source: FileSource | (() => FileSource | Promise<FileSource>); name: string; kind: string };
@@ -490,17 +496,17 @@ function downloads(a: Artifact, name: string, toPng: (svg: string, w: number, h:
   const api = (path: string) => ({ api: `/api/artifacts/${a.id}/${path}` });
   if (a.type === "report") {
     return [
-      { label: "Markdown (.md)", icon: <MarkdownIcon size={22} />, source: () => ({ text: reportMarkdown(a.content ?? {}) }), name, kind: "md" },
-      { label: "PDF document (.pdf)", icon: <PdfIcon size={22} />, source: api("report.pdf"), name, kind: "pdf" },
+      { label: i18n.t("card.markdown"), icon: <MarkdownIcon size={22} />, source: () => ({ text: reportMarkdown(a.content ?? {}) }), name, kind: "md" },
+      { label: i18n.t("card.pdf"), icon: <PdfIcon size={22} />, source: api("report.pdf"), name, kind: "pdf" },
     ];
   }
   if (a.type === "mind_map") {
     const root = a.content?.root as MindNode | undefined;
     if (!root) return [];
     return [
-      { label: "Markdown outline (.md)", icon: <MarkdownIcon size={22} />, source: () => ({ text: mapOutline(a.title, root) }), name, kind: "md" },
+      { label: i18n.t("card.outline"), icon: <MarkdownIcon size={22} />, source: () => ({ text: mapOutline(a.title, root) }), name, kind: "md" },
       {
-        label: "Image (.png)",
+        label: i18n.t("card.png"),
         icon: <ImageIcon size={22} />,
         source: async () => {
           const { svg, w, h } = mapSvg(a.title, root, a.id, savedShape(a.id));
@@ -509,17 +515,17 @@ function downloads(a: Artifact, name: string, toPng: (svg: string, w: number, h:
         name,
         kind: "png",
       },
-      { label: "PDF document (.pdf)", icon: <PdfIcon size={22} />, source: api("mind-map.pdf"), name, kind: "pdf" },
+      { label: i18n.t("card.pdf"), icon: <PdfIcon size={22} />, source: api("mind-map.pdf"), name, kind: "pdf" },
     ];
   }
   if (a.type === "infographic") {
     return [
-      { label: "Landscape", icon: <LandscapeIcon size={22} />, source: api("image?layout=landscape"), name: `${name} (landscape)`, kind: "png" },
-      { label: "Portrait", icon: <PortraitIcon size={22} />, source: api("image?layout=portrait"), name: `${name} (portrait)`, kind: "png" },
+      { label: i18n.t("card.landscape"), icon: <LandscapeIcon size={22} />, source: api("image?layout=landscape"), name: i18n.t("card.landscapeName", { name }), kind: "png" },
+      { label: i18n.t("card.portrait"), icon: <PortraitIcon size={22} />, source: api("image?layout=portrait"), name: i18n.t("card.portraitName", { name }), kind: "png" },
     ];
   }
   if (a.type === "slide_deck" || (a.type === "video" && a.provider === "blog2video") || !a.download_url) return [];
-  return [{ label: "Download", source: { url: a.download_url }, name, kind: extOf(a.download_url, a.type === "audio_overview" ? "mp3" : "bin") }];
+  return [{ label: i18n.t("card.download"), source: { url: a.download_url }, name, kind: extOf(a.download_url, a.type === "audio_overview" ? "mp3" : "bin") }];
 }
 
 /** The card's download: one file straight away, several behind a menu (web: each card's download menu). The file is
@@ -532,16 +538,16 @@ function FileMenu({ items, onError }: { items: FileItem[]; onError: (message: st
     try {
       await saveFile(typeof item.source === "function" ? await item.source() : item.source, item.name, item.kind);
     } catch (e) {
-      onError(e instanceof ApiError || e instanceof Error ? e.message : "Could not download it. Try again.");
+      onError(e instanceof ApiError || e instanceof Error ? e.message : i18n.t("card.downloadFailed"));
     } finally {
       setBusy(false);
     }
   };
   const glyph = busy ? <ActivityIndicator size="small" color={colors.text} /> : <DownloadIcon size={15} />;
-  if (items.length === 1) return <IconButton label={busy ? "Preparing the file" : "Download"} glyph={glyph} disabled={busy} onPress={() => void get(items[0])} />;
+  if (items.length === 1) return <IconButton label={busy ? i18n.t("card.preparing") : i18n.t("card.download")} glyph={glyph} disabled={busy} onPress={() => void get(items[0])} />;
   return (
     <PopMenu
-      label={busy ? "Preparing the file" : "Download"}
+      label={busy ? i18n.t("card.preparing") : i18n.t("card.download")}
       disabled={busy}
       items={items.map((item) => ({ label: item.label, icon: item.icon, onPress: () => void get(item) }))}
       style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}>
@@ -608,7 +614,7 @@ export function CardFeedback({ artifact }: { artifact: Artifact }) {
       setRating(res.feedback);
       setOpen(null);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Could not save it. Try again.");
+      setError(e instanceof ApiError ? e.message : i18n.t("card.saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -617,13 +623,13 @@ export function CardFeedback({ artifact }: { artifact: Artifact }) {
   return (
     <>
       <IconButton
-        label="Good: tell us what you liked"
+        label={i18n.t("card.good")}
         glyph={<ThumbIcon size={15} color={rating?.rating === "up" ? colors.blue : colors.text} />}
         on={rating?.rating === "up"}
         onPress={() => start("up")}
       />
       <IconButton
-        label="Not good: tell us what to improve"
+        label={i18n.t("card.notGood")}
         glyph={<ThumbIcon down size={15} color={rating?.rating === "down" ? colors.blue : colors.text} />}
         on={rating?.rating === "down"}
         onPress={() => start("down")}
@@ -631,13 +637,13 @@ export function CardFeedback({ artifact }: { artifact: Artifact }) {
       <Sheet visible={open !== null} title={open === "up" ? "What you liked!" : "Help us improve"} onClose={() => setOpen(null)}>
         <Text style={styles.reviewOf}>{artifact.title}</Text>
         <Text style={styles.reviewLabel}>
-          YOUR FEEDBACK <Text style={styles.reviewOptional}>(optional)</Text>
+          {i18n.t("card.yourFeedback")} <Text style={styles.reviewOptional}>{i18n.t("common.optional")}</Text>
         </Text>
         <TextInput
           style={styles.reviewInput}
           value={comment}
           onChangeText={setComment}
-          placeholder={open === "up" ? "What did you like about it?" : "What was missing or could be better?"}
+          placeholder={open === "up" ? i18n.t("card.likedPlaceholder") : i18n.t("card.missingPlaceholder")}
           placeholderTextColor={colors.text3}
           multiline
           maxLength={1000}
@@ -648,11 +654,11 @@ export function CardFeedback({ artifact }: { artifact: Artifact }) {
         <View style={styles.reviewRow}>
           {same ? (
             <Pressable onPress={() => void send(null)} disabled={busy} accessibilityRole="button">
-              <Text style={styles.removeRating}>Remove rating</Text>
+              <Text style={styles.removeRating}>{i18n.t("card.removeRating")}</Text>
             </Pressable>
           ) : null}
           <View style={styles.spacer} />
-          <PillButton title="Cancel" onPress={() => setOpen(null)} disabled={busy} />
+          <PillButton title={i18n.t("common.cancel")} onPress={() => setOpen(null)} disabled={busy} />
           <PillButton title={busy ? "Saving..." : "Submit"} variant="primary" busy={busy} onPress={() => void send(open)} />
         </View>
       </Sheet>

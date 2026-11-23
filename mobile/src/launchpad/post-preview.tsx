@@ -9,22 +9,23 @@ import { colors, radius } from "@/ui/theme";
 import { ErrorText } from "@/ui";
 import { pageStyles, PillButton } from "@/ui/widgets";
 import { SparkleIcon } from "@/ui/icons";
+import i18n, { tKey } from "@/i18n";
 
 /** The post as it will look (web: ScheduleModal's .lp-social-preview): account, text, attachment, actions. */
 export function PostPreview({ platform, account, text, attached }: { platform: Platform; account: SocialAccount | null; text: string; attached: PostableArtifact | null }) {
   const meta = platformMeta(platform);
-  const handle = account?.handle ?? "Your account";
+  const handle = account?.handle ?? i18n.t("lp.yourAccount");
   const instagram = platform === "instagram";
   return (
     <View style={styles.stack}>
       <View style={styles.heading}>
         <View style={styles.headingLeft}>
           <BrandIcon brand={platform} size={19} color={colors.text2} />
-          <Text style={styles.headingText}>Preview</Text>
+          <Text style={styles.headingText}>{i18n.t("lp.preview")}</Text>
         </View>
         <View style={styles.headingLeft}>
           <View style={styles.liveDot} />
-          <Text style={styles.liveText}>Live preview</Text>
+          <Text style={styles.liveText}>{i18n.t("lp.livePreview")}</Text>
         </View>
       </View>
 
@@ -42,7 +43,7 @@ export function PostPreview({ platform, account, text, attached }: { platform: P
         {instagram && attached ? <Media attached={attached} /> : null}
         <Text style={[styles.text, !text && styles.placeholder]}>
           {instagram && text ? <Text style={styles.handle}>{handle} </Text> : null}
-          {text || `Your ${meta.label} ${instagram ? "caption" : "post"} will appear here as you type.`}
+          {text || i18n.t(instagram ? "lp.placeholderCaption" : "lp.placeholderPost", { platform: meta.label })}
         </Text>
         {!instagram && attached ? <Media attached={attached} /> : null}
         <View style={styles.actions}>
@@ -96,34 +97,34 @@ export function AiPanel({
           <SparkleIcon size={18} color={colors.blue} />
         </View>
         <View style={styles.flex}>
-          <Text style={styles.aiTitle}>Write with AI</Text>
-          <Text style={styles.aiSub}>Generate or refine your {platformMeta(platform).label} post.</Text>
+          <Text style={styles.aiTitle}>{i18n.t("lp.writeAi")}</Text>
+          <Text style={styles.aiSub}>{i18n.t("lp.aiSub", { platform: platformMeta(platform).label })}</Text>
         </View>
       </View>
-      <Text style={styles.aiLabel}>What do you want to write about?</Text>
+      <Text style={styles.aiLabel}>{i18n.t("lp.aiLabel")}</Text>
       <TextInput
         style={[pageStyles.input, styles.aiPrompt]}
         value={prompt}
         onChangeText={onPrompt}
         multiline
         textAlignVertical="top"
-        placeholder="Include the key points, audience, and outcome you want."
+        placeholder={i18n.t("lp.aiPlaceholder")}
         placeholderTextColor={colors.text3}
       />
-      <PillButton variant="primary" title={busy === "generate" ? "Generating..." : "Generate post"} busy={busy === "generate"} disabled={busy !== null || !prompt.trim()} onPress={() => onRun("generate")} />
+      <PillButton variant="primary" title={busy === "generate" ? i18n.t("lp.generating") : i18n.t("lp.generatePost")} busy={busy === "generate"} disabled={busy !== null || !prompt.trim()} onPress={() => onRun("generate")} />
       <View style={styles.divider}>
         <View style={styles.rule} />
-        <Text style={styles.dividerText}>OR REFINE YOUR DRAFT</Text>
+        <Text style={styles.dividerText}>{i18n.t("lp.refine")}</Text>
         <View style={styles.rule} />
       </View>
       <View style={styles.rework}>
         {AI_REWORK.map(({ id, label }) => (
-          <PillButton key={id} small title={busy === id ? "Working..." : label} disabled={busy !== null || !hasDraft} onPress={() => onRun(id)} />
+          <PillButton key={id} small title={busy === id ? i18n.t("lp.working") : tKey(`lp.rework.${id}`, label)} disabled={busy !== null || !hasDraft} onPress={() => onRun(id)} />
         ))}
       </View>
-      {!hasDraft ? <Text style={styles.aiSub}>Write a few words in the editor to enable rework options.</Text> : null}
+      {!hasDraft ? <Text style={styles.aiSub}>{i18n.t("lp.reworkHint")}</Text> : null}
       <ErrorText>{error ?? ""}</ErrorText>
-      <Text style={styles.note}>AI can make mistakes. Check the text before you post.</Text>
+      <Text style={styles.note}>{i18n.t("misc.aiMistakes")}</Text>
     </View>
   );
 }

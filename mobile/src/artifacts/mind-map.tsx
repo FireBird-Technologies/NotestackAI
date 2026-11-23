@@ -32,6 +32,8 @@ import { MIND_MAP_PAGE } from "@/artifacts/mind-map-page";
 import { ChevronIcon, ExpandIcon } from "@/ui/icons";
 import { type Cited, ReaderSheet } from "@/artifacts/reader";
 import { colors, fonts, radius } from "@/ui/theme";
+import i18n, { tKey } from "@/i18n";
+
 
 /* The Mind Constellation explorer (web: MindMap.tsx MindMapExplorer), from the same layout, so every star sits where it
    does on the web. Pinch to zoom, drag to move, tap a star to fly to it, double-tap to dive in. The details of the star in
@@ -45,7 +47,7 @@ import { colors, fonts, radius } from "@/ui/theme";
 /** The map's own data: an artifact, or a report's block (its id seeds the layout). */
 export type MindMapSource = { id: string; title: string; root: MindNode };
 
-const LEVEL_NAME = ["Centre", "Theme", "Sub-theme", "Point"];
+const LEVEL_NAME = [i18n.t("mindMap.levels.0"), i18n.t("mindMap.levels.1"), i18n.t("mindMap.levels.2"), i18n.t("mindMap.levels.3")];
 
 /** The shape picked for this map in the explorer, else the map's own (its picture download uses it too). */
 const storeKey = (id: string) =>
@@ -296,7 +298,7 @@ export function MindMapExplorer({
           silent
           onPress={onExpand}
           accessibilityRole="button"
-          accessibilityLabel="Open the map full screen"
+          accessibilityLabel={i18n.t("mindMap.openFull")}
           style={StyleSheet.absoluteFill}
         />
       ) : null}
@@ -306,7 +308,7 @@ export function MindMapExplorer({
           <Pressable
             onPress={onExpand}
             accessibilityRole="button"
-            accessibilityLabel="Open full screen"
+            accessibilityLabel={i18n.t("mindMap.openFullShort")}
             style={[styles.btn, styles.corner]}
           >
             <ExpandIcon size={16} />
@@ -325,7 +327,7 @@ export function MindMapExplorer({
                 <Pressable
                   onPress={onClose}
                   accessibilityRole="button"
-                  accessibilityLabel="Back"
+                  accessibilityLabel={i18n.t("common.back")}
                   style={styles.btn}
                 >
                   <Svg
@@ -367,7 +369,7 @@ export function MindMapExplorer({
                 </Text>
               </View>
             </View>
-            <View style={styles.shapes} accessibilityLabel="Shape of the map">
+            <View style={styles.shapes} accessibilityLabel={i18n.t("mindMap.shape")}>
               {SHAPES.map((x) => (
                 <Pressable
                   key={x.id}
@@ -382,7 +384,7 @@ export function MindMapExplorer({
                       shape === x.id && styles.shapeTextOn,
                     ]}
                   >
-                    {x.label}
+                    {tKey(`mindMap.shapes.${x.id}`, x.label)}
                   </Text>
                 </Pressable>
               ))}
@@ -393,7 +395,7 @@ export function MindMapExplorer({
             <Pressable
               onPress={() => zoomBy(1.6)}
               accessibilityRole="button"
-              accessibilityLabel="Zoom in"
+              accessibilityLabel={i18n.t("mindMap.zoomIn")}
               style={styles.btn}
             >
               <Text style={styles.btnText}>+</Text>
@@ -401,7 +403,7 @@ export function MindMapExplorer({
             <Pressable
               onPress={() => zoomBy(1 / 1.6)}
               accessibilityRole="button"
-              accessibilityLabel="Zoom out"
+              accessibilityLabel={i18n.t("mindMap.zoomOut")}
               style={styles.btn}
             >
               <Text style={styles.btnText}>−</Text>
@@ -409,7 +411,7 @@ export function MindMapExplorer({
             <Pressable
               onPress={() => focus("root")}
               accessibilityRole="button"
-              accessibilityLabel="Show everything"
+              accessibilityLabel={i18n.t("mindMap.showAll")}
               style={styles.btn}
             >
               <Svg
@@ -429,7 +431,7 @@ export function MindMapExplorer({
               <Pressable
                 onPress={up}
                 accessibilityRole="button"
-                accessibilityLabel="Back out one orbit"
+                accessibilityLabel={i18n.t("mindMap.backOut")}
                 style={styles.btn}
               >
                 <Svg
@@ -486,7 +488,7 @@ export function MindMapExplorer({
                 ) : null}
                 {focused.node.children.length > 0 ? (
                   <>
-                    <Text style={styles.panelLabel}>ORBITING HERE</Text>
+                    <Text style={styles.panelLabel}>{i18n.t("mindMap.orbiting")}</Text>
                     <View style={styles.chips}>
                       {focused.node.children.map((c) => (
                         <Pressable
@@ -511,7 +513,7 @@ export function MindMapExplorer({
                 ) : null}
                 {focused.node.sources.length > 0 ? (
                   <>
-                    <Text style={styles.panelLabel}>FROM YOUR POSTS</Text>
+                    <Text style={styles.panelLabel}>{i18n.t("mindMap.fromPosts")}</Text>
                     {focused.node.sources.map((src, i) => (
                       <View key={i} style={styles.source}>
                         <Text
@@ -528,10 +530,9 @@ export function MindMapExplorer({
                         >
                           {src.title}
                           <Text style={styles.sourceLines}>
-                            {"  "}lines {src.line_start}
                             {src.line_end > src.line_start
-                              ? ` to ${src.line_end}`
-                              : ""}
+                              ? i18n.t("mindMap.linesRange", { start: src.line_start, end: src.line_end })
+                              : i18n.t("mindMap.lines", { start: src.line_start })}
                           </Text>
                         </Text>
                         <Text style={styles.quote}>

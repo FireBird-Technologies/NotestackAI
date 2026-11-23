@@ -9,7 +9,10 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 
+// First: picks the language (phone or Settings) before anything renders.
+import "@/i18n";
 import { AiConsentGate, AiConsentProvider } from "@/account/ai-consent";
 import { AuthProvider, useAuth } from "@/account/auth";
 import { logScreen, startAnalytics } from "@/lib/analytics";
@@ -46,6 +49,7 @@ export default function RootLayout() {
 }
 
 function RootNavigator() {
+  const { t } = useTranslation();
   const { user, loading, restoreError, retryRestore, signInPending } = useAuth();
   // A font that fails to load falls back to the system font rather than holding the app on the splash.
   const [fontsLoaded, fontError] = useFonts({ SpaceGrotesk_500Medium, SpaceGrotesk_700Bold, JetBrainsMono_400Regular });
@@ -75,7 +79,7 @@ function RootNavigator() {
     return (
       <Centered>
         <Body muted>{restoreError}</Body>
-        <Button title="Try again" onPress={retryRestore} />
+        <Button title={t("common.tryAgain")} onPress={retryRestore} />
       </Centered>
     );
   }

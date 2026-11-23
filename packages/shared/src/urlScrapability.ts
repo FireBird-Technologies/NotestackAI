@@ -2,6 +2,8 @@
 // frontend/src/utils/urlScrapability.ts; the server has the same rules in backend/app/services/url_policy.py (it refuses
 // blocked links too). Keep the three in step.
 
+import { tr } from "./i18n";
+
 // Always refused, whatever the path. Empty for now: the list is here so sites can be added.
 const HARD_BLOCKED_DOMAINS: string[] = [];
 
@@ -68,24 +70,24 @@ export function classifyUrl(s: string): UrlClassification {
   const path = url.pathname;
 
   if (HARD_BLOCKED_DOMAINS.some((d) => matches(host, d)) || ADULT_KEYWORDS.some((kw) => host.includes(kw))) {
-    return { kind: "blocked", message: BLOCKED_MESSAGE };
+    return { kind: "blocked", message: tr("url.blocked", BLOCKED_MESSAGE) };
   }
   if (SOCIAL_DOMAINS.some((d) => matches(host, d))) {
     const main = path.replace(/\/+$/, "");
     if (main === "" || SOCIAL_LANDING_PATHS.includes(main)) {
-      return { kind: "blocked", message: SOCIAL_BLOCKED_MESSAGE };
+      return { kind: "blocked", message: tr("url.socialBlocked", SOCIAL_BLOCKED_MESSAGE) };
     }
     return WARN_DOMAINS.some((d) => matches(host, d))
-      ? { kind: "warn", message: MAYBE_UNSCRAPABLE_WARNING }
+      ? { kind: "warn", message: tr("url.maybe", MAYBE_UNSCRAPABLE_WARNING) }
       : { kind: "ok" };
   }
   if (matches(host, GOOGLE_DRIVE_RULE.domain) && GOOGLE_DRIVE_RULE.pathPrefixes.some((p) => path.startsWith(p))) {
-    return { kind: "warn", message: GOOGLE_DRIVE_WARNING };
+    return { kind: "warn", message: tr("url.drive", GOOGLE_DRIVE_WARNING) };
   }
   const chat = CHAT_SHARE_RULES.find((r) => matches(host, r.domain));
-  if (chat && chat.pathPrefixes.some((p) => path.startsWith(p))) return { kind: "warn", message: PUBLIC_SHARE_WARNING };
-  if (PAYWALL_DOMAINS.some((d) => matches(host, d))) return { kind: "warn", message: PAYWALL_WARNING };
-  if (WARN_DOMAINS.some((d) => matches(host, d))) return { kind: "warn", message: MAYBE_UNSCRAPABLE_WARNING };
+  if (chat && chat.pathPrefixes.some((p) => path.startsWith(p))) return { kind: "warn", message: tr("url.publicShare", PUBLIC_SHARE_WARNING) };
+  if (PAYWALL_DOMAINS.some((d) => matches(host, d))) return { kind: "warn", message: tr("url.paywall", PAYWALL_WARNING) };
+  if (WARN_DOMAINS.some((d) => matches(host, d))) return { kind: "warn", message: tr("url.maybe", MAYBE_UNSCRAPABLE_WARNING) };
   return { kind: "ok" };
 }
 

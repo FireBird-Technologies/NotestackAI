@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { Pressable } from "@/ui/pressable";
 
 import { colors } from "@/ui/theme";
+import i18n from "@/i18n";
 
 /** Sources and the Topic map share one tab; this strip switches between them (web: SourcesNav). */
 export function SourcesNav({ current }: { current: "posts" | "map" }) {
@@ -20,7 +21,7 @@ export function SourcesNav({ current }: { current: "posts" | "map" }) {
             accessibilityRole="tab"
             accessibilityState={{ selected: on }}
             style={[styles.segment, on && styles.segmentOn]}>
-            <Text style={on ? styles.textOn : styles.text}>{id === "posts" ? "Posts" : "Topic map"}</Text>
+            <Text style={on ? styles.textOn : styles.text}>{id === "posts" ? i18n.t("sourcesNav.posts") : i18n.t("sourcesNav.map")}</Text>
           </Pressable>
         );
       })}

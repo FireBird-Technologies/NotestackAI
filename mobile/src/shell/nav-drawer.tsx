@@ -2,9 +2,9 @@ import { useQuery } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import { router, useSegments, type Href } from "expo-router";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { BackHandler, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
+import { BackHandler, I18nManager, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Pressable } from "@/ui/pressable";
-import Animated, { FadeIn, FadeOut, SlideInLeft, SlideOutLeft } from "react-native-reanimated";
+import Animated, { FadeIn, FadeOut, SlideInLeft, SlideInRight, SlideOutLeft, SlideOutRight } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAuth } from "@/account/auth";
@@ -13,20 +13,21 @@ import { setPlan } from "@/lib/analytics";
 import { useBottomInset } from "@/lib/insets";
 import { useUpgrade } from "@/account/upgrade";
 import { colors, fonts, gutter, radius } from "@/ui/theme";
+import i18n, { tKey } from "@/i18n";
 
 /**
  * The app's sections, in the web sidebar's order (frontend/src/components/AppShell.tsx). Their icons are the web's own
  * (Icons.tsx), drawn white into assets/images/tabs and tinted here.
  */
 export const SECTIONS: { name: string; label: string; icon: number }[] = [
-  { name: "notebooks", label: "Notebooks", icon: require("@/assets/images/tabs/notebooks.png") },
-  { name: "sources", label: "Sources", icon: require("@/assets/images/tabs/sources.png") },
-  { name: "library", label: "Library", icon: require("@/assets/images/tabs/library.png") },
-  { name: "launchpad", label: "Launchpad", icon: require("@/assets/images/tabs/launchpad.png") },
-  { name: "voices", label: "Manage voices", icon: require("@/assets/images/tabs/voices.png") },
-  { name: "connector", label: "Connector", icon: require("@/assets/images/tabs/connector.png") },
+  { name: "notebooks", label: i18n.t("nav.notebooks"), icon: require("@/assets/images/tabs/notebooks.png") },
+  { name: "sources", label: i18n.t("nav.sources"), icon: require("@/assets/images/tabs/sources.png") },
+  { name: "library", label: i18n.t("nav.library"), icon: require("@/assets/images/tabs/library.png") },
+  { name: "launchpad", label: i18n.t("nav.launchpad"), icon: require("@/assets/images/tabs/launchpad.png") },
+  { name: "voices", label: i18n.t("nav.voices"), icon: require("@/assets/images/tabs/voices.png") },
+  { name: "connector", label: i18n.t("nav.connector"), icon: require("@/assets/images/tabs/connector.png") },
 ];
-const SETTINGS = { name: "settings", label: "Settings", icon: require("@/assets/images/tabs/settings.png") };
+const SETTINGS = { name: "settings", label: i18n.t("nav.settings"), icon: require("@/assets/images/tabs/settings.png") };
 
 const DrawerContext = createContext<{ open: () => void } | null>(null);
 
@@ -80,19 +81,20 @@ function SidePanel({ onClose }: { onClose: () => void }) {
   return (
     <View style={StyleSheet.absoluteFill}>
       <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(160)} style={styles.backdrop}>
-        <Pressable silent style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close menu" />
+        <Pressable silent style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel={i18n.t("ui.closeMenu")} />
       </Animated.View>
       <Animated.View
-        entering={SlideInLeft.duration(240)}
-        exiting={SlideOutLeft.duration(200)}
+        // The panel sits at the start edge: the right in Arabic and Urdu.
+        entering={(I18nManager.isRTL ? SlideInRight : SlideInLeft).duration(240)}
+        exiting={(I18nManager.isRTL ? SlideOutRight : SlideOutLeft).duration(200)}
         style={[styles.panel, { paddingTop: insets.top + 8, paddingBottom: Math.max(bottomInset, gutter) }]}
         accessibilityViewIsModal>
         <View style={styles.top}>
-          <Pressable sound onPress={() => go("notebooks")} style={styles.brand} accessibilityRole="link" accessibilityLabel="Your notebooks">
+          <Pressable sound onPress={() => go("notebooks")} style={styles.brand} accessibilityRole="link" accessibilityLabel={i18n.t("nav.yourNotebooks")}>
             <Image source={require("@/assets/images/logo.png")} style={styles.logo} accessibilityIgnoresInvertColors />
             <Text style={styles.wordmark}>Notestack</Text>
           </Pressable>
-          <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel="Close menu">
+          <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel={i18n.t("ui.closeMenu")}>
             <Image source={require("@/assets/images/ui/close.png")} style={styles.close} tintColor={colors.text} />
           </Pressable>
         </View>
@@ -121,7 +123,7 @@ function SidePanel({ onClose }: { onClose: () => void }) {
             }}
             accessibilityRole="button"
             style={styles.signOut}>
-            <Text style={styles.signOutText}>Sign out</Text>
+            <Text style={styles.signOutText}>{i18n.t("nav.signOut")}</Text>
           </Pressable>
         </ScrollView>
       </Animated.View>
@@ -173,9 +175,10 @@ function AppBadge() {
 }
 
 function fuelLeft(m: { used: number; limit: number; unit: string }): string {
-  if (m.limit < 0) return "Unlimited";
+  if (m.limit < 0) return i18n.t("nav.unlimited");
   const left = Math.max(m.limit - m.used, 0);
-  return `${Number.isInteger(left) ? left : left.toFixed(1)}${m.unit ? ` ${m.unit}` : ""} left`;
+  const amount = `${Number.isInteger(left) ? left : left.toFixed(1)}${m.unit ? ` ${tKey(`units.${m.unit}`, m.unit)}` : ""}`;
+  return i18n.t("nav.left", { amount });
 }
 
 /** The plan and what is left of it this period (the web's FuelGauge). "View plans" opens the upgrade sheet. */
@@ -185,13 +188,13 @@ function PlanCard({ onPlans }: { onPlans: () => void }) {
   const meters = data.meters.filter((m) => m.key !== "sources");
   return (
     <View style={styles.plan}>
-      <Text style={styles.planName}>{data.plan.name} plan</Text>
+      <Text style={styles.planName}>{i18n.t("nav.planName", { name: data.plan.name })}</Text>
       {meters.map((m) => {
         const hot = m.limit >= 0 && m.pct >= 0.8;
         return (
           <View key={m.key} style={styles.meter}>
             <View style={styles.meterHead}>
-              <Text style={styles.meterLabel}>{m.label}</Text>
+              <Text style={styles.meterLabel}>{tKey(`meters.${m.key}`, m.label)}</Text>
               <Text style={[styles.meterLeft, hot && styles.hot]}>{fuelLeft(m)}</Text>
             </View>
             <View style={styles.track}>
@@ -201,7 +204,7 @@ function PlanCard({ onPlans }: { onPlans: () => void }) {
         );
       })}
       <Text style={styles.plansLink} onPress={onPlans} accessibilityRole="link">
-        View plans
+        {i18n.t("nav.viewPlans")}
       </Text>
     </View>
   );

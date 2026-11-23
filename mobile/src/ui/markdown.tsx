@@ -8,6 +8,7 @@ import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { Pressable } from "@/ui/pressable";
 
 import { colors, fonts, radius } from "@/ui/theme";
+import i18n from "@/i18n";
 
 /* The web's Markdown (frontend/src/components/Markdown.tsx) drawn natively, from the same parser: headings, paragraphs,
    lists (one nested level, tasks), quotes, code, tables, images, rules, and inline bold, italic, strikethrough, code,
@@ -69,7 +70,7 @@ function inline(text: string, cite: Cite, key: string): ReactNode[] {
         return t.markers.map((n) => {
           const c = byMarker.get(n);
           return c ? (
-            <Text key={`${k}-${n}`} style={styles.cite} onPress={() => cite.onCite?.(c)} accessibilityRole="button" accessibilityLabel={`Source ${n}: ${c.title}`}>
+            <Text key={`${k}-${n}`} style={styles.cite} onPress={() => cite.onCite?.(c)} accessibilityRole="button" accessibilityLabel={i18n.t("ui.sourceN", { n, title: c.title })}>
               {` ${c.marker} `}
             </Text>
           ) : (
@@ -92,7 +93,7 @@ function CodeBlock({ code, lang }: { code: string; lang: string }) {
   return (
     <View style={styles.code}>
       <View style={styles.codeBar}>
-        <Text style={styles.codeLang}>{lang || "code"}</Text>
+        <Text style={styles.codeLang}>{lang || i18n.t("ui.code")}</Text>
         <Pressable
           onPress={async () => {
             await Clipboard.setStringAsync(code);
@@ -101,7 +102,7 @@ function CodeBlock({ code, lang }: { code: string; lang: string }) {
           }}
           hitSlop={8}
           accessibilityRole="button">
-          <Text style={styles.codeLang}>{copied ? "Copied" : "Copy"}</Text>
+          <Text style={styles.codeLang}>{copied ? i18n.t("ui.copied") : i18n.t("ui.copy")}</Text>
         </Pressable>
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -111,7 +112,7 @@ function CodeBlock({ code, lang }: { code: string; lang: string }) {
       </ScrollView>
       {long ? (
         <Pressable onPress={() => setShownAll((o) => !o)} accessibilityRole="button">
-          <Text style={styles.codeMore}>{shownAll ? "Show less" : `Show all ${lines.length} lines`}</Text>
+          <Text style={styles.codeMore}>{shownAll ? i18n.t("ui.showLess") : i18n.t("ui.showAllLines", { count: lines.length })}</Text>
         </Pressable>
       ) : null}
     </View>
@@ -157,9 +158,9 @@ function Table({ b, cite, k }: { b: Extract<Block, { kind: "table" }>; cite: Cit
 function Figure({ src, alt, title }: { src: string; alt: string; title?: string }) {
   const [ratio, setRatio] = useState(16 / 9);
   const [broken, setBroken] = useState(false);
-  if (broken) return <Text style={styles.broken}>[image: {alt || src}]</Text>;
+  if (broken) return <Text style={styles.broken}>{i18n.t("ui.image", { alt: alt || src })}</Text>;
   return (
-    <Pressable onPress={() => open(src)} accessibilityRole="imagebutton" accessibilityLabel={alt || "Open image"} style={styles.figure}>
+    <Pressable onPress={() => open(src)} accessibilityRole="imagebutton" accessibilityLabel={alt || i18n.t("ui.openImage")} style={styles.figure}>
       <Image
         source={{ uri: src }}
         style={[styles.image, { aspectRatio: ratio }]}

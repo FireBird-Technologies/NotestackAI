@@ -1,4 +1,5 @@
 import type { Citation } from "./types";
+import { tr } from "./i18n";
 
 /** Citations grouped by what they cite: each source once, then every place it was cited, in marker order (web:
  * ArtifactCard's CitationList; mobile: the summary and the report). */
@@ -14,4 +15,7 @@ export function groupCitations(citations: Citation[]): { key: string; title: str
 }
 
 /** "lines 4 to 9", or "lines 4". */
-export const citedLines = (c: Pick<Citation, "line_start" | "line_end">) => `lines ${c.line_start}${c.line_end > c.line_start ? ` to ${c.line_end}` : ""}`;
+export const citedLines = (c: Pick<Citation, "line_start" | "line_end">) =>
+  c.line_end > c.line_start
+    ? tr("cite.linesRange", "lines {{start}} to {{end}}", { start: c.line_start, end: c.line_end })
+    : tr("cite.lines", "lines {{start}}", { start: c.line_start });

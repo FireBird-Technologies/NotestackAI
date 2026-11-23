@@ -27,6 +27,7 @@ import { colors, fonts, radius } from "@/ui/theme";
 import { ErrorText, formatDate, Loading } from "@/ui";
 import { NestedPlansSheet } from "@/account/upgrade";
 import { pageStyles, PillButton } from "@/ui/widgets";
+import i18n, { resolveLanguage, tKey } from "@/i18n";
 
 type Source = { kind: "notebook"; id: string } | { kind: "post"; id: string };
 const ONE_POST = "__post";
@@ -40,10 +41,19 @@ const templateFields = (t: VideoTemplate) => ({
   text_color: t.preview_colors?.text ?? VIDEO_DEFAULTS.text_color,
 });
 
+// The video wizard's content languages share the app's codes (backend routers/videos.py LANGUAGES), but not Urdu.
+const VIDEO_LANGUAGES = new Set(["es", "fr", "de", "pt", "ar", "ja", "ko", "zh"]);
+
+/** The video's language to start on: the app's, when it is not English and the wizard has it; else Auto. */
+function appVideoLanguage(): string | null {
+  const lang = resolveLanguage();
+  return VIDEO_LANGUAGES.has(lang) ? lang : (VIDEO_DEFAULTS.content_language ?? null);
+}
+
 function Steps({ step }: { step: number }) {
-  const names = ["Project", "Template", "Voice"];
+  const names = [i18n.t("videoCreate.stepProject"), i18n.t("videoCreate.stepTemplate"), i18n.t("videoCreate.stepVoice")];
   return (
-    <View style={styles.steps} accessibilityLabel={`Step ${step} of 3: ${names[step - 1]}`}>
+    <View style={styles.steps} accessibilityLabel={i18n.t("videoCreate.stepOf", { step, name: names[step - 1] })}>
       {names.map((name, i) => {
         const done = i + 1 < step;
         const on = i + 1 === step;
@@ -99,7 +109,7 @@ export function VideoDialog({ notebook, initial, onCreate }: {
   const [form, setForm] = useState<VideoOptions>(() => ({
     ...VIDEO_DEFAULTS,
     aspect_ratio: initial?.aspect_ratio === "portrait" ? "portrait" : VIDEO_DEFAULTS.aspect_ratio,
-    content_language: initial?.content_language ?? VIDEO_DEFAULTS.content_language,
+    content_language: initial?.content_language ?? appVideoLanguage(),
     voice_gender: initial?.voice_gender === "male" ? "male" : initial?.voice_gender === "none" ? "none" : VIDEO_DEFAULTS.voice_gender,
     voice_accent: initial?.voice_accent === "british" ? "british" : VIDEO_DEFAULTS.voice_accent,
   }));
@@ -126,7 +136,7 @@ export function VideoDialog({ notebook, initial, onCreate }: {
   const defaultTemplate = askedTemplate ?? templates[Math.floor(randomAt * templates.length)];
   const listed = catalog.data?.video_styles ?? [];
   const houseStyles = listed.some((s) => s.kind === "house");
-  const styleList: VideoStyleItem[] = houseStyles ? listed : [{ id: "auto", name: "Auto", kind: "builtin" }, ...listed];
+  const styleList: VideoStyleItem[] = houseStyles ? listed : [{ id: "auto", name: i18n.t("videoCreate.auto"), kind: "builtin" }, ...listed];
   // The style asked for: Overview is short, Deep dive long.
   const styleName = initial?.video_style === "deep_dive" ? "deep dive" : initial?.video_style === "overview" ? "overview" : null;
   const askedStyle = styleName ? styleList.find((s) => (s.name ?? "").toLowerCase() === styleName) : undefined;
@@ -192,7 +202,7 @@ export function VideoDialog({ notebook, initial, onCreate }: {
     if (playing === v.voice_id) return play(v.voice_id, null);
     voicePreviewUrl(v.voice_id)
       .then((url) => play(v.voice_id, url))
-      .catch((e) => setError(e instanceof Error ? e.message : "Could not play the sample."));
+      .catch((e) => setError(e instanceof Error ? e.message : i18n.t("misc.samplePlayFailed")));
   };
 
   const submit = async () => {
@@ -218,23 +228,21 @@ export function VideoDialog({ notebook, initial, onCreate }: {
 
   if (config.error) return <ErrorText>{config.error.message}</ErrorText>;
   if (!config.data) return <Loading />;
-  if (!config.data.configured) return <Text style={styles.notice}>Video is not set up on this server yet.</Text>;
+  if (!config.data.configured) return <Text style={styles.notice}>{i18n.t("videoCreate.notSetUp")}</Text>;
   if (limitHit) {
     return (
       <View style={createStyles.stack}>
-        <Text style={styles.limitTitle}>Video limit reached</Text>
-        <Text style={pageStyles.body}>
-          You have used all of the videos included in your current plan. Upgrade to a bigger plan to keep turning your posts and chats into videos.
-        </Text>
-        <PillButton title="Upgrade" variant="primary" onPress={() => setPlansOpen(true)} />
+        <Text style={styles.limitTitle}>{i18n.t("videoCreate.limit")}</Text>
+        <Text style={pageStyles.body}>{i18n.t("videoCreate.limitBody")}</Text>
+        <PillButton title={i18n.t("settings.plan.upgrade")} variant="primary" onPress={() => setPlansOpen(true)} />
         <NestedPlansSheet visible={plansOpen} onClose={() => setPlansOpen(false)} />
       </View>
     );
   }
 
   const sourceOptions = [
-    ...(notebooks.data ?? []).map((n) => ({ value: n.id, label: n.is_archive ? "My whole archive" : n.title, hint: `${n.document_count} posts` })),
-    { value: ONE_POST, label: "Create a video on a single post" },
+    ...(notebooks.data ?? []).map((n) => ({ value: n.id, label: n.is_archive ? i18n.t("videoCreate.wholeArchive") : n.title, hint: i18n.t("notebooks.posts", { count: n.document_count }) })),
+    { value: ONE_POST, label: i18n.t("videoCreate.singlePost") },
   ];
   const sourceValue = choosingPost || source?.kind === "post" ? ONE_POST : (source?.id ?? ONE_POST);
   const currentVoiceId = options.custom_voice_id;
@@ -243,7 +251,7 @@ export function VideoDialog({ notebook, initial, onCreate }: {
     <View style={createStyles.stack}>
       {left !== null && quota.data ? (
         <Text style={styles.quota}>
-          {left} of {quota.data.limit} video{quota.data.limit === 1 ? "" : "s"} left
+          {i18n.t("videoCreate.left", { left, count: quota.data.limit })}
         </Text>
       ) : null}
       <Steps step={step} />
@@ -251,9 +259,9 @@ export function VideoDialog({ notebook, initial, onCreate }: {
       {step === 1 ? (
         <>
           <View style={createStyles.field}>
-            <Label>Made from</Label>
+            <Label>{i18n.t("fields.madeFrom")}</Label>
             <Select
-              label="Made from"
+              label={i18n.t("fields.madeFrom")}
               value={sourceValue}
               options={sourceOptions}
               onChange={(v) => {
@@ -267,19 +275,19 @@ export function VideoDialog({ notebook, initial, onCreate }: {
                 setFocus(null);
               }}
             />
-            <Hint>Choose a notebook, your whole archive or a single post.</Hint>
+            <Hint>{i18n.t("videoCreate.madeFromHint")}</Hint>
           </View>
           {choosingPost || source?.kind === "post" ? (
             <PostPicker selected={source?.kind === "post" ? source.id : null} onPick={(id) => setSource({ kind: "post", id })} />
           ) : null}
-          {wholeNotebook && notebookCount === 0 ? <Hint>This notebook has no posts yet. Add some, or pick another notebook.</Hint> : null}
+          {wholeNotebook && notebookCount === 0 ? <Hint>{i18n.t("videoCreate.emptyNotebook")}</Hint> : null}
 
           {sourceReady ? (
             <View style={createStyles.field}>
-              <Label>{wholeNotebook ? "What should the video be about?" : "What should the video focus on?"}</Label>
+              <Label>{wholeNotebook ? i18n.t("videoCreate.aboutQuestion") : i18n.t("videoCreate.focusQuestion")}</Label>
               {/* Your own topic first, the suggestions under it: the same for a notebook and a single post */}
               <CustomTopic
-                title={wholeNotebook ? "Your topic" : undefined}
+                title={wholeNotebook ? i18n.t("videoCreate.yourTopic") : undefined}
                 rows={2}
                 value={custom}
                 onChange={(t) => {
@@ -289,11 +297,11 @@ export function VideoDialog({ notebook, initial, onCreate }: {
                 onFocus={() => setFocus(null)}
                 note={
                   wholeNotebook
-                    ? "We find what your posts say about it. If none cover it, you get an overview of the whole notebook."
-                    : "Keep it to what the selected posts cover; anything they don't cover is left out of the video."
+                    ? i18n.t("videoCreate.notebookNote")
+                    : i18n.t("videoCreate.postNote")
                 }
               />
-              {shownTopics?.length !== 0 ? <Hint>Or pick a suggested topic</Hint> : null}
+              {shownTopics?.length !== 0 ? <Hint>{i18n.t("videoCreate.orPick")}</Hint> : null}
               <FocusCards
                 topics={shownTopics}
                 picked={focus}
@@ -306,7 +314,7 @@ export function VideoDialog({ notebook, initial, onCreate }: {
           ) : null}
 
           <View style={createStyles.field}>
-            <Label>Video style</Label>
+            <Label>{i18n.t("videoCreate.videoStyle")}</Label>
             {!catalog.data ? (
               <Loading />
             ) : (
@@ -317,7 +325,7 @@ export function VideoDialog({ notebook, initial, onCreate }: {
                     <Pressable key={s.id} onPress={() => (setStylePicked(true), set({ video_style: s.id }))} accessibilityRole="button" accessibilityState={{ selected: on }} style={[styles.chip, on && styles.chipOn]}>
                       <Text style={[styles.chipText, on && styles.chipTextOn]}>
                         {s.name}
-                        {s.kind === "custom" ? " (yours)" : ""}
+                        {s.kind === "custom" ? i18n.t("videoCreate.yours") : ""}
                       </Text>
                     </Pressable>
                   );
@@ -330,7 +338,7 @@ export function VideoDialog({ notebook, initial, onCreate }: {
           </View>
           <Foot error={error}>
             <PillButton
-              title="Go to step 2"
+              title={i18n.t("videoCreate.toStep2")}
               variant="primary"
               disabled={!sourceReady || shownTopics === null || (wholeNotebook && !topicChosen)}
               onPress={() => setStep(2)}
@@ -344,7 +352,7 @@ export function VideoDialog({ notebook, initial, onCreate }: {
           {!catalog.data ? (
             <Loading />
           ) : templates.length === 0 ? (
-            <Hint>No templates available.</Hint>
+            <Hint>{i18n.t("videoCreate.noTemplates")}</Hint>
           ) : (
             <ScrollView
               ref={templateBox}
@@ -376,9 +384,9 @@ export function VideoDialog({ notebook, initial, onCreate }: {
                       style={[styles.template, on && styles.templateOn]}>
                       <TemplateThumb template={t} />
                       {t.custom ? (
-                        <Text style={styles.badge}>Yours</Text>
+                        <Text style={styles.badge}>{i18n.t("videoCreate.yoursBadge")}</Text>
                       ) : t.badge || t.popular_template ? (
-                        <Text style={styles.badge}>{t.badge ?? "Popular"}</Text>
+                        <Text style={styles.badge}>{t.badge ?? i18n.t("videoCreate.popular")}</Text>
                       ) : null}
                       <Text style={styles.templateName} numberOfLines={1}>
                         {t.name}
@@ -395,13 +403,13 @@ export function VideoDialog({ notebook, initial, onCreate }: {
             </ScrollView>
           )}
           <View style={createStyles.field}>
-            <Label>Video colors</Label>
+            <Label>{i18n.t("videoCreate.colors")}</Label>
             <View style={styles.colors}>
               {(
                 [
-                  ["accent_color", "Accent"],
-                  ["bg_color", "BG"],
-                  ["text_color", "Text"],
+                  ["accent_color", i18n.t("videoCreate.accent")],
+                  ["bg_color", i18n.t("videoCreate.bg")],
+                  ["text_color", i18n.t("videoCreate.text")],
                 ] as const
               ).map(([k, label]) => (
                 <ColorField
@@ -420,8 +428,8 @@ export function VideoDialog({ notebook, initial, onCreate }: {
             </View>
           </View>
           <Foot>
-            <PillButton title="Back" onPress={() => setStep(1)} />
-            <PillButton title="Go to step 3" variant="primary" onPress={() => setStep(3)} />
+            <PillButton title={i18n.t("common.back")} onPress={() => setStep(1)} />
+            <PillButton title={i18n.t("videoCreate.toStep3")} variant="primary" onPress={() => setStep(3)} />
           </Foot>
         </>
       ) : null}
@@ -429,17 +437,17 @@ export function VideoDialog({ notebook, initial, onCreate }: {
       {step === 3 ? (
         <>
           <View style={createStyles.field}>
-            <Label>Language</Label>
+            <Label>{i18n.t("dialogs.language")}</Label>
             <Select
-              label="Language"
+              label={i18n.t("dialogs.language")}
               value={form.content_language ?? ""}
-              options={[{ value: "", label: "Auto", hint: "Detect from the content" }, ...(catalog.data?.languages ?? []).map((l) => ({ value: l.code, label: l.name }))]}
+              options={[{ value: "", label: i18n.t("videoCreate.auto"), hint: i18n.t("videoCreate.detect") }, ...(catalog.data?.languages ?? []).map((l) => ({ value: l.code, label: tKey(`options.languages.${l.name}`, l.name) }))]}
               onChange={(v) => set({ content_language: v || null })}
             />
-            <Hint>Language of the video content</Hint>
+            <Hint>{i18n.t("videoCreate.languageHint")}</Hint>
           </View>
           <View style={styles.switchRow}>
-            <Text style={styles.switchText}>No voiceover</Text>
+            <Text style={styles.switchText}>{i18n.t("videoCreate.noVoiceover")}</Text>
             <Switch
               value={form.voice_gender === "none"}
               onValueChange={(on) => {
@@ -451,11 +459,11 @@ export function VideoDialog({ notebook, initial, onCreate }: {
               trackColor={{ true: colors.blue }}
             />
           </View>
-          <Label>Voice: play to preview</Label>
+          <Label>{i18n.t("videoCreate.voicePreview")}</Label>
           {saved === null ? (
             <Loading />
           ) : saved.length === 0 ? (
-            <Hint>No voices yet. Add some in Manage voices.</Hint>
+            <Hint>{i18n.t("videoCreate.noVoices")}</Hint>
           ) : (
             <ScrollView
               style={[styles.box, form.voice_gender === "none" && styles.dim, { height: voiceRow ? BOX_PAD * 2 + voiceRow * 4.5 + VOICE_GAP * 4 : 300 }]}
@@ -474,7 +482,7 @@ export function VideoDialog({ notebook, initial, onCreate }: {
                       onPress={() => playVoice(v)}
                       disabled={!canPlay}
                       accessibilityRole="button"
-                      accessibilityLabel={`${playing === v.voice_id ? "Stop" : "Play"} ${v.name}`}
+                      accessibilityLabel={playing === v.voice_id ? i18n.t("voices.stopNamed", { label: v.name }) : i18n.t("voices.playNamed", { label: v.name })}
                       style={[styles.play, !canPlay && styles.dim]}>
                       <SymbolView name={playing === v.voice_id ? { ios: "stop.fill", android: "stop" } : { ios: "play.fill", android: "play_arrow" }} size={14} tintColor={colors.white} />
                     </Pressable>
@@ -494,8 +502,8 @@ export function VideoDialog({ notebook, initial, onCreate }: {
             </ScrollView>
           )}
           <Foot error={error}>
-            <PillButton title="Back" onPress={() => setStep(2)} disabled={busy} />
-            <PillButton title={busy ? "Initiating..." : "Generate Video"} variant="primary" busy={busy} onPress={() => void submit()} />
+            <PillButton title={i18n.t("common.back")} onPress={() => setStep(2)} disabled={busy} />
+            <PillButton title={busy ? i18n.t("videoCreate.initiating") : i18n.t("videoCreate.generate")} variant="primary" busy={busy} onPress={() => void submit()} />
           </Foot>
         </>
       ) : null}
@@ -540,7 +548,7 @@ export function ColorField({ label, value, onChange }: { label: string; value: s
           setOpen(true);
         }}
         accessibilityRole="button"
-        accessibilityLabel={`${label} colour ${value}`}
+        accessibilityLabel={i18n.t("videoCreate.colourOf", { label, value })}
         style={styles.colorField}>
         <View style={[styles.swatch, { backgroundColor: value }]} />
         <Text style={styles.colorLabel}>{label}</Text>
@@ -577,7 +585,7 @@ export function ColorField({ label, value, onChange }: { label: string; value: s
               />
               <PillButton
                 small
-                title="Use"
+                title={i18n.t("videoCreate.use")}
                 variant="primary"
                 disabled={!valid}
                 onPress={() => {
@@ -609,7 +617,7 @@ function PostPicker({ selected, onPick }: { selected: string | null; onPick: (id
         style={pageStyles.input}
         value={q}
         onChangeText={setQ}
-        placeholder="Search posts"
+        placeholder={i18n.t("fields.searchPosts")}
         placeholderTextColor={colors.text3}
         clearButtonMode="while-editing"
         autoCapitalize="none"
@@ -636,7 +644,7 @@ function PostPicker({ selected, onPick }: { selected: string | null; onPick: (id
             </Pressable>
           );
         })}
-        {posts.data && shown.length === 0 ? <Hint>No posts match.</Hint> : null}
+        {posts.data && shown.length === 0 ? <Hint>{i18n.t("sources.noMatch")}</Hint> : null}
       </ScrollView>
     </View>
   );

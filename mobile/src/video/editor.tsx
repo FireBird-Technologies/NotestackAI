@@ -2,7 +2,7 @@ import { ApiError } from "@notestack/shared/client";
 import { type LayoutInfo, type LayoutSchema, videoEditApi, videosApi } from "@notestack/shared/endpoints";
 import { finished, jobPercent } from "@notestack/shared/jobState";
 import type { LegacyVideo, ScriptScene, VideoCatalog, VideoConfig, VideoJobState, VideoProject, VideoQuota, VideoStatus } from "@notestack/shared/types";
-import { B2V_READY, embedUrl, FINISH_CAP_MS, isFailed, isReady, jobByLabel, jobDetail, JOBS, LOADING_STEP, mediaOf, REVIEW } from "@notestack/shared/video";
+import { B2V_READY, embedUrl, FINISH_CAP_MS, isFailed, isReady, jobByLabel, jobDetail, JOBS, jobText, LOADING_STEP, mediaOf, REVIEW } from "@notestack/shared/video";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -27,22 +27,23 @@ import { LookPanel } from "./settings";
 import type { PanelProps } from "./types";
 import { Spinner, Tabs, usePoll, vstyles } from "./ui";
 import { Voiceovers } from "./voiceovers";
+import i18n from "@/i18n";
 
 type Panel = "scenes" | "images" | "audio" | "settings";
 type Format = "landscape" | "portrait";
 type Running = { label: string; poll: () => Promise<VideoJobState | null> } | null;
 
-const message = (e: unknown) => (e instanceof ApiError || e instanceof Error ? e.message : "Something went wrong. Try again.");
-const busyMessage = (e: unknown) => (e instanceof ApiError && e.status === 409 ? "Another change is still running, try again in a moment." : message(e));
+const message = (e: unknown) => (e instanceof ApiError || e instanceof Error ? e.message : i18n.t("common.somethingWrong"));
+const busyMessage = (e: unknown) => (e instanceof ApiError && e.status === 409 ? i18n.t("editor.busy") : message(e));
 
 /** Out of videos on the plan: say so, and offer the plans (the upgrade sheet). */
 function outOfVideos(q: VideoQuota | null | undefined, onPlans: () => void) {
   Alert.alert(
-    "Your video limit is reached",
-    q ? `You've used ${q.used} of ${q.limit} videos this period.` : "You've used every video in your plan this period.",
+    i18n.t("editor.limitTitle"),
+    q ? i18n.t("editor.limitUsed", { used: q.used, limit: q.limit }) : i18n.t("editor.limitAll"),
     [
-      { text: "OK", style: "cancel" },
-      { text: "See plans", onPress: onPlans },
+      { text: i18n.t("editor.ok"), style: "cancel" },
+      { text: i18n.t("editor.seePlans"), onPress: onPlans },
     ],
   );
 }
@@ -51,7 +52,7 @@ function outOfVideos(q: VideoQuota | null | undefined, onPlans: () => void) {
 function JobProgress({ label, name, state }: { label: string; name: string; state: VideoJobState | null }) {
   const known = jobByLabel(label);
   // Resumed from the stored status, a voiceover delete arrives as a voice job: blog2video's kind tells them apart.
-  const copy = state?.kind === "delete" ? jobByLabel("Deleting the voiceover") : known;
+  const copy = jobText(state?.kind === "delete" ? jobByLabel("Deleting the voiceover") : known);
   const pct = jobPercent(state);
   const detail = jobDetail(state);
   const step = typeof state?.current_step === "string" && state.current_step ? state.current_step : null;
@@ -67,12 +68,12 @@ function JobProgress({ label, name, state }: { label: string; name: string; stat
       </View>
       <View style={vstyles.row}>
         <Spinner />
-        <Text style={vstyles.muted}>{pct !== null ? `${pct}% complete` : step ? step.replace(/_/g, " ") : "Working..."}</Text>
+        <Text style={vstyles.muted}>{pct !== null ? i18n.t("editor.complete", { pct }) : step ? step.replace(/_/g, " ") : i18n.t("editor.working")}</Text>
       </View>
       {detail ? <Text style={[vstyles.muted, vstyles.small]}>{detail}</Text> : null}
       {copy.tip ? (
         <View style={styles.tip}>
-          <Text style={styles.tipLabel}>TIP</Text>
+          <Text style={styles.tipLabel}>{i18n.t("editor.tip")}</Text>
           <Text style={vstyles.body}>{copy.tip}</Text>
         </View>
       ) : null}
@@ -131,35 +132,35 @@ function ScriptReview({ id, onApproved }: { id: string; onApproved: () => void }
 
   return (
     <View style={vstyles.card}>
-      <Text style={vstyles.h2}>Review the script</Text>
-      <Text style={vstyles.muted}>Edit any scene before the voiceover and visuals are made.</Text>
+      <Text style={vstyles.h2}>{i18n.t("editor.reviewScript")}</Text>
+      <Text style={vstyles.muted}>{i18n.t("editor.reviewBody")}</Text>
       {!scenes && !error ? <Spinner /> : null}
       {scenes?.map((s, i) => (
         <View key={s.id} style={styles.scriptScene}>
-          <Text style={styles.sceneNo}>Scene {i + 1}</Text>
-          <TextInput style={vstyles.input} value={s.title} maxLength={255} accessibilityLabel="Title" onChangeText={(t) => edit(s.id, { title: t })} />
+          <Text style={styles.sceneNo}>{i18n.t("editor.sceneN", { n: i + 1 })}</Text>
+          <TextInput style={vstyles.input} value={s.title} maxLength={255} accessibilityLabel={i18n.t("editor.title")} onChangeText={(t) => edit(s.id, { title: t })} />
           <TextInput
             style={[vstyles.input, styles.short]}
             value={s.display_text ?? ""}
             maxLength={3000}
             multiline
-            placeholder="On-screen text"
+            placeholder={i18n.t("editor.onScreen")}
             placeholderTextColor={colors.text3}
-            accessibilityLabel="On-screen text"
+            accessibilityLabel={i18n.t("editor.onScreen")}
             onChangeText={(t) => edit(s.id, { display_text: t })}
           />
-          <TextInput style={[vstyles.input, vstyles.area]} value={s.narration_text} maxLength={6000} multiline accessibilityLabel="Narration" onChangeText={(t) => edit(s.id, { narration_text: t })} />
-          <PillButton small title={busy === `n${s.id}` ? "Rewriting..." : "Rewrite narration to match"} disabled={!!busy || !s.title.trim()} onPress={() => void rewrite(s)} />
+          <TextInput style={[vstyles.input, vstyles.area]} value={s.narration_text} maxLength={6000} multiline accessibilityLabel={i18n.t("editor.narration")} onChangeText={(t) => edit(s.id, { narration_text: t })} />
+          <PillButton small title={busy === `n${s.id}` ? i18n.t("editor.rewriting") : i18n.t("editor.rewrite")} disabled={!!busy || !s.title.trim()} onPress={() => void rewrite(s)} />
         </View>
       ))}
       {error ? <Text style={vstyles.error}>{error}</Text> : null}
-      <PillButton variant="primary" title={busy === "approve" ? "Starting..." : "Generate Video"} disabled={!!busy || !scenes} onPress={() => void approve()} />
+      <PillButton variant="primary" title={busy === "approve" ? i18n.t("common.starting") : i18n.t("editor.generate")} disabled={!!busy || !scenes} onPress={() => void approve()} />
     </View>
   );
 }
 
 /** A dialog whose confirm stays loading until it is done (web: the editor's Modal + .vw-nav). */
-function ConfirmDialog({ title, body, cancel = "Cancel", confirm: ok, busyLabel, failedText, danger, run, onClose }: {
+function ConfirmDialog({ title, body, cancel = i18n.t("common.cancel"), confirm: ok, busyLabel, failedText, danger, run, onClose }: {
   title: string;
   body: string;
   cancel?: string;
@@ -208,13 +209,12 @@ function DownloadModal({ rendered, onDownloadNow, onRender, onClose }: { rendere
         .catch(() => undefined);
   }, [rendered]);
   const left = quota ? Math.max(quota.limit - quota.used, 0) : null;
-  const leftNote = left === null ? "" : ` (${left} left)`;
   const options = rendered
     ? ([
-        ["now", "Download the rendered MP4", "The video as it was last rendered."],
-        ["render", "Render again, then download", `Picks up your latest edits. Uses 1 video${leftNote}. Takes a few minutes; it downloads by itself when done.`],
+        ["now", i18n.t("editor.downloadNow"), i18n.t("editor.downloadNowNote")],
+        ["render", i18n.t("editor.renderAgain"), left === null ? i18n.t("editor.renderAgainNote") : i18n.t("editor.renderAgainNoteLeft", { left })],
       ] as const)
-    : ([["render", "Render and download MP4", "Takes a few minutes. Keep this screen open and it downloads by itself when done."]] as const);
+    : ([["render", i18n.t("editor.renderDownload"), i18n.t("editor.renderDownloadNote")]] as const);
 
   async function go() {
     if (choice === "render" && rendered && !confirming) return setConfirming(true);
@@ -235,20 +235,20 @@ function DownloadModal({ rendered, onDownloadNow, onRender, onClose }: { rendere
 
   if (confirming) {
     return (
-      <Dialog visible title="Render again?" onClose={busy ? () => undefined : () => setConfirming(false)}>
+      <Dialog visible title={i18n.t("editor.renderAgainTitle")} onClose={busy ? () => undefined : () => setConfirming(false)}>
         <Text style={vstyles.body}>
-          Rendering again uses another video from your allowance{quota ? ` (${left} of ${quota.limit} left)` : ""}. Do you want to continue?
+          {quota ? i18n.t("editor.renderAgainBodyLeft", { left, limit: quota.limit }) : i18n.t("editor.renderAgainBody")}
         </Text>
         <View style={vstyles.end}>
-          <PillButton small title="Cancel" disabled={busy} onPress={() => setConfirming(false)} />
-          <PillButton small variant="primary" title={busy ? "Starting..." : "Continue"} busy={busy} onPress={() => void go()} />
+          <PillButton small title={i18n.t("common.cancel")} disabled={busy} onPress={() => setConfirming(false)} />
+          <PillButton small variant="primary" title={busy ? i18n.t("common.starting") : i18n.t("editor.continue")} busy={busy} onPress={() => void go()} />
         </View>
       </Dialog>
     );
   }
 
   return (
-    <Dialog visible title="Download MP4" onClose={busy ? () => undefined : onClose}>
+    <Dialog visible title={i18n.t("editor.downloadTitle")} onClose={busy ? () => undefined : onClose}>
       <View style={styles.choices} accessibilityRole="radiogroup">
         {options.map(([value, label, note]) => (
           <Pressable key={value} onPress={() => setChoice(value)} disabled={busy} accessibilityRole="radio" accessibilityState={{ checked: choice === value }} style={[styles.choice, choice === value && styles.choiceOn]}>
@@ -261,11 +261,11 @@ function DownloadModal({ rendered, onDownloadNow, onRender, onClose }: { rendere
         ))}
       </View>
       <View style={vstyles.end}>
-        <PillButton small title="Cancel" disabled={busy} onPress={onClose} />
+        <PillButton small title={i18n.t("common.cancel")} disabled={busy} onPress={onClose} />
         <PillButton
           small
           variant="primary"
-          title={busy ? (choice === "now" ? "Preparing..." : "Starting...") : choice === "now" ? "Download" : "Render and download"}
+          title={busy ? (choice === "now" ? i18n.t("editor.preparing") : i18n.t("common.starting")) : choice === "now" ? i18n.t("editor.download") : i18n.t("editor.renderAndDownload")}
           busy={busy}
           onPress={() => void go()}
         />
@@ -290,24 +290,24 @@ function RenderPanel({ disabled, format, rendering, progress, onFormat, onDownlo
         <View style={styles.grow} accessibilityLiveRegion="polite">
           <View style={vstyles.row}>
             <Spinner />
-            <Text style={vstyles.body}>Rendering MP4</Text>
+            <Text style={vstyles.body}>{i18n.t("editor.renderingMp4")}</Text>
             <Text style={styles.pct}>{progress ?? 0}%</Text>
           </View>
           <View style={styles.bar}>
             <View style={[styles.barFill, { width: `${Math.max(2, Math.min(100, progress ?? 0))}%` }]} />
           </View>
         </View>
-        <PillButton small title="Cancel" onPress={onCancel} />
+        <PillButton small title={i18n.t("common.cancel")} onPress={onCancel} />
       </View>
     );
   }
   return (
     <View style={styles.renderRow}>
-      <View style={styles.formats} accessibilityRole="radiogroup" accessibilityLabel="Video format">
+      <View style={styles.formats} accessibilityRole="radiogroup" accessibilityLabel={i18n.t("editor.format")}>
         {(
           [
-            ["portrait", "Portrait (9:16), for phones"],
-            ["landscape", "Landscape (16:9), for screens"],
+            ["portrait", i18n.t("editor.portrait")],
+            ["landscape", i18n.t("editor.landscape")],
           ] as const
         ).map(([f, label]) => (
           <Pressable
@@ -323,7 +323,7 @@ function RenderPanel({ disabled, format, rendering, progress, onFormat, onDownlo
         ))}
       </View>
       <View style={styles.grow} />
-      <PillButton small variant="primary" title="Download" icon={<DownloadIcon size={16} color={colors.white} />} disabled={disabled} onPress={onDownload} />
+      <PillButton small variant="primary" title={i18n.t("editor.download")} icon={<DownloadIcon size={16} color={colors.white} />} disabled={disabled} onPress={onDownload} />
     </View>
   );
 }
@@ -335,20 +335,20 @@ function LegacyVideoView({ video, onRemove }: { video: LegacyVideo; onRemove: ()
   return (
     <ScrollView contentContainerStyle={styles.page}>
       <BackLink />
-      <Text style={styles.eyebrow}>VIDEOS</Text>
-      <Text style={styles.title}>{video.artifact.title ?? "Video"}</Text>
+      <Text style={styles.eyebrow}>{i18n.t("editor.eyebrow")}</Text>
+      <Text style={styles.title}>{video.artifact.title ?? i18n.t("editor.video")}</Text>
       <View style={vstyles.row}>
         <StatusPill status={video.artifact.status} />
-        <PillButton small variant="danger" title="Remove" onPress={() => confirm("Remove this video?", "Remove", onRemove)} />
+        <PillButton small variant="danger" title={i18n.t("common.remove")} onPress={() => confirm(i18n.t("editor.removeTitle"), i18n.t("common.remove"), onRemove)} />
       </View>
       <View style={vstyles.card}>
-        <Text style={vstyles.body}>This video was made before the video service changed, so it can no longer be edited.</Text>
+        <Text style={vstyles.body}>{i18n.t("editor.legacy")}</Text>
         {preview ? (
           <View style={styles.preview}>
             <WebView source={{ uri: preview }} style={styles.web} allowsInlineMediaPlayback allowsFullscreenVideo />
           </View>
         ) : (
-          <Text style={vstyles.muted}>No finished video was saved for it.</Text>
+          <Text style={vstyles.muted}>{i18n.t("editor.noFinished")}</Text>
         )}
       </View>
     </ScrollView>
@@ -494,7 +494,7 @@ export function VideoEditor({ id, renderOnOpen = false, fresh = false }: { id: s
   /** The MP4 as a file, handed to the share sheet (Save to Files, Photos, another app). */
   const saveMp4 = async (url: string) => {
     try {
-      await saveFile({ url }, fileName(project?.artifact.title ?? "Video", "Video"), "mp4");
+      await saveFile({ url }, fileName(project?.artifact.title ?? i18n.t("editor.video"), i18n.t("editor.video")), "mp4");
     } catch (e) {
       setError(message(e));
     }
@@ -519,7 +519,7 @@ export function VideoEditor({ id, renderOnOpen = false, fresh = false }: { id: s
       .catch(() => null);
     const url = isWebUrl(fresh) ? fresh : storedMp4;
     if (url) await saveMp4(url);
-    else setError("The MP4 isn't available to download yet. Try rendering it again.");
+    else setError(i18n.t("editor.mp4NotAvailable"));
   }
   /** After a render: download once the MP4 is uploaded (download-url answers 202 / a local path until then). */
   async function downloadWhenUploaded(r2: string | null) {
@@ -534,7 +534,7 @@ export function VideoEditor({ id, renderOnOpen = false, fresh = false }: { id: s
       if (isWebUrl(url)) return saveMp4(fresh(url));
       await new Promise((ok) => setTimeout(ok, 3000));
     }
-    setError("The MP4 is rendered but not ready to download yet. Try Download again in a moment.");
+    setError(i18n.t("editor.mp4NotReady"));
   }
 
   // One background job at a time (template, voice, language, add scene, script refresh, render).
@@ -588,7 +588,7 @@ export function VideoEditor({ id, renderOnOpen = false, fresh = false }: { id: s
     } catch (e) {
       if (e instanceof ApiError && e.status === 404) {
         // The video changed on blog2video under us (e.g. scenes were rebuilt): show the current version.
-        setError(`${message(e)}. The video was reloaded; try the change again.`);
+        setError(i18n.t("editor.reloaded", { message: message(e) }));
         await reload();
         return false;
       }
@@ -633,25 +633,25 @@ export function VideoEditor({ id, renderOnOpen = false, fresh = false }: { id: s
   if (notFound) {
     return (
       <View style={styles.page}>
-        <Text style={styles.eyebrow}>VIDEOS</Text>
-        <Text style={styles.title}>Video not found</Text>
-        <PillButton title="Back to videos" onPress={() => (router.canGoBack() ? router.back() : router.replace("/library"))} />
+        <Text style={styles.eyebrow}>{i18n.t("editor.eyebrow")}</Text>
+        <Text style={styles.title}>{i18n.t("editor.notFound")}</Text>
+        <PillButton title={i18n.t("editor.backToVideos")} onPress={() => (router.canGoBack() ? router.back() : router.replace("/library"))} />
       </View>
     );
   }
   if (legacy) return <LegacyVideoView video={legacy} onRemove={() => void remove()} />;
   // Just generated: keep showing step 1 (as the screen before it did) rather than a loading spinner.
-  if (!project && !status && fresh) return <MakingPage title="New video" />;
+  if (!project && !status && fresh) return <MakingPage title={i18n.t("editor.newVideo")} />;
   if (!project && !status) {
     return (
       <View style={[styles.page, styles.center]}>
         <Spinner />
-        <Text style={vstyles.muted}>Loading video</Text>
+        <Text style={vstyles.muted}>{i18n.t("editor.loading")}</Text>
       </View>
     );
   }
 
-  const title = project?.artifact.title ?? "Video";
+  const title = project?.artifact.title ?? i18n.t("editor.video");
   const failed = genFailed;
   const stored = !status && genKey === 0 ? project?.artifact.status : null;
   const generating = finishingNow || (status ? !isReady(status) && !failed && !REVIEW.has(status.status) && !(status.status in JOBS) : stored === "generating" || stored === "pending");
@@ -677,26 +677,26 @@ export function VideoEditor({ id, renderOnOpen = false, fresh = false }: { id: s
         <View style={styles.toast} accessibilityLiveRegion="polite">
           <Text style={styles.toastMark}>✓</Text>
           <View style={styles.grow}>
-            <Text style={vstyles.strong}>Video rendered</Text>
-            <Text style={[vstyles.muted, vstyles.small]}>We&apos;ve emailed you a download link. You can download it from there too.</Text>
+            <Text style={vstyles.strong}>{i18n.t("editor.rendered")}</Text>
+            <Text style={[vstyles.muted, vstyles.small]}>{i18n.t("editor.emailed")}</Text>
           </View>
           <PillButton
             small
             variant="primary"
-            title="Download now"
+            title={i18n.t("editor.downloadNowShort")}
             onPress={() => {
               setRendered3s(false);
               void downloadNow();
             }}
           />
-          <Pressable onPress={() => setRendered3s(false)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Close">
+          <Pressable onPress={() => setRendered3s(false)} hitSlop={8} accessibilityRole="button" accessibilityLabel={i18n.t("common.close")}>
             <Text style={styles.toastX}>×</Text>
           </Pressable>
         </View>
       ) : null}
 
       <BackLink />
-      <Text style={styles.eyebrow}>VIDEOS</Text>
+      <Text style={styles.eyebrow}>{i18n.t("editor.eyebrow")}</Text>
       <View style={styles.titleRow}>
         <Text style={[styles.title, styles.grow]}>{title}</Text>
         {project && !generating && pillStatus ? <StatusPill status={pillStatus} /> : null}
@@ -706,10 +706,10 @@ export function VideoEditor({ id, renderOnOpen = false, fresh = false }: { id: s
 
       {failed ? (
         <View style={vstyles.card}>
-          <Text style={vstyles.h2}>This video could not be made</Text>
-          <Text style={vstyles.error}>{status?.error ?? "Generation failed."}</Text>
-          <Text style={vstyles.muted}>It was not charged against your videos.</Text>
-          <PillButton variant="primary" title="Try again" onPress={() => router.replace("/library/videos/new")} />
+          <Text style={vstyles.h2}>{i18n.t("editor.failedTitle")}</Text>
+          <Text style={vstyles.error}>{status?.error ?? i18n.t("editor.genFailed")}</Text>
+          <Text style={vstyles.muted}>{i18n.t("editor.notCharged")}</Text>
+          <PillButton variant="primary" title={i18n.t("common.tryAgain")} onPress={() => router.replace("/library/videos/new")} />
         </View>
       ) : null}
 
@@ -717,8 +717,8 @@ export function VideoEditor({ id, renderOnOpen = false, fresh = false }: { id: s
 
       {status?.status === "awaiting_stock_footage_review" && project ? (
         <View style={vstyles.card}>
-          <Text style={vstyles.h2}>Review stock footage</Text>
-          <Text style={vstyles.muted}>These clips were picked for your scenes. Keep them, or make the video without them.</Text>
+          <Text style={vstyles.h2}>{i18n.t("editor.reviewFootage")}</Text>
+          <Text style={vstyles.muted}>{i18n.t("editor.reviewFootageBody")}</Text>
           {(project.project.assets ?? [])
             .filter((a) => a.asset_type === "video" && a.r2_url)
             .map((a) => (
@@ -727,8 +727,8 @@ export function VideoEditor({ id, renderOnOpen = false, fresh = false }: { id: s
               </View>
             ))}
           <View style={vstyles.row}>
-            <PillButton variant="primary" title="Keep the footage" onPress={() => void act(() => videoEditApi.approveStock(id)).then(() => setGenKey((k) => k + 1))} />
-            <PillButton title="Continue without it" onPress={() => void act(() => videoEditApi.rejectStock(id)).then(() => setGenKey((k) => k + 1))} />
+            <PillButton variant="primary" title={i18n.t("editor.keepFootage")} onPress={() => void act(() => videoEditApi.approveStock(id)).then(() => setGenKey((k) => k + 1))} />
+            <PillButton title={i18n.t("editor.withoutFootage")} onPress={() => void act(() => videoEditApi.rejectStock(id)).then(() => setGenKey((k) => k + 1))} />
           </View>
         </View>
       ) : null}
@@ -746,12 +746,12 @@ export function VideoEditor({ id, renderOnOpen = false, fresh = false }: { id: s
                 <View style={[styles.previewBox, playableMp4 ? null : styles.center, previewSize]}>
                   {playableMp4 ? <Mp4Player uri={playableMp4} /> : <Spinner />}
                 </View>
-                <Text style={[vstyles.muted, vstyles.small]}>Showing your last render. Edits appear after you render again.</Text>
+                <Text style={[vstyles.muted, vstyles.small]}>{i18n.t("editor.lastRender")}</Text>
               </>
             ) : liveCrashed ? (
               <View style={[styles.previewBox, styles.center, previewSize]} accessibilityRole={isRendering ? "progressbar" : undefined}>
                 {isRendering ? <Spinner /> : null}
-                <Text style={vstyles.muted}>{isRendering ? "Rendering. The MP4 will play here when it's ready." : "The preview stopped."}</Text>
+                <Text style={vstyles.muted}>{isRendering ? i18n.t("editor.renderingBody") : i18n.t("editor.previewStopped")}</Text>
               </View>
             ) : project.preview_url && previewReady ? (
               // Keyed on the format: a switch reloads it in the new shape. Other edits reach the embed by themselves.
@@ -761,19 +761,19 @@ export function VideoEditor({ id, renderOnOpen = false, fresh = false }: { id: s
             ) : project.preview_url ? (
               <View style={[styles.previewBox, styles.center, previewSize]} accessibilityRole="progressbar">
                 <Spinner />
-                <Text style={vstyles.muted}>{status ? "Preview comes back when the change is done." : "Loading the preview..."}</Text>
+                <Text style={vstyles.muted}>{status ? i18n.t("editor.previewBack") : i18n.t("editor.loadingPreview")}</Text>
               </View>
             ) : (
-              <Text style={vstyles.muted}>The live preview is not available right now.</Text>
+              <Text style={vstyles.muted}>{i18n.t("editor.previewOff")}</Text>
             )}
             <View style={vstyles.between}>
               <Text style={[vstyles.muted, vstyles.small, styles.grow]}>
-                Preview · {summary?.scenes ?? project.project.scenes.length} scenes
+                {i18n.t("editor.previewScenes", { count: summary?.scenes ?? project.project.scenes.length })}
                 {summary ? ` · ${summary.duration_seconds}s` : ""}
               </Text>
               <View style={vstyles.row}>
                 {storedMp4 ? (
-                  <Pressable onPress={() => setSharing(true)} accessibilityRole="button" accessibilityLabel="Share" style={styles.round}>
+                  <Pressable onPress={() => setSharing(true)} accessibilityRole="button" accessibilityLabel={i18n.t("misc.share")} style={styles.round}>
                     <ShareIcon size={15} />
                   </Pressable>
                 ) : null}
@@ -794,15 +794,15 @@ export function VideoEditor({ id, renderOnOpen = false, fresh = false }: { id: s
           <View style={styles.tabbar}>
             <Tabs<Panel>
               tabs={[
-                { id: "scenes", label: "Edit Scenes" },
-                { id: "images", label: "Images" },
-                { id: "audio", label: "Audio" },
-                { id: "settings", label: "Settings" },
+                { id: "scenes", label: i18n.t("editor.tabScenes") },
+                { id: "images", label: i18n.t("editor.tabImages") },
+                { id: "audio", label: i18n.t("editor.tabAudio") },
+                { id: "settings", label: i18n.t("editor.tabSettings") },
               ]}
               value={panel}
               onChange={setPanel}
             />
-            {aiEditsLeft !== null ? <Text style={[vstyles.muted, vstyles.small]}>AI edits left: {aiEditsLeft}</Text> : null}
+            {aiEditsLeft !== null ? <Text style={[vstyles.muted, vstyles.small]}>{i18n.t("editor.aiEditsLeft", { count: aiEditsLeft })}</Text> : null}
           </View>
           {panel === "scenes" ? <SceneList {...panelProps} aiEditsLeft={aiEditsLeft} /> : null}
           {panel === "images" ? <ImagesPanel {...panelProps} /> : null}
@@ -815,12 +815,12 @@ export function VideoEditor({ id, renderOnOpen = false, fresh = false }: { id: s
       {/* Closes by itself if the render ends while it is open */}
       {stoppingRender && isRendering ? (
         <ConfirmDialog
-          title="Stop rendering?"
-          body="The MP4 won't be made and nothing is downloaded. Your edits stay as they are; you can render again any time."
-          cancel="Keep rendering"
-          confirm="Stop rendering"
-          busyLabel="Stopping..."
-          failedText="Couldn't stop the render. Try again."
+          title={i18n.t("editor.stopTitle")}
+          body={i18n.t("editor.stopBody")}
+          cancel={i18n.t("editor.keepRendering")}
+          confirm={i18n.t("editor.stopRendering")}
+          busyLabel={i18n.t("editor.stopping")}
+          failedText={i18n.t("editor.stopFailed")}
           danger
           run={async () => {
             const ok = await act(() => videoEditApi.cancelRender(id));
@@ -848,11 +848,11 @@ export function VideoEditor({ id, renderOnOpen = false, fresh = false }: { id: s
       ) : null}
       {formatTo ? (
         <ConfirmDialog
-          title={formatTo === "portrait" ? "Switch to portrait (9:16)?" : "Switch to landscape (16:9)?"}
-          body={`${formatTo === "portrait" ? "The video is laid out for phones (TikTok, Reels, Shorts)." : "The video is laid out for screens (YouTube, websites)."} Scenes, narration and media stay the same. The preview updates right away; render again for a new MP4.`}
-          confirm={formatTo === "portrait" ? "Switch to portrait" : "Switch to landscape"}
-          busyLabel="Switching..."
-          failedText="Couldn't switch the format. Try again."
+          title={formatTo === "portrait" ? i18n.t("editor.toPortraitTitle") : i18n.t("editor.toLandscapeTitle")}
+          body={formatTo === "portrait" ? i18n.t("editor.toPortraitBody") : i18n.t("editor.toLandscapeBody")}
+          confirm={formatTo === "portrait" ? i18n.t("editor.toPortrait") : i18n.t("editor.toLandscape")}
+          busyLabel={i18n.t("editor.switching")}
+          failedText={i18n.t("editor.switchFailed")}
           run={() => act(() => videoEditApi.updateProject(id, { aspect_ratio: formatTo }))}
           onClose={() => setFormatTo(null)}
         />

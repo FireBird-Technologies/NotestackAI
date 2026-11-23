@@ -13,6 +13,7 @@ import { CloseIcon, CollapseIcon, ExpandIcon, LandscapeIcon, PortraitIcon, Share
 import { colors, fonts, gutter, radius } from "@/ui/theme";
 import { pageStyles } from "@/ui/widgets";
 import { ZoomView } from "@/ui/zoom-view";
+import i18n from "@/i18n";
 
 export type Layout = "landscape" | "portrait";
 const PAGE = { landscape: { w: 2260, h: 1600 }, portrait: { w: 1600, h: 2260 } };
@@ -54,7 +55,7 @@ export function InfographicThumb({ artifact, onOpen }: { artifact: Artifact; onO
   return (
     <View style={styles.thumb} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
       {width > 0 ? <InfographicFrame html={html} width={width} layout="landscape" /> : null}
-      <Pressable silent style={StyleSheet.absoluteFill} onPress={onOpen} accessibilityRole="button" accessibilityLabel="Open the infographic" />
+      <Pressable silent style={StyleSheet.absoluteFill} onPress={onOpen} accessibilityRole="button" accessibilityLabel={i18n.t("misc.openInfographic")} />
     </View>
   );
 }
@@ -74,7 +75,7 @@ function FullView({ html, layout, onClose }: { html: string; layout: Layout; onC
               <InfographicFrame html={html} width={width} layout={layout} />
             </ZoomView>
             <SafeAreaView edges={["top", "right"]} style={styles.fullExit} pointerEvents="box-none">
-              <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Exit full screen" style={styles.round}>
+              <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel={i18n.t("infographic.exitFull")} style={styles.round}>
                 <CollapseIcon size={18} />
               </Pressable>
             </SafeAreaView>
@@ -112,23 +113,23 @@ export function InfographicViewer({ artifact, visible, onClose, feedback, downlo
           <Text style={[pageStyles.sheetTitle, styles.title]} numberOfLines={2}>
             {artifact.title}
           </Text>
-          <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel="Close">
+          <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel={i18n.t("common.close")}>
             <CloseIcon size={20} />
           </Pressable>
         </View>
         <ScrollView contentContainerStyle={pageStyles.sheetBody}>
           <View style={styles.barTop}>
             <Pressable onPress={() => setInfo((o) => !o)} accessibilityRole="button" accessibilityState={{ expanded: info }} style={({ pressed }) => [styles.pill, info && styles.pillOn, pressed && styles.pressed]}>
-              <Text style={styles.pillText}>View prompt</Text>
+              <Text style={styles.pillText}>{i18n.t("infographic.viewPrompt")}</Text>
             </Pressable>
-            <View style={styles.layouts} accessibilityRole="radiogroup" accessibilityLabel="Page shape">
+            <View style={styles.layouts} accessibilityRole="radiogroup" accessibilityLabel={i18n.t("infographic.pageShape")}>
               {(["landscape", "portrait"] as const).map((l) => (
                 <Pressable
                   key={l}
                   onPress={() => setLayout(l)}
                   accessibilityRole="radio"
                   accessibilityState={{ checked: layout === l }}
-                  accessibilityLabel={l === "landscape" ? "Landscape" : "Portrait"}
+                  accessibilityLabel={l === "landscape" ? i18n.t("card.landscape") : i18n.t("card.portrait")}
                   style={[styles.layout, layout === l && styles.layoutOn]}>
                   {l === "landscape" ? <LandscapeIcon size={16} color={layout === l ? colors.white : colors.text2} /> : <PortraitIcon size={16} color={layout === l ? colors.white : colors.text2} />}
                 </Pressable>
@@ -141,29 +142,29 @@ export function InfographicViewer({ artifact, visible, onClose, feedback, downlo
               {download}
             </View>
             <View style={styles.group}>
-              <Pressable onPress={() => setSharing(true)} accessibilityRole="button" accessibilityLabel="Share" style={({ pressed }) => [styles.round, pressed && styles.pressed]}>
+              <Pressable onPress={() => setSharing(true)} accessibilityRole="button" accessibilityLabel={i18n.t("misc.share")} style={({ pressed }) => [styles.round, pressed && styles.pressed]}>
                 <ShareIcon size={15} />
               </Pressable>
-              <Pressable onPress={() => setFull(true)} disabled={!html} accessibilityRole="button" accessibilityLabel="Full screen" style={({ pressed }) => [styles.round, pressed && styles.pressed]}>
+              <Pressable onPress={() => setFull(true)} disabled={!html} accessibilityRole="button" accessibilityLabel={i18n.t("misc.fullScreen")} style={({ pressed }) => [styles.round, pressed && styles.pressed]}>
                 <ExpandIcon size={15} />
               </Pressable>
             </View>
           </View>
           {info ? (
-            <View style={styles.info} accessibilityLabel="Prompt and sources">
-              <Pressable onPress={() => setInfo(false)} hitSlop={10} accessibilityRole="button" accessibilityLabel="Close" style={styles.infoClose}>
+            <View style={styles.info} accessibilityLabel={i18n.t("infographic.info")}>
+              <Pressable onPress={() => setInfo(false)} hitSlop={10} accessibilityRole="button" accessibilityLabel={i18n.t("common.close")} style={styles.infoClose}>
                 <CloseIcon size={18} color={colors.text2} />
               </Pressable>
-              <Text style={styles.eyebrow}>PROMPT</Text>
-              <Text style={styles.infoText}>{prompt || "None. It was made from the sources as a whole."}</Text>
-              <Text style={styles.eyebrow}>MADE FROM</Text>
+              <Text style={styles.eyebrow}>{i18n.t("infographic.prompt")}</Text>
+              <Text style={styles.infoText}>{prompt || i18n.t("infographic.noPrompt")}</Text>
+              <Text style={styles.eyebrow}>{i18n.t("infographic.madeFrom")}</Text>
               <Text style={styles.infoText}>{sourceSummary(c.source)}</Text>
             </View>
           ) : null}
           <View style={styles.stage} onLayout={(e) => setWidth(e.nativeEvent.layout.width - 2)}>
             {html && width > 0 ? <InfographicFrame key={layout} html={html} width={width} layout={layout} /> : null}
             {/* A tap on the page opens it full screen, to pinch closer */}
-            {html ? <Pressable silent style={StyleSheet.absoluteFill} onPress={() => setFull(true)} accessibilityRole="button" accessibilityLabel="Open full screen" /> : null}
+            {html ? <Pressable silent style={StyleSheet.absoluteFill} onPress={() => setFull(true)} accessibilityRole="button" accessibilityLabel={i18n.t("mindMap.openFullShort")} /> : null}
           </View>
         </ScrollView>
       </SafeAreaView>

@@ -8,6 +8,7 @@ import { colors, fonts, radius } from "@/ui/theme";
 
 import type { PanelProps } from "./types";
 import { clock, GroupHead, inFives, NumBadge, vstyles } from "./ui";
+import i18n from "@/i18n";
 
 /** Each scene's voiceover, grouped by five (one group open at a time), to play with a progress bar (web: Voiceovers). */
 export function Voiceovers(p: PanelProps) {
@@ -41,18 +42,18 @@ export function Voiceovers(p: PanelProps) {
   return (
     <View style={vstyles.card}>
       <View style={styles.head}>
-        <Text style={vstyles.h3}>Voiceovers</Text>
+        <Text style={vstyles.h3}>{i18n.t("videoPanels.voiceovers")}</Text>
         <Text style={[vstyles.muted, vstyles.small]}>
           {ready} / {scenes.length} scenes · {total}s total
         </Text>
         <View style={styles.legend}>
           <View style={vstyles.row}>
             <View style={[styles.dot, styles.dotOk]} />
-            <Text style={[vstyles.muted, vstyles.small]}>Ready</Text>
+            <Text style={[vstyles.muted, vstyles.small]}>{i18n.t("videoPanels.ready")}</Text>
           </View>
           <View style={vstyles.row}>
             <View style={styles.dot} />
-            <Text style={[vstyles.muted, vstyles.small]}>Pending</Text>
+            <Text style={[vstyles.muted, vstyles.small]}>{i18n.t("videoPanels.pending")}</Text>
           </View>
         </View>
       </View>
@@ -62,7 +63,7 @@ export function Voiceovers(p: PanelProps) {
         const open = openGroup === g;
         return (
           <View key={g} style={styles.group}>
-            <GroupHead label={`Scenes ${first}–${first + group.length - 1}`} note="Expand to view scenes" open={open} onPress={() => setOpenGroup(open ? null : g)} />
+            <GroupHead label={i18n.t("videoPanels.scenesRange", { from: first, to: first + group.length - 1 })} note={i18n.t("videoPanels.expand")} open={open} onPress={() => setOpenGroup(open ? null : g)} />
             {open
               ? group.map((s) => {
                   const playing = on === s.id;
@@ -77,7 +78,7 @@ export function Voiceovers(p: PanelProps) {
                       <View style={styles.main}>
                         <View style={vstyles.between}>
                           <Text style={[vstyles.strong, styles.title]} numberOfLines={1}>
-                            {s.title || `Scene ${s.order}`}
+                            {s.title || i18n.t("videoPanels.sceneN", { n: s.order })}
                           </Text>
                           <Text style={styles.time}>
                             {clock(at)} / {clock(length)}
@@ -87,7 +88,7 @@ export function Voiceovers(p: PanelProps) {
                           <View style={[styles.fill, { width: `${length ? Math.min(100, (at / length) * 100) : 0}%` }]} />
                         </View>
                       </View>
-                      <View style={[styles.dot, s.audio_url ? styles.dotOk : null]} accessibilityLabel={s.audio_url ? "Ready" : "Pending"} />
+                      <View style={[styles.dot, s.audio_url ? styles.dotOk : null]} accessibilityLabel={s.audio_url ? i18n.t("videoPanels.ready") : i18n.t("videoPanels.pending")} />
                     </View>
                   );
                 })

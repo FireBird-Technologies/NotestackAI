@@ -4,6 +4,7 @@ import * as Sharing from "expo-sharing";
 import { useState } from "react";
 
 import { track } from "@/lib/analytics";
+import i18n from "@/i18n";
 
 /** What each kind of file is, for the share sheet (Android's MIME type, iOS's UTI). */
 const KINDS: Record<string, { mime: string; uti: string }> = {
@@ -58,7 +59,7 @@ export function useFileDownload<K extends string>(prepare?: () => Promise<boolea
       if (prepare && !(await prepare())) return;
       await saveFile(typeof source === "function" ? await source() : source, name, kind);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Could not download it. Try again.");
+      setError(e instanceof ApiError ? e.message : i18n.t("misc.downloadFailed"));
     } finally {
       setBusy(null);
     }

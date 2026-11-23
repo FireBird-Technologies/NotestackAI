@@ -7,6 +7,7 @@ import { identifyUser, track } from "@/lib/analytics";
 import { on } from "@/lib/platform";
 import { forgetCustomer } from "@/account/purchases";
 import { signOutOfGoogle } from "@/account/social-auth";
+import i18n from "@/i18n";
 
 type AuthState = {
   user: User | null;
@@ -53,7 +54,7 @@ export function AuthProvider({ children, onSignOut }: { children: ReactNode; onS
       .catch((err) => {
         // Only a refused session signs out; being offline at launch is not a reason to.
         if (err instanceof ApiError && err.status === 401) tokens.clear();
-        else setRestoreError("Could not reach Notestack. Check your connection and try again.");
+        else setRestoreError(i18n.t("auth.restoreFailed"));
       })
       .finally(() => setLoading(false));
   }, [attempt]);

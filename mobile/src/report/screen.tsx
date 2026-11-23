@@ -16,12 +16,13 @@ import { ErrorText } from "@/ui";
 import { confirm, Dialog, JobProgress, PillButton, pageStyles } from "@/ui/widgets";
 
 import { ReportView } from "./view";
+import i18n, { tKey } from "@/i18n";
 
 const LABEL = { mind_map: "Mind Constellation", plot: "plot", table: "data table", timeline: "timeline", infographic: "infographic" } as const;
 /** The visuals that also exist as their own artifact, so one already made can be reused. */
 const REUSABLE = ["mind_map", "infographic"];
 
-const message = (e: unknown, fallback = "Something went wrong. Try again.") => (e instanceof ApiError ? e.message : fallback);
+const message = (e: unknown, fallback = i18n.t("common.somethingWrong")) => (e instanceof ApiError ? e.message : fallback);
 
 /** Add a suggested visual: make a new one from the report's sources, or use one already made (web: ReportAddDialog). */
 function AddDialog({ adding, onClose, onAdd }: {
@@ -42,29 +43,29 @@ function AddDialog({ adding, onClose, onAdd }: {
     </Pressable>
   );
   return (
-    <Dialog visible={!!adding} title={s ? `Add ${LABEL[s.kind]}` : ""} onClose={onClose}>
+    <Dialog visible={!!adding} title={s ? tKey(`report.add.${s.kind}`, `Add ${LABEL[s.kind]}`) : ""} onClose={onClose}>
       {s ? (
         <>
           <Text style={styles.muted}>{s.brief}</Text>
-          {option(!useExisting, ["plot", "table", "timeline"].includes(s.kind) ? "Add this verified view of the report's source data" : "Make a new one from this report's sources", () => setUseExisting(false))}
+          {option(!useExisting, ["plot", "table", "timeline"].includes(s.kind) ? i18n.t("report.verifiedView") : i18n.t("report.makeNew"), () => setUseExisting(false))}
           {REUSABLE.includes(s.kind)
             ? option(
                 useExisting,
-                adding?.loading ? "Use one you already made (looking...)" : existing.length === 0 ? "Use one you already made (none yet)" : `Use one you already made (${existing.length})`,
+                adding?.loading ? i18n.t("report.useLooking") : existing.length === 0 ? i18n.t("report.useNone") : i18n.t("report.useCount", { count: existing.length }),
                 () => setUseExisting(true),
                 adding?.loading || existing.length === 0,
               )
             : null}
-          {useExisting && existing.length > 0 ? <Select label="Choose one" value={chosen} onChange={setPick} options={existing.map((a) => ({ value: a.id, label: a.title }))} /> : null}
+          {useExisting && existing.length > 0 ? <Select label={i18n.t("report.chooseOne")} value={chosen} onChange={setPick} options={existing.map((a) => ({ value: a.id, label: a.title }))} /> : null}
           {s.kind === "infographic" && !useExisting ? (
             <>
-              <Text style={styles.label}>Theme</Text>
+              <Text style={styles.label}>{i18n.t("report.theme")}</Text>
               <ThemePicker value={theme} onChange={setTheme} />
             </>
           ) : null}
           <View style={styles.row}>
-            <PillButton small title="Cancel" onPress={onClose} />
-            <PillButton small variant="primary" title="Add" disabled={useExisting && !chosen} onPress={() => onAdd(useExisting ? chosen : null, theme)} />
+            <PillButton small title={i18n.t("common.cancel")} onPress={onClose} />
+            <PillButton small variant="primary" title={i18n.t("common.add")} disabled={useExisting && !chosen} onPress={() => onAdd(useExisting ? chosen : null, theme)} />
           </View>
         </>
       ) : null}
@@ -96,7 +97,7 @@ export function ReportScreen({ artifact: initial, visible, onClose, onDeleted, o
   const [sharing, setSharing] = useState(false);
   const [cite, setCite] = useState<Cited | null>(null);
 
-  const load = useCallback(() => artifactsApi.get(initial.id).then(setArtifact, (e) => setError(message(e, "Could not load the report."))), [initial.id]);
+  const load = useCallback(() => artifactsApi.get(initial.id).then(setArtifact, (e) => setError(message(e, i18n.t("misc.loadReport")))), [initial.id]);
   useEffect(() => {
     if (visible) void load();
   }, [visible, load]);
@@ -169,7 +170,7 @@ export function ReportScreen({ artifact: initial, visible, onClose, onDeleted, o
     <View style={styles.head}>
       <Pressable onPress={onClose} hitSlop={10} accessibilityRole="button" style={styles.back}>
         <ArrowLeftIcon size={16} color={colors.text2} />
-        <Text style={styles.backText}>Back</Text>
+        <Text style={styles.backText}>{i18n.t("common.back")}</Text>
       </Pressable>
       <Text style={styles.eyebrow}>{artifact.content?.format === "interactive" ? "INTERACTIVE REPORT" : "REPORT"}</Text>
       <Text style={styles.title} accessibilityRole="header">
@@ -179,20 +180,20 @@ export function ReportScreen({ artifact: initial, visible, onClose, onDeleted, o
         <View style={styles.actions}>
           {feedback}
           {download}
-          <Pressable onPress={() => setSharing(true)} accessibilityRole="button" accessibilityLabel="Share" style={({ pressed }) => [styles.round, pressed && styles.pressed]}>
+          <Pressable onPress={() => setSharing(true)} accessibilityRole="button" accessibilityLabel={i18n.t("report.share")} style={({ pressed }) => [styles.round, pressed && styles.pressed]}>
             <ShareIcon size={15} />
           </Pressable>
           <Pressable
-            onPress={() => confirm("Delete report?", "Delete", onDeleted, artifact.title)}
+            onPress={() => confirm(i18n.t("report.deleteTitle"), i18n.t("common.delete"), onDeleted, artifact.title)}
             accessibilityRole="button"
-            accessibilityLabel="Delete report"
+            accessibilityLabel={i18n.t("report.deleteLabel")}
             style={({ pressed }) => [styles.round, pressed && styles.pressed]}>
             <TrashIcon size={15} />
           </Pressable>
         </View>
       ) : null}
       {running && artifact.job ? <JobProgress job={artifact.job} /> : null}
-      {artifact.status === "failed" ? <ErrorText>{String(artifact.content?.error ?? artifact.job?.error ?? "The report could not be made.")}</ErrorText> : null}
+      {artifact.status === "failed" ? <ErrorText>{String(artifact.content?.error ?? artifact.job?.error ?? i18n.t("report.failed"))}</ErrorText> : null}
       {error || blockFailed ? <ErrorText>{error || blockFailed || ""}</ErrorText> : null}
     </View>
   );

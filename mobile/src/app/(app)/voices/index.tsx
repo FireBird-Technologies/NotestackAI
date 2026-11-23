@@ -29,8 +29,10 @@ import { Segments } from "@/sources/sources-nav";
 import { colors, fonts, radius } from "@/ui/theme";
 import { ErrorText, Loading } from "@/ui";
 import { confirm, JobProgress, Page, PageHead, pageStyles, PillButton, Section, Sheet } from "@/ui/widgets";
+import i18n, { tKey } from "@/i18n";
 
-const cap = (s?: string | null) => (s ? s[0].toUpperCase() + s.slice(1) : "");
+/** A voice trait ("female", "middle aged", "british") as a label in the app language. */
+const cap = (s?: string | null) => (s ? tKey(`voices.values.${s.toLowerCase()}`, s[0].toUpperCase() + s.slice(1)) : "");
 const fmtSeconds = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
 
 
@@ -72,7 +74,7 @@ export default function Voices() {
       await run();
       await queryClient.invalidateQueries({ queryKey: ["voices", "list"] });
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Something went wrong. Try again.");
+      setError(e instanceof ApiError ? e.message : i18n.t("common.somethingWrong"));
     } finally {
       setBusy(null);
     }
@@ -84,7 +86,7 @@ export default function Voices() {
     try {
       play(v.voice_id, await previewUrl(v.voice_id));
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Could not play that voice.");
+      setError(e instanceof ApiError ? e.message : i18n.t("voices.playFailed"));
     }
   };
 
@@ -93,9 +95,9 @@ export default function Voices() {
   if (!state) {
     return (
       <Page>
-        <PageHead eyebrow="Voices" title="Manage voices" />
-        <ErrorText>Could not load your voices.</ErrorText>
-        <PillButton title="Try again" onPress={reload} />
+        <PageHead eyebrow={i18n.t("voices.eyebrow")} title={i18n.t("nav.voices")} />
+        <ErrorText>{i18n.t("voices.loadFailed")}</ErrorText>
+        <PillButton title={i18n.t("common.tryAgain")} onPress={reload} />
       </Page>
     );
   }
@@ -105,13 +107,11 @@ export default function Voices() {
 
   return (
     <Page>
-      <PageHead eyebrow="Voices" title="Manage voices" />
-      <Section title="Who reads your work aloud">
-        {!state.tts_configured ? <Text style={pageStyles.body}>Voice previews are unavailable right now.</Text> : null}
-        <Text style={pageStyles.body}>
-          Your voices read your audio overviews, and narrate your videos. Add your own, or pick from the library.
-        </Text>
-        <PillButton title="Add voices" variant="primary" onPress={() => setAdding(true)} />
+      <PageHead eyebrow={i18n.t("voices.eyebrow")} title={i18n.t("nav.voices")} />
+      <Section title={i18n.t("voices.who")}>
+        {!state.tts_configured ? <Text style={pageStyles.body}>{i18n.t("voices.previewsOff")}</Text> : null}
+        <Text style={pageStyles.body}>{i18n.t("voices.intro")}</Text>
+        <PillButton title={i18n.t("voices.add")} variant="primary" onPress={() => setAdding(true)} />
         <ErrorText>{error}</ErrorText>
         {voices.isPending ? <Loading /> : null}
 
@@ -119,23 +119,23 @@ export default function Voices() {
           <>
             <View style={styles.listCard}>
               <View style={styles.listHead}>
-                <Text style={styles.listTitle}>Your voices</Text>
+                <Text style={styles.listTitle}>{i18n.t("voices.yours")}</Text>
                 <Text style={styles.count}>{voices.data.saved.length}</Text>
               </View>
               {voices.data.saved.length === 0 ? (
-                <Text style={pageStyles.body}>No voices yet. Add one, or pick from the library below.</Text>
+                <Text style={pageStyles.body}>{i18n.t("voices.none")}</Text>
               ) : (
                 voices.data.saved.map((v) => (
                   <VoiceRow
                     key={v.voice_id}
                     name={v.name}
-                    detail={v.source === "notestack" ? "Your voice" : [cap(v.gender), cap(v.accent)].filter(Boolean).join(" • ")}
+                    detail={v.source === "notestack" ? i18n.t("voices.yourVoice") : [cap(v.gender), cap(v.accent)].filter(Boolean).join(" • ")}
                     playing={playing === v.voice_id}
                     canPlay={v.source === "notestack" || Boolean(v.preview_url)}
                     onPlay={() => void playSaved(v)}
                     action={
                       <PillButton
-                        title={busy === v.voice_id ? "Removing..." : "Remove"}
+                        title={busy === v.voice_id ? i18n.t("common.removing") : i18n.t("common.remove")}
                         small
                         disabled={busy === v.voice_id}
                         onPress={() => act(v.voice_id, () => videoVoicesApi.unsave(v.voice_id))}
@@ -148,10 +148,10 @@ export default function Voices() {
 
             <View style={styles.listCard}>
               <View style={styles.listHead}>
-                <Text style={styles.listTitle}>Voice library</Text>
+                <Text style={styles.listTitle}>{i18n.t("voices.library")}</Text>
               </View>
               {library.length === 0 ? (
-                <Text style={pageStyles.body}>Every library voice is in your voices.</Text>
+                <Text style={pageStyles.body}>{i18n.t("voices.allSaved")}</Text>
               ) : (
                 library.map((v: VideoLibraryVoice) => (
                   <VoiceRow
@@ -163,7 +163,7 @@ export default function Voices() {
                     onPlay={() => play(v.voice_id, v.preview_url)}
                     action={
                       <PillButton
-                        title={busy === v.voice_id ? "Adding..." : "Add"}
+                        title={busy === v.voice_id ? i18n.t("common.adding") : i18n.t("common.add")}
                         variant="primary"
                         small
                         disabled={busy === v.voice_id}
@@ -179,26 +179,26 @@ export default function Voices() {
 
         {showClone ? (
           <View style={styles.clone}>
-            <Text style={styles.listTitle}>Your cloned voice</Text>
+            <Text style={styles.listTitle}>{i18n.t("voices.cloned")}</Text>
             {cloneJob && (cloneRunning || cloneJob.status === "failed") ? <JobProgress job={cloneJob} /> : null}
             {state.clone.status === "processing" && !cloneJob ? (
-              <Text style={pageStyles.body}>Your voice is being created. It joins your voices when ready.</Text>
+              <Text style={pageStyles.body}>{i18n.t("voices.creating")}</Text>
             ) : null}
             {state.clone.status === "failed" && state.clone.error && !cloneRunning ? <ErrorText>{state.clone.error}</ErrorText> : null}
             <View style={pageStyles.row}>
               {state.clone.status === "ready" && state.clone.preview_url ? (
-                <PillButton small title={playing === "clone" ? "Stop" : "Hear my voice"} onPress={() => play("clone", state.clone.preview_url)} />
+                <PillButton small title={playing === "clone" ? i18n.t("common.stop") : i18n.t("voices.hear")} onPress={() => play("clone", state.clone.preview_url)} />
               ) : null}
               {!cloneRunning && state.clone.allowed ? (
-                <PillButton small title={state.clone.status === "failed" ? "Try again" : "Record again"} onPress={() => setCloning(true)} />
+                <PillButton small title={state.clone.status === "failed" ? i18n.t("common.tryAgain") : i18n.t("voices.recordAgain")} onPress={() => setCloning(true)} />
               ) : null}
               {state.clone.status !== "none" ? (
                 <PillButton
                   small
                   variant="danger"
-                  title="Revoke consent"
+                  title={i18n.t("voices.revoke")}
                   onPress={() =>
-                    confirm("Revoke and delete my voice?", "Revoke", async () => {
+                    confirm(i18n.t("voices.revokeTitle"), i18n.t("voices.revokeAction"), async () => {
                       await voiceApi.revoke();
                       reload();
                     })
@@ -210,7 +210,7 @@ export default function Voices() {
         ) : null}
       </Section>
 
-      <Sheet visible={adding} title="Add voices" onClose={() => setAdding(false)}>
+      <Sheet visible={adding} title={i18n.t("voices.add")} onClose={() => setAdding(false)}>
         <AddVoices
           state={state}
           onSaved={() => {
@@ -223,7 +223,7 @@ export default function Voices() {
           }}
         />
       </Sheet>
-      <Sheet visible={cloning} title="Clone your voice" onClose={() => setCloning(false)}>
+      <Sheet visible={cloning} title={i18n.t("voices.cloneTitle")} onClose={() => setCloning(false)}>
         <CloneVoice
           state={state}
           onClose={() => setCloning(false)}
@@ -275,7 +275,7 @@ function PlayButton({ on, disabled, label, onPress }: { on: boolean; disabled?: 
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
-      accessibilityLabel={`${on ? "Stop" : "Play"} ${label}`}
+      accessibilityLabel={on ? i18n.t("voices.stopNamed", { label }) : i18n.t("voices.playNamed", { label })}
       style={[styles.play, on && styles.playOn, disabled && styles.off]}>
       <SymbolView
         name={{ ios: on ? "stop.fill" : "play.fill", android: on ? "stop" : "play_arrow" }}
@@ -289,11 +289,11 @@ function PlayButton({ on, disabled, label, onPress }: { on: boolean; disabled?: 
 type GenMode = "prompt" | "clone" | "options";
 
 const GEN_OPTIONS: { key: keyof Omit<VoiceDesignInput, "prompt">; label: string; values: string[] }[] = [
-  { key: "gender", label: "Gender", values: ["female", "male", "neutral"] },
-  { key: "age", label: "Age", values: ["young", "middle-aged", "older"] },
-  { key: "persona", label: "Personality", values: ["warm", "professional", "calm", "friendly", "confident", "energetic"] },
-  { key: "pace", label: "Pace", values: ["slow", "measured", "brisk"] },
-  { key: "accent", label: "Accent", values: ["American", "British", "Australian", "Irish", "Scottish", "Indian", "Canadian", "South African"] },
+  { key: "gender", label: i18n.t("voices.gender"), values: ["female", "male", "neutral"] },
+  { key: "age", label: i18n.t("voices.age"), values: ["young", "middle-aged", "older"] },
+  { key: "persona", label: i18n.t("voices.persona"), values: ["warm", "professional", "calm", "friendly", "confident", "energetic"] },
+  { key: "pace", label: i18n.t("voices.pace"), values: ["slow", "measured", "brisk"] },
+  { key: "accent", label: i18n.t("voices.accent"), values: ["American", "British", "Australian", "Irish", "Scottish", "Indian", "Canadian", "South African"] },
 ];
 
 const PROMPT_IDEAS = [
@@ -324,7 +324,7 @@ function AddVoices({ state, onSaved, onClone }: { state: VoiceState; onSaved: ()
       setResult(res);
       setPicked(res.previews[0]?.generated_voice_id ?? null);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Could not make previews. Try again.");
+      setError(e instanceof ApiError ? e.message : i18n.t("voices.previewsFailed"));
     } finally {
       setBusy(null);
     }
@@ -338,7 +338,7 @@ function AddVoices({ state, onSaved, onClone }: { state: VoiceState; onSaved: ()
       await voiceApi.saveDesign({ generated_voice_id: picked, name: name.trim(), description: result.description });
       onSaved();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Could not save the voice. Try again.");
+      setError(e instanceof ApiError ? e.message : i18n.t("voices.saveFailed"));
     } finally {
       setBusy(null);
     }
@@ -348,9 +348,9 @@ function AddVoices({ state, onSaved, onClone }: { state: VoiceState; onSaved: ()
     <View style={styles.stack}>
       <Segments
         options={[
-          { id: "prompt", label: "Describe it" },
-          { id: "clone", label: "Clone my voice" },
-          { id: "options", label: "Build" },
+          { id: "prompt", label: i18n.t("voices.modeDescribe") },
+          { id: "clone", label: i18n.t("voices.modeClone") },
+          { id: "options", label: i18n.t("voices.modeBuild") },
         ]}
         value={mode}
         onChange={(m) => {
@@ -370,7 +370,7 @@ function AddVoices({ state, onSaved, onClone }: { state: VoiceState; onSaved: ()
                 label={g.label}
                 value={opts[g.key] ?? g.values[0]}
                 onChange={(v) => setOpts({ ...opts, [g.key]: v })}
-                options={g.values.map((v) => ({ value: v, label: g.key === "accent" ? v : cap(v.replace(/-/g, " ")) }))}
+                options={g.values.map((v) => ({ value: v, label: cap(v.replace(/-/g, " ")) }))}
               />
             </View>
           ))}
@@ -379,7 +379,7 @@ function AddVoices({ state, onSaved, onClone }: { state: VoiceState; onSaved: ()
 
       {mode === "prompt" ? (
         <>
-          <Text style={pageStyles.label}>Describe the voice you want</Text>
+          <Text style={pageStyles.label}>{i18n.t("voices.describe")}</Text>
           <TextInput
             style={[pageStyles.input, styles.textarea]}
             value={prompt}
@@ -404,12 +404,9 @@ function AddVoices({ state, onSaved, onClone }: { state: VoiceState; onSaved: ()
       {mode === "clone" ? (
         state.clone.allowed ? (
           <>
-            <Text style={pageStyles.body}>
-              Read a passage from your own writing for one to three minutes. Your voice joins your voices, ready for audio
-              overviews and videos.
-            </Text>
+            <Text style={pageStyles.body}>{i18n.t("voices.cloneIntro")}</Text>
             <PillButton
-              title={state.clone.status === "ready" ? "Record my voice again" : "Start recording"}
+              title={state.clone.status === "ready" ? i18n.t("voices.recordMineAgain") : i18n.t("voices.startRecording")}
               variant="primary"
               disabled={!state.tts_configured}
               onPress={onClone}
@@ -417,15 +414,15 @@ function AddVoices({ state, onSaved, onClone }: { state: VoiceState; onSaved: ()
           </>
         ) : (
           <View style={styles.notice}>
-            <Text style={styles.noticeTitle}>Voice cloning is not available on this plan</Text>
-            <Text style={pageStyles.body}>Record a couple of minutes and every audio overview is narrated by you.</Text>
+            <Text style={styles.noticeTitle}>{i18n.t("voices.cloneUnavailable")}</Text>
+            <Text style={pageStyles.body}>{i18n.t("voices.cloneUpsell")}</Text>
           </View>
         )
       ) : null}
 
       {mode !== "clone" ? (
         <PillButton
-          title={busy === "generate" ? "Generating previews..." : result ? "Generate again" : "Generate previews"}
+          title={busy === "generate" ? i18n.t("voices.generating") : result ? i18n.t("voices.generateAgain") : i18n.t("voices.generate")}
           variant="primary"
           busy={busy === "generate"}
           disabled={busy !== null || !state.tts_configured || (mode === "prompt" && prompt.trim().length < 20)}
@@ -435,15 +432,15 @@ function AddVoices({ state, onSaved, onClone }: { state: VoiceState; onSaved: ()
 
       {result && mode !== "clone" ? (
         <View style={styles.stack}>
-          <Text style={pageStyles.eyebrow}>Pick the one you like</Text>
+          <Text style={pageStyles.eyebrow}>{i18n.t("voices.pick")}</Text>
           {result.previews.map((p, i) => {
             const on = picked === p.generated_voice_id;
             return (
               <Pressable key={p.generated_voice_id} onPress={() => setPicked(p.generated_voice_id)} style={[styles.preview, on && styles.previewOn]}>
                 <View style={[styles.radio, on && styles.radioOn]} />
-                <Text style={styles.voiceName}>Option {i + 1}</Text>
+                <Text style={styles.voiceName}>{i18n.t("voices.option", { n: i + 1 })}</Text>
                 <View style={styles.spacer} />
-                <PillButton small title={playing === p.generated_voice_id ? "Stop" : "Play"} onPress={() => play(p.generated_voice_id, p.url)} />
+                <PillButton small title={playing === p.generated_voice_id ? i18n.t("common.stop") : i18n.t("common.play")} onPress={() => play(p.generated_voice_id, p.url)} />
               </Pressable>
             );
           })}
@@ -451,13 +448,13 @@ function AddVoices({ state, onSaved, onClone }: { state: VoiceState; onSaved: ()
             style={pageStyles.input}
             value={name}
             onChangeText={setName}
-            placeholder="Name it, e.g. Late night narrator"
+            placeholder={i18n.t("voices.namePlaceholder")}
             placeholderTextColor={colors.text3}
             maxLength={60}
-            accessibilityLabel="Voice name"
+            accessibilityLabel={i18n.t("voices.nameLabel")}
           />
           <PillButton
-            title={busy === "save" ? "Saving..." : "Save voice"}
+            title={busy === "save" ? i18n.t("common.saving") : i18n.t("voices.save")}
             variant="primary"
             busy={busy === "save"}
             disabled={busy !== null || !picked || !name.trim()}
@@ -465,7 +462,7 @@ function AddVoices({ state, onSaved, onClone }: { state: VoiceState; onSaved: ()
           />
         </View>
       ) : null}
-      {!state.tts_configured ? <Text style={pageStyles.mono}>Voice generation is unavailable right now.</Text> : null}
+      {!state.tts_configured ? <Text style={pageStyles.mono}>{i18n.t("voices.generationOff")}</Text> : null}
       <ErrorText>{error}</ErrorText>
     </View>
   );
@@ -502,12 +499,12 @@ function CloneVoice({ state, onClose, onDone }: { state: VoiceState; onClose: ()
   const total = takes.reduce((n, t) => n + t.seconds, 0);
   const quality =
     total < 30
-      ? "Too short: record at least 30 seconds"
+      ? i18n.t("voices.tooShort")
       : total < 60
-        ? "Usable, but 1 to 3 minutes sounds much better"
+        ? i18n.t("voices.usable")
         : total <= 300
-          ? "Great length"
-          : "Plenty: more than 5 minutes adds little";
+          ? i18n.t("voices.great")
+          : i18n.t("voices.plenty");
 
   const upload = async () => {
     const picked = await File.pickFileAsync({ multipleFiles: true, mimeTypes: ["audio/*"] }).catch(() => null);
@@ -527,7 +524,7 @@ function CloneVoice({ state, onClose, onDone }: { state: VoiceState; onClose: ()
       const res = await voiceApi.consent(files, state.clone.consent_text, denoise);
       onDone(res.job);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Could not upload your takes. Try again.");
+      setError(e instanceof ApiError ? e.message : i18n.t("voices.uploadFailed"));
     } finally {
       setBusy(false);
     }
@@ -536,13 +533,13 @@ function CloneVoice({ state, onClose, onDone }: { state: VoiceState; onClose: ()
   return (
     <View style={styles.stack}>
       <View style={styles.tips}>
-        <Text style={pageStyles.body}>1. Quiet room, no music, phone on silent. Keep the same distance from the mic.</Text>
-        <Text style={pageStyles.body}>2. Read naturally, the way you would on a podcast. Pauses are fine.</Text>
-        <Text style={pageStyles.body}>3. Record in one or more takes: 1 to 3 minutes in total works best.</Text>
+        <Text style={pageStyles.body}>{i18n.t("voices.tip1")}</Text>
+        <Text style={pageStyles.body}>{i18n.t("voices.tip2")}</Text>
+        <Text style={pageStyles.body}>{i18n.t("voices.tip3")}</Text>
       </View>
       {script.data ? (
         <View style={styles.script}>
-          <Text style={pageStyles.eyebrow}>Read this, from &quot;{script.data.title}&quot;</Text>
+          <Text style={pageStyles.eyebrow}>{i18n.t("voices.readThis", { title: script.data.title })}</Text>
           {script.data.text.split(/\n\n+/).map((p, i) => (
             <Text key={i} style={styles.scriptText}>
               {p}
@@ -552,15 +549,15 @@ function CloneVoice({ state, onClose, onDone }: { state: VoiceState; onClose: ()
       ) : null}
 
       <Recorder onTake={(t) => setTakes((list) => [...list, t])} />
-      <PillButton title="Or upload recordings" small onPress={() => void upload()} />
+      <PillButton title={i18n.t("voices.uploadInstead")} small onPress={() => void upload()} />
 
       {takes.map((t, i) => (
         <View key={t.uri} style={styles.take}>
-          <PlayButton on={playing === t.uri} label={`take ${i + 1}`} onPress={() => play(t.uri, t.uri)} />
+          <PlayButton on={playing === t.uri} label={i18n.t("voices.take", { n: i + 1 })} onPress={() => play(t.uri, t.uri)} />
           <Text style={[pageStyles.mono, styles.voiceText]}>
             Take {i + 1} · {fmtSeconds(t.seconds)}
           </Text>
-          <Pressable onPress={() => setTakes(takes.filter((x) => x !== t))} hitSlop={10} accessibilityLabel={`Remove take ${i + 1}`}>
+          <Pressable onPress={() => setTakes(takes.filter((x) => x !== t))} hitSlop={10} accessibilityLabel={i18n.t("voices.removeTake", { n: i + 1 })}>
             <SymbolView name={{ ios: "xmark", android: "close" }} size={14} tintColor={colors.text2} />
           </Pressable>
         </View>
@@ -568,22 +565,22 @@ function CloneVoice({ state, onClose, onDone }: { state: VoiceState; onClose: ()
 
       <View style={pageStyles.meter}>
         <View style={pageStyles.meterHead}>
-          <Text style={pageStyles.meterLabel}>Total {fmtSeconds(total)}</Text>
-          <Text style={pageStyles.meterValue}>{takes.length ? quality : "No takes yet"}</Text>
+          <Text style={pageStyles.meterLabel}>{i18n.t("voices.total", { time: fmtSeconds(total) })}</Text>
+          <Text style={pageStyles.meterValue}>{takes.length ? quality : i18n.t("voices.noTakes")}</Text>
         </View>
         <View style={pageStyles.track}>
           <View style={[pageStyles.bar, { width: `${Math.min(100, (total / 180) * 100)}%` }]} />
         </View>
       </View>
 
-      <Check value={denoise} onChange={setDenoise} label="Remove background noise (turn off for studio quality recordings)" />
+      <Check value={denoise} onChange={setDenoise} label={i18n.t("voices.denoise")} />
       <Text style={styles.consent}>{state.clone.consent_text}</Text>
-      <Check value={agreed} onChange={setAgreed} label="I agree to the statement above, and this is my own voice." />
+      <Check value={agreed} onChange={setAgreed} label={i18n.t("misc.agree")} />
       <ErrorText>{error}</ErrorText>
       <View style={pageStyles.row}>
-        <PillButton title="Cancel" onPress={onClose} />
+        <PillButton title={i18n.t("common.cancel")} onPress={onClose} />
         <PillButton
-          title={busy ? "Uploading..." : "Create my voice"}
+          title={busy ? i18n.t("common.uploading") : i18n.t("voices.create")}
           variant="primary"
           busy={busy}
           disabled={!takes.length || total < 10 || !agreed || busy}
@@ -607,7 +604,7 @@ function Recorder({ onTake }: { onTake: (t: Take) => void }) {
     setError("");
     const permission = await requestRecordingPermissionsAsync();
     if (!permission.granted) {
-      setError("Microphone access was blocked. Allow it in Settings, or upload recordings instead.");
+      setError(i18n.t("voices.micBlocked"));
       return;
     }
     await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
@@ -625,20 +622,20 @@ function Recorder({ onTake }: { onTake: (t: Take) => void }) {
     <View style={styles.stack}>
       <View style={pageStyles.row}>
         {live.isRecording ? (
-          <PillButton title={`Stop take (${fmtSeconds(seconds)})`} variant="danger" onPress={() => void stop()} />
+          <PillButton title={i18n.t("voices.stopTake", { time: fmtSeconds(seconds) })} variant="danger" onPress={() => void stop()} />
         ) : (
-          <PillButton title="Record a take" variant="primary" onPress={() => void start()} />
+          <PillButton title={i18n.t("voices.recordTake")} variant="primary" onPress={() => void start()} />
         )}
         {live.isRecording ? (
-          <View style={styles.level} accessibilityLabel="Input level">
+          <View style={styles.level} accessibilityLabel={i18n.t("voices.level")}>
             <View style={[styles.levelFill, { width: `${Math.min(100, level * 160)}%` }]} />
           </View>
         ) : null}
       </View>
       {live.isRecording && level < 0.04 && seconds > 2 ? (
-        <Text style={pageStyles.mono}>We can barely hear you. Move closer to the microphone.</Text>
+        <Text style={pageStyles.mono}>{i18n.t("voices.quiet")}</Text>
       ) : null}
-      {level > 0.95 ? <Text style={pageStyles.mono}>Too loud: back off a little so it does not clip.</Text> : null}
+      {level > 0.95 ? <Text style={pageStyles.mono}>{i18n.t("voices.loud")}</Text> : null}
       <ErrorText>{error}</ErrorText>
     </View>
   );

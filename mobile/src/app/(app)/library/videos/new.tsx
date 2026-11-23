@@ -6,6 +6,7 @@ import { BackLink } from "@/video/back";
 import { trackNewVideo } from "@/video/pending";
 import { Starfield } from "@/shell/starfield";
 import { colors, fonts, gutter } from "@/ui/theme";
+import i18n from "@/i18n";
 
 /** A new video on its own (web: /app/videos/new): the three-step wizard (it says how many videos are left), then
  * straight to its screen, which waits there for the server to accept it. */
@@ -15,8 +16,8 @@ export default function NewVideoScreen() {
       <Starfield />
       <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
         <BackLink />
-        <Text style={styles.eyebrow}>VIDEOS</Text>
-        <Text style={styles.title}>New video</Text>
+        <Text style={styles.eyebrow}>{i18n.t("editor.eyebrow")}</Text>
+        <Text style={styles.title}>{i18n.t("editor.newVideo")}</Text>
         <VideoDialog
           onCreate={(created) => router.replace({ pathname: "/library/videos/[id]", params: { id: trackNewVideo(created) } })}
         />

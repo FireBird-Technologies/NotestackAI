@@ -9,6 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 
 from app.config import settings
+from app.llm.languages import HEADER as APP_LANGUAGE_HEADER
+from app.llm.languages import use_app_language
 from app.llm.provider import configure_default
 from app.routers import (
     artifacts,
@@ -85,6 +87,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def app_language(request: Request, call_next):
+    # The mobile app's interface language (llm/languages.py): AI output made for this request follows it.
+    with use_app_language(request.headers.get(APP_LANGUAGE_HEADER)):
+        return await call_next(request)
 
 
 @app.middleware("http")

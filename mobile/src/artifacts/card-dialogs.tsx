@@ -13,6 +13,8 @@ import { DownloadIcon } from "@/ui/icons";
 import { colors, radius } from "@/ui/theme";
 import { ErrorText } from "@/ui";
 import { Dialog, pageStyles, PillButton } from "@/ui/widgets";
+import i18n, { tKey } from "@/i18n";
+import { Trans } from "react-i18next";
 
 /** What each kind is called in the share dialog (web: ShareDialog SHARE_WHAT). */
 export const SHARE_WHAT: Record<string, string> = {
@@ -63,7 +65,7 @@ export function ShareDialog({ artifactId, what, visible, onClose }: { artifactId
     let live = true;
     linkFor(artifactId)
       .then((got) => live && setInfo(got))
-      .catch((e) => live && setError(message(e, "Could not make the link.")));
+      .catch((e) => live && setError(message(e, i18n.t("misc.makeLinkFailed"))));
     return () => {
       live = false;
     };
@@ -81,27 +83,27 @@ export function ShareDialog({ artifactId, what, visible, onClose }: { artifactId
     try {
       setInfo(await act());
     } catch (e) {
-      setError(message(e, "Could not change the link."));
+      setError(message(e, i18n.t("share.changeFailed")));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <Dialog visible={visible} title="Share" onClose={onClose}>
+    <Dialog visible={visible} title={i18n.t("share.title")} onClose={onClose}>
       {!info && !error ? (
         <View style={styles.wait}>
           <ActivityIndicator color={colors.blue} />
-          <Text style={styles.muted}>Making the link</Text>
+          <Text style={styles.muted}>{i18n.t("share.making")}</Text>
         </View>
       ) : null}
       {info && !info.shared ? (
         <>
           <Text style={styles.muted}>
-            Make a link anyone can open to see this {what}. They don&apos;t need an account, and they can&apos;t edit or see your posts, only the {what}.
+            {tKey(`share.make.${what}`, `Make a link anyone can open to see this ${what}. They don't need an account, and they can't edit or see your posts, only the ${what}.`)}
           </Text>
           <View style={styles.end}>
-            <PillButton title={busy ? "Making the link..." : "Create preview link"} variant="primary" busy={busy} onPress={() => void run(() => createLink(artifactId))} />
+            <PillButton title={busy ? i18n.t("share.makingDots") : i18n.t("share.create")} variant="primary" busy={busy} onPress={() => void run(() => createLink(artifactId))} />
           </View>
         </>
       ) : null}
@@ -113,14 +115,14 @@ export function ShareDialog({ artifactId, what, visible, onClose }: { artifactId
                 {info.url}
               </Text>
             </View>
-            <PillButton title={copied ? "Copied" : "Copy link"} variant="primary" onPress={() => void Clipboard.setStringAsync(info.url!).then(() => setCopied(true))} />
+            <PillButton title={copied ? i18n.t("ui.copied") : i18n.t("share.copyLink")} variant="primary" onPress={() => void Clipboard.setStringAsync(info.url!).then(() => setCopied(true))} />
           </View>
           <Text style={styles.muted}>
-            The page shows the {what} only: no source text, no quotes and no name. Stopping ends the link for good, and sharing again makes a new one.
+            {tKey(`share.only.${what}`, `The page shows the ${what} only: no source text, no quotes and no name. Stopping ends the link for good, and sharing again makes a new one.`)}
           </Text>
           <View style={styles.row}>
-            <PillButton small title="Open the page" onPress={() => void WebBrowser.openBrowserAsync(info.url!, { controlsColor: colors.blue })} />
-            <PillButton small title="Stop sharing" variant="danger" disabled={busy} onPress={() => void run(() => shareApi.remove(artifactId))} />
+            <PillButton small title={i18n.t("share.openPage")} onPress={() => void WebBrowser.openBrowserAsync(info.url!, { controlsColor: colors.blue })} />
+            <PillButton small title={i18n.t("share.stop")} variant="danger" disabled={busy} onPress={() => void run(() => shareApi.remove(artifactId))} />
           </View>
         </>
       ) : null}
@@ -132,19 +134,18 @@ export function ShareDialog({ artifactId, what, visible, onClose }: { artifactId
 /** Launch on an audio overview (web: launchpad/Attachment.tsx AudioOnlyModal): LinkedIn takes no audio, so download it. */
 export function AudioOnlyDialog({ title, downloadUrl, visible, onClose }: { title: string; downloadUrl: string | null | undefined; visible: boolean; onClose: () => void }) {
   return (
-    <Dialog visible={visible} title="Audio can't be posted" onClose={onClose}>
+    <Dialog visible={visible} title={i18n.t("share.audioTitle")} onClose={onClose}>
       <View style={styles.badge}>
         <Image source={require("@/assets/images/create/headphones.png")} style={styles.badgeIcon} tintColor={colors.blue} />
       </View>
       <Text style={pageStyles.body}>
-        LinkedIn does not support posting audio files, so <Text style={styles.strong}>{title}</Text> can&apos;t be scheduled. Download it now to use it
-        elsewhere, like a podcast app, your newsletter or a website.
+        <Trans i18nKey="share.audioBody" values={{ title }} components={[<Text key="title" style={styles.strong} />]} />
       </Text>
       <View style={styles.end}>
-        <PillButton title="Close" onPress={onClose} />
+        <PillButton title={i18n.t("common.close")} onPress={onClose} />
         {downloadUrl ? (
           <PillButton
-            title="Download"
+            title={i18n.t("card.download")}
             variant="primary"
             icon={<DownloadIcon size={17} color={colors.white} />}
             onPress={() => {
@@ -154,7 +155,7 @@ export function AudioOnlyDialog({ title, downloadUrl, visible, onClose }: { titl
             }}
           />
         ) : (
-          <Text style={styles.muted}>The file isn&apos;t available right now. Try again later.</Text>
+          <Text style={styles.muted}>{i18n.t("share.unavailable")}</Text>
         )}
       </View>
     </Dialog>

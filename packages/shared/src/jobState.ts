@@ -1,4 +1,5 @@
-import type { VideoJobState } from "./types";
+import { tr } from "./i18n";
+import type { Job, VideoJobState } from "./types";
 
 /** blog2video job endpoints report progress in slightly different shapes; any of these means it stopped. */
 export function finished(s: VideoJobState | null): boolean {
@@ -20,4 +21,29 @@ export function jobPercent(s: VideoJobState | null): number | null {
 
 function ratio(done: number | null, total: number | null): number | null {
   return done !== null && total ? (done / total) * 100 : null;
+}
+
+/** A notestack job that has stopped, either way. */
+export const jobFinished = (j: Job | null): boolean => j?.status === "done" || j?.status === "failed";
+
+/**
+ * Several jobs (an upload makes one per file) as one, for a single progress bar: the average progress, "Files in
+ * orbit: 2 of 5" while they run, failed only when every one failed, and the last one's result (plan limits). One job
+ * is returned as it is; null when there are none.
+ */
+export function combineJobs(jobs: (Job | null)[]): Job | null {
+  const list = jobs.filter((j): j is Job => j !== null);
+  if (list.length <= 1) return list[0] ?? null;
+  const done = list.filter(jobFinished).length;
+  const failed = list.filter((j) => j.status === "failed").length;
+  const last = list[list.length - 1];
+  const progress = list.reduce((sum, j) => sum + (jobFinished(j) ? 1 : j.progress), 0) / list.length;
+  const status = failed === list.length ? "failed" : done === list.length ? "done" : "running";
+  return {
+    ...last,
+    status,
+    progress,
+    message: tr("jobs.filesInOrbit", "Files in orbit: {{done}} of {{total}}", { done, total: list.length }),
+    error: status === "failed" ? last.error : null,
+  };
 }

@@ -1,5 +1,6 @@
 /** A video's list status and helpers, shared by the web and mobile (web: pages/Videos.tsx, pages/VideoEditor.tsx). */
 import { videoEditApi } from "./endpoints";
+import { tr } from "./i18n";
 import type { VideoJobState, VideoListItem, VideoProjectData, VideoStatus } from "./types";
 
 /** A file a scene uses, to load before the preview opens. */
@@ -15,17 +16,17 @@ export const JOB_LABELS: Record<string, string> = {
 /** blog2video's status, as a label and a dot color. */
 export function statusOf(v: VideoListItem): { label: string; tone: "done" | "ready" | "busy" | "review" | "failed" } {
   const raw = v.b2v_status ?? "";
-  if (v.status === "failed" || raw === "failed" || raw === "error") return { label: "Failed", tone: "failed" };
+  if (v.status === "failed" || raw === "failed" || raw === "error") return { label: tr("videoStatus.failed", "Failed"), tone: "failed" };
   // An edit job on a finished video (blog2video's status, kept on the artifact too). Before "Complete": a video
   // rendered earlier keeps its MP4 link while it is being changed.
   const job = JOB_LABELS[raw] ?? JOB_LABELS[v.status];
-  if (job) return { label: job, tone: "busy" };
-  if (raw === "done" || v.url) return { label: "Complete", tone: "done" };
-  if (raw === "generated" || v.status === "ready") return { label: "Generated", tone: "ready" };
-  if (raw === "awaiting_script_review") return { label: "Review script", tone: "review" };
-  if (raw === "awaiting_stock_footage_review") return { label: "Review footage", tone: "review" };
-  if (raw === "rendering" || v.status === "rendering") return { label: "Rendering", tone: "busy" };
-  return { label: "Generating", tone: "busy" };
+  if (job) return { label: tr(`videoStatus.job.${raw in JOB_LABELS ? raw : v.status}`, job), tone: "busy" };
+  if (raw === "done" || v.url) return { label: tr("videoStatus.complete", "Complete"), tone: "done" };
+  if (raw === "generated" || v.status === "ready") return { label: tr("videoStatus.generated", "Generated"), tone: "ready" };
+  if (raw === "awaiting_script_review") return { label: tr("videoStatus.reviewScript", "Review script"), tone: "review" };
+  if (raw === "awaiting_stock_footage_review") return { label: tr("videoStatus.reviewFootage", "Review footage"), tone: "review" };
+  if (raw === "rendering" || v.status === "rendering") return { label: tr("videoStatus.rendering", "Rendering"), tone: "busy" };
+  return { label: tr("videoStatus.generating", "Generating"), tone: "busy" };
 }
 
 export function shortUrl(url: string | null | undefined): string | null {
@@ -79,10 +80,18 @@ export function jobDetail(s: VideoJobState | null): string | null {
   if (s.kind === "language_change") {
     // Two passes over the scenes: the copy, then every voiceover (blog2video counts both in total).
     const scenes = total ? total / 2 : null;
-    if (s.phase === "translating") return `Translating the text${scenes && done !== null ? ` · scene ${Math.min(done + 1, scenes)} of ${scenes}` : ""}`;
-    if (s.phase === "voiceover") return `Recording voiceovers${scenes && done !== null ? ` · scene ${Math.min(Math.max(done - scenes, 0) + 1, scenes)} of ${scenes}` : ""}`;
+    if (s.phase === "translating") {
+      return scenes && done !== null
+        ? tr("videoJob.translatingScene", "Translating the text · scene {{n}} of {{total}}", { n: Math.min(done + 1, scenes), total: scenes })
+        : tr("videoJob.translating", "Translating the text");
+    }
+    if (s.phase === "voiceover") {
+      return scenes && done !== null
+        ? tr("videoJob.voiceoverScene", "Recording voiceovers · scene {{n}} of {{total}}", { n: Math.min(Math.max(done - scenes, 0) + 1, scenes), total: scenes })
+        : tr("videoJob.voiceover", "Recording voiceovers");
+    }
   }
-  return total && done !== null ? `Scene ${Math.min(done + 1, total)} of ${total}` : null;
+  return total && done !== null ? tr("videoJob.scene", "Scene {{n}} of {{total}}", { n: Math.min(done + 1, total), total }) : null;
 }
 
 /** How far a job is, 0-100, from whichever shape its status endpoint uses; null when it does not say. */
@@ -116,6 +125,14 @@ export const LOCAL_JOBS: JobInfo[] = [
     tip: "Render again afterwards to get a silent MP4.", poll: (id) => videoEditApi.voiceStatus(id) },
   { label: "Adding a scene", title: "Writing the new scene", tip: "You can edit any scene once it's added.", view: "bar" },
 ];
+
+/** A job's title and tip as shown (in the app's language on mobile); `label` stays English, it is the job's name. */
+export function jobText(job: JobInfo): { title: string; tip?: string } {
+  return {
+    title: tr(`videoJob.title.${job.label}`, job.title),
+    tip: job.tip ? tr(`videoJob.tip.${job.label}`, job.tip) : undefined,
+  };
+}
 
 export const jobByLabel = (label: string): JobInfo =>
   Object.values(JOBS).find((j) => j.label === label) ?? LOCAL_JOBS.find((j) => j.label === label)

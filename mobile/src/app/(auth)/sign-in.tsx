@@ -7,6 +7,7 @@ import { useAuth } from "@/account/auth";
 import { LegalLinks } from "@/account/plans";
 import { SocialButtons } from "@/account/social-buttons";
 import { Brand, Button, ErrorText, Field, FormScreen } from "@/ui";
+import i18n from "@/i18n";
 
 /** The landing page when signed out: the logo and one line, then Google and the email sign in. */
 export default function SignIn() {
@@ -22,7 +23,7 @@ export default function SignIn() {
     try {
       complete(await authApi.login(email.trim(), password));
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Could not reach Notestack. Check your connection.");
+      setError(e instanceof ApiError ? e.message : i18n.t("common.noConnection"));
       setBusy(false);
     }
   };
@@ -32,7 +33,7 @@ export default function SignIn() {
       <Brand />
       <SocialButtons mode="signin" />
       <Field
-        label="Email"
+        label={i18n.t("auth.email")}
         value={email}
         onChangeText={setEmail}
         autoCapitalize="none"
@@ -42,7 +43,7 @@ export default function SignIn() {
         returnKeyType="next"
       />
       <Field
-        label="Password"
+        label={i18n.t("auth.password")}
         value={password}
         onChangeText={setPassword}
         secureTextEntry
@@ -52,9 +53,9 @@ export default function SignIn() {
         onSubmitEditing={submit}
       />
       <ErrorText>{error}</ErrorText>
-      <Button title="Sign in" onPress={submit} busy={busy} disabled={!email.trim() || !password} />
-      <Button title="Forgot password?" variant="link" onPress={() => router.push("/forgot")} />
-      <Button title="New here? Create an account" variant="link" onPress={() => router.navigate("/sign-up")} />
+      <Button title={i18n.t("auth.signIn")} onPress={submit} busy={busy} disabled={!email.trim() || !password} />
+      <Button title={i18n.t("auth.forgot")} variant="link" onPress={() => router.push("/forgot")} />
+      <Button title={i18n.t("auth.newHere")} variant="link" onPress={() => router.navigate("/sign-up")} />
       <LegalLinks />
     </FormScreen>
   );

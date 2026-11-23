@@ -1,5 +1,5 @@
 import { ApiError } from "@notestack/shared/client";
-import { SLIDE_THEMES, sourceSummary } from "@notestack/shared/create-options";
+import { sourceSummary } from "@notestack/shared/create-options";
 import { artifactsApi, type EditSlide } from "@notestack/shared/endpoints";
 import { deckOf, deckTitle, draftOf, EDITOR_TAG, type DeckSlide, type Draft } from "@notestack/shared/slideDeck";
 import { addActions, convert, type DeckFmt, LAYOUTS, MAX_SLIDES, newSlide, problem, removable, removeField, setText } from "@notestack/shared/slideDeckEdit";
@@ -35,6 +35,8 @@ import { colors, fonts, gutter, radius } from "@/ui/theme";
 import { ErrorText } from "@/ui";
 import { confirm, Dialog, PillButton, PopMenu, pageStyles } from "@/ui/widgets";
 import { ZoomView } from "@/ui/zoom-view";
+import i18n from "@/i18n";
+import { SLIDE_THEMES } from "@/create/options";
 
 /* The web's slide deck viewer (frontend/src/components/SlideDeck.tsx): every slide stacked, presenting, downloading,
    and editing the slides in place. */
@@ -42,7 +44,7 @@ import { ZoomView } from "@/ui/zoom-view";
 const SLIDE_W = 1920;
 const SLIDE_H = 1080;
 
-const message = (e: unknown, fallback = "Something went wrong. Try again.") => (e instanceof ApiError ? e.message : fallback);
+const message = (e: unknown, fallback = i18n.t("common.somethingWrong")) => (e instanceof ApiError ? e.message : fallback);
 
 /** Passes what the editor tells its parent (in an app's WebView, the page itself) on to the app. */
 const BRIDGE = `<script>window.addEventListener("message",function(e){var d=e.data;if(d&&typeof d==="object"&&d.type&&d.type!=="sd-mode"&&window.ReactNativeWebView)window.ReactNativeWebView.postMessage(JSON.stringify(d));});</script>`;
@@ -165,7 +167,7 @@ export function SlidePresenter({ pages, start = 0, light = false, onClose }: { p
       <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
       <StatusBar hidden />
-      <View style={[styles.present, light && styles.presentLight]} onTouchStart={wake} accessibilityLabel={`Slide ${i + 1} of ${pages.length}`}>
+      <View style={[styles.present, light && styles.presentLight]} onTouchStart={wake} accessibilityLabel={i18n.t("deck.slideOf", { n: i + 1, total: pages.length })}>
         {/* A tap goes on, a swipe moves either way; pinch to look closer (a new slide starts at normal size) */}
         <ZoomView resetKey={i} onTap={() => go(i + 1)} onSwipe={(dir) => go(i + dir)}>
           <View style={{ width, height: (width * SLIDE_H) / SLIDE_W }}>
@@ -178,12 +180,12 @@ export function SlidePresenter({ pages, start = 0, light = false, onClose }: { p
         </ZoomView>
         <SafeAreaView edges={["bottom"]} style={[styles.presentBar, idle && styles.hidden]} pointerEvents={idle ? "none" : "box-none"}>
           <View style={styles.presentBarRow}>
-            <PillButton small title="Prev" disabled={i === 0} onPress={() => (go(i - 1), wake())} />
+            <PillButton small title={i18n.t("misc.prev")} disabled={i === 0} onPress={() => (go(i - 1), wake())} />
             <Text style={styles.presentCount} accessibilityLiveRegion="polite">
               {i + 1} / {pages.length}
             </Text>
-            <PillButton small title="Next" disabled={i === pages.length - 1} onPress={() => (go(i + 1), wake())} />
-            <PillButton small title="Exit" onPress={onClose} />
+            <PillButton small title={i18n.t("misc.next")} disabled={i === pages.length - 1} onPress={() => (go(i + 1), wake())} />
+            <PillButton small title={i18n.t("deck.exit")} onPress={onClose} />
           </View>
         </SafeAreaView>
       </View>
@@ -197,13 +199,13 @@ export function SlidePresenter({ pages, start = 0, light = false, onClose }: { p
  * sheet. `prepare` runs first (the viewer saves unsaved edits, so the file has them). */
 function useDeckDownload(artifact: Artifact, prepare?: () => Promise<boolean>) {
   const dl = useFileDownload<"pdf" | "pptx">(prepare);
-  const name = fileName(deckTitle(artifact), "Slide deck");
+  const name = fileName(deckTitle(artifact), i18n.t("deck.fileName"));
   return { ...dl, save: (ext: "pdf" | "pptx") => dl.save(ext, { api: `/api/artifacts/${artifact.id}/slides.${ext}` }, name, ext) };
 }
 
 const downloadItems = (save: (ext: "pdf" | "pptx") => void) => [
-  { label: "Download PDF Document (.pdf)", icon: <PdfIcon size={22} />, onPress: () => save("pdf") },
-  { label: "Download PowerPoint (.pptx)", icon: <PptxIcon size={22} />, onPress: () => save("pptx") },
+  { label: i18n.t("deck.downloadPdf"), icon: <PdfIcon size={22} />, onPress: () => save("pdf") },
+  { label: i18n.t("deck.downloadPptx"), icon: <PptxIcon size={22} />, onPress: () => save("pptx") },
 ];
 
 /** Download: a menu of PDF or PowerPoint. `round` is the card's round icon button; else the viewer's header icon. */
@@ -212,7 +214,7 @@ export function DownloadMenu({ artifact, prepare, round = false }: { artifact: A
   return (
     <>
       <PopMenu
-        label={dl.busy ? "Preparing the file" : "Download"}
+        label={dl.busy ? i18n.t("card.preparing") : i18n.t("card.download")}
         disabled={dl.busy !== null}
         items={downloadItems((ext) => void dl.save(ext))}
         style={({ pressed }) => [round ? styles.roundBtn : styles.iconBtn, pressed && styles.pressed]}>
@@ -236,16 +238,16 @@ function DeckMenu({ artifact, shareable, prepare, onPresent, onDelete }: {
   return (
     <>
       <PopMenu
-        label="More"
+        label={i18n.t("deck.more")}
         items={[
           ...downloadItems((ext) => void dl.save(ext)),
-          { label: "Start slideshow", icon: <PlayIcon size={22} />, onPress: onPresent },
-          ...(shareable ? [{ label: "Share", icon: <ShareIcon size={22} />, onPress: () => setSharing(true) }] : []),
+          { label: i18n.t("deck.slideshow"), icon: <PlayIcon size={22} />, onPress: onPresent },
+          ...(shareable ? [{ label: i18n.t("deck.share"), icon: <ShareIcon size={22} />, onPress: () => setSharing(true) }] : []),
           {
-            label: "Delete",
+            label: i18n.t("common.delete"),
             danger: true,
             icon: <TrashIcon size={22} color="#ff8a8a" />,
-            onPress: () => confirm("Delete slide deck?", "Delete", onDelete, deckTitle(artifact)),
+            onPress: () => confirm(i18n.t("deck.deleteTitle"), i18n.t("common.delete"), onDelete, deckTitle(artifact)),
           },
         ]}
         style={({ pressed }) => [styles.iconBtn, styles.moreBtn, pressed && styles.pressed]}>
@@ -285,12 +287,12 @@ function SlideTools({ k, count, slide, slots, fmt, busy, onChange, onMove, onDup
   onDelete: () => void;
 }) {
   return (
-    <View style={styles.tools} accessibilityLabel={`Slide ${k + 1}`}>
+    <View style={styles.tools} accessibilityLabel={i18n.t("deck.slideN", { n: k + 1 })}>
       <View style={styles.toolsRow}>
-        <Text style={styles.toolsNo}>Slide {k + 1}</Text>
+        <Text style={styles.toolsNo}>{i18n.t("deck.slideN", { n: k + 1 })}</Text>
         <View style={styles.toolsLayout}>
           <Select
-            label={`Layout of slide ${k + 1}`}
+            label={i18n.t("deck.layoutOf", { n: k + 1 })}
             value={slide.layout}
             disabled={busy}
             onChange={(layout) => onChange(convert(slide, layout, fmt))}
@@ -303,10 +305,10 @@ function SlideTools({ k, count, slide, slots, fmt, busy, onChange, onMove, onDup
         <ToolIcon label={`Move slide ${k + 1} down`} disabled={busy || k === count - 1} onPress={() => onMove(1)}>
           <ArrowDownIcon />
         </ToolIcon>
-        <ToolIcon label={`Duplicate slide ${k + 1}`} disabled={busy || count >= MAX_SLIDES} onPress={onDuplicate}>
+        <ToolIcon label={i18n.t("deck.duplicate", { n: k + 1 })} disabled={busy || count >= MAX_SLIDES} onPress={onDuplicate}>
           <DuplicateIcon />
         </ToolIcon>
-        <ToolIcon label={`Delete slide ${k + 1}`} danger disabled={busy || count <= 1} onPress={onDelete}>
+        <ToolIcon label={i18n.t("deck.deleteSlide", { n: k + 1 })} danger disabled={busy || count <= 1} onPress={onDelete}>
           <TrashIcon />
         </ToolIcon>
       </View>
@@ -333,9 +335,9 @@ function AddSlide({ after, busy, full, onAdd }: { after: number; busy: boolean; 
   return (
     <View style={styles.addSlide}>
       <Select
-        label={`Add a slide after slide ${after + 1}`}
+        label={i18n.t("deck.addAfter", { n: after + 1 })}
         value=""
-        display={full ? `At most ${MAX_SLIDES} slides` : "+ Add slide here"}
+        display={full ? i18n.t("deck.atMost", { max: MAX_SLIDES }) : i18n.t("deck.addHere")}
         disabled={busy || full}
         onChange={(layout) => layout && onAdd(layout)}
         options={LAYOUTS.map((l) => ({ value: l.id, label: l.name }))}
@@ -381,8 +383,8 @@ function SlideEditor({ k, count, html, slide, slots, fmt, version, busy, saving,
               <Text style={styles.editorTitle} accessibilityRole="header">
                 Slide {k + 1} of {count}
               </Text>
-              <PillButton small variant="primary" title={saving ? "Saving..." : "Save"} busy={saving} disabled={busy || !dirty} onPress={onSave} />
-              <PillButton small title="Done" disabled={saving} onPress={onDone} />
+              <PillButton small variant="primary" title={saving ? i18n.t("common.saving") : i18n.t("common.save")} busy={saving} disabled={busy || !dirty} onPress={onSave} />
+              <PillButton small title={i18n.t("common.done")} disabled={saving} onPress={onDone} />
             </View>
             <View style={styles.editorTools}>
               <SlideTools k={k} count={count} slide={slide} slots={slots} fmt={fmt} busy={busy || saving} onChange={onChange} onMove={onMove} onDuplicate={onDuplicate} onDelete={onDelete} />
@@ -451,7 +453,7 @@ export function SlideDeckViewer({ artifact, visible, shareable, feedback, onClos
   const rows = useRef<{ y: number; h: number }[]>([]);
   const c = artifact.content;
   const fmt: DeckFmt = c.format === "presenter" ? "presenter" : "detailed";
-  const theme = SLIDE_THEMES.find((t) => t.id === c.theme)?.name ?? "Night stellar";
+  const theme = SLIDE_THEMES.find((t) => t.id === c.theme)?.name ?? i18n.t("options.slideThemes.dark-space.name");
   const editing = draft !== null;
   const pages = draft ? draft.pages : stored.pages;
   const slides: DeckSlide[] = draft ? draft.slides : stored.slides;
@@ -534,7 +536,7 @@ export function SlideDeckViewer({ artifact, visible, shareable, feedback, onClos
       const fresh = await artifactsApi.get(artifact.id);
       onSaved(fresh);
       if (!deckOf(fresh).pages.some((html) => html.includes("data-f="))) {
-        setSaveError("This deck can't be edited. Generate it again to edit its text.");
+        setSaveError(i18n.t("deck.notEditable"));
         return;
       }
       setDraft(draftOf(fresh));
@@ -567,23 +569,23 @@ export function SlideDeckViewer({ artifact, visible, shareable, feedback, onClos
           <Text style={styles.title} numberOfLines={2} accessibilityRole="header">
             {deckTitle(artifact)}
           </Text>
-          <Pressable onPress={requestClose} hitSlop={12} accessibilityRole="button" accessibilityLabel="Close" style={styles.close}>
+          <Pressable onPress={requestClose} hitSlop={12} accessibilityRole="button" accessibilityLabel={i18n.t("common.close")} style={styles.close}>
             <SymbolView name={{ ios: "xmark", android: "close" }} size={20} tintColor={colors.text} />
           </Pressable>
         </View>
 
-        <View style={styles.toolbar} accessibilityLabel="Slide deck">
+        <View style={styles.toolbar} accessibilityLabel={i18n.t("deck.label")}>
           {editing ? (
             <>
-              <PillButton small variant="primary" title={saving ? "Saving..." : "Save"} busy={saving} disabled={busy || !dirty} onPress={() => void save()} />
-              <PillButton small title="Done" disabled={saving} onPress={stopEditing} />
+              <PillButton small variant="primary" title={saving ? i18n.t("common.saving") : i18n.t("common.save")} busy={saving} disabled={busy || !dirty} onPress={() => void save()} />
+              <PillButton small title={i18n.t("common.done")} disabled={saving} onPress={stopEditing} />
             </>
           ) : (
             <Pressable
               onPress={() => void startEditing()}
               disabled={!pages.length || opening}
               accessibilityRole="button"
-              accessibilityLabel="Edit slides"
+              accessibilityLabel={i18n.t("deck.edit")}
               style={({ pressed }) => [styles.iconBtn, !pages.length && styles.off, pressed && styles.pressed]}>
               {opening ? <ActivityIndicator size="small" color={colors.text} /> : <PencilIcon size={22} />}
             </Pressable>
@@ -592,14 +594,14 @@ export function SlideDeckViewer({ artifact, visible, shareable, feedback, onClos
             onPress={() => void present(inView)}
             disabled={!pages.length || saving || busy}
             accessibilityRole="button"
-            accessibilityLabel="Start slideshow"
+            accessibilityLabel={i18n.t("deck.slideshow")}
             style={({ pressed }) => [styles.iconBtn, (!pages.length || saving || busy) && styles.off, pressed && styles.pressed]}>
             <PlayIcon size={22} />
           </Pressable>
           <Pressable
             onPress={() => setBig((b) => !b)}
             accessibilityRole="button"
-            accessibilityLabel={big ? "Smaller preview" : "Larger preview"}
+            accessibilityLabel={big ? i18n.t("deck.smaller") : i18n.t("deck.larger")}
             accessibilityState={{ selected: big }}
             style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}>
             {big ? <CollapseIcon size={22} /> : <ExpandIcon size={22} />}
@@ -612,9 +614,9 @@ export function SlideDeckViewer({ artifact, visible, shareable, feedback, onClos
 
         {!big || editing ? (
           <Text style={styles.meta}>
-            {pages.length} slides · {fmt === "presenter" ? "Presenter" : "Detailed"} · {theme}
-            {c.source ? ` · from ${sourceSummary(c.source)}` : ""}
-            {editing ? ` · Editing: tap a slide to edit it${busy ? " · Updating..." : dirty ? " · Unsaved changes" : ""}` : ""}
+            {i18n.t("deck.slides", { count: pages.length })} · {fmt === "presenter" ? i18n.t("deck.presenter") : i18n.t("deck.detailed")} · {theme}
+            {c.source ? i18n.t("deck.fromSources", { what: sourceSummary(c.source) }) : ""}
+            {editing ? `${i18n.t("deck.editingHint")}${busy ? i18n.t("deck.updating") : dirty ? i18n.t("deck.unsaved") : ""}` : ""}
           </Text>
         ) : null}
         {saveError && !asking ? (
@@ -625,7 +627,7 @@ export function SlideDeckViewer({ artifact, visible, shareable, feedback, onClos
 
         {pages.length === 0 ? (
           <View style={styles.errorRow}>
-            <ErrorText>This deck has no slides to show. Try generating it again.</ErrorText>
+            <ErrorText>{i18n.t("deck.noSlides")}</ErrorText>
           </View>
         ) : (
           <ScrollView
@@ -654,7 +656,7 @@ export function SlideDeckViewer({ artifact, visible, shareable, feedback, onClos
                           onPress={() => (editing ? setEditingSlide(k) : void present(k))}
                           disabled={editing && busy}
                           accessibilityRole="button"
-                          accessibilityLabel={`${editing ? "Edit" : "Present from"} slide ${k + 1}: ${s?.heading ?? ""}`}
+                          accessibilityLabel={i18n.t(editing ? "deck.editSlide" : "deck.presentFrom", { n: k + 1, heading: s?.heading ?? "" })}
                         />
                       </View>
                       {draft ? (
@@ -702,16 +704,16 @@ export function SlideDeckViewer({ artifact, visible, shareable, feedback, onClos
           }}
         />
       ) : null}
-      <Dialog visible={asking !== null} title="Save changes?" onClose={() => !saving && setAsking(null)}>
+      <Dialog visible={asking !== null} title={i18n.t("deck.saveTitle")} onClose={() => !saving && setAsking(null)}>
         <Text style={pageStyles.body}>
-          You edited this slide deck. Do you want to save your changes{asking === "close" ? " before closing" : ""}?
+          {asking === "close" ? i18n.t("deck.saveBodyClose") : i18n.t("deck.saveBody")}
         </Text>
         <ErrorText>{asking ? saveError : ""}</ErrorText>
         <View style={styles.confirmRow}>
-          <PillButton small title="Cancel" disabled={saving} onPress={() => setAsking(null)} />
+          <PillButton small title={i18n.t("common.cancel")} disabled={saving} onPress={() => setAsking(null)} />
           <PillButton
             small
-            title="Don't save"
+            title={i18n.t("deck.dontSave")}
             disabled={saving}
             onPress={() => {
               if (asking === "close") return close();
@@ -722,7 +724,7 @@ export function SlideDeckViewer({ artifact, visible, shareable, feedback, onClos
           <PillButton
             small
             variant="primary"
-            title={saving ? "Saving..." : "Save"}
+            title={saving ? i18n.t("common.saving") : i18n.t("common.save")}
             busy={saving}
             disabled={busy}
             onPress={async () => {

@@ -12,6 +12,7 @@ import { CloseIcon } from "@/ui/icons";
 import { colors, fonts, gutter } from "@/ui/theme";
 import { ErrorText } from "@/ui";
 import { pageStyles } from "@/ui/widgets";
+import i18n from "@/i18n";
 
 /** The player without its speed and captions controls (blog2video's `hide` option, as the web's PreviewFrame). */
 function playerUrl(src: string): string {
@@ -94,10 +95,10 @@ export function VideoPreview({ artifact, visible, onClose, onChanged }: { artifa
     (async () => {
       try {
         const got = (await videosApi.get(artifact.id)) as { preview_url?: string | null };
-        if (!got.preview_url) throw new Error("The preview is not available yet.");
+        if (!got.preview_url) throw new Error(i18n.t("videoPreview.notYet"));
         if (live) setPreview(got.preview_url);
       } catch (e) {
-        if (live) setError(e instanceof ApiError || e instanceof Error ? e.message : "The preview could not be opened.");
+        if (live) setError(e instanceof ApiError || e instanceof Error ? e.message : i18n.t("videoPreview.openFailed"));
       }
     })();
     return () => {
@@ -128,7 +129,7 @@ export function VideoPreview({ artifact, visible, onClose, onChanged }: { artifa
           <Text style={styles.title} numberOfLines={1}>
             {artifact.title}
           </Text>
-          <Pressable onPress={close} hitSlop={12} accessibilityRole="button" accessibilityLabel="Close">
+          <Pressable onPress={close} hitSlop={12} accessibilityRole="button" accessibilityLabel={i18n.t("common.close")}>
             <CloseIcon size={22} />
           </Pressable>
         </View>
@@ -143,15 +144,15 @@ export function VideoPreview({ artifact, visible, onClose, onChanged }: { artifa
           ) : null}
           {view === "mp4" && mp4 ? <Mp4Player uri={mp4} /> : null}
           {view === "rendering" ? (
-            <View style={styles.wait} accessibilityRole="progressbar" accessibilityLabel="Rendering the video">
+            <View style={styles.wait} accessibilityRole="progressbar" accessibilityLabel={i18n.t("videoPreview.rendering")}>
               <ActivityIndicator color={colors.blue} />
-              <Text style={styles.waitText}>Rendering. The MP4 will play here when it&apos;s ready.</Text>
+              <Text style={styles.waitText}>{i18n.t("videoPreview.renderingBody")}</Text>
             </View>
           ) : null}
           {view === "live" && !ready && !error ? (
-            <View style={styles.wait} accessibilityRole="progressbar" accessibilityLabel="Loading the video">
+            <View style={styles.wait} accessibilityRole="progressbar" accessibilityLabel={i18n.t("videoPreview.loading")}>
               <ActivityIndicator color={colors.blue} />
-              <Text style={styles.waitText}>Loading the video</Text>
+              <Text style={styles.waitText}>{i18n.t("videoPreview.loading")}</Text>
             </View>
           ) : null}
           {error ? (

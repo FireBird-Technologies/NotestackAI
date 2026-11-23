@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { useAuth } from "@/account/auth";
 import { Body, Button, ErrorText, Field, FormScreen, Notice, Title } from "@/ui";
+import i18n from "@/i18n";
 
 const MIN_PASSWORD = 8;
 
@@ -26,7 +27,7 @@ export default function Forgot() {
       const result = await fn();
       if (result) complete(result);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Something went wrong. Try again.");
+      setError(e instanceof ApiError ? e.message : i18n.t("common.somethingWrong"));
       if (e instanceof ApiError && (e.code === "too_many_attempts" || e.code === "expired")) {
         setCode("");
         setCodeDead(true);
@@ -47,10 +48,10 @@ export default function Forgot() {
   if (step === "reset") {
     return (
       <FormScreen>
-        <Title>Choose a new password</Title>
+        <Title>{i18n.t("auth.choosePassword")}</Title>
         <Notice>{notice}</Notice>
         <Field
-          label="6 digit code"
+          label={i18n.t("auth.code")}
           value={code}
           onChangeText={(t) => setCode(t.replace(/\D/g, "").slice(0, 6))}
           keyboardType="number-pad"
@@ -59,7 +60,7 @@ export default function Forgot() {
           editable={!codeDead}
         />
         <Field
-          label={`New password (at least ${MIN_PASSWORD} characters)`}
+          label={i18n.t("auth.newPasswordMin", { min: MIN_PASSWORD })}
           value={password}
           onChangeText={setPassword}
           secureTextEntry
@@ -68,10 +69,10 @@ export default function Forgot() {
         />
         <ErrorText>{error}</ErrorText>
         {codeDead ? (
-          <Button title="Resend code" onPress={() => send("New code sent.")} busy={busy} />
+          <Button title={i18n.t("auth.resendCode")} onPress={() => send(i18n.t("auth.newCodeSent"))} busy={busy} />
         ) : (
           <Button
-            title="Save and sign in"
+            title={i18n.t("auth.saveAndSignIn")}
             onPress={() => run(() => authApi.forgotComplete(email.trim(), code, password))}
             busy={busy}
             disabled={code.length !== 6 || password.length < MIN_PASSWORD}
@@ -83,10 +84,10 @@ export default function Forgot() {
 
   return (
     <FormScreen>
-      <Title>Reset your password</Title>
-      <Body muted>We will email you a code to set a new one.</Body>
+      <Title>{i18n.t("auth.resetTitle")}</Title>
+      <Body muted>{i18n.t("auth.resetBody")}</Body>
       <Field
-        label="Email"
+        label={i18n.t("auth.email")}
         value={email}
         onChangeText={setEmail}
         autoCapitalize="none"
@@ -96,8 +97,8 @@ export default function Forgot() {
       />
       <ErrorText>{error}</ErrorText>
       <Button
-        title="Send reset code"
-        onPress={() => send(`We sent a reset code to ${email.trim()}.`)}
+        title={i18n.t("auth.sendReset")}
+        onPress={() => send(i18n.t("auth.resetSent", { email: email.trim() }))}
         busy={busy}
         disabled={!email.trim()}
       />
