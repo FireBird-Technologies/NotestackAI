@@ -8,6 +8,7 @@ import { BrandIcon } from "@/launchpad/brand-icon";
 import { Pressable } from "@/ui/pressable";
 import { colors, fonts, radius } from "@/ui/theme";
 import { PillButton } from "@/ui/widgets";
+import i18n from "@/i18n";
 
 /** "Publish to": a tile per channel, with a dot when connected (web: .lp-channel-picker). */
 export function ChannelPicker({ accounts, selected, onPick }: { accounts: SocialAccounts | null; selected: Platform[]; onPick: (p: Platform) => void }) {
@@ -27,7 +28,7 @@ export function ChannelPicker({ accounts, selected, onPick }: { accounts: Social
               style={({ pressed }) => [styles.tile, on && styles.tileOn, pressed && styles.pressed]}
               accessibilityRole="button"
               accessibilityState={{ selected: on }}
-              accessibilityLabel={`${on ? "Remove" : "Add"} ${p.label}, ${connected ? "connected" : "not connected"}`}>
+              accessibilityLabel={i18n.t(on ? "lp.toggleRemove" : "lp.toggleAdd", { name: p.label, state: connected ? i18n.t("lp.connected") : i18n.t("lp.notConnected") })}>
               <View style={styles.tileIcon}>
                 <BrandIcon brand={p.id} size={22} />
                 {connected ? <View style={styles.live} /> : null}
@@ -44,7 +45,7 @@ export function ChannelPicker({ accounts, selected, onPick }: { accounts: Social
 }
 
 type Tool = "emoji" | "bullets" | "hashtag" | "link";
-const TOOL_LABEL: Record<Tool, string> = { emoji: "Emoji", bullets: "Bulleted list", hashtag: "Hashtag", link: "Insert link" };
+const TOOL_LABEL: Record<Tool, string> = { emoji: i18n.t("lp.tool.emoji"), bullets: i18n.t("lp.tool.bullets"), hashtag: i18n.t("lp.tool.hashtag"), link: i18n.t("lp.tool.link") };
 
 function ToolIcon({ tool, color }: { tool: Tool; color: string }) {
   const svg = { width: 18, height: 18, viewBox: "0 0 16 16", fill: "none", stroke: color, strokeWidth: 1.5, strokeLinecap: "round" } as const;
@@ -127,7 +128,7 @@ export function ComposeToolbar({
               onPress={attach.onPress}
               style={({ pressed }) => [styles.tool, styles.attach, attach.attached && styles.toolOn, pressed && styles.toolPressed]}
               accessibilityRole="button"
-              accessibilityLabel={attach.attached ? "Change attachment from your Library" : "Attach from your Library"}>
+              accessibilityLabel={attach.attached ? i18n.t("lp.changeAttachment") : i18n.t("lp.attach")}>
               <Svg width={16} height={16} viewBox="0 0 16 16" fill="none" stroke={attach.attached ? colors.blue : colors.text2} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
                 <Path d="m13.6 7.6-5.5 5.5a3.6 3.6 0 0 1-5.1-5.1l5.7-5.7a2.4 2.4 0 0 1 3.4 3.4l-5.7 5.7a1.2 1.2 0 0 1-1.7-1.7l5.2-5.2" />
               </Svg>
@@ -158,12 +159,12 @@ export function LinkBar({ value, error, onChange, onAdd, onCancel }: { value: st
           keyboardType="url"
           returnKeyType="done"
           onSubmitEditing={onAdd}
-          placeholder="Paste or type a web address"
+          placeholder={i18n.t("lp.urlPlaceholder")}
           placeholderTextColor={colors.text3}
-          accessibilityLabel="Web address"
+          accessibilityLabel={i18n.t("lp.url")}
         />
-        <PillButton small variant="primary" title="Add link" onPress={onAdd} />
-        <Pressable onPress={onCancel} hitSlop={10} accessibilityRole="button" accessibilityLabel="Cancel link">
+        <PillButton small variant="primary" title={i18n.t("lp.addLink")} onPress={onAdd} />
+        <Pressable onPress={onCancel} hitSlop={10} accessibilityRole="button" accessibilityLabel={i18n.t("lp.cancelLink")}>
           <Text style={styles.linkCancel}>×</Text>
         </Pressable>
       </View>
@@ -174,9 +175,9 @@ export function LinkBar({ value, error, onChange, onAdd, onCancel }: { value: st
 
 export function EmojiRow({ onPick }: { onPick: (emoji: string) => void }) {
   return (
-    <View style={styles.emojis} accessibilityLabel="Choose an emoji">
+    <View style={styles.emojis} accessibilityLabel={i18n.t("lp.chooseEmoji")}>
       {COMPOSER_EMOJIS.map((e) => (
-        <Pressable key={e} onPress={() => onPick(e)} style={({ pressed }) => [styles.emoji, pressed && styles.toolPressed]} accessibilityRole="button" accessibilityLabel={`Insert ${e}`}>
+        <Pressable key={e} onPress={() => onPick(e)} style={({ pressed }) => [styles.emoji, pressed && styles.toolPressed]} accessibilityRole="button" accessibilityLabel={i18n.t("lp.insert", { e })}>
           <Text style={styles.emojiText}>{e}</Text>
         </Pressable>
       ))}

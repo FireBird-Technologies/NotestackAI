@@ -11,6 +11,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, fonts, radius } from "@/ui/theme";
 import { formatDate } from "@/ui";
 import { pageStyles } from "@/ui/widgets";
+import i18n, { tKey } from "@/i18n";
 
 /* ---------- Small pieces ---------- */
 
@@ -19,7 +20,7 @@ export function Label({ children, optional }: { children: ReactNode; optional?: 
   return (
     <Text style={styles.label}>
       {children}
-      {optional ? <Text style={styles.optional}> (optional)</Text> : null}
+      {optional ? <Text style={styles.optional}> {i18n.t("common.optional")}</Text> : null}
     </Text>
   );
 }
@@ -179,7 +180,7 @@ export function Select<T extends string>({
         <SymbolView name={{ ios: "chevron.down", android: "expand_more" }} size={14} tintColor={colors.text2} />
       </Pressable>
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable silent style={styles.backdrop} onPress={() => setOpen(false)} accessibilityLabel="Close">
+        <Pressable silent style={styles.backdrop} onPress={() => setOpen(false)} accessibilityLabel={i18n.t("common.close")}>
           <Pressable silent style={styles.menu} onPress={() => {}}>
             <Text style={styles.menuTitle}>{label}</Text>
             <ScrollView style={styles.menuList}>
@@ -206,7 +207,7 @@ export function Select<T extends string>({
             </ScrollView>
             {multiple ? (
               <Pressable onPress={() => setOpen(false)} style={styles.done} accessibilityRole="button">
-                <Text style={styles.doneText}>Done</Text>
+                <Text style={styles.doneText}>{i18n.t("common.done")}</Text>
               </Pressable>
             ) : null}
           </Pressable>
@@ -233,8 +234,8 @@ export function ListSheet({ visible, title, onClose, children }: { visible: bool
       <SafeAreaView style={pageStyles.sheet} edges={["top", "bottom"]}>
         <View style={pageStyles.sheetHead}>
           <Text style={pageStyles.sheetTitle}>{title}</Text>
-          <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel="Done">
-            <Text style={styles.doneText}>Done</Text>
+          <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel={i18n.t("common.done")}>
+            <Text style={styles.doneText}>{i18n.t("common.done")}</Text>
           </Pressable>
         </View>
         {children}
@@ -243,7 +244,7 @@ export function ListSheet({ visible, title, onClose, children }: { visible: bool
   );
 }
 
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+const plural = (n: number, word: "post" | "chat") => i18n.t(word === "post" ? "notebooks.posts" : "notebooks.chats", { count: n });
 const chatTitle = (c: ChatSummary) => c.title?.trim() || "Untitled chat";
 
 /**
@@ -298,29 +299,29 @@ export function SourcesMenu({
   const toggle = (ids: string[], id: string, max: number, set: (ids: string[]) => void) =>
     set(ids.includes(id) ? ids.filter((x) => x !== id) : ids.length < max ? [...ids, id] : ids);
 
-  const label = [postIds.length ? plural(postIds.length, "post") : "", chatIds.length ? plural(chatIds.length, "chat") : ""].filter(Boolean).join(" + ") || "Nothing selected";
+  const label = [postIds.length ? plural(postIds.length, "post") : "", chatIds.length ? plural(chatIds.length, "chat") : ""].filter(Boolean).join(" + ") || i18n.t("fields.nothingSelected");
   const empty = docs.length === 0 && chats.length === 0;
 
-  if (empty) return <Hint>No posts yet. Add some from the Sources tab.</Hint>;
+  if (empty) return <Hint>{i18n.t("fields.noPostsYet")}</Hint>;
   return (
     <>
       <Pressable
         onPress={() => setOpen(true)}
         accessibilityRole="button"
-        accessibilityLabel={`Choose posts and chats: ${label}`}
+        accessibilityLabel={i18n.t("fields.choose", { label })}
         style={({ pressed }) => [styles.select, pressed && styles.pressed]}>
         <Text style={styles.selectText} numberOfLines={1}>
           {label}
         </Text>
         <SymbolView name={{ ios: "chevron.down", android: "expand_more" }} size={14} tintColor={colors.text2} />
       </Pressable>
-      <ListSheet visible={open} title="Made from" onClose={() => setOpen(false)}>
+      <ListSheet visible={open} title={i18n.t("fields.madeFrom")} onClose={() => setOpen(false)}>
         <View style={styles.pickerBar}>
           <TextInput
             style={[pageStyles.input, styles.pickerSearch]}
             value={q}
             onChangeText={setQ}
-            placeholder={chats.length ? "Search posts and chats" : "Search posts"}
+            placeholder={chats.length ? i18n.t("fields.searchBoth") : i18n.t("fields.searchPosts")}
             placeholderTextColor={colors.text3}
             clearButtonMode="while-editing"
             autoCapitalize="none"
@@ -332,10 +333,16 @@ export function SourcesMenu({
             accessibilityState={{ checked: allOn }}
             style={styles.selectAll}>
             <Check on={allOn} />
-            <Text style={styles.selectAllText}>Select All</Text>
+            <Text style={styles.selectAllText}>{i18n.t("fields.selectAll")}</Text>
           </Pressable>
           <Text style={styles.limitNote}>
-            Up to {[Number.isFinite(maxPosts) ? `${maxPosts} posts` : "", chats.length ? `${maxChats} chats` : ""].filter(Boolean).join(" and ")}
+            {Number.isFinite(maxPosts) && chats.length
+              ? i18n.t("fields.upToBoth", { posts: maxPosts, chats: maxChats })
+              : Number.isFinite(maxPosts)
+                ? i18n.t("fields.upToPosts", { posts: maxPosts })
+                : chats.length
+                  ? i18n.t("fields.upToChats", { chats: maxChats })
+                  : ""}
           </Text>
         </View>
         <ScrollView contentContainerStyle={styles.pickerList} keyboardShouldPersistTaps="handled">
@@ -353,11 +360,11 @@ export function SourcesMenu({
                 <Check on={on} disabled={off && !on} />
                 <View style={styles.pickText}>
                   <Text style={styles.pickTitle} numberOfLines={2}>
-                    <Text style={styles.tag}>POST </Text>
+                    <Text style={styles.tag}>{i18n.t("fields.postTag")}</Text>
                     {d.title}
                   </Text>
                   <Text style={pageStyles.mono}>
-                    {formatDate(d.published_at)} · {d.locked ? "Not indexed on your plan" : `${d.words} words`}
+                    {formatDate(d.published_at)} · {d.locked ? i18n.t("notebooks.notIndexed") : i18n.t("notebooks.words", { count: d.words })}
                   </Text>
                 </View>
               </Pressable>
@@ -377,14 +384,14 @@ export function SourcesMenu({
                 <Check on={on} disabled={off} />
                 <View style={styles.pickText}>
                   <Text style={styles.pickTitle} numberOfLines={2}>
-                    <Text style={styles.tag}>CHAT </Text>
+                    <Text style={styles.tag}>{i18n.t("fields.chatTag")}</Text>
                     {chatTitle(c)}
                   </Text>
                 </View>
               </Pressable>
             );
           })}
-          {posts.length + chatRows.length === 0 ? <Hint>Nothing matches.</Hint> : null}
+          {posts.length + chatRows.length === 0 ? <Hint>{i18n.t("fields.nothingMatches")}</Hint> : null}
         </ScrollView>
       </ListSheet>
     </>
@@ -504,7 +511,7 @@ export function FocusCards({
 
 /** The user's own topic, with its count and a line on how it is used. */
 export function CustomTopic({
-  title = "Custom topic",
+  title = i18n.t("fields.customTopic"),
   value,
   onChange,
   onFocus,
@@ -526,7 +533,7 @@ export function CustomTopic({
         value={value}
         onChangeText={(t) => onChange(t.slice(0, 500))}
         onFocus={onFocus}
-        placeholder="Describe your own, e.g. how rebalancing protects a long-term portfolio"
+        placeholder={i18n.t("fields.customPlaceholder")}
         placeholderTextColor={colors.text3}
         multiline
         maxLength={500}
@@ -616,7 +623,7 @@ export function SourceFocusFields({
     }
     if (chatIds.length) request.chat_ids = chatIds;
     if (topic) request.topic = topic;
-    const label = [postIds.length ? plural(postIds.length, "post") : "", chatIds.length ? plural(chatIds.length, "chat") : ""].filter(Boolean).join(" + ") || "no sources";
+    const label = [postIds.length ? plural(postIds.length, "post") : "", chatIds.length ? plural(chatIds.length, "chat") : ""].filter(Boolean).join(" + ") || i18n.t("fields.noSources");
     return { ready: sourceReady, loading: !noFocus && sourceReady && waiting, request, label };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sourceKey, topic, waiting, noFocus]);
@@ -629,7 +636,7 @@ export function SourceFocusFields({
   return (
     <>
       <View style={styles.field}>
-        <Label>Made from</Label>
+        <Label>{i18n.t("fields.madeFrom")}</Label>
         <SourcesMenu
           docs={docs}
           postIds={postIds}
@@ -641,10 +648,10 @@ export function SourceFocusFields({
           maxChats={MAX_CHATS}
         />
       </View>
-      {!sourceReady && !noFocus ? <Hint>Pick at least one post or chat to see topic suggestions.</Hint> : null}
+      {!sourceReady && !noFocus ? <Hint>{i18n.t("fields.pickFirst")}</Hint> : null}
       {sourceReady && !noFocus ? (
         <View style={styles.field}>
-          <Label>What should the {what} focus on?</Label>
+          <Label>{tKey(`fields.focus.question.${what}`, `What should the ${what} focus on?`)}</Label>
           <FocusCards
             topics={shownTopics}
             picked={focus}
@@ -660,15 +667,15 @@ export function SourceFocusFields({
               setFocus(null);
             }}
             onFocus={() => setFocus(null)}
-            note="Keep it to what the selected material covers; anything it doesn't cover is left out."
+            note={i18n.t("fields.customNote")}
           />
           {shownTopics ? (
             <Hint>
               {focus
-                ? `The ${what} is mainly about this topic.`
+                ? tKey(`fields.focus.main.${what}`, `The ${what} is mainly about this topic.`)
                 : custom.trim()
-                  ? `The ${what} follows your topic, as far as the material covers it.`
-                  : `None picked: the ${what} covers the material as a whole.`}
+                  ? tKey(`fields.focus.follows.${what}`, `The ${what} follows your topic, as far as the material covers it.`)
+                  : tKey(`fields.focus.none.${what}`, `None picked: the ${what} covers the material as a whole.`)}
             </Hint>
           ) : null}
         </View>

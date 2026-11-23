@@ -4,6 +4,7 @@ import { StyleSheet, Text, View } from "react-native";
 import Svg, { Circle, Path, Rect } from "react-native-svg";
 
 import { colors } from "@/ui/theme";
+import i18n from "@/i18n";
 
 /** The social marks (web: components/SocialBrandIcon.tsx), drawn locally so nothing waits on an image host. */
 export function BrandIcon({ brand, size = 22, color = colors.text }: { brand: Platform; size?: number; color?: string }) {
@@ -59,11 +60,11 @@ export function BrandIcon({ brand, size = 22, color = colors.text }: { brand: Pl
 /** A connected account's picture, or its initials (web: SocialAccountAvatar). */
 export function AccountAvatar({ avatarUrl, handle, size = 40 }: { avatarUrl?: string | null; handle: string; size?: number }) {
   const round = { width: size, height: size, borderRadius: size / 2 };
-  if (avatarUrl) return <Image source={{ uri: avatarUrl }} style={round} accessibilityLabel={`${handle} profile`} />;
+  if (avatarUrl) return <Image source={{ uri: avatarUrl }} style={round} accessibilityLabel={i18n.t("lp.profile", { handle })} />;
   const words = handle.replace(/^@/, "").trim().split(/\s+/).filter(Boolean);
   const initials = (words.length > 1 ? `${words[0][0]}${words[words.length - 1][0]}` : words[0]?.slice(0, 1) || "?").toUpperCase();
   return (
-    <View style={[styles.initials, round]} accessibilityLabel={`${handle} profile`}>
+    <View style={[styles.initials, round]} accessibilityLabel={i18n.t("lp.profile", { handle })}>
       <Text style={styles.initialsText}>{initials}</Text>
     </View>
   );

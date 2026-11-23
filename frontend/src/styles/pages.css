@@ -2531,6 +2531,18 @@ select.input option {
   background: var(--blue-05);
 }
 
+.welcome-drop.off {
+  opacity: 0.5;
+  cursor: not-allowed;
+  border-color: var(--line);
+  background: none;
+}
+
+.welcome-files .icon-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
 .welcome-drop svg {
   margin-bottom: 6px;
   color: var(--blue);
@@ -2561,6 +2573,10 @@ select.input option {
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   overflow-wrap: anywhere;
+}
+
+.welcome-files .welcome-file-name {
+  flex: 1;
 }
 
 .welcome-files .icon-btn {

@@ -24,7 +24,7 @@ from app.pipeline.ingest import (
     rebuild_index,
     store_entries,
 )
-from app.services.jobs import create_job, pending_job, serialize_job
+from app.services.jobs import create_job, pending_job, queue_for_documents, serialize_job
 from app.services.plans import effective_plan, plan_limit_error, post_room
 from app.services.storage import storage
 from app.services.url_policy import classify_url
@@ -424,10 +424,10 @@ def _queue_notebooklm_processing(ctx: Ctx, changed: list[uuid.UUID]) -> None:
     if not changed or not settings.llm_api_key:
         return
     ids = [str(doc_id) for doc_id in changed]
-    create_job(ctx.db, ctx.workspace.id, "topics", {"document_ids": ids}, max_attempts=2)
-    create_job(ctx.db, ctx.workspace.id, "ideas", {"document_ids": ids}, max_attempts=2)
+    queue_for_documents(ctx.db, ctx.workspace.id, "topics", ids, max_attempts=2)
+    queue_for_documents(ctx.db, ctx.workspace.id, "ideas", ids, max_attempts=2)
     if settings.post_cards_enabled:
-        create_job(ctx.db, ctx.workspace.id, "post_cards", {"document_ids": ids}, max_attempts=2)
+        queue_for_documents(ctx.db, ctx.workspace.id, "post_cards", ids, max_attempts=2)
     if not pending_job(ctx.db, ctx.workspace.id, "resurface_scan"):
         create_job(ctx.db, ctx.workspace.id, "resurface_scan", {}, max_attempts=2)
 

@@ -5,6 +5,7 @@ import { ArtifactCard } from "@/artifacts/artifact-card";
 import { colors, fonts, radius } from "@/ui/theme";
 import { ErrorText, Loading } from "@/ui";
 import { FlowBar } from "@/ui/widgets";
+import i18n from "@/i18n";
 
 /**
  * The Library tab (web: StudioPanel's "Made from this notebook" on a phone): what is being started, then everything made
@@ -32,13 +33,13 @@ export function LibraryTab({
         <ErrorText>{error}</ErrorText>
         {!artifacts ? <Loading /> : null}
         {empty ? (
-          <Text style={styles.empty}>Nothing made yet. Use the Create tab to make audio, slides, videos and more.</Text>
+          <Text style={styles.empty}>{i18n.t("create.nothingMade")}</Text>
         ) : null}
-        {artifacts && !empty ? <Text style={styles.label}>MADE FROM THIS NOTEBOOK</Text> : null}
+        {artifacts && !empty ? <Text style={styles.label}>{i18n.t("create.madeHere")}</Text> : null}
         {starting.map((label, i) => (
           <View key={`${label}-${i}`} style={styles.starting} accessibilityLiveRegion="polite">
-            <Text style={styles.startingTitle}>Starting your {label}</Text>
-            <FlowBar label="Queued for launch" />
+            <Text style={styles.startingTitle}>{label}</Text>
+            <FlowBar label={i18n.t("ui.queued")} />
           </View>
         ))}
         {artifacts?.map((a) => (

@@ -29,6 +29,8 @@ from sqlalchemy.orm import Session
 from app.chat_memory.organize import forget_orphans, organize_chat, rebuild_chat
 from app.config import settings
 from app.db import SessionLocal, engine
+from app.llm.languages import PARAM as APP_LANGUAGE_PARAM
+from app.llm.languages import use_app_language
 from app.models import (
     Artifact,
     Chat,
@@ -62,6 +64,7 @@ from app.services.jobs import (
     claim_next,
     create_job,
     pending_job,
+    queue_for_documents,
     record_usage,
     retry_or_fail,
     stale_jobs,
@@ -94,10 +97,10 @@ def _after_import(db: Session, job: Job, workspace_id: uuid.UUID, changed: list[
     first import builds the writing voice, so none of these need a button press."""
     if not changed or not settings.llm_api_key:
         return
-    create_job(db, workspace_id, "topics", {"document_ids": changed}, max_attempts=2)
-    create_job(db, workspace_id, "ideas", {"document_ids": changed}, max_attempts=2)
+    queue_for_documents(db, workspace_id, "topics", changed, max_attempts=2)
+    queue_for_documents(db, workspace_id, "ideas", changed, max_attempts=2)
     if settings.post_cards_enabled:
-        create_job(db, workspace_id, "post_cards", {"document_ids": changed}, max_attempts=2)
+        queue_for_documents(db, workspace_id, "post_cards", changed, max_attempts=2)
     if not pending_job(db, workspace_id, "resurface_scan"):
         create_job(db, workspace_id, "resurface_scan", {}, max_attempts=2)
     vp = db.scalar(select(VoiceProfile).where(VoiceProfile.workspace_id == workspace_id))
@@ -417,7 +420,9 @@ def run_job(
             update_job(db, job, status="failed", error=f"No handler for job kind {job.kind!r}")
             return
         try:
-            outcome = handler(db, job)
+            # The app language of the request that queued the job, so its output and any job it starts follow it.
+            with use_app_language((job.params or {}).get(APP_LANGUAGE_PARAM)):
+                outcome = handler(db, job)
         except PermanentJobError as exc:
             db.rollback()
             job = db.get(Job, job_id)

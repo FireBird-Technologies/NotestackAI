@@ -9,14 +9,15 @@ import { Pressable } from "@/ui/pressable";
 
 import { colors, fonts, radius } from "@/ui/theme";
 import { PillButton } from "@/ui/widgets";
+import i18n, { flipX, tKey } from "@/i18n";
 
 const REASONS: { id: string; label: string }[] = [
-  { id: "forgot_chat", label: "Forgot something we said" },
-  { id: "mixed_chat", label: "Mixed up an earlier chat" },
-  { id: "wrong", label: "Wrong or made up" },
-  { id: "missed", label: "Missed something in my posts" },
-  { id: "bad_sources", label: "Bad sources" },
-  { id: "other", label: "Something else" },
+  { id: "forgot_chat", label: i18n.t("feedback.forgot_chat") },
+  { id: "mixed_chat", label: i18n.t("feedback.mixed_chat") },
+  { id: "wrong", label: i18n.t("feedback.wrong") },
+  { id: "missed", label: i18n.t("feedback.missed") },
+  { id: "bad_sources", label: i18n.t("feedback.bad_sources") },
+  { id: "other", label: i18n.t("feedback.other") },
 ];
 
 /** The answer as plain text for pasting: the [1] citation markers are left out. */
@@ -77,7 +78,7 @@ export function AnswerFeedback({ messageId, initial, text, extra }: {
   return (
     <View style={styles.wrap}>
       <View style={styles.row}>
-        <Pressable onPress={() => void copy()} hitSlop={6} accessibilityRole="button" accessibilityLabel={copied ? "Copied" : "Copy answer"} style={({ pressed }) => [styles.btn, pressed && styles.pressed]}>
+        <Pressable onPress={() => void copy()} hitSlop={6} accessibilityRole="button" accessibilityLabel={copied ? i18n.t("ui.copied") : i18n.t("feedback.copyAnswer")} style={({ pressed }) => [styles.btn, pressed && styles.pressed]}>
           <SymbolView
             name={copied ? { ios: "checkmark", android: "check" } : { ios: "doc.on.doc", android: "content_copy" }}
             size={19}
@@ -88,7 +89,7 @@ export function AnswerFeedback({ messageId, initial, text, extra }: {
           onPress={toggleDown}
           hitSlop={6}
           accessibilityRole="button"
-          accessibilityLabel="Bad answer"
+          accessibilityLabel={i18n.t("feedback.bad")}
           accessibilityState={{ selected: down }}
           style={({ pressed }) => [styles.btn, down && styles.btnOn, pressed && styles.pressed]}>
           <SymbolView
@@ -99,10 +100,10 @@ export function AnswerFeedback({ messageId, initial, text, extra }: {
         </Pressable>
         {extra}
       </View>
-      {error ? <Text style={styles.error}>Could not save that. Try again.</Text> : null}
+      {error ? <Text style={styles.error}>{i18n.t("common.couldNotSave")}</Text> : null}
       {open && down ? (
         <View style={styles.why}>
-          <Text style={styles.whyLabel}>What went wrong? (optional)</Text>
+          <Text style={styles.whyLabel}>{i18n.t("feedback.why")}</Text>
           <View style={styles.chips}>
             {REASONS.map((r) => {
               const on = reasons.includes(r.id);
@@ -124,16 +125,16 @@ export function AnswerFeedback({ messageId, initial, text, extra }: {
             onChangeText={setComment}
             maxLength={1000}
             multiline
-            placeholder="Tell us more, like what it should have said"
+            placeholder={i18n.t("feedback.tellMore")}
             placeholderTextColor={colors.text3}
-            accessibilityLabel="What went wrong"
+            accessibilityLabel={i18n.t("feedback.whyLabel")}
           />
           <View style={styles.end}>
-            <PillButton small title="Skip" onPress={() => setOpen(false)} />
+            <PillButton small title={i18n.t("common.skip")} onPress={() => setOpen(false)} />
             <PillButton
               small
               variant="primary"
-              title="Send"
+              title={i18n.t("common.send")}
               onPress={async () => {
                 await save("down", reasons, comment.trim());
                 setOpen(false);
@@ -151,16 +152,16 @@ export type NextStep = { kind: ChatArtifact; label: string; icon: ImageSource };
 /** The steps suggested under the last answer (web: NotebookView nextSteps): with the answer's topic each one names it. */
 export function nextSteps(topic?: string): NextStep[] {
   const t = topic?.trim();
-  const say = (plain: string, named: (t: string) => string) => (t ? named(t) : plain);
+  const say = (kind: ChatArtifact) => (t ? tKey(`next.${kind}Named`, t, { topic: t }) : tKey(`next.${kind}`, kind));
   return [
-    { kind: "audio_overview", label: say("Make an audio overview", (x) => `Hear an audio overview of ${x}`), icon: require("@/assets/images/create/headphones.png") },
-    { kind: "slide_deck", label: say("Create a slide deck", (x) => `Turn ${x} into a slide deck`), icon: require("@/assets/images/create/slides.png") },
-    { kind: "video", label: say("Make a video", (x) => `Make a video about ${x}`), icon: require("@/assets/images/create/video.png") },
-    { kind: "report", label: say("Generate a report", (x) => `Write a report on ${x}`), icon: require("@/assets/images/create/report.png") },
-    { kind: "quiz", label: say("Take a quiz", (x) => `Quiz yourself on ${x}`), icon: require("@/assets/images/create/quiz.png") },
-    { kind: "infographic", label: say("Generate an infographic", (x) => `Make an infographic on ${x}`), icon: require("@/assets/images/create/infographic.png") },
-    { kind: "mind_map", label: say("Explore a Mind Constellation", (x) => `Map ${x} in a Mind Constellation`), icon: require("@/assets/images/create/telescope.png") },
-    { kind: "flashcards", label: say("Study with flashcards", (x) => `Study ${x} with flashcards`), icon: require("@/assets/images/create/flashcards.png") },
+    { kind: "audio_overview", label: say("audio_overview"), icon: require("@/assets/images/create/headphones.png") },
+    { kind: "slide_deck", label: say("slide_deck"), icon: require("@/assets/images/create/slides.png") },
+    { kind: "video", label: say("video"), icon: require("@/assets/images/create/video.png") },
+    { kind: "report", label: say("report"), icon: require("@/assets/images/create/report.png") },
+    { kind: "quiz", label: say("quiz"), icon: require("@/assets/images/create/quiz.png") },
+    { kind: "infographic", label: say("infographic"), icon: require("@/assets/images/create/infographic.png") },
+    { kind: "mind_map", label: say("mind_map"), icon: require("@/assets/images/create/telescope.png") },
+    { kind: "flashcards", label: say("flashcards"), icon: require("@/assets/images/create/flashcards.png") },
   ];
 }
 
@@ -197,7 +198,7 @@ export function NextStepPill({ steps, onPick }: { steps: NextStep[]; onPick: (ki
       <Text style={styles.nextLabel} numberOfLines={2}>
         {step.label}
       </Text>
-      <Text style={styles.nextArrow}>→</Text>
+      <Text style={[styles.nextArrow, flipX]}>→</Text>
     </Pressable>
   );
 }

@@ -1,13 +1,3 @@
-import {
-  AUDIO_LENGTHS,
-  AUDIO_STYLES,
-  DECK_FORMATS,
-  DECK_LENGTHS,
-  INFOGRAPHIC_STYLES,
-  INFOGRAPHIC_THEMES,
-  LANGUAGES,
-  SLIDE_THEMES,
-} from "@notestack/shared/create-options";
 import { videoVoicesApi } from "@notestack/shared/endpoints";
 import { useQuery } from "@tanstack/react-query";
 import { Image, type ImageSource } from "expo-image";
@@ -17,11 +7,21 @@ import { StyleSheet, Text, View } from "react-native";
 import { Pressable } from "@/ui/pressable";
 
 import { ChoiceCard, createStyles, Foot, Hint, Label, Pills, Select, SourceFocusFields, type SourceSelection, TextArea } from "@/create/fields";
+import {
+  AUDIO_LENGTHS,
+  AUDIO_STYLES,
+  DECK_FORMATS,
+  DECK_LENGTHS,
+  defaultOutputLanguage,
+  INFOGRAPHIC_STYLES,
+  INFOGRAPHIC_THEMES,
+  LANGUAGE_OPTIONS,
+  SLIDE_THEMES,
+} from "@/create/options";
 import type { DialogProps } from "@/create/study";
 import { colors, radius } from "@/ui/theme";
 import { PillButton } from "@/ui/widgets";
-
-const LANGUAGE_OPTIONS = LANGUAGES.map((l) => ({ value: l, label: l }));
+import i18n from "@/i18n";
 
 /** The workspace's voices for the hosts (web: prefetchVoices); none when they cannot load, so the defaults are used. */
 export const voicesQuery = { queryKey: ["video-voices"], queryFn: videoVoicesApi.list, staleTime: 60_000 } as const;
@@ -34,7 +34,7 @@ export function AudioDialog({ notebook, chats, currentChatId, initial, onCreate 
   const [style, setStyle] = useState<Style>(() => AUDIO_STYLES.find((s) => s.id === initial?.style)?.id ?? "deep_dive");
   const [hosts, setHosts] = useState<"1" | "2">(initial?.hosts === "1" ? "1" : "2");
   const [minutes, setMinutes] = useState(() => AUDIO_LENGTHS.find((l) => l.value === initial?.minutes)?.value ?? "6");
-  const [language, setLanguage] = useState(initial?.language ?? "English");
+  const [language, setLanguage] = useState(initial?.language ?? defaultOutputLanguage);
   const [focus, setFocus] = useState(initial?.focus ?? "");
   const voices = useQuery(voicesQuery);
   const saved = voices.data?.saved ?? (voices.error ? [] : null);
@@ -60,7 +60,7 @@ export function AudioDialog({ notebook, chats, currentChatId, initial, onCreate 
   return (
     <View style={createStyles.stack}>
       <View style={createStyles.field}>
-        <Label>Style</Label>
+        <Label>{i18n.t("dialogs.style")}</Label>
         <View style={styles.grid}>
           {AUDIO_STYLES.map((s) => {
             const off = s.id === "debate" && !two;
@@ -68,7 +68,7 @@ export function AudioDialog({ notebook, chats, currentChatId, initial, onCreate 
               <ChoiceCard
                 key={s.id}
                 title={s.name}
-                blurb={off ? "Needs two hosts." : s.blurb}
+                blurb={off ? i18n.t("dialogs.needsTwo") : s.blurb}
                 on={shownStyle === s.id}
                 disabled={off}
                 lines={3}
@@ -80,25 +80,25 @@ export function AudioDialog({ notebook, chats, currentChatId, initial, onCreate 
         </View>
       </View>
       <View style={createStyles.field}>
-        <Label>Hosts</Label>
+        <Label>{i18n.t("dialogs.hosts")}</Label>
         <Pills<"1" | "2">
           value={hosts}
           onChange={setHosts}
           options={[
-            { id: "2", label: "Two hosts" },
-            { id: "1", label: "One host" },
+            { id: "2", label: i18n.t("dialogs.twoHosts") },
+            { id: "1", label: i18n.t("dialogs.oneHost") },
           ]}
         />
       </View>
       <View style={styles.row}>
         <View style={[createStyles.field, styles.half]}>
-          <Label>Length</Label>
-          <Select label="Length" value={minutes} onChange={setMinutes} options={AUDIO_LENGTHS.map((l) => ({ value: l.value, label: l.label }))} />
+          <Label>{i18n.t("dialogs.length")}</Label>
+          <Select label={i18n.t("dialogs.length")} value={minutes} onChange={setMinutes} options={AUDIO_LENGTHS.map((l) => ({ value: l.value, label: l.label }))} />
           <Hint>{AUDIO_LENGTHS.find((l) => l.value === minutes)?.range}</Hint>
         </View>
         <View style={[createStyles.field, styles.half]}>
-          <Label>Language</Label>
-          <Select label="Language" value={language} onChange={setLanguage} options={LANGUAGE_OPTIONS} />
+          <Label>{i18n.t("dialogs.language")}</Label>
+          <Select label={i18n.t("dialogs.language")} value={language} onChange={setLanguage} options={LANGUAGE_OPTIONS} />
         </View>
       </View>
       {saved && saved.length > 0
@@ -106,13 +106,13 @@ export function AudioDialog({ notebook, chats, currentChatId, initial, onCreate 
             .filter((i) => i === 0 || two)
             .map((i) => (
               <View key={i} style={createStyles.field}>
-                <Label>{two ? `Host ${i + 1} voice` : "Host voice"}</Label>
-                <Select label={two ? `Host ${i + 1} voice` : "Host voice"} value={voice[i]} onChange={(v) => pickVoice(i, v)} options={voiceOptions} />
+                <Label>{two ? i18n.t("dialogs.hostNVoice", { n: i + 1 }) : i18n.t("dialogs.hostVoice")}</Label>
+                <Select label={two ? i18n.t("dialogs.hostNVoice", { n: i + 1 }) : i18n.t("dialogs.hostVoice")} value={voice[i]} onChange={(v) => pickVoice(i, v)} options={voiceOptions} />
               </View>
             ))
         : null}
-      {saved === null ? <Hint>Loading your voices...</Hint> : null}
-      {saved !== null && saved.length === 0 ? <Hint>Your voices could not load, so the default {two ? "voices are" : "voice is"} used.</Hint> : null}
+      {saved === null ? <Hint>{i18n.t("dialogs.loadingVoices")}</Hint> : null}
+      {saved !== null && saved.length === 0 ? <Hint>{two ? i18n.t("dialogs.voicesFailedTwo") : i18n.t("dialogs.voicesFailedOne")}</Hint> : null}
       <SourceFocusFields
         notebookId={notebook.id}
         docs={notebook.documents}
@@ -123,12 +123,12 @@ export function AudioDialog({ notebook, chats, currentChatId, initial, onCreate 
         onChange={setSel}
       />
       <View style={createStyles.field}>
-        <Label optional>What should the AI {two ? "hosts" : "host"} focus on in this episode?</Label>
-        <TextArea value={focus} onChange={setFocus} max={4000} rows={5} placeholder={"- List the core ideas worth remembering\n- Explain how the pieces connect"} />
+        <Label optional>{two ? i18n.t("dialogs.audioFocusTwo") : i18n.t("dialogs.audioFocusOne")}</Label>
+        <TextArea value={focus} onChange={setFocus} max={4000} rows={5} placeholder={i18n.t("dialogs.audioFocusPlaceholder")} />
       </View>
-      <Foot note={!sel?.ready && "Select at least one post or chat to make an audio overview."}>
+      <Foot note={!sel?.ready && i18n.t("dialogs.audioNote")}>
         <PillButton
-          title="Generate audio overview"
+          title={i18n.t("dialogs.generateAudio")}
           variant="primary"
           disabled={!sel?.ready}
           onPress={() =>
@@ -196,12 +196,12 @@ export function SlidesDialog({ notebook, chats, currentChatId, initial, onCreate
   const [theme, setTheme] = useState<string>(() => SLIDE_THEMES.find((t) => t.id === initial?.theme)?.id ?? "dark-space");
   const [format, setFormat] = useState<DeckFormat>(() => DECK_FORMATS.find((f) => f.id === initial?.format)?.id ?? "detailed");
   const [length, setLength] = useState<DeckLength>(() => DECK_LENGTHS.find((l) => l.id === initial?.length)?.id ?? "default");
-  const [language, setLanguage] = useState(initial?.language ?? "English");
+  const [language, setLanguage] = useState(initial?.language ?? defaultOutputLanguage);
   const [prompt, setPrompt] = useState(initial?.prompt ?? "");
   return (
     <View style={createStyles.stack}>
       <View style={createStyles.field}>
-        <Label>Visual style</Label>
+        <Label>{i18n.t("dialogs.visualStyle")}</Label>
         <View style={styles.looks}>
           {SLIDE_THEMES.map((t) => (
             <ImageChoice key={t.id} image={SLIDE_IMAGES[t.id]} name={t.name} on={theme === t.id} ratio={16 / 9} onPress={() => setTheme(t.id)} />
@@ -209,35 +209,35 @@ export function SlidesDialog({ notebook, chats, currentChatId, initial, onCreate
         </View>
       </View>
       <View style={createStyles.field}>
-        <Label>Format</Label>
+        <Label>{i18n.t("dialogs.format")}</Label>
         <Pills<DeckFormat> value={format} onChange={setFormat} options={DECK_FORMATS} />
         <Hint>{DECK_FORMATS.find((f) => f.id === format)?.blurb}</Hint>
       </View>
       <View style={styles.row}>
         <View style={[createStyles.field, styles.half]}>
-          <Label>Length</Label>
-          <Select<DeckLength> label="Length" value={length} onChange={setLength} options={DECK_LENGTHS.map((l) => ({ value: l.id, label: l.label }))} />
+          <Label>{i18n.t("dialogs.length")}</Label>
+          <Select<DeckLength> label={i18n.t("dialogs.length")} value={length} onChange={setLength} options={DECK_LENGTHS.map((l) => ({ value: l.id, label: l.label }))} />
           <Hint>{DECK_LENGTHS.find((l) => l.id === length)?.range}</Hint>
         </View>
         <View style={[createStyles.field, styles.half]}>
-          <Label>Language</Label>
-          <Select label="Language" value={language} onChange={setLanguage} options={LANGUAGE_OPTIONS} />
+          <Label>{i18n.t("dialogs.language")}</Label>
+          <Select label={i18n.t("dialogs.language")} value={language} onChange={setLanguage} options={LANGUAGE_OPTIONS} />
         </View>
       </View>
       <SourceFocusFields notebookId={notebook.id} docs={notebook.documents} chats={chats} currentChatId={currentChatId} what="slide deck" noFocus onChange={setSel} />
       <View style={createStyles.field}>
-        <Label optional>Describe the slide deck you want to create</Label>
+        <Label optional>{i18n.t("dialogs.describeDeck")}</Label>
         <TextArea
           value={prompt}
           onChange={setPrompt}
           max={4000}
           rows={3}
-          placeholder={'Add a high-level outline, or guide the audience, style, and focus: "Create a deck for beginners with a focus on step-by-step instructions."'}
+          placeholder={i18n.t("dialogs.deckPlaceholder")}
         />
       </View>
-      <Foot note={!sel?.ready && "Select at least one post or chat to make a slide deck."}>
+      <Foot note={!sel?.ready && i18n.t("dialogs.deckNote")}>
         <PillButton
-          title="Generate slide deck"
+          title={i18n.t("dialogs.generateDeck")}
           variant="primary"
           disabled={!sel?.ready}
           onPress={() => sel && onCreate({ ...sel.request, theme, deck_format: format, deck_length: length, language, instructions: prompt.trim() })}
@@ -256,23 +256,23 @@ export function InfographicDialog({ notebook, chats, currentChatId, initial, onC
   return (
     <View style={createStyles.stack}>
       <View style={createStyles.field}>
-        <Label>Layout</Label>
+        <Label>{i18n.t("dialogs.layout")}</Label>
         <Pills value={style} onChange={setStyle} options={INFOGRAPHIC_STYLES.map((t) => ({ id: t.id as string, label: t.name }))} />
-        <Hint>{INFOGRAPHIC_STYLES.find((t) => t.id === style)?.blurb}. The AI builds the page around it.</Hint>
+        <Hint>{i18n.t("dialogs.layoutHint", { blurb: INFOGRAPHIC_STYLES.find((t) => t.id === style)?.blurb ?? "" })}</Hint>
       </View>
       <View style={createStyles.field}>
-        <Label>Look</Label>
+        <Label>{i18n.t("dialogs.look")}</Label>
         <ThemePicker value={theme} onChange={setTheme} />
       </View>
       <SourceFocusFields notebookId={notebook.id} docs={notebook.documents} chats={chats} currentChatId={currentChatId} what="infographic" noFocus onChange={setSel} />
       <View style={createStyles.field}>
-        <Label optional>What should it show?</Label>
-        <TextArea value={prompt} onChange={setPrompt} max={600} rows={6} placeholder="e.g. The main stages of the idea, in order, for someone new to it" />
-        <Hint>{prompt.length}/600 · It follows this, as far as the posts and chats cover it.</Hint>
+        <Label optional>{i18n.t("dialogs.whatShow")}</Label>
+        <TextArea value={prompt} onChange={setPrompt} max={600} rows={6} placeholder={i18n.t("dialogs.showPlaceholder")} />
+        <Hint>{i18n.t("dialogs.showHint", { count: prompt.length })}</Hint>
       </View>
-      <Foot note={!sel?.ready && "Select at least one post or chat to make an infographic."}>
+      <Foot note={!sel?.ready && i18n.t("dialogs.infographicNote")}>
         <PillButton
-          title="Generate Infographic"
+          title={i18n.t("dialogs.generateInfographic")}
           variant="primary"
           disabled={!sel?.ready}
           onPress={() => sel && onCreate({ ...sel.request, theme, ig_style: style, instructions: prompt.trim() })}

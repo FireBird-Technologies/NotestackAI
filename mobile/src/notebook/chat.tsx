@@ -21,6 +21,7 @@ import { RingSpinner } from "@/ui/spinner";
 import { colors, fonts, gutter, radius } from "@/ui/theme";
 import { Loading } from "@/ui";
 import { useUpgrade } from "@/account/upgrade";
+import i18n, { flipX, tKey } from "@/i18n";
 
 type Turn = {
   key: string;
@@ -67,20 +68,15 @@ function useSmoothText(text: string): string {
   return shown;
 }
 
-const ARTIFACT_NAMES: Record<ChatArtifact, string> = {
-  audio_overview: "audio overview", slide_deck: "slide deck", video: "video", report: "report",
-  infographic: "infographic", quiz: "quiz", flashcards: "flashcards", mind_map: "Mind Constellation",
-};
-
 /** Under a "create a report" answer: open those settings again (web: NotebookView's nbv-open-action). */
 function OpenAction({ action, onOpen }: { action: ChatAction; onOpen: (kind: ChatArtifact, preset?: ChatPreset) => void }) {
   const icon = nextSteps().find((s) => s.kind === action.artifact)?.icon;
-  const label = `Open ${ARTIFACT_NAMES[action.artifact] ?? "the"} settings`;
+  const label = tKey(`chat.openSettings.${action.artifact}`, i18n.t("chat.openSettings.other"));
   return (
     <Pressable onPress={() => onOpen(action.artifact, action.settings)} accessibilityRole="button" accessibilityLabel={label} style={({ pressed }) => [styles.openAction, pressed && styles.openActionOn]}>
       {icon ? <Image source={icon} style={styles.openActionIcon} tintColor={colors.blue} /> : null}
       <Text style={styles.openActionText}>{label}</Text>
-      <Text style={styles.openActionArrow}>→</Text>
+      <Text style={[styles.openActionArrow, flipX]}>→</Text>
     </Pressable>
   );
 }
@@ -165,7 +161,7 @@ export function ChatTab({ notebook, chatId, onStarted, onNextStep, onNeedPosts }
     setBusy(true);
     const n = ++asked.current;
     const answerKey = `answer-${n}`;
-    setPending((t) => [...t, { key: `ask-${n}`, role: "user", text }, { key: answerKey, role: "assistant", text: "", status: "Scanning" }]);
+    setPending((t) => [...t, { key: `ask-${n}`, role: "user", text }, { key: answerKey, role: "assistant", text: "", status: i18n.t("chat.scanning") }]);
     const patch = (p: Partial<Turn>) => setPending((t) => t.map((x) => (x.key === answerKey ? { ...x, ...p } : x)));
     const savedBefore = messages.data?.length ?? 0;
     let draft = "";
@@ -232,7 +228,7 @@ export function ChatTab({ notebook, chatId, onStarted, onNextStep, onNeedPosts }
         // The stream dropped before the answer. The server carries on without it, so look for the saved answer. The
         // fetch comes before the deadline check: a phone back from the background gets one fresh look first.
         if (reached && saved) {
-          patch({ status: "Reconnecting" });
+          patch({ status: i18n.t("chat.reconnecting") });
           const deadline = Date.now() + RECONNECT_MS;
           while (mounted.current && !(msgs && holdsAnswer(msgs)) && Date.now() < deadline) {
             await new Promise((resolve) => setTimeout(resolve, RECONNECT_EVERY_MS));
@@ -244,7 +240,7 @@ export function ChatTab({ notebook, chatId, onStarted, onNextStep, onNeedPosts }
         } else {
           track("chat_error");
           patch({
-            text: reached ? "We couldn't finish this answer. Try again." : "Couldn't reach Notestack. Check your connection and try again.",
+            text: reached ? i18n.t("chat.unfinished") : i18n.t("chat.unreachable"),
             status: undefined,
           });
           // It never got there: nothing to find later, so the question is theirs to send again without retyping.
@@ -288,10 +284,10 @@ export function ChatTab({ notebook, chatId, onStarted, onNextStep, onNeedPosts }
     <View style={styles.empty}>
       <Image source={require("@/assets/images/create/telescope.png")} style={styles.telescope} tintColor={colors.blue} />
       <Text style={styles.emptyText}>
-        Ask anything about {posts} {posts === 1 ? "post" : "posts"}. Answers cite the passage they came from.
+        {i18n.t("chat.emptyIntro", { count: posts })}
       </Text>
       {posts > 0
-        ? STARTERS.map((s) => (
+        ? STARTERS.map((english, i) => tKey(`chat.starters.${i}`, english)).map((s) => (
             <Pressable
               key={s}
               onPress={() => void ask(s)}
@@ -340,7 +336,7 @@ export function ChatTab({ notebook, chatId, onStarted, onNextStep, onNeedPosts }
             <View
               style={styles.track}
               accessibilityRole="progressbar"
-              accessibilityLabel="Plan chat messages used"
+              accessibilityLabel={i18n.t("chat.quotaLabel")}
               accessibilityValue={{ min: 0, max: quota.limit, now: Math.min(quota.used, quota.limit) }}>
               <View
                 style={[
@@ -351,13 +347,13 @@ export function ChatTab({ notebook, chatId, onStarted, onNextStep, onNeedPosts }
               />
             </View>
             <Text style={styles.limitText}>
-              Plan chat limit{" "}
+              {i18n.t("chat.planLimit")}{" "}
               <Text style={styles.limitCount}>
                 {Math.min(quota.used, quota.limit)}/{quota.limit}
               </Text>{" "}
               ·{" "}
               <Text style={styles.upgrade} onPress={() => upgrade()} accessibilityRole="link">
-                Upgrade
+                {i18n.t("chat.upgrade")}
               </Text>
             </Text>
           </View>
@@ -368,16 +364,16 @@ export function ChatTab({ notebook, chatId, onStarted, onNextStep, onNeedPosts }
             value={question}
             onChangeText={setQuestion}
             placeholder={
-              outOfChat ? "Chat limit reached" : posts ? "What have I written about pricing?" : "Add posts to start asking"
+              outOfChat ? i18n.t("chat.limitReached") : posts ? i18n.t("chat.placeholder") : i18n.t("chat.addPosts")
             }
             placeholderTextColor={colors.text3}
             multiline
             editable={!off}
-            accessibilityLabel="Ask your notebook"
+            accessibilityLabel={i18n.t("chat.askLabel")}
           />
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={busy ? "Researching" : "Send message"}
+            accessibilityLabel={busy ? i18n.t("chat.researching") : i18n.t("chat.sendMessage")}
             onPress={() => void ask(question)}
             disabled={off || !question.trim()}
             style={({ pressed }) => [styles.send, (off || !question.trim()) && !busy && styles.sendOff, pressed && styles.pressed]}>
@@ -388,8 +384,8 @@ export function ChatTab({ notebook, chatId, onStarted, onNextStep, onNeedPosts }
             )}
           </Pressable>
           {/* A field that can't be typed in takes no taps of its own: this catches them, to add posts or upgrade first. */}
-          {!posts ? <Pressable silent onPress={onNeedPosts} accessibilityRole="button" accessibilityLabel="Add posts to start asking" style={StyleSheet.absoluteFill} /> : null}
-          {posts && outOfChat && !busy ? <Pressable silent onPress={() => upgrade()} accessibilityRole="button" accessibilityLabel="Chat limit reached. See plans" style={StyleSheet.absoluteFill} /> : null}
+          {!posts ? <Pressable silent onPress={onNeedPosts} accessibilityRole="button" accessibilityLabel={i18n.t("chat.addPosts")} style={StyleSheet.absoluteFill} /> : null}
+          {posts && outOfChat && !busy ? <Pressable silent onPress={() => upgrade()} accessibilityRole="button" accessibilityLabel={i18n.t("chat.limitSeePlans")} style={StyleSheet.absoluteFill} /> : null}
         </View>
       </View>
     </KeyboardAvoidingView>
@@ -432,8 +428,8 @@ function TurnView({ turn, next, onOpen }: { turn: Turn; next?: ReactNode; onOpen
       {text ? <AnswerText text={text} citations={sources} onCite={openCitation} /> : null}
       {sources.length > 0 ? (
         <View style={styles.sources}>
-          <Pressable onPress={() => setOpen((o) => !o)} accessibilityRole="button" accessibilityLabel={`Citations, ${sources.length}`} accessibilityState={{ expanded: open }} style={styles.sourcesHead}>
-            <Text style={styles.sourcesLabel}>Citations</Text>
+          <Pressable onPress={() => setOpen((o) => !o)} accessibilityRole="button" accessibilityLabel={i18n.t("chat.citationsCount", { count: sources.length })} accessibilityState={{ expanded: open }} style={styles.sourcesHead}>
+            <Text style={styles.sourcesLabel}>{i18n.t("chat.citations")}</Text>
             <View style={styles.count}>
               <Text style={styles.countText}>{sources.length}</Text>
             </View>
@@ -456,7 +452,7 @@ function TurnView({ turn, next, onOpen }: { turn: Turn; next?: ReactNode; onOpen
                       {c.title}
                     </Text>
                     {c.kind === "chat" ? (
-                      <Text style={styles.sourceMeta}>Earlier in this notebook&apos;s chats</Text>
+                      <Text style={styles.sourceMeta}>{i18n.t("chat.earlierChats")}</Text>
                     ) : (
                       <Text style={styles.sourceMeta}>
                         lines {c.line_start}–{c.line_end}

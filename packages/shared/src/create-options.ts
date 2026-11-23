@@ -1,4 +1,5 @@
 import type { QuizQuestionType } from "./types";
+import { tr } from "./i18n";
 
 /** The option lists of the create dialogs (web and app show the same ones). */
 
@@ -12,8 +13,10 @@ export const LANGUAGES = ["English", "Spanish", "French", "German", "Italian", "
 export function sourceSummary(source: { document_ids?: string[]; chat_ids?: string[]; count?: number } | undefined): string {
   const posts = source?.document_ids?.length ?? 0;
   const chats = source?.chat_ids?.length ?? 0;
-  const parts = [posts ? `${posts} post${posts === 1 ? "" : "s"}` : "", chats ? `${chats} chat${chats === 1 ? "" : "s"}` : ""];
-  return parts.filter(Boolean).join(" + ") || `${source?.count ?? 0} posts`;
+  const parts = [posts ? tr("sources.posts", posts === 1 ? "{{count}} post" : "{{count}} posts", { count: posts }) : "",
+    chats ? tr("sources.chats", chats === 1 ? "{{count}} chat" : "{{count}} chats", { count: chats }) : ""];
+  const count = source?.count ?? 0;
+  return parts.filter(Boolean).join(" + ") || tr("sources.posts", count === 1 ? "{{count}} post" : "{{count}} posts", { count });
 }
 
 export const QUIZ_LEVELS = [

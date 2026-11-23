@@ -16,6 +16,8 @@ import { FontSliders, SceneEditModal } from "./scene-edit";
 import { AiImageModal, AiReviewModal, AssetPickerModal, ChoiceModal, ConfirmModal, errorMessage, IMAGE_MAX, IMAGE_TYPES, RemoveMediaModal, StockSearchModal } from "./scene-media";
 import type { PanelProps } from "./types";
 import { clock, GroupHead, inFives, Label, MediaThumb, NumBadge, Spinner, StatePill, vstyles } from "./ui";
+import i18n from "@/i18n";
+import { Trans } from "react-i18next";
 
 const sorted = (scenes: VideoScene[]) => [...scenes].sort((a, b) => a.order - b.order);
 
@@ -62,7 +64,9 @@ export function SceneList(p: PanelProps & { aiEditsLeft: number | null }) {
       <View style={styles.head}>
         <Text style={vstyles.h2}>{p.project.name}</Text>
         <Text style={vstyles.muted}>
-          {summary?.scenes ?? scenes.length} scenes{summary ? `: ${summary.images} images, ${summary.clips ?? 0} stock clips` : ""}. Tap <Text style={vstyles.accent}>Edit</Text> on any scene to change it.
+          {i18n.t("scenes.summary", { count: summary?.scenes ?? scenes.length })}
+          {summary ? i18n.t("scenes.summaryMedia", { images: summary.images, clips: summary.clips ?? 0 }) : ""}
+          <Trans i18nKey="scenes.tapEdit" components={[<Text key="edit" style={vstyles.accent} />]} />
         </Text>
       </View>
 
@@ -71,7 +75,7 @@ export function SceneList(p: PanelProps & { aiEditsLeft: number | null }) {
         const open = openGroup === g;
         return (
           <View key={g} style={styles.group}>
-            <GroupHead label={`Scenes ${first}–${first + group.length - 1}`} open={open} onPress={() => setOpenGroup(open ? null : g)} />
+            <GroupHead label={i18n.t("videoPanels.scenesRange", { from: first, to: first + group.length - 1 })} open={open} onPress={() => setOpenGroup(open ? null : g)} />
             {open
               ? group.map((s) => {
                   const i = scenes.indexOf(s);
@@ -82,22 +86,22 @@ export function SceneList(p: PanelProps & { aiEditsLeft: number | null }) {
                         <NumBadge n={i + 1} />
                         <Pressable onPress={() => setExpanded(isOpen ? null : s.id)} style={styles.titleBtn} accessibilityRole="button">
                           <Text style={styles.title} numberOfLines={2}>
-                            {s.title || `Scene ${i + 1}`}
+                            {s.title || i18n.t("scenes.sceneN", { n: i + 1 })}
                           </Text>
                         </Pressable>
                       </View>
                       <View style={styles.actions}>
-                        <StatePill label="Scene" ok={!!s.layout} />
-                        <StatePill label="Audio" ok={!!s.audio_url} />
+                        <StatePill label={i18n.t("scenes.scene")} ok={!!s.layout} />
+                        <StatePill label={i18n.t("scenes.audio")} ok={!!s.audio_url} />
                         <Text style={styles.duration}>{Number(s.duration_seconds ?? 0).toFixed(1)}s</Text>
                         <View style={styles.grow} />
-                        <PillButton small title="Edit" disabled={p.disabled} onPress={() => setEditing(s)} />
+                        <PillButton small title={i18n.t("scenes.edit")} disabled={p.disabled} onPress={() => setEditing(s)} />
                         <Pressable onPress={() => setExpanded(isOpen ? null : s.id)} hitSlop={6} accessibilityRole="button" accessibilityLabel={isOpen ? "Collapse" : "Expand"} style={styles.iconBtn}>
                           <View style={isOpen && styles.flip}>
                             <ChevronIcon size={16} />
                           </View>
                         </Pressable>
-                        <Pressable onPress={() => setDeleting(s)} disabled={p.disabled} hitSlop={6} accessibilityRole="button" accessibilityLabel={`Delete scene ${i + 1}`} style={[styles.iconBtn, p.disabled && styles.off]}>
+                        <Pressable onPress={() => setDeleting(s)} disabled={p.disabled} hitSlop={6} accessibilityRole="button" accessibilityLabel={i18n.t("scenes.deleteN", { n: i + 1 })} style={[styles.iconBtn, p.disabled && styles.off]}>
                           <TrashIcon size={17} />
                         </Pressable>
                       </View>
@@ -119,7 +123,7 @@ export function SceneList(p: PanelProps & { aiEditsLeft: number | null }) {
         );
       })}
 
-      {scenes.length === 0 ? <PillButton title="＋ Add the first scene" disabled={p.disabled} onPress={() => setAdding(1)} /> : null}
+      {scenes.length === 0 ? <PillButton title={i18n.t("scenes.addFirst")} disabled={p.disabled} onPress={() => setAdding(1)} /> : null}
 
       {editing ? (
         <SceneEditModal
@@ -140,11 +144,11 @@ export function SceneList(p: PanelProps & { aiEditsLeft: number | null }) {
       {reviewScene && reviewJob?.status === "ready" ? <AiReviewModal {...p} scene={reviewScene} base64={reviewJob.base64} onDone={() => closeReview(reviewScene.id)} /> : null}
       {deleting ? (
         <ConfirmModal
-          title={`Delete scene ${scenes.findIndex((sc) => sc.id === deleting.id) + 1}?`}
-          body={`"${deleting.title || "This scene"}" and its voiceover will be deleted from this video. This can't be undone.`}
-          confirm="Delete"
-          busyLabel="Deleting..."
-          failedText="Couldn't delete the scene. Try again."
+          title={i18n.t("scenes.deleteTitle", { n: scenes.findIndex((sc) => sc.id === deleting.id) + 1 })}
+          body={i18n.t("scenes.deleteBody", { title: deleting.title || i18n.t("scenes.thisScene") })}
+          confirm={i18n.t("common.delete")}
+          busyLabel={i18n.t("sceneMedia.deleting")}
+          failedText={i18n.t("scenes.deleteFailed")}
           run={() => p.act(() => videoEditApi.deleteScene(p.id, deleting.id))}
           onClose={() => setDeleting(null)}
         />
@@ -166,7 +170,7 @@ export function SceneList(p: PanelProps & { aiEditsLeft: number | null }) {
 function AddSceneModal({ position, onClose, onAdd }: { position: number; onClose: () => void; onAdd: (prompt: string) => void }) {
   const [prompt, setPrompt] = useState("");
   return (
-    <Dialog visible title={`Add a scene at position ${position}`} onClose={onClose}>
+    <Dialog visible title={i18n.t("scenes.addAt", { n: position })} onClose={onClose}>
       <TextInput
         style={[vstyles.input, vstyles.area]}
         value={prompt}
@@ -174,13 +178,13 @@ function AddSceneModal({ position, onClose, onAdd }: { position: number; onClose
         multiline
         maxLength={2000}
         autoFocus
-        placeholder="What should the new scene cover?"
+        placeholder={i18n.t("scenes.addPlaceholder")}
         placeholderTextColor={colors.text3}
       />
-      <Text style={[vstyles.muted, vstyles.small]}>AI writes the scene, its narration and its layout. Uses 1 AI edit.</Text>
+      <Text style={[vstyles.muted, vstyles.small]}>{i18n.t("misc.aiScene")}</Text>
       <View style={vstyles.end}>
-        <PillButton small title="Cancel" onPress={onClose} />
-        <PillButton small variant="primary" title="Add scene" disabled={prompt.trim().length < 3} onPress={() => onAdd(prompt.trim())} />
+        <PillButton small title={i18n.t("common.cancel")} onPress={onClose} />
+        <PillButton small variant="primary" title={i18n.t("scenes.addScene")} disabled={prompt.trim().length < 3} onPress={() => onAdd(prompt.trim())} />
       </View>
     </Dialog>
   );
@@ -262,7 +266,7 @@ function SceneDetail(p: PanelProps & { scene: VideoScene; aiEditsLeft: number | 
     const a = res.assets[0];
     const type = a.mimeType ?? "";
     if ((type && !IMAGE_TYPES.includes(type)) || (a.fileSize ?? 0) > IMAGE_MAX) {
-      setUploadError("Pick a PNG, JPEG or WebP image of 5 MB or less.");
+      setUploadError(i18n.t("scenes.badImage"));
       return;
     }
     setUploading(true);
@@ -277,17 +281,17 @@ function SceneDetail(p: PanelProps & { scene: VideoScene; aiEditsLeft: number | 
   return (
     <View style={styles.detail}>
       <View style={styles.block}>
-        <Label>Display text</Label>
-        <Text style={vstyles.body}>{s.display_text || <Text style={vstyles.muted}>None</Text>}</Text>
+        <Label>{i18n.t("scenes.displayText")}</Label>
+        <Text style={vstyles.body}>{s.display_text || <Text style={vstyles.muted}>{i18n.t("scenes.none")}</Text>}</Text>
       </View>
       {s.visual_description ? (
         <View style={styles.block}>
-          <Label>Visual description</Label>
+          <Label>{i18n.t("scenes.visual")}</Label>
           <Text style={[vstyles.muted, styles.italic]}>{s.visual_description}</Text>
         </View>
       ) : null}
       <View style={styles.block}>
-        <Label>Layout</Label>
+        <Label>{i18n.t("scenes.layout")}</Label>
         <Text style={styles.layoutPill}>{layoutName(s.layout, p.layoutNames)}</Text>
       </View>
       <FontSliders
@@ -300,8 +304,8 @@ function SceneDetail(p: PanelProps & { scene: VideoScene; aiEditsLeft: number | 
         onDone={saveFont}
       />
       <View style={styles.block}>
-        <Label>Audio</Label>
-        {s.audio_url ? <SceneAudio url={s.audio_url} /> : <Text style={vstyles.muted}>No voiceover yet.</Text>}
+        <Label>{i18n.t("scenes.audio")}</Label>
+        {s.audio_url ? <SceneAudio url={s.audio_url} /> : <Text style={vstyles.muted}>{i18n.t("scenes.noVoiceover")}</Text>}
       </View>
       <View style={styles.block}>
         <Label>Images/footage ({s.images?.length ?? 0})</Label>
@@ -309,37 +313,37 @@ function SceneDetail(p: PanelProps & { scene: VideoScene; aiEditsLeft: number | 
           {(s.images ?? []).map((img) => (
             <View key={img.filename} style={styles.tile}>
               <MediaThumb uri={img.url} kind={img.kind} />
-              <Pressable onPress={() => setRemoving({ filename: img.filename, kind: img.kind })} disabled={p.disabled} accessibilityRole="button" accessibilityLabel="Remove from scene" style={styles.tileX}>
+              <Pressable onPress={() => setRemoving({ filename: img.filename, kind: img.kind })} disabled={p.disabled} accessibilityRole="button" accessibilityLabel={i18n.t("scenes.removeFrom")} style={styles.tileX}>
                 <Text style={styles.tileXText}>✕</Text>
               </Pressable>
             </View>
           ))}
           {aiRunning ? (
-            <View style={[styles.tile, styles.loading]} accessibilityLabel="Generating an image">
+            <View style={[styles.tile, styles.loading]} accessibilityLabel={i18n.t("scenes.generatingImage")}>
               <Spinner />
             </View>
           ) : null}
           {uploading ? (
-            <View style={[styles.tile, styles.loading]} accessibilityLabel="Uploading the image">
+            <View style={[styles.tile, styles.loading]} accessibilityLabel={i18n.t("scenes.uploadingImage")}>
               <Spinner />
             </View>
           ) : null}
           {/* Add tiles: icon in a tinted circle, label under it */}
-          <AddTile label="AI image" ai disabled={p.disabled || aiRunning} onPress={() => setModal("ai")} icon={<SparkleIcon size={16} color={colors.blue} />} />
-          <AddTile label="Image" disabled={p.disabled || uploading} onPress={() => setModal("image")} icon={<UploadIcon size={16} />} />
-          <AddTile label="Stock footage" disabled={p.disabled} onPress={() => setModal("stock")} icon={<FilmIcon size={16} />} />
+          <AddTile label={i18n.t("scenes.aiImage")} ai disabled={p.disabled || aiRunning} onPress={() => setModal("ai")} icon={<SparkleIcon size={16} color={colors.blue} />} />
+          <AddTile label={i18n.t("scenes.image")} disabled={p.disabled || uploading} onPress={() => setModal("image")} icon={<UploadIcon size={16} />} />
+          <AddTile label={i18n.t("scenes.stock")} disabled={p.disabled} onPress={() => setModal("stock")} icon={<FilmIcon size={16} />} />
         </View>
         {aiRunning ? (
           <View style={vstyles.row}>
             <Spinner />
-            <Text style={vstyles.muted}>Generating image...</Text>
+            <Text style={vstyles.muted}>{i18n.t("scenes.generatingDots")}</Text>
           </View>
         ) : null}
         {p.aiJob?.status === "ready" ? (
           <Text style={vstyles.muted}>
-            Your AI image is ready.{" "}
+            {i18n.t("scenes.aiReady")}{" "}
             <Text style={styles.link} onPress={p.onReviewAi}>
-              Review it
+              {i18n.t("scenes.review")}
             </Text>
           </Text>
         ) : null}
@@ -347,7 +351,7 @@ function SceneDetail(p: PanelProps & { scene: VideoScene; aiEditsLeft: number | 
           <Text style={vstyles.error}>
             {p.aiJob.error}{" "}
             <Text style={styles.link} onPress={p.onDismissAi}>
-              Dismiss
+              {i18n.t("scenes.dismiss")}
             </Text>
           </Text>
         ) : null}
@@ -367,10 +371,10 @@ function SceneDetail(p: PanelProps & { scene: VideoScene; aiEditsLeft: number | 
       ) : null}
       {modal === "image" ? (
         <ChoiceModal
-          title="Add scene image"
-          subtitle="Choose where to pick the image from."
-          existing="Use existing images"
-          fresh="Upload image file"
+          title={i18n.t("scenes.addImageTitle")}
+          subtitle={i18n.t("scenes.addImageSub")}
+          existing={i18n.t("scenes.useExistingImages")}
+          fresh={i18n.t("scenes.uploadFile")}
           freshIcon={<UploadIcon size={22} />}
           onClose={() => setModal(null)}
           onPick={(c) => {
@@ -381,10 +385,10 @@ function SceneDetail(p: PanelProps & { scene: VideoScene; aiEditsLeft: number | 
       ) : null}
       {modal === "stock" ? (
         <ChoiceModal
-          title="Add stock footage"
-          subtitle="Reuse a clip this video already has, or find a new one."
-          existing="Choose existing stock footage"
-          fresh="Add a new one"
+          title={i18n.t("sceneMedia.addStock")}
+          subtitle={i18n.t("scenes.addStockSub")}
+          existing={i18n.t("sceneMedia.existingClip")}
+          fresh={i18n.t("scenes.addNew")}
           freshIcon={<FilmIcon size={22} />}
           onClose={() => setModal(null)}
           onPick={(c) => setModal(c === "existing" ? "pick-clip" : "search")}

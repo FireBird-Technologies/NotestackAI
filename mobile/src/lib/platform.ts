@@ -25,10 +25,27 @@ export function on(event: string, fn: Listener): () => void {
  */
 function apiUrl(): string {
   if (process.env.EXPO_PUBLIC_API_URL) return process.env.EXPO_PUBLIC_API_URL;
-  let devHost = __DEV__ ? Constants.expoConfig?.hostUri?.split(":")[0] : undefined;
+  const host = devHost();
+  return host ? `http://${host}:8000` : "https://api.notestack.ai";
+}
+
+/** In a dev build, the machine the app loaded from (see apiUrl); undefined in a release build. */
+function devHost(): string | undefined {
+  const host = __DEV__ ? Constants.expoConfig?.hostUri?.split(":")[0] : undefined;
   const emulator = RNPlatform.OS === "android" && !Device.isDevice;
-  if (emulator && (devHost === "127.0.0.1" || devHost === "localhost")) devHost = "10.0.2.2";
-  return devHost ? `http://${devHost}:8000` : "https://api.notestack.ai";
+  return emulator && (host === "127.0.0.1" || host === "localhost") ? "10.0.2.2" : host;
+}
+
+/**
+ * The web app's address, for files it serves (the onboarding sample PDFs in frontend/public). EXPO_PUBLIC_WEB_URL wins
+ * when set; otherwise a dev build uses the Vite dev server (port 5173) on the same machine as the API, so files not yet
+ * deployed still load, and a release build uses notestack.ai. A phone or Android emulator needs Vite started with
+ * `npm run dev -- --host`, as it listens on localhost only by default.
+ */
+export function webUrl(): string {
+  if (process.env.EXPO_PUBLIC_WEB_URL) return process.env.EXPO_PUBLIC_WEB_URL;
+  const host = devHost();
+  return host ? `http://${host}:5173` : "https://notestack.ai";
 }
 
 /** The native side of the shared API layer: tokens in the Keychain / Keystore, signals through a small emitter. */

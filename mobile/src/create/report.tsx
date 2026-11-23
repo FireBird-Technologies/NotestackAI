@@ -11,6 +11,7 @@ import { ChoiceCard, createStyles, Foot, Hint, Label, SourceFocusFields, type So
 import type { DialogProps } from "@/create/study";
 import { colors, radius } from "@/ui/theme";
 import { PillButton } from "@/ui/widgets";
+import i18n from "@/i18n";
 
 type Format = "document" | "interactive";
 
@@ -88,22 +89,22 @@ export function ReportDialog({ notebook, chats, currentChatId, initial, onCreate
 
   const editor = (
     <View style={createStyles.field}>
-      <Label>Describe the report you want to create</Label>
+      <Label>{i18n.t("reportDialog.describe")}</Label>
       <TextInput
         style={styles.editor}
         value={text}
         onChangeText={(t) => setEdited(t.slice(0, 4000))}
-        placeholder="Describe the structure, style, tone and length you want."
+        placeholder={i18n.t("reportDialog.placeholder")}
         placeholderTextColor={colors.text3}
         multiline
         maxLength={4000}
         textAlignVertical="top"
-        accessibilityLabel="Describe the report you want to create"
+        accessibilityLabel={i18n.t("reportDialog.describe")}
       />
       <Hint>
         {format === "interactive"
-          ? "The AI writes the report and suggests where a visual fits. Nothing is made until you click Add."
-          : "Sent to the AI with your sources. Change anything."}
+          ? i18n.t("reportDialog.interactiveHint")
+          : i18n.t("reportDialog.documentHint")}
       </Hint>
     </View>
   );
@@ -129,7 +130,7 @@ export function ReportDialog({ notebook, chats, currentChatId, initial, onCreate
           <Pressable
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel={`Edit the ${t.name} instructions`}
+            accessibilityLabel={i18n.t("reportDialog.editTemplate", { name: t.name })}
             style={styles.pencil}
             onPress={() => {
               choose("document", t.id);
@@ -167,23 +168,23 @@ export function ReportDialog({ notebook, chats, currentChatId, initial, onCreate
           onChange={setSel}
         />
         <View style={createStyles.field}>
-          <ChoiceCard title="Interactive" blurb="An interactive report with embedded studio content" on={format === "interactive"} onPress={() => choose("interactive")} />
-          <ChoiceCard title="Document" blurb="A structured text-only document" on={format === "document"} onPress={() => choose("document")} />
+          <ChoiceCard title={i18n.t("reportDialog.interactive")} blurb={i18n.t("reportDialog.interactiveBlurb")} on={format === "interactive"} onPress={() => choose("interactive")} />
+          <ChoiceCard title={i18n.t("reportDialog.document")} blurb={i18n.t("reportDialog.documentBlurb")} on={format === "document"} onPress={() => choose("document")} />
         </View>
         {format === "document" ? (
           <>
             <View style={createStyles.field}>
-              <Label>Template</Label>
+              <Label>{i18n.t("reportDialog.template")}</Label>
               {catalog.data ? catalog.data.templates.map(templateCard) : waiting}
             </View>
             {suggested === null || suggested.length > 0 ? (
               <View style={createStyles.field}>
                 <View style={styles.suggestHead}>
                   <Text style={styles.sparkle}>✦</Text>
-                  <Label>Suggested Template</Label>
+                  <Label>{i18n.t("reportDialog.suggested")}</Label>
                   {suggested === null ? <ActivityIndicator size="small" color={colors.blue} /> : null}
                 </View>
-                {suggested === null ? <Hint>Writing templates for your sources...</Hint> : null}
+                {suggested === null ? <Hint>{i18n.t("reportDialog.writing")}</Hint> : null}
                 {suggested === null ? waiting : suggested.map(templateCard)}
               </View>
             ) : null}
@@ -196,24 +197,21 @@ export function ReportDialog({ notebook, chats, currentChatId, initial, onCreate
       {step === 2 ? (
         <View style={createStyles.stack}>
           <Pressable onPress={() => setStep(1)} accessibilityRole="button" style={styles.back}>
-            <Text style={styles.backText}>← Back</Text>
+            <Text style={styles.backText}>{i18n.t("reportDialog.back")}</Text>
           </Pressable>
           <View style={styles.header}>
-            <Label>Template</Label>
-            <Text style={styles.templateName}>{template?.name ?? "Report"}</Text>
+            <Label>{i18n.t("reportDialog.template")}</Label>
+            <Text style={styles.templateName}>{template?.name ?? i18n.t("reportDialog.report")}</Text>
             {template?.description ? <Text style={styles.templateDesc}>{template.description}</Text> : null}
           </View>
-          <Hint>
-            This text goes to the AI with your sources. It starts from the template and your topic. Change the structure, tone or length however
-            you like.
-          </Hint>
+          <Hint>{i18n.t("reportDialog.editHint")}</Hint>
           {editor}
         </View>
       ) : null}
 
       <Foot>
         <PillButton
-          title={needsText && step === 1 ? "Next" : "Generate"}
+          title={needsText && step === 1 ? i18n.t("reportDialog.next") : i18n.t("dialogs.generate")}
           variant="primary"
           disabled={!ready || (needsText && step === 2)}
           onPress={needsText && step === 1 ? () => setStep(2) : generate}

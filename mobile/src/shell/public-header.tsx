@@ -8,13 +8,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAuth } from "@/account/auth";
 import { colors, fonts, gutter, radius } from "@/ui/theme";
+import i18n from "@/i18n";
 
 /** The web app's mobile menu (frontend/src/components/PublicChrome.tsx); each item is a screen in the app. */
 const LINKS: { label: string; path: Href }[] = [
-  { label: "Features", path: "/features" },
-  { label: "Pricing", path: "/pricing" },
-  { label: "Free tools", path: "/tools" },
-  { label: "Blog", path: "/blogs" },
+  { label: i18n.t("public.features"), path: "/features" },
+  { label: i18n.t("public.pricing"), path: "/pricing" },
+  { label: i18n.t("public.freeTools"), path: "/tools" },
+  { label: i18n.t("public.blog"), path: "/blogs" },
 ];
 
 const BAR_HEIGHT = 60;
@@ -44,7 +45,7 @@ export function PublicHeader({ minimal = false }: { minimal?: boolean }) {
     <View style={styles.layer} pointerEvents="box-none">
       {open && (
         <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(160)} style={styles.backdrop}>
-          <Pressable silent style={StyleSheet.absoluteFill} onPress={() => setOpen(false)} accessibilityLabel="Close menu" />
+          <Pressable silent style={StyleSheet.absoluteFill} onPress={() => setOpen(false)} accessibilityLabel={i18n.t("ui.closeMenu")} />
         </Animated.View>
       )}
 
@@ -55,7 +56,7 @@ export function PublicHeader({ minimal = false }: { minimal?: boolean }) {
             <Pressable
               onPress={home}
               accessibilityRole="link"
-              accessibilityLabel="Notestack home"
+              accessibilityLabel={i18n.t("nav.home")}
               hitSlop={8}
               style={({ pressed }) => [styles.brand, pressed && styles.pressed]}>
               <Image source={require("@/assets/images/logo.png")} style={styles.logo} accessibilityIgnoresInvertColors />
@@ -65,7 +66,7 @@ export function PublicHeader({ minimal = false }: { minimal?: boolean }) {
           <Pressable
             onPress={() => setOpen((o) => !o)}
             accessibilityRole="button"
-            accessibilityLabel={open ? "Close menu" : "Open menu"}
+            accessibilityLabel={open ? i18n.t("ui.closeMenu") : i18n.t("ui.openMenu")}
             accessibilityState={{ expanded: open }}
             style={({ pressed }) => [styles.menuButton, pressed && styles.pressed]}>
             {open ? <CloseIcon /> : <MenuIcon />}

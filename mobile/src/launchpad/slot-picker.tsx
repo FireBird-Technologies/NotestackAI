@@ -7,22 +7,24 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ArrowLeftIcon } from "@/ui/icons";
 import { Pressable } from "@/ui/pressable";
 import { colors, fonts, radius } from "@/ui/theme";
+import i18n, { flipX, locale } from "@/i18n";
 
-const WEEKDAYS = ["M", "T", "W", "T", "F", "S", "S"];
+// Monday first, one letter each, in the app language (1 January 2024 was a Monday).
+const WEEKDAYS = Array.from({ length: 7 }, (_, i) => new Date(2024, 0, 1 + i).toLocaleDateString(locale(), { weekday: "narrow" }));
 
 /** "GMT+5" for the zone right now. */
 function zoneName(): string {
-  const part = new Intl.DateTimeFormat("en-US", { timeZoneName: "short" }).formatToParts(new Date()).find((p) => p.type === "timeZoneName");
+  const part = new Intl.DateTimeFormat(locale(), { timeZoneName: "short" }).formatToParts(new Date()).find((p) => p.type === "timeZoneName");
   return part?.value ?? "";
 }
 
 const atTime = (from: Date, addDays: number, hour: number) => new Date(from.getFullYear(), from.getMonth(), from.getDate() + addDays, hour, 0, 0, 0);
-const timeOf = (d: Date) => d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-const shortDay = (d: Date) => d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+const timeOf = (d: Date) => d.toLocaleTimeString(locale(), { hour: "numeric", minute: "2-digit" });
+const shortDay = (d: Date) => d.toLocaleDateString(locale(), { weekday: "short", month: "short", day: "numeric" });
 
 function friendlyDay(d: Date, now: Date): string {
-  if (dayKey(d) === dayKey(now)) return "Today";
-  if (dayKey(d) === dayKey(atTime(now, 1, 0))) return "Tomorrow";
+  if (dayKey(d) === dayKey(now)) return i18n.t("lp.today");
+  if (dayKey(d) === dayKey(atTime(now, 1, 0))) return i18n.t("lp.tomorrow");
   return shortDay(d);
 }
 
@@ -59,13 +61,13 @@ export function SlotPicker({ value, onChange }: { value: Wall; onChange: (w: Wal
         }}
         style={({ pressed }) => [styles.trigger, pressed && styles.pressed]}
         accessibilityRole="button"
-        accessibilityLabel={`Schedule for ${label}. Change`}>
+        accessibilityLabel={i18n.t("lp.scheduleFor", { label })}>
         <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={colors.blue} strokeWidth={1.7}>
           <Rect x="3" y="5" width="18" height="16" rx="2.5" />
           <Path d="M3 9h18M8 3v4M16 3v4M12 13v3l2 1" />
         </Svg>
         <View style={styles.triggerCopy}>
-          <Text style={styles.triggerSmall}>SCHEDULE FOR</Text>
+          <Text style={styles.triggerSmall}>{i18n.t("lp.scheduleForCaps")}</Text>
           <Text style={styles.triggerStrong} numberOfLines={1}>
             {label}
           </Text>
@@ -79,12 +81,12 @@ export function SlotPicker({ value, onChange }: { value: Wall; onChange: (w: Wal
         <SafeAreaView edges={["top", "bottom"]} style={styles.screen}>
           <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
             <View style={styles.head}>
-              <Pressable onPress={() => setOpen(false)} hitSlop={12} style={styles.back} accessibilityRole="button" accessibilityLabel="Back">
+              <Pressable onPress={() => setOpen(false)} hitSlop={12} style={styles.back} accessibilityRole="button" accessibilityLabel={i18n.t("common.back")}>
                 <ArrowLeftIcon size={22} color={colors.text} />
               </Pressable>
               <View style={styles.flex}>
-                <Text style={styles.title}>Choose when to publish</Text>
-                <Text style={styles.sub}>Times use your local time zone</Text>
+                <Text style={styles.title}>{i18n.t("lp.choose")}</Text>
+                <Text style={styles.sub}>{i18n.t("lp.localTime")}</Text>
               </View>
             </View>
 
@@ -96,16 +98,16 @@ export function SlotPicker({ value, onChange }: { value: Wall; onChange: (w: Wal
                   onPress={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}
                   style={[styles.monthBtn, month <= thisMonth && styles.off]}
                   accessibilityRole="button"
-                  accessibilityLabel="Previous month">
-                  <Text style={styles.monthArrow}>‹</Text>
+                  accessibilityLabel={i18n.t("launchpad.previousMonth")}>
+                  <Text style={[styles.monthArrow, flipX]}>‹</Text>
                 </Pressable>
-                <Text style={styles.monthName}>{month.toLocaleDateString("en-US", { month: "long", year: "numeric" })}</Text>
+                <Text style={styles.monthName}>{month.toLocaleDateString(locale(), { month: "long", year: "numeric" })}</Text>
                 <Pressable
                   onPress={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}
                   style={styles.monthBtn}
                   accessibilityRole="button"
-                  accessibilityLabel="Next month">
-                  <Text style={styles.monthArrow}>›</Text>
+                  accessibilityLabel={i18n.t("launchpad.nextMonth")}>
+                  <Text style={[styles.monthArrow, flipX]}>›</Text>
                 </Pressable>
               </View>
               <View style={styles.grid}>
@@ -136,7 +138,7 @@ export function SlotPicker({ value, onChange }: { value: Wall; onChange: (w: Wal
 
             <View style={styles.card}>
               <Text style={styles.cardLabel}>
-                TIME <Text style={styles.cardLabelDay}>· {shortDay(wallToDate(`${pickedDay}T00:00`))}</Text>
+                {i18n.t("lp.time")} <Text style={styles.cardLabelDay}>· {shortDay(wallToDate(`${pickedDay}T00:00`))}</Text>
               </Text>
               <View style={styles.times}>
                 {SLOTS.map((t) => {

@@ -5,11 +5,12 @@ import { Pressable } from "@/ui/pressable";
 
 import { Card, Eyebrow, Lede, PageTitle, PublicPage, publicText } from "@/shell/public-page";
 import { colors } from "@/ui/theme";
+import i18n from "@/i18n";
 
 export default function ToolsHub() {
   return (
     <PublicPage>
-      <Eyebrow>Free tools</Eyebrow>
+      <Eyebrow>{i18n.t("public.freeTools")}</Eyebrow>
       <PageTitle>{toolsHub.heroTitle}</PageTitle>
       <Lede>{toolsHub.heroDescription}</Lede>
       {tools.map((t) => (
@@ -21,7 +22,7 @@ export default function ToolsHub() {
           <Card>
             <Text style={publicText.cardTitle}>{t.heroTitle}</Text>
             <Text style={publicText.body}>{t.description}</Text>
-            <Text style={styles.open}>Open tool →</Text>
+            <Text style={styles.open}>{i18n.t("marketing.openTool")}</Text>
           </Card>
         </Pressable>
       ))}

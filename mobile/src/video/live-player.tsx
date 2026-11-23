@@ -8,16 +8,17 @@ import { WebView } from "react-native-webview";
 import { ErrorText } from "@/ui";
 import { colors, gutter } from "@/ui/theme";
 import { Dialog, pageStyles, PillButton } from "@/ui/widgets";
+import i18n from "@/i18n";
 
 export const isWebUrl = (u: unknown): u is string => typeof u === "string" && /^https?:\/\//.test(u);
 
-export const CRASH_TITLE = "Video stopped playing";
-export const CRASH_BODY = "The video player is memory heavy and crashed because your phone ran out of memory.";
+export const CRASH_TITLE = i18n.t("player.crashTitle");
+export const CRASH_BODY = i18n.t("player.crashBody");
 
 /** Why a render could not start, in words for the crash dialogs. */
 export function renderStartError(e: unknown): string {
-  if (e instanceof ApiError && e.status === 409) return "Another change is still running on this video, try again in a moment.";
-  return e instanceof Error && e.message ? e.message : "Could not start the render. Try again.";
+  if (e instanceof ApiError && e.status === 409) return i18n.t("player.busy");
+  return e instanceof Error && e.message ? e.message : i18n.t("player.renderFailed");
 }
 
 /**
@@ -54,7 +55,7 @@ export function Mp4Player({ uri }: { uri: string }) {
   if (status === "error") {
     return (
       <View style={styles.message}>
-        <ErrorText>The MP4 could not be played. Try again in a moment.</ErrorText>
+        <ErrorText>{i18n.t("player.mp4Failed")}</ErrorText>
       </View>
     );
   }
@@ -78,12 +79,12 @@ export function PlayerCrashDialog({ hasMp4, onCancel, onPrimary }: { hasMp4: boo
   return (
     <Dialog visible title={CRASH_TITLE} onClose={onCancel}>
       <Text style={styles.body}>
-        {CRASH_BODY} {hasMp4 ? "Play the rendered MP4 to watch it smoothly." : "Render the video to watch it smoothly."}
+        {CRASH_BODY} {hasMp4 ? i18n.t("player.watchMp4") : i18n.t("player.watchRender")}
       </Text>
       <ErrorText>{error}</ErrorText>
       <View style={styles.end}>
-        <PillButton title="Cancel" onPress={onCancel} disabled={busy} />
-        <PillButton title={busy ? "Starting..." : hasMp4 ? "Play MP4" : "Render"} variant="primary" busy={busy} onPress={() => void go()} />
+        <PillButton title={i18n.t("common.cancel")} onPress={onCancel} disabled={busy} />
+        <PillButton title={busy ? i18n.t("common.starting") : hasMp4 ? i18n.t("player.playMp4") : i18n.t("player.render")} variant="primary" busy={busy} onPress={() => void go()} />
       </View>
     </Dialog>
   );

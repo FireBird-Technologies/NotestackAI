@@ -11,6 +11,7 @@ import { useBottomInset } from "@/lib/insets";
 
 import { colors, fonts, gutter, radius } from "@/ui/theme";
 import { Body, Button, ErrorText, Loading, formatDate } from "@/ui";
+import i18n from "@/i18n";
 
 /** New notebook, as the web's dialog: what it is about, and the posts it reads from. */
 export default function NewNotebook() {
@@ -42,13 +43,13 @@ export default function NewNotebook() {
     setBusy(true);
     setError("");
     try {
-      const nb = await notebooksApi.create(topic.trim() || "Untitled notebook", selected);
+      const nb = await notebooksApi.create(topic.trim() || i18n.t("notebooks.untitled"), selected);
       track("notebook_create", { from: "manual" });
       await queryClient.invalidateQueries({ queryKey: ["notebooks"] });
       router.dismiss();
       router.push({ pathname: "/notebooks/[id]", params: { id: nb.id, title: nb.title } });
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Could not create the notebook. Try again.");
+      setError(e instanceof ApiError ? e.message : i18n.t("notebooks.createFailed"));
       setBusy(false);
     }
   };
@@ -62,21 +63,21 @@ export default function NewNotebook() {
         contentContainerStyle={styles.list}
         ListHeaderComponent={
           <View style={styles.head}>
-            <Text style={styles.label}>What is it about?</Text>
+            <Text style={styles.label}>{i18n.t("notebooks.about")}</Text>
             <TextInput
               style={styles.input}
               value={topic}
               onChangeText={setTopic}
-              placeholder="Pricing, paid tiers, 2024 essays..."
+              placeholder={i18n.t("notebooks.aboutPlaceholder")}
               placeholderTextColor={colors.text3}
               autoFocus
             />
-            <Text style={[styles.label, styles.postsLabel]}>Posts</Text>
+            <Text style={[styles.label, styles.postsLabel]}>{i18n.t("notebooks.postsLabel")}</Text>
             <TextInput
               style={styles.input}
               value={filter}
               onChangeText={setFilter}
-              placeholder="Filter by title"
+              placeholder={i18n.t("notebooks.filter")}
               placeholderTextColor={colors.text3}
               clearButtonMode="while-editing"
             />
@@ -99,20 +100,20 @@ export default function NewNotebook() {
                   {d.title}
                 </Text>
                 <Text style={styles.postMeta}>
-                  {formatDate(d.published_at)} · {d.locked ? "Not indexed on your plan" : `${d.words} words`}
+                  {formatDate(d.published_at)} · {d.locked ? i18n.t("notebooks.notIndexed") : i18n.t("notebooks.words", { count: d.words })}
                 </Text>
               </View>
             </Pressable>
           );
         }}
         ListEmptyComponent={
-          posts.isPending ? undefined : <Body muted>{filter ? "No posts match that." : "No posts yet. Add a source first."}</Body>
+          posts.isPending ? undefined : <Body muted>{filter ? i18n.t("notebooks.noMatch") : i18n.t("notebooks.noPosts")}</Body>
         }
       />
       <View style={[styles.footer, { paddingBottom: Math.max(bottomInset, gutter) }]}>
         <ErrorText>{error}</ErrorText>
         <Button
-          title={busy ? "Creating..." : `Create with ${selected.length} ${selected.length === 1 ? "post" : "posts"}`}
+          title={busy ? i18n.t("common.creating") : i18n.t("notebooks.createWith", { count: selected.length })}
           onPress={create}
           busy={busy}
           disabled={!selected.length}

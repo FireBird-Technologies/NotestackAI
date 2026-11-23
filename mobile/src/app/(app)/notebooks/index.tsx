@@ -10,6 +10,7 @@ import { PlanetIcon } from "@/shell/planet";
 import { Starfield } from "@/shell/starfield";
 import { colors, fonts, gutter, radius } from "@/ui/theme";
 import { Body, Button, Centered, Loading, formatDate } from "@/ui";
+import i18n from "@/i18n";
 
 /** Every notebook, "All posts" first, as the web's Research notebooks page. */
 export default function Notebooks() {
@@ -30,7 +31,7 @@ export default function Notebooks() {
     return (
       <Centered>
         <Body muted>{error.message}</Body>
-        <Button title="Try again" onPress={() => refetch()} />
+        <Button title={i18n.t("common.tryAgain")} onPress={() => refetch()} />
       </Centered>
     );
   }
@@ -45,15 +46,15 @@ export default function Notebooks() {
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => void refetch()} tintColor={colors.blue} />}
         ListHeaderComponent={
           <View style={styles.head}>
-            <Text style={styles.eyebrow}>Notebooks</Text>
+            <Text style={styles.eyebrow}>{i18n.t("notebooks.eyebrow")}</Text>
             <Text style={styles.title} accessibilityRole="header">
-              Research notebooks
+              {i18n.t("notebooks.title")}
             </Text>
             <Pressable
               accessibilityRole="button"
               onPress={() => router.push("/notebooks/new")}
               style={({ pressed }) => [styles.newButton, pressed && styles.pressed]}>
-              <Text style={styles.newText}>New notebook</Text>
+              <Text style={styles.newText}>{i18n.t("notebooks.new")}</Text>
             </Pressable>
           </View>
         }
@@ -68,9 +69,9 @@ function NotebookCard({ notebook: n, onChanged }: { notebook: NotebookSummary; o
   const [name, setName] = useState(n.title);
 
   const meta = [
-    `${n.document_count} posts`,
-    n.chat_count ? `${n.chat_count} chats` : null,
-    n.artifact_count ? `${n.artifact_count} made` : null,
+    i18n.t("notebooks.posts", { count: n.document_count }),
+    n.chat_count ? i18n.t("notebooks.chats", { count: n.chat_count }) : null,
+    n.artifact_count ? i18n.t("notebooks.made", { count: n.artifact_count }) : null,
     formatDate(n.updated_at),
   ]
     .filter(Boolean)
@@ -84,10 +85,10 @@ function NotebookCard({ notebook: n, onChanged }: { notebook: NotebookSummary; o
   };
 
   const confirmDelete = () =>
-    Alert.alert(`Delete "${n.title}"?`, undefined, [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(i18n.t("notebooks.deleteTitle", { title: n.title }), undefined, [
+      { text: i18n.t("common.cancel"), style: "cancel" },
       {
-        text: "Delete",
+        text: i18n.t("common.delete"),
         style: "destructive",
         onPress: async () => {
           await notebooksApi.remove(n.id);
@@ -99,14 +100,14 @@ function NotebookCard({ notebook: n, onChanged }: { notebook: NotebookSummary; o
   const options = () =>
     Alert.alert(n.title, undefined, [
       {
-        text: "Rename",
+        text: i18n.t("common.rename"),
         onPress: () => {
           setName(n.title);
           setRenaming(true);
         },
       },
-      { text: "Delete", style: "destructive", onPress: confirmDelete },
-      { text: "Cancel", style: "cancel" },
+      { text: i18n.t("common.delete"), style: "destructive", onPress: confirmDelete },
+      { text: i18n.t("common.cancel"), style: "cancel" },
     ]);
 
   return (
@@ -121,10 +122,10 @@ function NotebookCard({ notebook: n, onChanged }: { notebook: NotebookSummary; o
             selectTextOnFocus
             returnKeyType="done"
             onSubmitEditing={save}
-            accessibilityLabel="Notebook title"
+            accessibilityLabel={i18n.t("notebooks.titleLabel")}
           />
           <Pressable onPress={save} style={styles.saveButton} accessibilityRole="button">
-            <Text style={styles.saveText}>Save</Text>
+            <Text style={styles.saveText}>{i18n.t("common.save")}</Text>
           </Pressable>
         </View>
       ) : (
@@ -149,7 +150,7 @@ function NotebookCard({ notebook: n, onChanged }: { notebook: NotebookSummary; o
           onPress={options}
           hitSlop={10}
           accessibilityRole="button"
-          accessibilityLabel="Notebook options"
+          accessibilityLabel={i18n.t("notebooks.options")}
           style={styles.menu}>
           <Text style={styles.menuText}>⋯</Text>
         </Pressable>

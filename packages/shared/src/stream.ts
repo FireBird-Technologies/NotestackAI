@@ -1,4 +1,4 @@
-import { parseError, tokens } from "./client";
+import { applyAppLanguage, parseError, tokens } from "./client";
 import { platform } from "./platform";
 
 /** SSE over fetch so we can send the Authorization header (EventSource cannot). */
@@ -11,6 +11,7 @@ export async function streamSSE(
   const headers = new Headers(init.headers);
   if (tokens.access) headers.set("Authorization", `Bearer ${tokens.access}`);
   if (init.body) headers.set("Content-Type", "application/json");
+  applyAppLanguage(headers);
   const res = await platform().fetch(`${platform().baseUrl}${path}`, { ...init, headers, signal });
   // A refused request (a 402 plan_limit opens the upgrade popup) throws the same ApiError as any other call.
   if (!res.ok) throw await parseError(res);

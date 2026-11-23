@@ -35,6 +35,7 @@ from app.chat_memory.logs import context_log, text_enabled
 from app.chat_memory.tools import ChatTools, is_chat_path
 from app.config import settings
 from app.corpus import Corpus, CorpusError, ScopedTools
+from app.llm.languages import reply_language_note
 from app.llm.postprocess import strip_em_dashes
 from app.llm.provider import agent_lm, fast_lm, track_usage, triage_lm, writer_lm
 from app.llm.signatures import (
@@ -1142,6 +1143,12 @@ def _memory_parts(notes: str) -> str:
     return ", ".join(parts) or "empty"
 
 
+def with_reply_language(profile: str | None) -> str:
+    """The writer notes plus, when the app is not in English, which language to answer in (llm/languages.py)."""
+    note = reply_language_note()
+    return "\n".join(p for p in ((profile or "").strip(), note) if p)
+
+
 def research(
     corpus: Corpus,
     allowed: dict[str, str],
@@ -1480,7 +1487,8 @@ def research(
         tool_list += external_tools
     inputs = dict(question=external_question(route.question) if external_only else route.question,
                   conversation=conversation_text(history),
-                  archive_guide=archive_guide(tools), writer_profile=profile or "(none)", answer_length=route.detail,
+                  archive_guide=archive_guide(tools), writer_profile=with_reply_language(profile) or "(none)",
+                  answer_length=route.detail,
                   prefetched="(none)")
     if external_only:
         signature = ResearchExternal

@@ -15,8 +15,9 @@ import { useStorePrices } from "@/account/store-prices";
 import { colors } from "@/ui/theme";
 import { ErrorText, Loading } from "@/ui";
 import { PillButton, Sheet } from "@/ui/widgets";
+import i18n from "@/i18n";
+import { Trans } from "react-i18next";
 
-const STORE = Platform.OS === "ios" ? "the App Store" : "Google Play";
 /** Where this app sells and manages plans: its phone's store. */
 const HERE: BillingPlace = Platform.OS === "ios" ? "app_store" : "play_store";
 
@@ -56,7 +57,7 @@ export function UpgradeProvider({ children }: { children: ReactNode }) {
   return (
     <UpgradeContext.Provider value={value}>
       {children}
-      <Sheet visible={opening !== null} title="Plans" onClose={() => setOpening(null)}>
+      <Sheet visible={opening !== null} title={i18n.t("plans.sheetTitle")} onClose={() => setOpening(null)}>
         {opening ? <Paywall opening={opening} /> : null}
       </Sheet>
     </UpgradeContext.Provider>
@@ -72,7 +73,7 @@ export function NestedPlansSheet({ visible, onClose }: { visible: boolean; onClo
     if (visible) track("paywall_view", { limit: "manual" });
   }, [visible]);
   return (
-    <Sheet visible={visible} title="Plans" onClose={onClose}>
+    <Sheet visible={visible} title={i18n.t("plans.sheetTitle")} onClose={onClose}>
       {visible ? <Paywall opening={{}} /> : null}
     </Sheet>
   );
@@ -124,7 +125,7 @@ function Paywall({ opening }: { opening: Opening }) {
         if (done) setNotice(done(next));
       }
     } catch (e) {
-      setError(e instanceof Error && e.message ? e.message : "Something went wrong. Try again.");
+      setError(e instanceof Error && e.message ? e.message : i18n.t("common.somethingWrong"));
     } finally {
       setBusy(null);
     }
@@ -134,7 +135,7 @@ function Paywall({ opening }: { opening: Opening }) {
     <View style={styles.stack}>
       {opening.message ? <Text style={styles.reason}>{opening.message}</Text> : null}
       <Text style={styles.current}>
-        You are on <Text style={styles.strong}>{s.plan.name}</Text>.
+        <Trans i18nKey="plans.youAreOn" values={{ name: s.plan.name }} components={[<Text key="name" style={styles.strong} />]} />
       </Text>
 
       {elsewhere ? <Text style={styles.elsewhere}>{elsewhere.text}</Text> : null}
@@ -153,14 +154,14 @@ function Paywall({ opening }: { opening: Opening }) {
             key={plan.id}
             plan={plan}
             cycle={cycle}
-            badge={isCurrent ? "Your plan" : plan.id === POPULAR_PLAN ? "Most popular" : null}
+            badge={isCurrent ? i18n.t("plans.yourPlan") : plan.id === POPULAR_PLAN ? i18n.t("plans.mostPopular") : null}
             storePrice={intro?.renews ?? pkg?.product.priceString ?? null}
             introPrice={sellable && higher ? intro?.price ?? null : null}>
             {sellable && pkg && higher ? (
               <View style={styles.buy}>
                 <PillButton
                   variant="primary"
-                  title={`Upgrade to ${plan.name}`}
+                  title={i18n.t("plans.upgradeTo", { name: plan.name })}
                   busy={busy === plan.id}
                   disabled={busy !== null}
                   onPress={() => {
@@ -168,9 +169,9 @@ function Paywall({ opening }: { opening: Opening }) {
                     void run(plan.id, () => buy(pkg), (next) => {
                       if (next.plan.id === plan.id) {
                         track("purchase_complete", { plan: plan.id });
-                        return `You are on ${plan.name} now.`;
+                        return i18n.t("plans.nowOn", { name: plan.name });
                       }
-                      throw new Error(`The purchase went through, but your plan hasn't changed yet. Tap Restore purchases in a moment.`);
+                      throw new Error(i18n.t("plans.notChanged"));
                     });
                   }}
                 />
@@ -183,7 +184,7 @@ function Paywall({ opening }: { opening: Opening }) {
       {sellable && packages.isPending ? <Loading /> : null}
       {sellable && packages.error ? (
         <ErrorText>
-          Could not load the plans from {STORE}. Try again in a moment.
+          {Platform.OS === "ios" ? i18n.t("plans.loadFailedIos") : i18n.t("plans.loadFailedAndroid")}
           {/* Dev builds say why: RevenueCat's reason is what a setup mistake needs */}
           {__DEV__ ? `\n\n${packages.error.message}` : ""}
         </ErrorText>
@@ -193,11 +194,11 @@ function Paywall({ opening }: { opening: Opening }) {
 
       {sellable || billedHere ? (
         <View style={styles.row}>
-          {billedHere ? <PillButton small title="Manage subscription" onPress={() => void manageSubscriptions()} /> : null}
+          {billedHere ? <PillButton small title={i18n.t("settings.plan.manage")} onPress={() => void manageSubscriptions()} /> : null}
           {sellable ? (
             <PillButton
               small
-              title="Restore purchases"
+              title={i18n.t("plans.restore")}
               busy={busy === "restore"}
               disabled={busy !== null || !customerId}
               onPress={() =>
@@ -209,8 +210,8 @@ function Paywall({ opening }: { opening: Opening }) {
                   },
                   (next) =>
                     next.billed_by && next.billed_by !== "stripe"
-                      ? `Restored: you are on ${next.plan.name}.`
-                      : `No subscription found for this ${Platform.OS === "ios" ? "Apple ID" : "Google account"}.`,
+                      ? i18n.t("plans.restored", { name: next.plan.name })
+                      : Platform.OS === "ios" ? i18n.t("plans.noSubIos") : i18n.t("plans.noSubAndroid"),
                 )
               }
             />

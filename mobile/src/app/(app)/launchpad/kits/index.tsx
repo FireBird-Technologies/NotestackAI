@@ -8,6 +8,7 @@ import { colors, fonts, radius } from "@/ui/theme";
 import { ErrorText, Loading } from "@/ui";
 import { BackLink } from "@/video/back";
 import { Page, PageHead, pageStyles, PillButton, Section } from "@/ui/widgets";
+import i18n from "@/i18n";
 
 /**
  * Create a launch kit (web: pages/LaunchKit.tsx LaunchKits, /app/launchpad/kits): pick one of your posts, and its kit
@@ -45,7 +46,7 @@ export default function LaunchKits() {
         router.replace({ pathname: "/launchpad/kits/[id]", params: { id: kit.id } });
       } catch (e) {
         // A plan limit also opens the Plans sheet (PLAN_LIMIT_EVENT).
-        setError(e instanceof Error && e.message ? e.message : "Could not start the launch kit. Try again.");
+        setError(e instanceof Error && e.message ? e.message : i18n.t("kits.startFailed"));
         setBusy(null);
       }
     },
@@ -62,25 +63,25 @@ export default function LaunchKits() {
   return (
     <Page>
       <BackLink fallback="/launchpad" />
-      <PageHead eyebrow="Launch Kit" title="Create a launch kit" />
+      <PageHead eyebrow={i18n.t("kits.eyebrow")} title={i18n.t("titles.createLaunchKit")} />
       <ErrorText>{error}</ErrorText>
       <Section>
         <View style={styles.intro}>
-          <Text style={styles.h}>Pick a post to launch</Text>
-          <Text style={styles.muted}>A LinkedIn post and hooks, in your voice and grounded in the post.</Text>
+          <Text style={styles.h}>{i18n.t("kits.pick")}</Text>
+          <Text style={styles.muted}>{i18n.t("kits.pickBody")}</Text>
         </View>
         <TextInput
           style={pageStyles.input}
           value={q}
           onChangeText={setQ}
-          placeholder="Search your posts"
+          placeholder={i18n.t("kits.search")}
           placeholderTextColor={colors.text3}
           clearButtonMode="while-editing"
-          accessibilityLabel="Search your posts"
+          accessibilityLabel={i18n.t("kits.search")}
         />
         {posts.isPending ? <Loading /> : null}
         {posts.error ? <ErrorText>{posts.error.message}</ErrorText> : null}
-        {posts.data?.length === 0 ? <Text style={styles.muted}>{search ? "No posts match." : "No indexed posts yet. Connect a source first."}</Text> : null}
+        {posts.data?.length === 0 ? <Text style={styles.muted}>{search ? i18n.t("sources.noMatch") : i18n.t("kits.noIndexed")}</Text> : null}
         {posts.data?.map((d) => (
           <View key={d.id} style={styles.row}>
             <View style={styles.text}>
@@ -93,7 +94,7 @@ export default function LaunchKits() {
                 </Text>
               ) : null}
             </View>
-            <PillButton small variant="primary" title={busy === d.id ? "Launching..." : "Launch"} busy={busy === d.id} disabled={busy !== null} onPress={() => void generate(d.id)} />
+            <PillButton small variant="primary" title={busy === d.id ? i18n.t("kits.launching") : i18n.t("kits.launch")} busy={busy === d.id} disabled={busy !== null} onPress={() => void generate(d.id)} />
           </View>
         ))}
       </Section>

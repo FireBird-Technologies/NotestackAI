@@ -12,6 +12,7 @@ import { CloseIcon } from "@/ui/icons";
 import { colors, fonts, gutter } from "@/ui/theme";
 import { ErrorText, formatDate, Loading } from "@/ui";
 import { pageStyles } from "@/ui/widgets";
+import i18n from "@/i18n";
 
 /** What a citation points at: a post's lines (opened in the reader), or what was said in a chat (its words alone). */
 export type Cited = Pick<
@@ -49,13 +50,13 @@ export function ReaderSheet({
       <SafeAreaView style={pageStyles.sheet} edges={["top", "bottom"]}>
         <View style={pageStyles.sheetHead}>
           <Text style={[pageStyles.sheetTitle, styles.head]} numberOfLines={1}>
-            {doc.data?.source_title ?? cite?.title ?? "Source"}
+            {doc.data?.source_title ?? cite?.title ?? i18n.t("citeReader.source")}
           </Text>
           <Pressable
             onPress={onClose}
             hitSlop={12}
             accessibilityRole="button"
-            accessibilityLabel="Close"
+            accessibilityLabel={i18n.t("common.close")}
           >
             <CloseIcon size={20} />
           </Pressable>
@@ -69,7 +70,7 @@ export function ReaderSheet({
             <Loading />
           ) : !doc.data ? (
             <ErrorText>
-              {doc.error?.message ?? "Could not load this post."}
+              {doc.error?.message ?? i18n.t("reader.loadFailed")}
             </ErrorText>
           ) : (
             <View>
@@ -77,8 +78,9 @@ export function ReaderSheet({
                 {doc.data.title}
               </Text>
               <Text style={styles.meta}>
-                {formatDate(doc.data.published_at)} · lines {cite.line_start}
-                {cite.line_end > cite.line_start ? ` to ${cite.line_end}` : ""}
+                {cite.line_end > cite.line_start
+                  ? i18n.t("citeReader.linesRange", { date: formatDate(doc.data.published_at), start: cite.line_start, end: cite.line_end })
+                  : i18n.t("citeReader.lines", { date: formatDate(doc.data.published_at), start: cite.line_start })}
               </Text>
               {doc.data.url ? (
                 <Text
@@ -89,7 +91,7 @@ export function ReaderSheet({
                     })
                   }
                 >
-                  Open the original
+                  {i18n.t("reader.original")}
                 </Text>
               ) : null}
               {doc.data.lines.map((text, i) => (

@@ -122,6 +122,26 @@ export const sourcesApi = {
     const { upload_id } = await uploadFile(file);
     return post<SourceJob>("/api/sources/upload", { upload_id, notebook_id: notebookId });
   },
+  /**
+   * importFile for several files, `concurrency` at a time (each is four round trips, so one after another is slow).
+   * Settles every file, in the order given, so a caller can say which ones failed.
+   */
+  importFiles: async (files: UploadSource[], notebookId?: string, concurrency = 4) => {
+    const out: PromiseSettledResult<SourceJob>[] = new Array(files.length);
+    let next = 0;
+    const lane = async () => {
+      while (next < files.length) {
+        const i = next++;
+        try {
+          out[i] = { status: "fulfilled", value: await sourcesApi.importFile(files[i], notebookId) };
+        } catch (reason) {
+          out[i] = { status: "rejected", reason };
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(concurrency, files.length) }, lane));
+    return out;
+  },
   importNotebookLm: (transferId: string, posts: NotebookLmTransferPost[], artifacts: NotebookLmTransferArtifact[] = [], notebookId?: string) =>
     post<NotebookLmImportResult>("/api/sources/notebooklm", {
       transfer_id: transferId, posts, artifacts, target_notebook_id: notebookId,

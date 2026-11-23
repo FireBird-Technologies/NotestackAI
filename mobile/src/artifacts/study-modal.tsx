@@ -6,6 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { CloseIcon } from "@/ui/icons";
 import { colors, fonts } from "@/ui/theme";
 import { pageStyles } from "@/ui/widgets";
+import i18n from "@/i18n";
 
 /**
  * A popup for studying (a quiz, flashcards, a summary), as the web's StudyOverlay: the title, minimise and close.
@@ -34,10 +35,10 @@ export function StudyModal({ title, visible, onClose, fill = false, children }: 
               {title}
             </Text>
             <View style={styles.headActions}>
-              <Pressable onPress={() => setMinimized(true)} hitSlop={10} accessibilityRole="button" accessibilityLabel="Minimise">
+              <Pressable onPress={() => setMinimized(true)} hitSlop={10} accessibilityRole="button" accessibilityLabel={i18n.t("misc.minimise")}>
                 <View style={styles.minus} />
               </Pressable>
-              <Pressable onPress={close} hitSlop={10} accessibilityRole="button" accessibilityLabel="Close">
+              <Pressable onPress={close} hitSlop={10} accessibilityRole="button" accessibilityLabel={i18n.t("common.close")}>
                 <CloseIcon size={20} />
               </Pressable>
             </View>
@@ -49,14 +50,14 @@ export function StudyModal({ title, visible, onClose, fill = false, children }: 
       </Modal>
       {visible && minimized ? (
         <View style={styles.pill}>
-          <Pressable onPress={() => setMinimized(false)} accessibilityRole="button" accessibilityLabel="Open again" style={styles.pillOpen}>
+          <Pressable onPress={() => setMinimized(false)} accessibilityRole="button" accessibilityLabel={i18n.t("studyModal.openAgain")} style={styles.pillOpen}>
             <View style={styles.pillDot} />
             <Text style={styles.pillTitle} numberOfLines={1}>
               {title}
             </Text>
-            <Text style={styles.pillLink}>Open</Text>
+            <Text style={styles.pillLink}>{i18n.t("studyModal.open")}</Text>
           </Pressable>
-          <Pressable onPress={close} hitSlop={8} accessibilityRole="button" accessibilityLabel="Close">
+          <Pressable onPress={close} hitSlop={8} accessibilityRole="button" accessibilityLabel={i18n.t("common.close")}>
             <CloseIcon size={14} color={colors.text2} />
           </Pressable>
         </View>

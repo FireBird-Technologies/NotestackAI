@@ -12,10 +12,12 @@ from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime, timedelta
 
 from fastapi.concurrency import run_in_threadpool
-from sqlalchemy import or_, select
+from sqlalchemy import case, or_, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.llm.languages import PARAM as APP_LANGUAGE_PARAM
+from app.llm.languages import app_language, app_language_name
 from app.models import Job, UsageEvent
 
 TERMINAL = {"done", "failed"}
@@ -52,6 +54,48 @@ def pending_job(db: Session, workspace_id: uuid.UUID, kind: str) -> bool:
                                           Job.status.in_(("queued", "running"))).limit(1)) is not None
 
 
+def queue_for_documents(db: Session, workspace_id: uuid.UUID, kind: str, ids: list[str], **kw) -> Job | None:
+    """Enqueue a per-post job (topics, ideas, post_cards) for these posts, or fold them into one of that kind still
+    waiting in the queue (never tried yet), so a batch of uploads makes one job instead of one per file. A queued job with no
+    document_ids already covers every post. SKIP LOCKED passes over a job a worker is claiming right now."""
+    if not ids:
+        return None
+    params = with_app_language(kind, {"document_ids": ids})
+    waiting = db.scalars(
+        select(Job)
+        .where(Job.workspace_id == workspace_id, Job.kind == kind, Job.status == "queued",
+               Job.attempts == 0)  # not one waiting out a retry
+        .order_by(Job.created_at)
+        .with_for_update(skip_locked=True)
+    ).all()
+    for job in waiting:
+        theirs = {k: v for k, v in (job.params or {}).items() if k != "document_ids"}
+        if theirs != {k: v for k, v in params.items() if k != "document_ids"}:
+            continue  # different options (another language, force): kept apart
+        have = job.params.get("document_ids")
+        if have is not None:
+            job.params = {**job.params, "document_ids": list(dict.fromkeys([*have, *ids]))}
+        db.commit()
+        return job
+    return create_job(db, workspace_id, kind, {"document_ids": ids}, **kw)
+
+
+# Jobs whose pipeline takes params["language"] (falling back to the language of the sources when it is empty).
+LANGUAGE_KINDS = frozenset({"quiz", "flashcards", "report", "report_block", "slide_deck", "audio_overview"})
+
+
+def with_app_language(kind: str, params: dict) -> dict:
+    """Carry the app language into the job: its code always (the worker restores it, so jobs the job starts inherit
+    it), and its name as the default output language for kinds that take one. An explicit language wins."""
+    code = app_language()
+    if not code:
+        return params
+    out = {**params, APP_LANGUAGE_PARAM: code}
+    if kind in LANGUAGE_KINDS and not str(params.get("language") or "").strip():
+        out["language"] = app_language_name()
+    return out
+
+
 def create_job(
     db: Session,
     workspace_id: uuid.UUID,
@@ -66,7 +110,7 @@ def create_job(
     job = Job(
         workspace_id=workspace_id,
         kind=kind,
-        params=params or {},
+        params=with_app_language(kind, params or {}),
         artifact_id=artifact_id,
         status="queued",
         max_attempts=max_attempts,
@@ -108,13 +152,17 @@ def update_job(
 # Consumer side (worker)
 
 
+# Imports someone is watching a progress bar for: taken before the background work earlier imports queued.
+FOREGROUND_KINDS = ("ingest", "import_url", "import_upload")
+
+
 def claim_next(db: Session, worker_id: str) -> uuid.UUID | None:
-    """Atomically take the oldest runnable job. SKIP LOCKED lets parallel workers pass each other."""
+    """Atomically take the oldest runnable job, imports first. SKIP LOCKED lets parallel workers pass each other."""
     now = utcnow()
     job = db.scalar(
         select(Job)
         .where(Job.status == "queued", or_(Job.run_after.is_(None), Job.run_after <= now))
-        .order_by(Job.created_at)
+        .order_by(case((Job.kind.in_(FOREGROUND_KINDS), 0), else_=1), Job.created_at)
         .limit(1)
         .with_for_update(skip_locked=True)
     )

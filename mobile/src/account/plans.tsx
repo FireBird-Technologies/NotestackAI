@@ -7,6 +7,7 @@ import { Pressable } from "@/ui/pressable";
 
 import { Card, publicText } from "@/shell/public-page";
 import { colors, fonts, radius } from "@/ui/theme";
+import i18n from "@/i18n";
 
 /** Monthly or annual, with the best annual saving on its tab (the pricing page and the upgrade sheet). */
 export function CycleToggle({ cycle, onChange, plans }: { cycle: Cycle; onChange: (c: Cycle) => void; plans: Plan[] }) {
@@ -21,8 +22,8 @@ export function CycleToggle({ cycle, onChange, plans }: { cycle: Cycle; onChange
           accessibilityState={{ checked: cycle === c }}
           onPress={() => onChange(c)}
           style={[styles.option, cycle === c && styles.optionOn]}>
-          <Text style={[styles.optionText, cycle === c && styles.optionTextOn]}>{c === "monthly" ? "Monthly" : "Annual"}</Text>
-          {c === "annual" && bestSaving > 0 ? <Text style={styles.save}>Save {bestSaving}%</Text> : null}
+          <Text style={[styles.optionText, cycle === c && styles.optionTextOn]}>{c === "monthly" ? i18n.t("plans.monthly") : i18n.t("plans.annual")}</Text>
+          {c === "annual" && bestSaving > 0 ? <Text style={styles.save}>{i18n.t("plans.save", { pct: bestSaving })}</Text> : null}
         </Pressable>
       ))}
     </View>
@@ -67,11 +68,11 @@ export function LegalLinks() {
     <View style={styles.legal}>
       <Pressable style={styles.legalItem} accessibilityRole="link" onPress={() => open("/terms")}>
         <View style={styles.legalBullet} />
-        <Text style={styles.legalLink}>Terms of Service</Text>
+        <Text style={styles.legalLink}>{i18n.t("plans.terms")}</Text>
       </Pressable>
       <Pressable style={styles.legalItem} accessibilityRole="link" onPress={() => open("/privacy")}>
         <View style={styles.legalBullet} />
-        <Text style={styles.legalLink}>Privacy Policy</Text>
+        <Text style={styles.legalLink}>{i18n.t("plans.privacy")}</Text>
       </Pressable>
     </View>
   );
@@ -86,15 +87,13 @@ export function SubscriptionTerms() {
   const open = (path: string) => void WebBrowser.openBrowserAsync(`https://notestack.ai${path}`, { controlsColor: colors.blue });
   return (
     <Text style={styles.terms}>
-      Plans renew automatically at the price shown, monthly or yearly, until you cancel. Payment is charged to your{" "}
-      {ios ? "Apple ID" : "Google account"} at confirmation. Cancel at least 24 hours before the period ends in your{" "}
-      {ios ? "App Store account settings" : "Google Play subscriptions"}.{" "}
+      {ios ? i18n.t("plans.termsIos") : i18n.t("plans.termsAndroid")}{" "}
       <Text style={styles.termsLink} onPress={() => open("/terms")}>
-        Terms of Service
+        {i18n.t("plans.terms")}
       </Text>{" "}
       ·{" "}
       <Text style={styles.termsLink} onPress={() => open("/privacy")}>
-        Privacy Policy
+        {i18n.t("plans.privacy")}
       </Text>
     </Text>
   );
@@ -112,7 +111,7 @@ export function PlanCard({
   plan,
   cycle,
   highlight = plan.id === POPULAR_PLAN,
-  badge = plan.id === POPULAR_PLAN ? "Most popular" : null,
+  badge = plan.id === POPULAR_PLAN ? i18n.t("plans.mostPopular") : null,
   storePrice,
   introPrice,
   children,
@@ -128,7 +127,7 @@ export function PlanCard({
   const free = plan.price_monthly_usd === 0;
   const annual = cycle === "annual" && !free;
   const intro = !free && storePrice ? introPrice : null;
-  const per = annual ? "/year" : "/month";
+  const per = annual ? i18n.t("plans.perYear") : i18n.t("plans.perMonth");
   // Its limits first, then what every plan shares
   const { limits, extras } = groupFeatures(plan.features);
   const row = (f: string) => (
@@ -148,7 +147,7 @@ export function PlanCard({
         <>
           <View style={styles.priceRow}>
             {free ? (
-              <Text style={styles.price}>Free</Text>
+              <Text style={styles.price}>{i18n.t("plans.free")}</Text>
             ) : (
               <>
                 {intro ? <Text style={styles.was}>{storePrice}</Text> : null}
@@ -169,12 +168,12 @@ export function PlanCard({
           ) : null}
           <Text style={publicText.mono}>
             {free
-              ? "Free forever"
+              ? i18n.t("plans.freeForever")
               : intro
-                ? `First ${annual ? "year" : "month"}, then ${storePrice}${per}`
+                ? i18n.t(annual ? "plans.firstYear" : "plans.firstMonth", { price: storePrice, per })
                 : annual
-                  ? "Billed yearly"
-                  : "Billed monthly"}
+                  ? i18n.t("plans.billedYearly")
+                  : i18n.t("plans.billedMonthly")}
           </Text>
         </>
       ) : null}

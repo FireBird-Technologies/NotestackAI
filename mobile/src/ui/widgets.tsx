@@ -8,6 +8,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Starfield } from "@/shell/starfield";
 import { colors, fonts, gutter, radius } from "@/ui/theme";
+import i18n, { endChevron, startChevron, tKey } from "@/i18n";
 
 /** The busy pill breathes, as the web's (pill-pulse). */
 const pulse = { "0%": { opacity: 1 }, "50%": { opacity: 0.5 }, "100%": { opacity: 1 } };
@@ -28,7 +29,7 @@ export function StatusPill({ status }: { status: string }) {
         styles[tone],
         tone === "busy" && { animationName: pulse, animationDuration: "1.6s", animationTimingFunction: "ease-in-out", animationIterationCount: "infinite" },
       ]}>
-      <Text style={[styles.pillText, { color: TONE_TEXT[tone] }]}>{status.toUpperCase()}</Text>
+      <Text style={[styles.pillText, { color: TONE_TEXT[tone] }]}>{tKey(`status.${status}`, status.replace(/_/g, " ")).toUpperCase()}</Text>
     </Animated.View>
   );
 }
@@ -40,10 +41,10 @@ export function JobProgress({ job }: { job: Job }) {
   const pct = Math.round((job.status === "done" ? 1 : job.progress) * 100);
   const failed = job.status === "failed";
   const label = failed
-    ? (job.error ?? "Failed")
+    ? (job.error ?? i18n.t("ui.failed"))
     : job.status === "queued"
-      ? (job.message ?? "Queued for launch")
-      : (job.message ?? "Working");
+      ? (job.message ?? i18n.t("ui.queued"))
+      : (job.message ?? i18n.t("ui.working"));
   return (
     <View
       style={styles.progress}
@@ -99,10 +100,10 @@ export function Pager({ page, pages, onChange }: { page: number; pages: number; 
         onPress={() => onChange(page + dir)}
         disabled={disabled}
         accessibilityRole="button"
-        accessibilityLabel={dir < 0 ? "Previous page" : "Next page"}
+        accessibilityLabel={dir < 0 ? i18n.t("ui.previousPage") : i18n.t("ui.nextPage")}
         style={[styles.pageButton, disabled && styles.off]}>
         <SymbolView
-          name={{ ios: dir < 0 ? "chevron.left" : "chevron.right", android: dir < 0 ? "chevron_left" : "chevron_right" }}
+          name={dir < 0 ? startChevron : endChevron}
           size={15}
           tintColor={colors.text}
           weight="semibold"
@@ -114,7 +115,7 @@ export function Pager({ page, pages, onChange }: { page: number; pages: number; 
     <View style={styles.pager}>
       {arrow(-1)}
       <Text style={styles.mono}>
-        Page {page + 1} of {pages}
+        {i18n.t("ui.pageOf", { page: page + 1, pages })}
       </Text>
       {arrow(1)}
     </View>
@@ -180,7 +181,7 @@ export function Sheet({ visible, title, onClose, onDismissed, children }: { visi
       <SafeAreaView style={pageStyles.sheet} edges={["top", "bottom"]}>
         <View style={pageStyles.sheetHead}>
           <Text style={pageStyles.sheetTitle}>{title}</Text>
-          <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel="Close">
+          <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel={i18n.t("common.close")}>
             <SymbolView name={{ ios: "xmark", android: "close" }} size={18} tintColor={colors.text} />
           </Pressable>
         </View>
@@ -200,7 +201,7 @@ export function Dialog({ visible, title, onClose, children }: { visible: boolean
         <Pressable silent style={pageStyles.dialog} onPress={() => {}}>
           <View style={pageStyles.dialogHead}>
             <Text style={pageStyles.sheetTitle}>{title}</Text>
-            <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel="Close">
+            <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel={i18n.t("common.close")}>
               <SymbolView name={{ ios: "xmark", android: "close" }} size={17} tintColor={colors.text2} />
             </Pressable>
           </View>
@@ -371,7 +372,7 @@ export function PopMenu({
         onRequestClose={close}
         onDismiss={runPicked}
         supportedOrientations={["portrait", "landscape"]}>
-        <Pressable silent style={StyleSheet.absoluteFill} onPress={close} accessibilityLabel="Close menu" />
+        <Pressable silent style={StyleSheet.absoluteFill} onPress={close} accessibilityLabel={i18n.t("ui.closeMenu")} />
         <View
           style={[pageStyles.popMenu, place]}
           accessibilityRole="menu"
@@ -400,7 +401,7 @@ export function PopMenu({
 /** Ask before something that cannot be undone (the web's ConfirmButton), then run it. */
 export function confirm(title: string, action: string, run: () => void, message?: string) {
   Alert.alert(title, message, [
-    { text: "Cancel", style: "cancel" },
+    { text: i18n.t("common.cancel"), style: "cancel" },
     { text: action, style: "destructive", onPress: run },
   ]);
 }
@@ -414,7 +415,7 @@ export function Meter({ label, used, limit, unit }: { label: string; used: numbe
       <View style={pageStyles.meterHead}>
         <Text style={pageStyles.meterLabel}>{label}</Text>
         <Text style={pageStyles.meterValue}>
-          {used} / {unlimited ? "unlimited" : limit}
+          {used} / {unlimited ? i18n.t("ui.unlimited") : limit}
           {unit ? ` ${unit}` : ""}
         </Text>
       </View>

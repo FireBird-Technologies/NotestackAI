@@ -5,14 +5,15 @@ import { Pressable } from "@/ui/pressable";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { colors, gutter } from "@/ui/theme";
+import i18n, { flipX } from "@/i18n";
 
 export type NotebookTab = "sources" | "chat" | "create" | "library";
 
 const TABS: { id: NotebookTab; label: string }[] = [
-  { id: "sources", label: "Sources" },
-  { id: "chat", label: "Chat" },
-  { id: "create", label: "Create" },
-  { id: "library", label: "Library" },
+  { id: "sources", label: i18n.t("tabs.sources") },
+  { id: "chat", label: i18n.t("tabs.chat") },
+  { id: "create", label: i18n.t("tabs.create") },
+  { id: "library", label: i18n.t("tabs.library") },
 ];
 
 /** A notebook's top bar as on the web app on a phone: back to the notebooks, and the four tabs in one pill. */
@@ -25,9 +26,9 @@ export function NotebookBar({ tab, onTab }: { tab: NotebookTab; onTab: (t: Noteb
           onPress={() => (router.canGoBack() ? router.back() : router.navigate("/notebooks"))}
           hitSlop={10}
           accessibilityRole="button"
-          accessibilityLabel="All notebooks"
+          accessibilityLabel={i18n.t("tabs.allNotebooks")}
           style={styles.back}>
-          <SymbolView name={{ ios: "chevron.left", android: "arrow_back" }} size={20} tintColor={colors.text} />
+          <SymbolView name={{ ios: "chevron.left", android: "arrow_back" }} size={20} tintColor={colors.text} style={flipX} />
         </Pressable>
         <View style={styles.tabs} accessibilityRole="tablist">
           {TABS.map((t) => {

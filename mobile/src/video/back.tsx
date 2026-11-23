@@ -4,6 +4,7 @@ import { Pressable } from "@/ui/pressable";
 
 import { ArrowLeftIcon } from "@/ui/icons";
 import { colors } from "@/ui/theme";
+import i18n from "@/i18n";
 
 /** "← Back", as the web's video pages: where you came from, else `fallback` (opened from a notebook or a link, there
  * is no screen behind it in this stack). */
@@ -13,10 +14,10 @@ export function BackLink({ fallback = "/library" }: { fallback?: "/library" | "/
       onPress={() => (router.canGoBack() ? router.back() : router.replace(fallback))}
       hitSlop={10}
       accessibilityRole="button"
-      accessibilityLabel="Back"
+      accessibilityLabel={i18n.t("common.back")}
       style={styles.back}>
       <ArrowLeftIcon size={16} color={colors.text2} />
-      <Text style={styles.text}>Back</Text>
+      <Text style={styles.text}>{i18n.t("common.back")}</Text>
     </Pressable>
   );
 }

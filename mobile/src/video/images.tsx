@@ -9,6 +9,7 @@ import { colors, fonts, radius } from "@/ui/theme";
 import { DeleteAssetModal, RemoveMediaModal } from "./scene-media";
 import type { PanelProps } from "./types";
 import { GroupHead, inFives, MediaThumb, NumBadge, vstyles } from "./ui";
+import i18n from "@/i18n";
 
 type Media = { key: string; filename: string; kind: string; url: string; assetId: number | null };
 
@@ -18,7 +19,7 @@ function MediaTile({ m, children }: { m: Media; children?: React.ReactNode }) {
     <View style={styles.tile}>
       <View style={styles.thumb}>
         <MediaThumb uri={m.url} kind={m.kind} />
-        {m.kind === "video" ? <Text style={styles.badge}>CLIP</Text> : null}
+        {m.kind === "video" ? <Text style={styles.badge}>{i18n.t("videoPanels.clip")}</Text> : null}
         {children}
       </View>
       <Text style={styles.name} numberOfLines={1}>
@@ -46,7 +47,7 @@ export function ImagesPanel(p: PanelProps) {
   return (
     <View style={vstyles.stack}>
       <View style={styles.head}>
-        <Text style={vstyles.h3}>Images and stock footage</Text>
+        <Text style={vstyles.h3}>{i18n.t("videoPanels.imagesTitle")}</Text>
         <Text style={[vstyles.muted, vstyles.small]}>
           {images} image{images === 1 ? "" : "s"} · {clips} stock clip{clips === 1 ? "" : "s"}
         </Text>
@@ -63,7 +64,7 @@ export function ImagesPanel(p: PanelProps) {
                     <View style={vstyles.row}>
                       <NumBadge n={s.order} />
                       <Text style={[vstyles.strong, styles.grow]} numberOfLines={2}>
-                        {s.title || `Scene ${s.order}`}
+                        {s.title || i18n.t("videoPanels.sceneN", { n: s.order })}
                       </Text>
                     </View>
                     <View style={styles.grid}>
@@ -73,13 +74,13 @@ export function ImagesPanel(p: PanelProps) {
                             onPress={() => setRemoving({ scene: s, filename: i.filename, kind: i.kind })}
                             disabled={p.disabled}
                             accessibilityRole="button"
-                            accessibilityLabel={`Remove from scene ${s.order}`}
+                            accessibilityLabel={i18n.t("videoPanels.removeFrom", { n: s.order })}
                             style={styles.x}>
                             <Text style={styles.xText}>✕</Text>
                           </Pressable>
                         </MediaTile>
                       ))}
-                      {(s.images ?? []).length === 0 ? <Text style={[vstyles.muted, vstyles.small]}>No media</Text> : null}
+                      {(s.images ?? []).length === 0 ? <Text style={[vstyles.muted, vstyles.small]}>{i18n.t("videoPanels.noMedia")}</Text> : null}
                     </View>
                   </View>
                 ))
@@ -89,17 +90,17 @@ export function ImagesPanel(p: PanelProps) {
       })}
 
       <View style={[styles.head, styles.unassignedHead]}>
-        <Text style={vstyles.h3}>Unassigned</Text>
-        <Text style={[vstyles.muted, vstyles.small]}>not used in any scene</Text>
+        <Text style={vstyles.h3}>{i18n.t("videoPanels.unassigned")}</Text>
+        <Text style={[vstyles.muted, vstyles.small]}>{i18n.t("videoPanels.unused")}</Text>
       </View>
       {unassigned.length === 0 ? (
-        <Text style={[vstyles.muted, vstyles.small]}>Every image and clip is on a scene.</Text>
+        <Text style={[vstyles.muted, vstyles.small]}>{i18n.t("videoPanels.allAssigned")}.</Text>
       ) : (
         <View style={styles.grid}>
           {unassigned.map((m) => (
             <MediaTile key={m.key} m={m}>
               {m.assetId !== null ? (
-                <Pressable onPress={() => setDeleting(m)} disabled={p.disabled} accessibilityRole="button" accessibilityLabel="Delete permanently" style={styles.x}>
+                <Pressable onPress={() => setDeleting(m)} disabled={p.disabled} accessibilityRole="button" accessibilityLabel={i18n.t("videoPanels.deleteForever")} style={styles.x}>
                   <TrashIcon size={13} color={colors.white} />
                 </Pressable>
               ) : null}
