@@ -10,6 +10,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { PUBLIC_HEADER_HEIGHT, PublicHeader } from "@/shell/public-header";
 import { Starfield } from "@/shell/starfield";
 import { colors, fonts, gutter, radius } from "@/ui/theme";
+import i18n from "@/i18n";
 
 const SITE = "https://notestack.ai";
 
@@ -142,7 +143,7 @@ export function Faq({ items }: { items: { question: string; answer: string }[] }
   if (!items.length) return null;
   return (
     <View style={styles.section}>
-      <SectionTitle>Questions</SectionTitle>
+      <SectionTitle>{i18n.t("public.questions")}</SectionTitle>
       {items.map((f) => {
         const expanded = open === f.question;
         return (
@@ -177,7 +178,7 @@ export function Related({ paths }: { paths: string[] }) {
   if (!paths.length) return null;
   return (
     <View style={styles.section}>
-      <SectionTitle>Keep exploring</SectionTitle>
+      <SectionTitle>{i18n.t("public.keepExploring")}</SectionTitle>
       {paths.map((p) => (
         <Text key={p} style={[publicText.body, styles.link]} onPress={() => openLink(p)} accessibilityRole="link">
           {pathTitle(p)}

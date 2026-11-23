@@ -9,6 +9,7 @@ import { LibraryPicker } from "@/launchpad/library-picker";
 import { ErrorText } from "@/ui";
 import { BackLink } from "@/video/back";
 import { Page, PageHead, Section, Sheet } from "@/ui/widgets";
+import i18n from "@/i18n";
 
 /** A new post: from a Library item (attached), or a copy of a scheduled post (its words and attachment). */
 type Draft = { artifactId: string; text?: string };
@@ -40,11 +41,11 @@ export default function ScheduleLaunch() {
       const item = (await launchpadApi.items({ status: "scheduled" })).find((i) => i.id === itemId);
       if (item) then(item);
       else {
-        setError("That post isn't scheduled anymore.");
+        setError(i18n.t("launchpad.notScheduled"));
         reload();
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not open that post. Try again.");
+      setError(e instanceof Error ? e.message : i18n.t("launchpad.openFailed"));
     } finally {
       setOpening(null);
     }
@@ -53,7 +54,7 @@ export default function ScheduleLaunch() {
   return (
     <Page>
       <BackLink fallback="/launchpad" />
-      <PageHead eyebrow="Launchpad" title="Schedule a launch" />
+      <PageHead eyebrow={i18n.t("launchpad.eyebrow")} title={i18n.t("launchpad.schedule")} />
       <ErrorText>{error}</ErrorText>
       <Section>
         <LibraryPicker
@@ -67,7 +68,7 @@ export default function ScheduleLaunch() {
         />
       </Section>
 
-      <Sheet visible={draft !== null} title="Create post" onClose={() => setDraft(null)}>
+      <Sheet visible={draft !== null} title={i18n.t("launchpad.createPost")} onClose={() => setDraft(null)}>
         {draft ? (
           <Composer
             at={null}
@@ -86,7 +87,7 @@ export default function ScheduleLaunch() {
           />
         ) : null}
       </Sheet>
-      <Sheet visible={editing !== null} title={editing ? `${editing.platform_label} post` : ""} onClose={() => setEditing(null)}>
+      <Sheet visible={editing !== null} title={editing ? i18n.t("launchpad.platformPost", { platform: editing.platform_label }) : ""} onClose={() => setEditing(null)}>
         {editing ? <PostEditor item={editing} accounts={accounts.data ?? null} onAccounts={setAccounts} onChanged={reload} onClose={() => setEditing(null)} /> : null}
       </Sheet>
     </Page>

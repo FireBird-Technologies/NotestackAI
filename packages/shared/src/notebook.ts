@@ -1,4 +1,5 @@
 import type { ChatSummary, Doc, VideoOptions } from "./types";
+import { tr } from "./i18n";
 
 /** The questions offered in an empty notebook chat. */
 export const STARTERS = ["What are the strongest ideas across these posts?", "Where do I contradict myself?", "Which post is most worth updating, and why?"];
@@ -10,7 +11,7 @@ export const STARTERS = ["What are the strongest ideas across these posts?", "Wh
 export function firstNotebookName(docs: Pick<Doc, "title" | "source_title">[], sourceTitle?: string | null): string {
   const sources = new Set(docs.map((d) => d.source_title?.trim()).filter(Boolean));
   const name = docs.length === 1 ? docs[0].title : sources.size === 1 ? [...sources][0] : sourceTitle;
-  return name?.trim().slice(0, 80) || "My notebook";
+  return name?.trim().slice(0, 80) || tr("notebook.myNotebook", "My notebook");
 }
 
 /** Chats under date headings: Today, Yesterday, the last week, the last month, then by month. Newest first. */
@@ -22,8 +23,9 @@ export function groupChats(chats: ChatSummary[]): { label: string; items: ChatSu
   [...chats].sort((a, b) => +stamp(b) - +stamp(a)).forEach((c) => {
     const when = stamp(c);
     const days = Math.round((today - startOfDay(when)) / 86400000);
-    const label = days <= 0 ? "Today" : days === 1 ? "Yesterday" : days <= 7 ? "Previous 7 days" : days <= 30 ? "Previous 30 days"
-      : when.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+    const label = days <= 0 ? tr("chats.today", "Today") : days === 1 ? tr("chats.yesterday", "Yesterday")
+      : days <= 7 ? tr("chats.last7", "Previous 7 days") : days <= 30 ? tr("chats.last30", "Previous 30 days")
+      : when.toLocaleDateString(tr("locale", "") || undefined, { month: "long", year: "numeric" });
     const last = groups[groups.length - 1];
     if (last && last.label === label) last.items.push(c);
     else groups.push({ label, items: [c] });

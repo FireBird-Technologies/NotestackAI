@@ -15,10 +15,11 @@ import { colors, fonts, gutter } from "@/ui/theme";
 import { STATUS_LABEL, Sparkline, StarMap, type ColorMode } from "@/sources/topic-map";
 import { Body, Button, ErrorText, Loading, formatDate } from "@/ui";
 import { CARD_RADIUS, JobProgress } from "@/ui/widgets";
+import i18n from "@/i18n";
 
 function momentumText(m: number) {
   if (!Number.isFinite(m) || m === 0) return "no recent posts";
-  return m >= 1 ? `${m.toFixed(1)}x its usual share lately` : `${Math.round(m * 100)}% of its usual share lately`;
+  return m >= 1 ? i18n.t("map.usualShareUp", { x: m.toFixed(1) }) : i18n.t("map.usualSharePct", { pct: Math.round(m * 100) });
 }
 
 /** The constellations in the archive (web: pages/TopicMap.tsx): the map, the briefing, and a topic's details. */
@@ -58,7 +59,7 @@ export default function TopicMapScreen() {
     try {
       setJob(await topicsApi.rebuild(full));
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Could not start the rebuild. Try again.");
+      setError(e instanceof ApiError ? e.message : i18n.t("map.rebuildFailed"));
     }
   };
 
@@ -66,13 +67,13 @@ export default function TopicMapScreen() {
     const confirm = () => void rebuild(true);
     if (Platform.OS === "ios") {
       ActionSheetIOS.showActionSheetWithOptions(
-        { options: ["Rebuild the whole map", "Cancel"], cancelButtonIndex: 1, userInterfaceStyle: "dark" },
+        { options: [i18n.t("map.rebuildAll"), i18n.t("common.cancel")], cancelButtonIndex: 1, userInterfaceStyle: "dark" },
         (i) => i === 0 && confirm(),
       );
     } else {
-      Alert.alert("Map options", undefined, [
-        { text: "Rebuild the whole map", onPress: confirm },
-        { text: "Cancel", style: "cancel" },
+      Alert.alert(i18n.t("map.options"), undefined, [
+        { text: i18n.t("map.rebuildAll"), onPress: confirm },
+        { text: i18n.t("common.cancel"), style: "cancel" },
       ]);
     }
   };
@@ -86,7 +87,7 @@ export default function TopicMapScreen() {
       const detail = await topicsApi.get(id);
       if (pickedRef.current === id) setSelected(detail); // a later tap (or a tap that let go) wins
     } catch (e) {
-      if (pickedRef.current === id) setError(e instanceof ApiError ? e.message : "Could not load that topic.");
+      if (pickedRef.current === id) setError(e instanceof ApiError ? e.message : i18n.t("map.topicFailed"));
     }
   };
   /** Let go of the lit star and close its details. */
@@ -116,16 +117,16 @@ export default function TopicMapScreen() {
       <Starfield />
       <ScrollView contentContainerStyle={styles.page}>
         <SourcesNav current="map" />
-        <Text style={styles.eyebrow}>Topic map</Text>
+        <Text style={styles.eyebrow}>{i18n.t("map.eyebrow")}</Text>
         <Text style={styles.title} accessibilityRole="header">
-          The constellations in your archive
+          {i18n.t("map.title")}
         </Text>
 
         <View style={styles.toolbar}>
           <Segments
             options={[
-              { id: "recency", label: "Recency" },
-              { id: "momentum", label: "Momentum" },
+              { id: "recency", label: i18n.t("map.recency") },
+              { id: "momentum", label: i18n.t("map.momentum") },
             ]}
             value={mode}
             onChange={setMode}
@@ -137,34 +138,31 @@ export default function TopicMapScreen() {
                 onValueChange={setBriefing}
                 trackColor={{ false: colors.surface2, true: colors.blue }}
                 thumbColor={colors.white}
-                accessibilityLabel="Briefing"
+                accessibilityLabel={i18n.t("map.briefing")}
               />
-              <Text style={[styles.switchLabel, briefing && styles.switchLabelOn]}>Briefing</Text>
+              <Text style={[styles.switchLabel, briefing && styles.switchLabelOn]}>{i18n.t("map.briefing")}</Text>
             </View>
           ) : null}
-          <Pressable onPress={options} hitSlop={10} accessibilityRole="button" accessibilityLabel="Map options" style={styles.more}>
+          <Pressable onPress={options} hitSlop={10} accessibilityRole="button" accessibilityLabel={i18n.t("map.options")} style={styles.more}>
             <Text style={styles.moreText}>⋯</Text>
           </Pressable>
         </View>
         {data?.has_untagged_posts ? (
           <Pressable disabled={running} onPress={() => rebuild(false)} style={[styles.outline, running && styles.off]}>
-            <Text style={styles.outlineText}>Map new posts</Text>
+            <Text style={styles.outlineText}>{i18n.t("map.mapNew")}</Text>
           </Pressable>
         ) : null}
 
         {job && (running || job.status === "failed") ? <JobProgress job={job} /> : null}
         <ErrorText>{error}</ErrorText>
         {map.isPending ? <Loading /> : null}
-        {map.error && !data ? <ErrorText>Could not load the topic map.</ErrorText> : null}
+        {map.error && !data ? <ErrorText>{i18n.t("map.loadFailed")}</ErrorText> : null}
 
         {data && data.nodes.length === 0 && !running ? (
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>No constellations yet</Text>
-            <Body muted>
-              Notestack reads each post and names what it is about, then links topics that appear together. New posts are
-              mapped automatically after each sync.
-            </Body>
-            <Button title="Map my archive" onPress={() => rebuild(false)} />
+            <Text style={styles.cardTitle}>{i18n.t("map.none")}</Text>
+            <Body muted>{i18n.t("map.noneBody")}</Body>
+            <Button title={i18n.t("map.mapArchive")} onPress={() => rebuild(false)} />
           </View>
         ) : null}
 
@@ -186,7 +184,7 @@ export default function TopicMapScreen() {
             topic={selected}
             recentBucket={recentBucket}
             acting={acting}
-            closeLabel={briefing ? "Back to briefing" : "Close"}
+            closeLabel={briefing ? i18n.t("map.backToBriefing") : i18n.t("common.close")}
             onClose={unpick}
             onOpen={(id) => void open(id, true)}
             onAudio={async () => {
@@ -196,7 +194,7 @@ export default function TopicMapScreen() {
                 await artifactsApi.generate({ type: "audio_overview", notebook_id: nb.id, format: "deep_dive", minutes: 6 });
                 router.navigate({ pathname: "/notebooks/[id]", params: { id: nb.id, title: nb.title } });
               } catch (e) {
-                setError(e instanceof ApiError ? e.message : "Could not start the audio overview.");
+                setError(e instanceof ApiError ? e.message : i18n.t("map.audioFailed"));
               } finally {
                 setActing(null);
               }
@@ -215,39 +213,43 @@ export default function TopicMapScreen() {
 
         {data && briefing && !selected ? (
           <View style={styles.card}>
-            <Text style={styles.eyebrow}>Mission briefing</Text>
+            <Text style={styles.eyebrow}>{i18n.t("map.missionBriefing")}</Text>
             <Text style={styles.body}>
-              {data.archive.posts} posts from {formatDate(data.archive.start)} to {formatDate(data.archive.end)}. Recent
-              means since {formatDate(data.archive.recent_from)}.
+              {i18n.t("map.archiveSpan", {
+                posts: data.archive.posts,
+                start: formatDate(data.archive.start),
+                end: formatDate(data.archive.end),
+                recent: formatDate(data.archive.recent_from),
+              })}
             </Text>
 
-            <Brief title="Galaxies">
+            <Brief title={i18n.t("map.galaxies")}>
               {galaxies.slice(0, 6).map((g) => (
-                <Row key={g.id} label={g.name} meta={`${g.size} topics · ${g.post_count} posts`} onPress={() => g.topic_ids[0] && open(g.topic_ids[0], true)} />
+                <Row key={g.id} label={g.name} meta={i18n.t("map.galaxyMeta", { topics: g.size, posts: g.post_count })} onPress={() => g.topic_ids[0] && open(g.topic_ids[0], true)} />
               ))}
-              {galaxies.length === 0 ? <Text style={styles.body}>No clusters yet. Map more posts.</Text> : null}
+              {galaxies.length === 0 ? <Text style={styles.body}>{i18n.t("map.noClusters")}</Text> : null}
             </Brief>
 
-            <Brief title="Rising">
+            <Brief title={i18n.t("map.rising")}>
               {data.insights.rising.map((r) => (
                 <Row key={r.id} label={r.name} meta={`${r.momentum.toFixed(1)}x`} metaUp onPress={() => open(r.id, true)} />
               ))}
-              {data.insights.rising.length === 0 ? <Text style={styles.body}>Nothing is picking up speed right now.</Text> : null}
+              {data.insights.rising.length === 0 ? <Text style={styles.body}>{i18n.t("map.nothingRising")}</Text> : null}
             </Brief>
 
-            <Brief title="Dormant">
+            <Brief title={i18n.t("map.dormant")}>
               {data.insights.dormant.map((d) => (
-                <Row key={d.id} label={d.name} meta={`since ${formatDate(d.last_at)}`} onPress={() => open(d.id, true)} />
+                <Row key={d.id} label={d.name} meta={i18n.t("map.since", { date: formatDate(d.last_at) })} onPress={() => open(d.id, true)} />
               ))}
-              {data.insights.dormant.length === 0 ? <Text style={styles.body}>Every topic has been visited lately.</Text> : null}
+              {data.insights.dormant.length === 0 ? <Text style={styles.body}>{i18n.t("map.allVisited")}</Text> : null}
               {data.insights.dormant.length > 0 ? (
                 <Text style={styles.monoLink} onPress={() => router.navigate("/launchpad")}>
-                  Resurface old posts
+                  {i18n.t("map.resurface")}
                 </Text>
               ) : null}
             </Brief>
 
-            <Brief title="Strongest pairings" last>
+            <Brief title={i18n.t("map.pairings")} last>
               {data.insights.pairs.map((p) => (
                 <View key={`${p.a_id}-${p.b_id}`} style={styles.row}>
                   <Text style={styles.rowLabelWrap}>
@@ -259,7 +261,7 @@ export default function TopicMapScreen() {
                       {p.b}
                     </Text>
                   </Text>
-                  <Text style={styles.rowMeta}>{p.posts} posts</Text>
+                  <Text style={styles.rowMeta}>{i18n.t("notebooks.posts", { count: p.posts })}</Text>
                 </View>
               ))}
             </Brief>
@@ -323,10 +325,10 @@ function TopicCard({
       {t.summary ? <Text style={styles.body}>{t.summary}</Text> : null}
       <View style={styles.stats}>
         {[
-          ["Posts", String(t.post_count)],
-          ["Recent", String(t.recent_posts)],
-          ["First", formatDate(t.first_at)],
-          ["Last", formatDate(t.last_at)],
+          [i18n.t("map.statPosts"), String(t.post_count)],
+          [i18n.t("map.statRecent"), String(t.recent_posts)],
+          [i18n.t("map.statFirst"), formatDate(t.first_at)],
+          [i18n.t("map.statLast"), formatDate(t.last_at)],
         ].map(([k, v]) => (
           <View key={k} style={styles.stat}>
             <Text style={styles.statKey}>{k}</Text>
@@ -334,7 +336,7 @@ function TopicCard({
           </View>
         ))}
       </View>
-      <Text style={styles.rowMeta}>Momentum: {momentumText(t.momentum)}</Text>
+      <Text style={styles.rowMeta}>{i18n.t("map.momentumLine", { text: momentumText(t.momentum) })}</Text>
       <Sparkline values={t.timeline} highlightFrom={recentBucket} />
       <View style={styles.row}>
         <Text style={styles.rowMeta}>{formatDate(t.timeline_start)}</Text>
@@ -342,7 +344,7 @@ function TopicCard({
       </View>
       {t.related.length > 0 ? (
         <>
-          <Text style={styles.rowMeta}>Travels with</Text>
+          <Text style={styles.rowMeta}>{i18n.t("map.travelsWith")}</Text>
           <View style={styles.chips}>
             {t.related.map((r) => (
               <Pressable key={r.id} onPress={() => onOpen(r.id)} style={styles.chip}>
@@ -355,16 +357,16 @@ function TopicCard({
         </>
       ) : null}
       <View style={styles.actions}>
-        <Button title={acting === "audio" ? "Starting..." : "Audio about this"} onPress={onAudio} busy={acting === "audio"} disabled={acting !== null} />
+        <Button title={acting === "audio" ? i18n.t("common.starting") : i18n.t("map.audioAbout")} onPress={onAudio} busy={acting === "audio"} disabled={acting !== null} />
         {t.posts[0] ? (
           <Button
-            title="Launch Kit for the latest post"
+            title={i18n.t("map.kitLatest")}
             variant="secondary"
             disabled={acting !== null}
             onPress={() => router.push({ pathname: "/launchpad/kits", params: { post: t.posts[0].id } })}
           />
         ) : null}
-        <Button title="Open as notebook" variant="secondary" onPress={onNotebook} busy={acting === "notebook"} disabled={acting !== null} />
+        <Button title={i18n.t("map.openNotebook")} variant="secondary" onPress={onNotebook} busy={acting === "notebook"} disabled={acting !== null} />
       </View>
       {t.posts.map((d) => (
         <View key={d.id} style={styles.postRow}>

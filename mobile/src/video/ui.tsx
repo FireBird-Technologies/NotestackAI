@@ -7,6 +7,7 @@ import { GestureDetector, useCompetingGestures, usePanGesture, useTapGesture } f
 
 import { ChevronIcon } from "@/ui/icons";
 import { colors, fonts, radius } from "@/ui/theme";
+import i18n from "@/i18n";
 
 /* The pieces the video editor's panels share (web: the vw-* styles in styles/videos.css and video/parts.tsx). */
 
@@ -158,7 +159,7 @@ export function MediaThumb({ uri, kind, poster, style }: { uri: string; kind: st
   const [playing, setPlaying] = useState(false);
   if (kind !== "video") return <Image source={{ uri }} style={[styles.fill, style]} contentFit="cover" />;
   return (
-    <Pressable style={[styles.fill, style]} onPress={() => setPlaying((p) => !p)} accessibilityRole="button" accessibilityLabel={playing ? "Pause the clip" : "Play the clip"}>
+    <Pressable style={[styles.fill, style]} onPress={() => setPlaying((p) => !p)} accessibilityRole="button" accessibilityLabel={playing ? i18n.t("videoPanels.pauseClip") : i18n.t("videoPanels.playClip")}>
       {playing || !poster ? <ClipView uri={uri} playing={playing} /> : <Image source={{ uri: poster }} style={styles.fill} contentFit="cover" />}
     </Pressable>
   );

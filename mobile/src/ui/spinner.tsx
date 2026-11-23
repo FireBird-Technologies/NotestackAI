@@ -3,6 +3,7 @@ import Animated, { cancelAnimation, Easing, useAnimatedStyle, useSharedValue, wi
 import Svg, { Circle } from "react-native-svg";
 
 import { colors } from "@/ui/theme";
+import i18n from "@/i18n";
 
 /** A loader drawn as a thin ring with a quarter of it lit, turning on the UI thread (the web's .spinner). */
 export function RingSpinner({ size = 18, color = colors.blue, stroke = 2 }: { size?: number; color?: string; stroke?: number }) {
@@ -15,7 +16,7 @@ export function RingSpinner({ size = 18, color = colors.blue, stroke = 2 }: { si
   const r = (size - stroke) / 2;
   const length = 2 * Math.PI * r;
   return (
-    <Animated.View style={[{ width: size, height: size }, spin]} accessibilityRole="progressbar" accessibilityLabel="Loading">
+    <Animated.View style={[{ width: size, height: size }, spin]} accessibilityRole="progressbar" accessibilityLabel={i18n.t("common.loading")}>
       <Svg width={size} height={size}>
         <Circle cx={size / 2} cy={size / 2} r={r} stroke={color} strokeOpacity={0.22} strokeWidth={stroke} fill="none" />
         <Circle

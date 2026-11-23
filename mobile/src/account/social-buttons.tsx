@@ -11,6 +11,7 @@ import { useAuth } from "@/account/auth";
 import { appleAvailable, googleReady, signInWithApple, signInWithGoogle, SocialSignInError } from "@/account/social-auth";
 import { colors, fonts, radius } from "@/ui/theme";
 import { ErrorText } from "@/ui";
+import i18n from "@/i18n";
 
 const HEIGHT = 50;
 
@@ -55,7 +56,7 @@ export function SocialButtons({ mode }: { mode: "signin" | "signup" }) {
       if (result) complete(result);
     } catch (e) {
       // The API's refusal and our own sign in errors say what happened; anything else is the network.
-      setError(e instanceof ApiError || e instanceof SocialSignInError ? e.message : "Could not reach Notestack. Check your connection.");
+      setError(e instanceof ApiError || e instanceof SocialSignInError ? e.message : i18n.t("common.noConnection"));
     } finally {
       setBusy(null);
     }
@@ -92,7 +93,7 @@ export function SocialButtons({ mode }: { mode: "signin" | "signup" }) {
           ) : (
             <>
               <GoogleMark />
-              <Text style={styles.googleText}>Continue with Google</Text>
+              <Text style={styles.googleText}>{i18n.t("auth.continueGoogle")}</Text>
             </>
           )}
         </Pressable>
@@ -100,7 +101,7 @@ export function SocialButtons({ mode }: { mode: "signin" | "signup" }) {
       <ErrorText>{error}</ErrorText>
       <View style={styles.divider}>
         <View style={styles.rule} />
-        <Text style={styles.or}>OR WITH EMAIL</Text>
+        <Text style={styles.or}>{i18n.t("auth.orEmail")}</Text>
         <View style={styles.rule} />
       </View>
     </View>

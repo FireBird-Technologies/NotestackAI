@@ -25,6 +25,7 @@ import { colors, fonts, radius } from "@/ui/theme";
 import { ErrorText, formatDate } from "@/ui";
 import { ChevronIcon, EyeIcon, SparkleIcon } from "@/ui/icons";
 import { confirm, pageStyles, PillButton, StatusPill } from "@/ui/widgets";
+import i18n from "@/i18n";
 
 const LINKEDIN = PLATFORMS.find((p) => p.id === "linkedin")!;
 
@@ -69,7 +70,7 @@ function PostField({ label, value, onChange, limit, locked }: { label: string; v
         editable={!locked}
         multiline
         textAlignVertical="top"
-        placeholder="What do you want to say?"
+        placeholder={i18n.t("lp.sayPlaceholder")}
         placeholderTextColor={colors.text3}
       />
     </View>
@@ -89,11 +90,11 @@ function AttachField({ attached, picking, setPicking, setAttached, locked, onCre
   if (!attached && locked) return null;
   return (
     <View style={styles.field}>
-      <Text style={pageStyles.label}>Attachment</Text>
+      <Text style={pageStyles.label}>{i18n.t("lp.attachment")}</Text>
       {attached ? (
         <AttachmentChip a={attached} onChange={locked ? undefined : () => setPicking(true)} onRemove={locked ? undefined : () => setAttached(null)} />
       ) : (
-        <PillButton title="+ Attach from your Library" onPress={() => setPicking(true)} />
+        <PillButton title={i18n.t("lp.attachButton")} onPress={() => setPicking(true)} />
       )}
       <AttachSheet
         visible={picking}
@@ -250,7 +251,7 @@ export function Composer({
 
   const insertLink = (p: Platform, i: number, value: string) => {
     const url = normalLink(linkUrl);
-    if (!url) return setLinkError("Enter a valid web address.");
+    if (!url) return setLinkError(i18n.t("lp.badUrl"));
     const sel = selectionOf(p, i, value);
     const edit = linkEdit(value, sel.start, sel.end, url);
     setTool(null);
@@ -276,9 +277,9 @@ export function Composer({
   };
 
   const submit = async (now: boolean) => {
-    if (!selected.length) return setError("Pick where to post.");
+    if (!selected.length) return setError(i18n.t("lp.pickWhere"));
     if (blocked.length) return setError(blocked[0]);
-    if (!now && wallToDate(when) <= new Date()) return setError("Pick a time that is still ahead.");
+    if (!now && wallToDate(when) <= new Date()) return setError(i18n.t("lp.pickAhead"));
     setBusy(now ? "now" : "schedule");
     setError("");
     const done: string[] = [];
@@ -304,7 +305,7 @@ export function Composer({
       }
       onDone();
     } catch (e) {
-      const msg = e instanceof ApiError ? e.message : "Could not schedule it. Try again.";
+      const msg = e instanceof ApiError ? e.message : i18n.t("lp.scheduleFailed");
       setError(done.length ? `${done.join(" and ")} done; then: ${msg}` : msg);
     } finally {
       setBusy(null);
@@ -315,8 +316,8 @@ export function Composer({
   const previewText = (texts[activePlatform] ?? [""]).filter(Boolean).join("\n\n");
 
   const runAi = async (action: AiAction) => {
-    if (action === "generate" && !aiPrompt.trim()) return setAiError("Describe what you want the post to say.");
-    if (action !== "generate" && !previewText.trim()) return setAiError("Write something first, then choose how AI should rework it.");
+    if (action === "generate" && !aiPrompt.trim()) return setAiError(i18n.t("lp.describePost"));
+    if (action !== "generate" && !previewText.trim()) return setAiError(i18n.t("lp.writeFirst"));
     setAiBusy(action);
     setAiError(null);
     try {
@@ -346,9 +347,9 @@ export function Composer({
           setPane(v);
         }}
         tabs={[
-          { id: "write", label: "Write" },
-          { id: "preview", label: "Preview", icon: (color) => <EyeIcon size={17} color={color} /> },
-          { id: "ai", label: "AI", icon: (color) => <SparkleIcon size={16} color={color} /> },
+          { id: "write", label: i18n.t("lp.tabWrite") },
+          { id: "preview", label: i18n.t("lp.tabPreview"), icon: (color) => <EyeIcon size={17} color={color} /> },
+          { id: "ai", label: i18n.t("lp.tabAi"), icon: (color) => <SparkleIcon size={16} color={color} /> },
         ]}
       />
 
@@ -377,14 +378,14 @@ export function Composer({
                     <BrandIcon brand={p} size={18} color={colors.text2} />
                     <View style={styles.flex}>
                       <Text style={styles.accountName} numberOfLines={1}>
-                        {account?.handle ?? `${meta.label} account`}
+                        {account?.handle ?? i18n.t("lp.account", { platform: meta.label })}
                       </Text>
                       <Text style={[styles.accountState, problem ? styles.warn : null]}>
-                        {problem ?? (!ready ? "Checking connection..." : account ? "Connected" : "Not connected")}
+                        {problem ?? (!ready ? i18n.t("lp.checking") : account ? i18n.t("lp.connectedCap") : i18n.t("lp.notConnectedCap"))}
                       </Text>
                     </View>
                   </Pressable>
-                  <Pressable onPress={toggle} hitSlop={8} style={styles.chevron} accessibilityRole="button" accessibilityLabel={`${open ? "Collapse" : "Expand"} ${meta.label} editor`}>
+                  <Pressable onPress={toggle} hitSlop={8} style={styles.chevron} accessibilityRole="button" accessibilityLabel={i18n.t(open ? "lp.collapse" : "lp.expand", { platform: meta.label })}>
                     <View style={open ? styles.chevronUp : null}>
                       <ChevronIcon size={16} color={colors.text3} />
                     </View>
@@ -392,7 +393,7 @@ export function Composer({
                 </View>
                 {problem && canConnect ? (
                   <View style={styles.connectRow}>
-                    <PillButton small title={`${accounts?.accounts.some((a) => a.platform === p) ? "Reconnect" : "Connect"} ${meta.label}`} onPress={() => void connect(p)} />
+                    <PillButton small title={i18n.t(accounts?.accounts.some((a) => a.platform === p) ? "lp.reconnect" : "lp.connect", { platform: meta.label })} onPress={() => void connect(p)} />
                   </View>
                 ) : null}
                 {problem && ready && !canConnect ? <Text style={[pageStyles.mono, styles.connectRow]}>{meta.label} posting isn&apos;t set up yet.</Text> : null}
@@ -403,7 +404,7 @@ export function Composer({
                       const key = `${p}:${i}`;
                       return (
                         <View key={i} style={styles.field}>
-                          <Text style={styles.fieldLabel}>{threaded && list.length > 1 ? `Post ${i + 1}` : "Post text"}</Text>
+                          <Text style={styles.fieldLabel}>{threaded && list.length > 1 ? i18n.t("lp.postN", { n: i + 1 }) : i18n.t("lp.postText")}</Text>
                           <TextInput
                             ref={(node) => {
                               inputs.current[key] = node;
@@ -416,9 +417,9 @@ export function Composer({
                             }}
                             multiline
                             textAlignVertical="top"
-                            placeholder={`Write your ${meta.label} post...`}
+                            placeholder={i18n.t("lp.writePlaceholder", { platform: meta.label })}
                             placeholderTextColor={colors.text3}
-                            accessibilityLabel={`${meta.label} ${threaded && list.length > 1 ? `post ${i + 1}` : "post"}`}
+                            accessibilityLabel={threaded && list.length > 1 ? i18n.t("lp.postNLabel", { platform: meta.label, n: i + 1 }) : i18n.t("lp.postLabel", { platform: meta.label })}
                           />
                           {tool?.key === key && tool.kind === "link" ? (
                             <LinkBar
@@ -446,8 +447,8 @@ export function Composer({
                     {attached ? <AttachmentChip a={attached} onChange={() => setPicking(true)} onRemove={() => setAttached(null)} /> : null}
                     {threaded ? (
                       <View style={pageStyles.row}>
-                        <PillButton small title="+ Add to thread" onPress={() => setTexts({ ...texts, [p]: [...list, ""] })} />
-                        {list.length > 1 ? <PillButton small title="Remove last" onPress={() => setTexts({ ...texts, [p]: list.slice(0, -1) })} /> : null}
+                        <PillButton small title={i18n.t("lp.addThread")} onPress={() => setTexts({ ...texts, [p]: [...list, ""] })} />
+                        {list.length > 1 ? <PillButton small title={i18n.t("lp.removeLast")} onPress={() => setTexts({ ...texts, [p]: list.slice(0, -1) })} /> : null}
                       </View>
                     ) : null}
                   </View>
@@ -494,8 +495,8 @@ export function Composer({
             </Svg>
           </View>
           <View style={styles.flex}>
-            <Text style={styles.scheduleTitle}>Publishing time</Text>
-            <Text style={styles.scheduleSub}>Choose when this post should go live.</Text>
+            <Text style={styles.scheduleTitle}>{i18n.t("lp.publishing")}</Text>
+            <Text style={styles.scheduleSub}>{i18n.t("lp.publishingSub")}</Text>
           </View>
         </View>
         <SlotPicker value={when} onChange={setWhen} />
@@ -505,7 +506,7 @@ export function Composer({
       <View style={styles.actions}>
         <PillButton
           style={styles.flex}
-          title={busy === "now" ? "Posting..." : selected.length > 1 ? `Post to ${selected.length} now` : "Post now"}
+          title={busy === "now" ? i18n.t("lp.posting") : selected.length > 1 ? i18n.t("lp.postToNow", { count: selected.length }) : i18n.t("lp.postNow")}
           busy={busy === "now"}
           disabled={busy !== null || blocked.length > 0 || checking}
           onPress={() => void submit(true)}
@@ -513,7 +514,7 @@ export function Composer({
         <PillButton
           style={styles.flex}
           variant="primary"
-          title={busy === "schedule" ? "Scheduling..." : selected.length > 1 ? `Schedule ${selected.length} posts` : "Schedule post"}
+          title={busy === "schedule" ? i18n.t("lp.scheduling") : selected.length > 1 ? i18n.t("lp.scheduleN", { count: selected.length }) : i18n.t("lp.schedulePost")}
           busy={busy === "schedule"}
           disabled={busy !== null || blocked.length > 0 || checking}
           onPress={() => void submit(false)}
@@ -554,7 +555,7 @@ export function PostEditor({
   const reschedules = item.status !== "scheduled";
 
   const save = async () => {
-    if ((moved || reschedules) && wallToDate(when) <= new Date()) return setError("Pick a time that is still ahead.");
+    if ((moved || reschedules) && wallToDate(when) <= new Date()) return setError(i18n.t("lp.pickAhead"));
     setBusy("save");
     setError("");
     try {
@@ -570,7 +571,7 @@ export function PostEditor({
       onChanged();
       onClose();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Could not save it. Try again.");
+      setError(e instanceof ApiError ? e.message : i18n.t("lp.saveFailed"));
     } finally {
       setBusy(null);
     }
@@ -583,10 +584,10 @@ export function PostEditor({
       const next = await launchpadApi.publishNow(item.id);
       onChanged();
       // With a video or images it uploads in the background; the calendar follows it.
-      if (next.status === "failed" || (next.error && next.status !== "publishing")) setError(next.error ?? "Publishing failed.");
+      if (next.status === "failed" || (next.error && next.status !== "publishing")) setError(next.error ?? i18n.t("lp.publishFailed"));
       else onClose();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Publishing failed.");
+      setError(e instanceof ApiError ? e.message : i18n.t("lp.publishFailed"));
     } finally {
       setBusy(null);
     }
@@ -604,30 +605,30 @@ export function PostEditor({
     <View style={styles.stack}>
       <View style={styles.fieldHead}>
         <Text style={[pageStyles.mono, styles.flex]}>
-          {item.auto_post ? `Auto posts as ${item.account_handle}` : "Email reminder"} · {formatDate(item.scheduled_at, true)}
+          {item.auto_post ? i18n.t("lp.autoAs", { handle: item.account_handle }) : i18n.t("lp.emailReminder")} · {formatDate(item.scheduled_at, true)}
         </Text>
         <StatusPill status={item.status} />
       </View>
-      {item.kit_id ? <Text style={pageStyles.mono}>Written from the launch kit: {item.kit_title ?? "a launch kit"}</Text> : null}
+      {item.kit_id ? <Text style={pageStyles.mono}>{i18n.t("lp.fromKit", { title: item.kit_title ?? i18n.t("lp.aKit") })}</Text> : null}
       {item.status === "paused" ? (
         <View style={styles.paused}>
-          <Text style={pageStyles.body}>{item.error ?? "Paused: it won't go out until resumed."}</Text>
+          <Text style={pageStyles.body}>{item.error ?? i18n.t("lp.pausedBody")}</Text>
           {item.platform === "linkedin" && accounts && !accounts.accounts.some((a) => a.platform === "linkedin" && !a.needs_reconnect) ? (
             <PillButton
               small
               variant="primary"
-              title={`${accounts.accounts.some((a) => a.platform === "linkedin") ? "Reconnect" : "Connect"} LinkedIn`}
+              title={i18n.t(accounts.accounts.some((a) => a.platform === "linkedin") ? "lp.reconnect" : "lp.connect", { platform: "LinkedIn" })}
               onPress={() => void reconnect()}
             />
           ) : null}
-          <Text style={pageStyles.mono}>Pick a time still ahead and Save to resume it.</Text>
+          <Text style={pageStyles.mono}>{i18n.t("lp.resumeHint")}</Text>
         </View>
       ) : item.error ? (
         <ErrorText>{item.error}</ErrorText>
       ) : null}
       {item.external_url ? (
         <Text style={pageStyles.link} onPress={() => WebBrowser.openBrowserAsync(item.external_url!, { controlsColor: colors.blue })}>
-          View the live post
+          {i18n.t("lp.viewLive")}
         </Text>
       ) : null}
       {item.status === "posted" || item.clicks > 0 ? (
@@ -642,7 +643,7 @@ export function PostEditor({
       {posts.map((p, i) => (
         <PostField
           key={i}
-          label={posts.length > 1 ? `Post ${i + 1}` : "Post"}
+          label={posts.length > 1 ? i18n.t("lp.postN", { n: i + 1 }) : i18n.t("lp.post")}
           value={p}
           onChange={(v) => setPosts(posts.map((x, j) => (j === i ? v : x)))}
           limit={meta.limit}
@@ -653,14 +654,14 @@ export function PostEditor({
       {!locked ? (
         <>
           <View style={styles.field}>
-            <Text style={pageStyles.label}>When</Text>
+            <Text style={pageStyles.label}>{i18n.t("lp.when")}</Text>
             <SlotPicker value={when} onChange={setWhen} />
           </View>
           {meta.auto ? (
             <View style={styles.field}>
-              <Text style={pageStyles.label}>Account</Text>
+              <Text style={pageStyles.label}>{i18n.t("lp.accountLabel")}</Text>
               <View style={pageStyles.row}>
-                {[{ id: "", handle: "Email me a reminder" }, ...options].map((a) => {
+                {[{ id: "", handle: i18n.t("lp.emailMe") }, ...options].map((a) => {
                   const on = accountId === a.id;
                   return (
                     <Pressable key={a.id || "email"} onPress={() => setAccountId(a.id)} style={[styles.platform, on && styles.platformOn]}>
@@ -678,7 +679,7 @@ export function PostEditor({
       <View style={pageStyles.row}>
         <PillButton
           small
-          title={copied ? "Copied" : "Copy"}
+          title={copied ? i18n.t("ui.copied") : i18n.t("ui.copy")}
           onPress={async () => {
             await Clipboard.setStringAsync(posts.join("\n\n"));
             setCopied(true);
@@ -688,9 +689,9 @@ export function PostEditor({
         <PillButton
           small
           variant="danger"
-          title="Delete"
+          title={i18n.t("common.delete")}
           onPress={() =>
-            confirm("Delete this post?", "Delete", async () => {
+            confirm(i18n.t("lp.deletePost"), i18n.t("common.delete"), async () => {
               await launchpadApi.remove(item.id);
               onChanged();
               onClose();
@@ -701,13 +702,13 @@ export function PostEditor({
       {!locked ? (
         <View style={pageStyles.row}>
           <PillButton
-            title={busy === "now" ? "Publishing..." : item.auto_post ? "Publish now" : "Send reminder now"}
+            title={busy === "now" ? i18n.t("lp.publishingDots") : item.auto_post ? i18n.t("lp.publishNow") : i18n.t("lp.sendReminder")}
             busy={busy === "now"}
             disabled={busy !== null}
             onPress={() => void publishNow()}
           />
           <PillButton
-            title={reschedules ? "Reschedule" : "Save"}
+            title={reschedules ? i18n.t("lp.reschedule") : i18n.t("common.save")}
             variant="primary"
             busy={busy === "save"}
             disabled={busy !== null}

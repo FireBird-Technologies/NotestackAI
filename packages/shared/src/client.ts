@@ -34,6 +34,20 @@ export type PlanLimitDetail = {
   limit?: number;
 };
 
+/**
+ * The app's interface language (a code such as "es"), sent as X-App-Language so AI output follows it. Null leaves
+ * it out, and the API then writes in the language of the sources (the web, and the mobile app in English).
+ */
+let appLanguage: string | null = null;
+
+export function setAppLanguage(code: string | null): void {
+  appLanguage = code;
+}
+
+export function applyAppLanguage(headers: Headers): void {
+  if (appLanguage) headers.set("X-App-Language", appLanguage);
+}
+
 export const tokens = {
   get access() {
     return platform().storage.get(ACCESS_KEY);
@@ -100,6 +114,7 @@ async function request(path: string, init: RequestInit, retry: boolean): Promise
   }
   const signedIn = Boolean(tokens.access);
   if (signedIn) headers.set("Authorization", `Bearer ${tokens.access}`);
+  applyAppLanguage(headers);
   // OAuth start endpoints set a short-lived, HTTP-only state cookie on the API origin. In production the app and API
   // are different origins, so Fetch otherwise ignores that Set-Cookie response and the returning callback cannot bind
   // the authorization to the browser that started it.

@@ -3,6 +3,7 @@ import { ApiError } from "@notestack/shared/client";
 import { GoogleSignin, isErrorWithCode, statusCodes } from "@react-native-google-signin/google-signin";
 import * as AppleAuthentication from "expo-apple-authentication";
 import { Alert, Platform } from "react-native";
+import i18n from "@/i18n";
 
 /**
  * Native Google and Apple sign in. Each shows the system sheet, sends the identity token it returns to the API, and
@@ -34,19 +35,19 @@ export async function signInWithGoogle(): Promise<LoginResult | null> {
     if (Platform.OS === "android") await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
     const res = await GoogleSignin.signIn();
     if (res.type === "cancelled") return null;
-    if (!res.data.idToken) throw new SocialSignInError("Google did not return a sign in token. Try again.");
+    if (!res.data.idToken) throw new SocialSignInError(i18n.t("auth.googleNoToken"));
     return await authApi.google(res.data.idToken);
   } catch (e) {
     // Our server's refusal (a deleted account, another sign in method) says what happened in its own words.
     if (e instanceof ApiError || !isErrorWithCode(e)) throw e;
     if (e.code === statusCodes.SIGN_IN_CANCELLED || e.code === statusCodes.IN_PROGRESS) return null;
     if (e.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
-      throw new SocialSignInError("Google Play services is needed to sign in with Google.");
+      throw new SocialSignInError(i18n.t("auth.googlePlayServices"));
     }
     // Dev builds show Google's own reason, which is what a setup mistake needs.
     if (__DEV__) console.warn("Google sign in failed", e.code, e.message);
     throw new SocialSignInError(
-      __DEV__ ? `Google sign in failed (${e.code}): ${e.message}` : "Could not sign in with Google. Try again.",
+      __DEV__ ? `Google sign in failed (${e.code}): ${e.message}` : i18n.t("auth.googleFailed"),
     );
   }
 }
@@ -67,9 +68,9 @@ export async function signInWithApple(): Promise<LoginResult | null> {
     });
   } catch (e) {
     if ((e as { code?: string }).code === "ERR_REQUEST_CANCELED") return null;
-    throw new SocialSignInError("Could not sign in with Apple. Try again.");
+    throw new SocialSignInError(i18n.t("auth.appleFailed"));
   }
-  if (!credential.identityToken) throw new SocialSignInError("Apple did not return a sign in token. Try again.");
+  if (!credential.identityToken) throw new SocialSignInError(i18n.t("auth.appleNoToken"));
   // Apple sends the name only the first time this Apple ID signs in to the app.
   const name = [credential.fullName?.givenName, credential.fullName?.familyName].filter(Boolean).join(" ");
   try {
@@ -92,11 +93,11 @@ export async function signInWithApple(): Promise<LoginResult | null> {
 function confirmHiddenEmail(): Promise<boolean> {
   return new Promise((resolve) => {
     Alert.alert(
-      "Already have a Notestack account?",
-      "You chose to hide your email, so we can't tell if you already have an account. If you do, sign in with it instead. Otherwise you'll have two separate accounts.",
+      i18n.t("auth.appleExistingTitle"),
+      i18n.t("auth.appleExistingBody"),
       [
-        { text: "Use my existing account", style: "cancel", onPress: () => resolve(false) },
-        { text: "Continue with Apple", onPress: () => resolve(true) },
+        { text: i18n.t("auth.useExisting"), style: "cancel", onPress: () => resolve(false) },
+        { text: i18n.t("auth.continueApple"), onPress: () => resolve(true) },
       ],
       { cancelable: false },
     );

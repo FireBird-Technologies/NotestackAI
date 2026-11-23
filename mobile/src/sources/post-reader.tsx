@@ -7,6 +7,7 @@ import { ScrollView, StyleSheet, Text, View, type ScrollViewInstance } from "rea
 
 import { colors, fonts, gutter } from "@/ui/theme";
 import { Body, Button, Centered, Loading, formatDate } from "@/ui";
+import i18n from "@/i18n";
 
 /**
  * One post's text as Notestack indexed it (the web's Reader), with the real line numbers citations point at. Routed from
@@ -22,8 +23,8 @@ export default function Post() {
   if (!doc.data) {
     return (
       <Centered>
-        <Body muted>{doc.error?.message ?? "Could not load this post."}</Body>
-        <Button title="Try again" onPress={() => void doc.refetch()} />
+        <Body muted>{doc.error?.message ?? i18n.t("reader.loadFailed")}</Body>
+        <Button title={i18n.t("common.tryAgain")} onPress={() => void doc.refetch()} />
       </Centered>
     );
   }
@@ -76,16 +77,16 @@ export default function Post() {
         {d.title}
       </Text>
       <Text style={styles.meta}>
-        {d.source_title ?? ""} · {formatDate(d.published_at)} · {d.words} words
+        {d.source_title ?? ""} · {formatDate(d.published_at)} · {i18n.t("notebooks.words", { count: d.words })}
       </Text>
       {d.url.startsWith("http") ? (
         <Text style={styles.link} onPress={() => WebBrowser.openBrowserAsync(d.url, { controlsColor: colors.blue })}>
-          Open the original
+          {i18n.t("reader.original")}
         </Text>
       ) : null}
       <View style={styles.spacer} />
       {rows}
-      {d.preview ? <Body muted>This is a preview of the post.</Body> : null}
+      {d.preview ? <Body muted>{i18n.t("reader.preview")}</Body> : null}
     </ScrollView>
   );
 }

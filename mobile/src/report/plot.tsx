@@ -7,6 +7,7 @@ import Svg, { Circle, G, Line, Path, Rect, Text as SvgText } from "react-native-
 
 import { ChevronIcon } from "@/ui/icons";
 import { colors, fonts, radius } from "@/ui/theme";
+import i18n, { tKey } from "@/i18n";
 
 /* A report's plot (web: ReportPlot, drawn there with Plotly), drawn natively from the same verified points: bars
    (sideways when there are few or the labels are long), a line, a scatter or a donut, in the web's blues. A tap on a
@@ -184,17 +185,17 @@ export function ReportPlot({ block }: { block: PlotBlock }) {
   const [data, setData] = useState(false);
   const pts = block.points;
   const title = displayTitle(block);
-  const chartLabel = block.plot_kind === "pie" ? "Donut chart" : `${block.plot_kind[0].toUpperCase()}${block.plot_kind.slice(1)} chart`;
+  const chartLabel = block.plot_kind === "pie" ? i18n.t("report.donut") : tKey(`report.chart.${block.plot_kind}`, `${block.plot_kind[0].toUpperCase()}${block.plot_kind.slice(1)} chart`);
   const sideways = block.plot_kind === "bar" && (pts.length <= 5 || pts.some((p) => p.label.length > 18));
   const pick = (i: number) => setPicked((cur) => (cur === i ? null : i));
   return (
     <View style={styles.block}>
       <View style={styles.head}>
         <View style={styles.headText}>
-          <Text style={styles.eyebrow}>● VERIFIED SOURCE DATA</Text>
+          <Text style={styles.eyebrow}>{i18n.t("report.sourceData")}</Text>
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.meta}>
-            {pts.length} verified data points{block.y_label ? ` · ${block.y_label}` : ""}
+            {i18n.t("report.points", { count: pts.length })}{block.y_label ? ` · ${block.y_label}` : ""}
           </Text>
         </View>
         <Text style={styles.kind}>{chartLabel}</Text>
@@ -213,7 +214,7 @@ export function ReportPlot({ block }: { block: PlotBlock }) {
       {block.y_label || block.unit ? <Text style={styles.axisName}>{[block.y_label, block.unit].filter(Boolean).join(" · ")}</Text> : null}
       {picked !== null && pts[picked] ? <Tip point={pts[picked]} /> : null}
       <Pressable onPress={() => setData((o) => !o)} accessibilityRole="button" accessibilityState={{ expanded: data }} style={styles.dataToggle}>
-        <Text style={styles.dataToggleText}>View source values</Text>
+        <Text style={styles.dataToggleText}>{i18n.t("report.viewValues")}</Text>
         <View style={data && styles.flip}>
           <ChevronIcon size={14} color={colors.text2} />
         </View>
@@ -222,9 +223,9 @@ export function ReportPlot({ block }: { block: PlotBlock }) {
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View style={styles.table}>
             <View style={[styles.tr, styles.th]}>
-              <Text style={[styles.td, styles.thText]}>{block.x_label || "Label"}</Text>
+              <Text style={[styles.td, styles.thText]}>{block.x_label || i18n.t("report.label")}</Text>
               <Text style={[styles.td, styles.thText]}>
-                {block.y_label || "Value"}
+                {block.y_label || i18n.t("report.value")}
                 {block.unit ? ` (${block.unit})` : ""}
               </Text>
             </View>

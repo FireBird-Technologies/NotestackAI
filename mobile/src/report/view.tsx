@@ -18,6 +18,7 @@ import { colors, fonts, gutter, radius } from "@/ui/theme";
 import { PillButton } from "@/ui/widgets";
 
 import { ReportPlot } from "./plot";
+import i18n, { tKey } from "@/i18n";
 
 /** What the owner can do to a report: add a suggested visual, or remove one (web: ReportEditor). */
 export type ReportEditor = {
@@ -46,7 +47,7 @@ function MindMapBlock({ block, artifactId }: { block: Extract<ReportBlock, { typ
   return (
     <View style={styles.block}>
       <MindMapExplorer map={map} embedded warp={false} onExpand={() => setOpen(true)} />
-      <Text style={styles.hint}>Tap the map to open it full screen, then pinch, drag and tap a star to read it.</Text>
+      <Text style={styles.hint}>{i18n.t("report.mindMapHint")}</Text>
       <MindMapScreen map={map} visible={open} onClose={() => setOpen(false)} />
     </View>
   );
@@ -56,7 +57,7 @@ function QuizBlock({ block }: { block: Extract<ReportBlock, { type: "quiz" }> })
   const state = useQuiz(block.questions);
   return (
     <View style={styles.block}>
-      <Heading>{block.title || "Test yourself"}</Heading>
+      <Heading>{block.title || i18n.t("report.testYourself")}</Heading>
       <QuizRunner questions={block.questions} state={state} />
     </View>
   );
@@ -73,11 +74,11 @@ function InfographicBlock({ block }: { block: Extract<ReportBlock, { type: "info
           {width > 0 ? <InfographicFrame html={html} width={width} layout={block.html_landscape ? "landscape" : "portrait"} /> : null}
         </View>
       ) : block.status === "failed" || block.status === "missing" ? (
-        <Text style={styles.muted}>{block.status === "missing" ? "This infographic was deleted." : "This infographic could not be made."}</Text>
+        <Text style={styles.muted}>{block.status === "missing" ? i18n.t("report.infographicDeleted") : i18n.t("report.infographicFailed")}</Text>
       ) : (
         <View style={styles.building}>
           <ActivityIndicator size="small" color={colors.blue} />
-          <Text style={styles.muted}>Writing the infographic...</Text>
+          <Text style={styles.muted}>{i18n.t("report.writingInfographic")}</Text>
         </View>
       )}
     </View>
@@ -86,18 +87,18 @@ function InfographicBlock({ block }: { block: Extract<ReportBlock, { type: "info
 
 function TimelineBlock({ block }: { block: Extract<ReportBlock, { type: "timeline" }> }) {
   const supplied = block.title?.trim();
-  const title = !supplied || /^(source\s+)?timeline$/i.test(supplied) ? "Timeline" : supplied;
+  const title = !supplied || /^(source\s+)?timeline$/i.test(supplied) ? i18n.t("report.timeline") : supplied;
   return (
     <View style={[styles.block, styles.panel]}>
       <View style={styles.panelHead}>
         <View style={styles.panelHeadText}>
-          <Text style={styles.panelEyebrow}>● VERIFIED SOURCE CHRONOLOGY</Text>
+          <Text style={styles.panelEyebrow}>{i18n.t("report.chronology")}</Text>
           <Heading>{title}</Heading>
           <Text style={styles.muted}>
-            {block.events.length} verified milestone{block.events.length === 1 ? "" : "s"}
+            {i18n.t("report.milestones", { count: block.events.length })}
           </Text>
         </View>
-        <Text style={styles.kind}>Timeline</Text>
+        <Text style={styles.kind}>{i18n.t("report.timeline")}</Text>
       </View>
       <View style={styles.timeline}>
         {block.events.map((event, i) => {
@@ -138,7 +139,7 @@ function Block({ block, citations, artifactId, onCite }: { block: ReportBlock; c
     case "key_terms":
       return (
         <View style={styles.block}>
-          <Heading>{block.title || "Key terms"}</Heading>
+          <Heading>{block.title || i18n.t("report.keyTerms")}</Heading>
           {block.terms.map((t) => (
             <View key={t.term} style={styles.term}>
               <Text style={styles.termName}>{t.term}</Text>
@@ -182,7 +183,7 @@ function Block({ block, citations, artifactId, onCite }: { block: ReportBlock; c
     case "flashcards":
       return (
         <View style={styles.block}>
-          <Heading>{block.title || "Flashcards"}</Heading>
+          <Heading>{block.title || i18n.t("report.flashcards")}</Heading>
           <FlashcardDeck cards={block.cards as FlashcardData[]} />
         </View>
       );
@@ -210,7 +211,7 @@ function SourcesSection({ content, onCite }: { content: Record<string, any>; onC
   const citedBy = (r: SourceRow) => cites.filter((c) => (r.document_id ? c.document_id === r.document_id : c.title === r.title));
   const needle = filter.trim().toLowerCase();
   const shown = needle ? rows.filter((r) => r.title.toLowerCase().includes(needle)) : rows;
-  const label = `${prompt ? "View prompt and " : "View "}${rows.length} source${rows.length === 1 ? "" : "s"}${chats > 0 ? ` and ${chats} chat${chats === 1 ? "" : "s"}` : ""}`;
+  const label = `${i18n.t(prompt ? "report.viewPromptSources" : "report.viewSources", { count: rows.length })}${chats > 0 ? i18n.t("report.andChats", { count: chats }) : ""}`;
   return (
     <View style={styles.sources}>
       <Pressable onPress={() => setOpen((o) => !o)} accessibilityRole="button" accessibilityState={{ expanded: open }} style={[styles.toggle, open && styles.toggleOpen]}>
@@ -223,14 +224,14 @@ function SourcesSection({ content, onCite }: { content: Record<string, any>; onC
         <View style={styles.sourcesPanel}>
           {prompt ? (
             <View style={styles.gap6}>
-              <Text style={styles.sub}>PROMPT</Text>
+              <Text style={styles.sub}>{i18n.t("report.prompt")}</Text>
               <Text style={styles.body}>{prompt}</Text>
             </View>
           ) : null}
           <View style={styles.gap6}>
-            <Text style={styles.sub}>SOURCES · {rows.length}</Text>
+            <Text style={styles.sub}>{i18n.t("report.sourcesCount", { count: rows.length })}</Text>
             {rows.length > 8 ? (
-              <TextInput style={styles.filter} value={filter} onChangeText={setFilter} placeholder="Filter sources" placeholderTextColor={colors.text3} accessibilityLabel="Filter sources" />
+              <TextInput style={styles.filter} value={filter} onChangeText={setFilter} placeholder={i18n.t("report.filter")} placeholderTextColor={colors.text3} accessibilityLabel={i18n.t("report.filter")} />
             ) : null}
             {shown.map((r) => (
               <View key={r.document_id ?? r.title} style={styles.srcRow}>
@@ -253,11 +254,11 @@ function SourcesSection({ content, onCite }: { content: Record<string, any>; onC
               <View style={styles.srcRow}>
                 <Text style={styles.srcN}>+</Text>
                 <Text style={styles.srcTitle}>
-                  {chats} notebook chat{chats === 1 ? "" : "s"}
+                  {i18n.t("report.notebookChats", { count: chats })}
                 </Text>
               </View>
             ) : null}
-            {shown.length === 0 ? <Text style={styles.muted}>No source matches &quot;{filter}&quot;.</Text> : null}
+            {shown.length === 0 ? <Text style={styles.muted}>{i18n.t("report.noMatch", { filter })}</Text> : null}
           </View>
         </View>
       ) : null}
@@ -352,7 +353,7 @@ export function ReportView({ content, artifactId, onCite, editor, header }: {
               {n >= 0 ? (
                 <>
                   <View style={[styles.node, reached && styles.nodeReached]} />
-                  <Text style={[styles.waypointLabel, reached && styles.waypointReached]}>WAYPOINT {pad2(n + 1)}</Text>
+                  <Text style={[styles.waypointLabel, reached && styles.waypointReached]}>{i18n.t("report.waypoint", { n: pad2(n + 1) })}</Text>
                 </>
               ) : null}
               <Block block={b} citations={citations} artifactId={artifactId} onCite={onCite} />
@@ -361,10 +362,10 @@ export function ReportView({ content, artifactId, onCite, editor, header }: {
                   {editor.removing === b.id ? (
                     <View style={styles.building}>
                       <ActivityIndicator size="small" color={colors.text2} />
-                      <Text style={styles.removeText}>Removing...</Text>
+                      <Text style={styles.removeText}>{i18n.t("common.removing")}</Text>
                     </View>
                   ) : (
-                    <Text style={styles.removeText}>Remove this {KIND_LABEL[b.type as keyof typeof KIND_LABEL]?.toLowerCase() ?? "visual"}</Text>
+                    <Text style={styles.removeText}>{tKey(`report.remove.${b.type}`, i18n.t("report.remove.other"))}</Text>
                   )}
                 </Pressable>
               ) : null}
@@ -376,17 +377,17 @@ export function ReportView({ content, artifactId, onCite, editor, header }: {
                       return (
                         <View key={s.id} style={[styles.suggestion, progressNow && styles.suggestionBuilding]}>
                           <View style={styles.gap6}>
-                            <Text style={styles.suggestionTitle}>Suggested: {KIND_LABEL[s.kind]}</Text>
+                            <Text style={styles.suggestionTitle}>{i18n.t("report.suggested", { kind: tKey(`report.kind.${s.kind}`, KIND_LABEL[s.kind]) })}</Text>
                             <Text style={styles.muted}>{s.brief}</Text>
                             {!progressNow && s.why ? <Text style={[styles.muted, styles.small]}>{s.why}</Text> : null}
                           </View>
                           {progressNow ? (
                             <View style={styles.building}>
                               <ActivityIndicator size="small" color={colors.blue} />
-                              <Text style={styles.muted}>{progressNow.message || `Building the ${KIND_LABEL[s.kind].toLowerCase()}...`}</Text>
+                              <Text style={styles.muted}>{progressNow.message || tKey(`report.building.${s.kind}`, `Building the ${KIND_LABEL[s.kind].toLowerCase()}...`)}</Text>
                             </View>
                           ) : (
-                            <PillButton small title="Add" onPress={() => editor.onAdd(s)} />
+                            <PillButton small title={i18n.t("common.add")} onPress={() => editor.onAdd(s)} />
                           )}
                         </View>
                       );

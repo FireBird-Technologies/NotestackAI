@@ -7,6 +7,7 @@ import { Select } from "@/create/fields";
 import { colors, fonts, radius } from "@/ui/theme";
 
 import { Label, vstyles } from "./ui";
+import i18n from "@/i18n";
 
 /* A layout's content fields, each drawn by its type (web: components/video/LayoutFields.tsx). */
 
@@ -51,14 +52,14 @@ function FieldInput({ f, v, set }: { f: FieldDef; v: unknown; set: (next: unknow
           label={f.label}
           value={asText(v)}
           onChange={set}
-          options={[...(v == null || v === "" ? [{ value: "", label: "Default" }] : []), ...(f.options ?? [])]}
+          options={[...(v == null || v === "" ? [{ value: "", label: i18n.t("videoPanels.default") }] : []), ...(f.options ?? [])]}
         />
       );
     case "color":
       return (
         <View style={styles.color}>
           <ColorField label={f.label} value={/^#[0-9a-f]{6}$/i.test(asText(v)) ? asText(v) : "#000000"} onChange={set} />
-          <Text style={styles.hex}>{asText(v) || "Template default"}</Text>
+          <Text style={styles.hex}>{asText(v) || i18n.t("videoPanels.templateDefault")}</Text>
         </View>
       );
     case "boolean":
@@ -79,7 +80,7 @@ function FieldInput({ f, v, set }: { f: FieldDef; v: unknown; set: (next: unknow
 
 function RemoveX({ onPress }: { onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} hitSlop={8} accessibilityRole="button" accessibilityLabel="Remove" style={styles.x}>
+    <Pressable onPress={onPress} hitSlop={8} accessibilityRole="button" accessibilityLabel={i18n.t("common.remove")} style={styles.x}>
       <Text style={styles.xText}>✕</Text>
     </Pressable>
   );
@@ -97,7 +98,7 @@ function StringList({ f, items, set }: { f: FieldDef; items: string[]; set: (nex
       ))}
       {!full ? (
         <Pressable onPress={() => set([...items, ""])} accessibilityRole="button">
-          <Text style={styles.add}>+ Add</Text>
+          <Text style={styles.add}>{i18n.t("videoPanels.add")}</Text>
         </Pressable>
       ) : null}
     </View>
@@ -128,7 +129,7 @@ function ObjectList({ f, items, set }: { f: FieldDef; items: unknown[]; set: (ne
       ))}
       {!full && subs.length > 0 ? (
         <Pressable onPress={() => set([...rows, Object.fromEntries(subs.map((sf) => [sf.key, ""]))])} accessibilityRole="button">
-          <Text style={styles.add}>+ Add</Text>
+          <Text style={styles.add}>{i18n.t("videoPanels.add")}</Text>
         </Pressable>
       ) : null}
     </View>

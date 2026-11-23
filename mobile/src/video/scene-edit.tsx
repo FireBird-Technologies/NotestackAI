@@ -14,6 +14,8 @@ import { PillButton, Sheet } from "@/ui/widgets";
 import { LayoutFields } from "./layout-fields";
 import { errorMessage } from "./scene-media";
 import { Label, Slider, Spinner, vstyles } from "./ui";
+import i18n from "@/i18n";
+import { Trans } from "react-i18next";
 
 const KEEP = "__keep__"; // blog2video's "keep the current layout"
 const AUTO = "__auto__"; // ours for "let AI choose": the layout is left out of the request
@@ -110,16 +112,16 @@ export function SceneEditModal({ id, scene, index, template, aiEditsLeft, layout
   }
 
   return (
-    <Sheet visible title={`Edit Scene ${index + 1}`} onClose={busy ? () => undefined : onClose}>
+    <Sheet visible title={i18n.t("sceneEdit.title", { n: index + 1 })} onClose={busy ? () => undefined : onClose}>
       <View style={styles.gap6}>
-        <Label>Editing mode</Label>
+        <Label>{i18n.t("sceneEdit.mode")}</Label>
         <Text style={[vstyles.muted, vstyles.small]}>
-          Pick a tab: use <Text style={vstyles.strong}>AI-Assisted</Text> to let AI change the scene for you, or <Text style={vstyles.strong}>Manual</Text> to edit it yourself.
+          <Trans i18nKey="sceneEdit.modeHint" components={[<Text key="ai" style={vstyles.strong} />, <Text key="manual" style={vstyles.strong} />]} />
         </Text>
         <View style={styles.seg} accessibilityRole="tablist">
           {(["ai", "manual"] as const).map((m) => (
             <Pressable key={m} onPress={() => setMode(m)} accessibilityRole="tab" accessibilityState={{ selected: mode === m }} style={[styles.segBtn, mode === m && styles.segOn]}>
-              <Text style={[styles.segText, mode === m && styles.segTextOn]}>{m === "ai" ? "AI-Assisted editing" : "Manual editing"}</Text>
+              <Text style={[styles.segText, mode === m && styles.segTextOn]}>{m === "ai" ? i18n.t("sceneEdit.ai") : i18n.t("sceneEdit.manual")}</Text>
             </Pressable>
           ))}
         </View>
@@ -135,20 +137,20 @@ export function SceneEditModal({ id, scene, index, template, aiEditsLeft, layout
           ) : null}
           <View style={styles.gap6}>
             <View style={vstyles.between}>
-              <Text style={vstyles.strong}>Scene narration</Text>
+              <Text style={vstyles.strong}>{i18n.t("sceneEdit.narration")}</Text>
               <Text style={[vstyles.muted, vstyles.small]}>{wordsAndSeconds(narration)}</Text>
             </View>
-            <Text style={[vstyles.muted, vstyles.small]}>This is what&apos;s spoken in the voiceover. Edit it directly, or use AI below.</Text>
+            <Text style={[vstyles.muted, vstyles.small]}>{i18n.t("sceneEdit.narrationHint")}</Text>
             <TextInput style={[vstyles.input, styles.narration]} value={narration} onChangeText={editNarration} multiline maxLength={6000} />
-            {narrationChanged ? <Text style={styles.note}>⚠ You changed the narration, so the voiceover will be re-recorded on save.</Text> : null}
+            {narrationChanged ? <Text style={styles.note}>{i18n.t("misc.narrationChanged")}</Text> : null}
           </View>
           {!askAi ? (
             <Pressable onPress={() => setAskAi(true)} accessibilityRole="button" style={styles.aiBtn}>
-              <Text style={styles.aiBtnText}>✦ Rewrite this with AI</Text>
+              <Text style={styles.aiBtnText}>{i18n.t("misc.rewriteAi")}</Text>
             </Pressable>
           ) : (
             <View style={styles.gap6}>
-              <Label>What should change?</Label>
+              <Label>{i18n.t("sceneEdit.whatChange")}</Label>
               <TextInput
                 style={[vstyles.input, vstyles.area]}
                 value={instruction}
@@ -156,7 +158,7 @@ export function SceneEditModal({ id, scene, index, template, aiEditsLeft, layout
                 multiline
                 maxLength={2000}
                 autoFocus
-                placeholder="e.g. Make it shorter and punchier, or explain it with a real-world example"
+                placeholder={i18n.t("sceneEdit.changePlaceholder")}
                 placeholderTextColor={colors.text3}
               />
             </View>
@@ -164,16 +166,16 @@ export function SceneEditModal({ id, scene, index, template, aiEditsLeft, layout
           <View style={vstyles.card}>
             <View style={vstyles.between}>
               <View style={styles.grow}>
-                <Text style={vstyles.strong}>Re-record the voiceover</Text>
-                <Text style={[vstyles.muted, vstyles.small]}>Generate fresh audio for the new narration. Turn off to keep the current audio.</Text>
+                <Text style={vstyles.strong}>{i18n.t("sceneEdit.rerecord")}</Text>
+                <Text style={[vstyles.muted, vstyles.small]}>{i18n.t("sceneEdit.rerecordHint")}</Text>
               </View>
-              <Switch value={rerecord} onValueChange={setRerecord} trackColor={{ true: colors.blue, false: colors.surface2 }} accessibilityLabel="Re-record the voiceover" />
+              <Switch value={rerecord} onValueChange={setRerecord} trackColor={{ true: colors.blue, false: colors.surface2 }} accessibilityLabel={i18n.t("sceneEdit.rerecord")} />
             </View>
             <View style={[styles.gap6, !rerecord && styles.dim]}>
               {(
                 [
-                  [true, "Use exact wording", "Speaks your narration word for word."],
-                  [false, "Rephrase with AI", "AI lightly rephrases it to fit the rest of the video."],
+                  [true, i18n.t("sceneEdit.exact"), i18n.t("sceneEdit.exactHint")],
+                  [false, i18n.t("sceneEdit.rephrase"), i18n.t("sceneEdit.rephraseHint")],
                 ] as const
               ).map(([v, label, hint]) => (
                 <Pressable key={label} onPress={() => setVerbatim(v)} disabled={!rerecord} accessibilityRole="radio" accessibilityState={{ checked: verbatim === v }} style={styles.radio}>
@@ -185,18 +187,18 @@ export function SceneEditModal({ id, scene, index, template, aiEditsLeft, layout
                 </Pressable>
               ))}
             </View>
-            <Text style={[vstyles.muted, vstyles.small]}>You can change the voice for the whole video in Settings.</Text>
+            <Text style={[vstyles.muted, vstyles.small]}>{i18n.t("sceneEdit.voiceHint")}</Text>
 
             {variants.length > 1 ? (
               <View style={[styles.gap6, styles.rule]}>
-                <Text style={vstyles.strong}>Scene style</Text>
-                <Text style={[vstyles.muted, vstyles.small]}>Pick a different look for this scene. Your text and images stay as they are.</Text>
+                <Text style={vstyles.strong}>{i18n.t("sceneEdit.style")}</Text>
+                <Text style={[vstyles.muted, vstyles.small]}>{i18n.t("sceneEdit.styleHint")}</Text>
                 <View style={vstyles.row} accessibilityRole="radiogroup">
                   {variants.map((v, i) => {
                     const on = (layout === KEEP || layout === AUTO ? current : layout) === v;
                     return (
                       <Pressable key={v} onPress={() => setLayout(v === current ? KEEP : v)} accessibilityRole="radio" accessibilityState={{ checked: on }} style={[styles.chip, on && styles.chipOn]}>
-                        <Text style={[styles.chipText, on && styles.chipTextOn]}>{layoutInfo?.layout_variant_labels?.[v] ?? `Style ${i + 1}`}</Text>
+                        <Text style={[styles.chipText, on && styles.chipTextOn]}>{layoutInfo?.layout_variant_labels?.[v] ?? i18n.t("sceneEdit.styleN", { n: i + 1 })}</Text>
                       </Pressable>
                     );
                   })}
@@ -205,15 +207,15 @@ export function SceneEditModal({ id, scene, index, template, aiEditsLeft, layout
             ) : null}
 
             <View style={[styles.gap6, styles.rule]}>
-              <Text style={vstyles.strong}>Scene layout</Text>
-              <Text style={[vstyles.muted, vstyles.small]}>Keep the current layout, pick one, or let AI decide. A new layout uses 1 AI edit.</Text>
+              <Text style={vstyles.strong}>{i18n.t("sceneEdit.layout")}</Text>
+              <Text style={[vstyles.muted, vstyles.small]}>{i18n.t("sceneEdit.layoutHint")}</Text>
               <Select<string>
-                label="Scene layout"
+                label={i18n.t("sceneEdit.layout")}
                 value={layout}
                 onChange={setLayout}
                 options={[
                   { value: KEEP, label: `${layoutName(current, layoutNames)} (current)` },
-                  { value: AUTO, label: "Auto (let AI choose)" },
+                  { value: AUTO, label: i18n.t("sceneEdit.auto") },
                   ...(layoutInfo?.layouts ?? []).filter((l) => l !== current).map((l) => ({ value: l, label: layoutName(l, layoutNames) })),
                 ]}
               />
@@ -223,39 +225,39 @@ export function SceneEditModal({ id, scene, index, template, aiEditsLeft, layout
       ) : (
         <>
           <View style={vstyles.card}>
-            <Collapse label="Scene Settings" open={open.settings} onPress={() => setOpen({ ...open, settings: !open.settings })} />
+            <Collapse label={i18n.t("sceneEdit.settings")} open={open.settings} onPress={() => setOpen({ ...open, settings: !open.settings })} />
             {open.settings ? (
               <View style={vstyles.stack}>
                 <View style={styles.gap6}>
-                  <Label>Title</Label>
+                  <Label>{i18n.t("sceneEdit.titleLabel")}</Label>
                   <TextInput style={vstyles.input} value={title} onChangeText={setTitle} maxLength={255} />
                 </View>
                 <View style={styles.gap6}>
-                  <Label>Display text</Label>
+                  <Label>{i18n.t("sceneEdit.displayText")}</Label>
                   <TextInput style={[vstyles.input, vstyles.area]} value={display} onChangeText={setDisplay} multiline maxLength={3000} />
                 </View>
                 <View style={styles.gap6}>
                   <View style={vstyles.between}>
-                    <Label>Extra hold (seconds)</Label>
+                    <Label>{i18n.t("sceneEdit.hold")}</Label>
                     <Text style={styles.value}>{hold.toFixed(1)}s</Text>
                   </View>
-                  <Slider value={hold} min={0} max={30} step={0.5} onChange={setHold} label="Extra hold in seconds" />
-                  <Text style={[vstyles.muted, vstyles.small]}>Add seconds after the voiceover ends so animations can finish before the next scene.</Text>
+                  <Slider value={hold} min={0} max={30} step={0.5} onChange={setHold} label={i18n.t("sceneEdit.holdLabel")} />
+                  <Text style={[vstyles.muted, vstyles.small]}>{i18n.t("sceneEdit.holdHint")}</Text>
                 </View>
               </View>
             ) : null}
           </View>
           <View style={vstyles.card}>
-            <Collapse label="Scene Props" open={open.props} onPress={() => setOpen({ ...open, props: !open.props })} />
+            <Collapse label={i18n.t("sceneEdit.props")} open={open.props} onPress={() => setOpen({ ...open, props: !open.props })} />
             {open.props ? (
               <View style={vstyles.stack}>
-                <Label>Layout content</Label>
+                <Label>{i18n.t("sceneEdit.content")}</Label>
                 {fields.length === 0 ? (
-                  <Text style={[vstyles.muted, vstyles.small]}>This layout has no content fields to edit.</Text>
+                  <Text style={[vstyles.muted, vstyles.small]}>{i18n.t("sceneEdit.noFields")}</Text>
                 ) : (
                   <LayoutFields fields={fields} value={content} onChange={(k, v) => setContent((c) => ({ ...c, [k]: v }))} />
                 )}
-                {declared.hasTables ? <Text style={[vstyles.muted, vstyles.small]}>Chart and table data are edited by regenerating the scene in the AI tab.</Text> : null}
+                {declared.hasTables ? <Text style={[vstyles.muted, vstyles.small]}>{i18n.t("sceneEdit.tables")}</Text> : null}
               </View>
             ) : null}
           </View>
@@ -264,8 +266,8 @@ export function SceneEditModal({ id, scene, index, template, aiEditsLeft, layout
 
       {error ? <Text style={vstyles.error}>{error}</Text> : null}
       <View style={vstyles.end}>
-        <PillButton small title="Cancel" disabled={busy} onPress={onClose} />
-        <PillButton small variant="primary" title={busy ? "Saving..." : "Save changes"} busy={busy} disabled={!(mode === "ai" ? aiChanged : manualChanged)} onPress={() => void save()} />
+        <PillButton small title={i18n.t("common.cancel")} disabled={busy} onPress={onClose} />
+        <PillButton small variant="primary" title={busy ? i18n.t("common.saving") : i18n.t("sceneEdit.save")} busy={busy} disabled={!(mode === "ai" ? aiChanged : manualChanged)} onPress={() => void save()} />
       </View>
     </Sheet>
   );
@@ -295,8 +297,8 @@ export function FontSliders({ title, desc, defaults, saving, onTitle, onDesc, on
   onDone?: (kind: "title" | "desc", v: number) => void;
 }) {
   const rows = [
-    ["Title font size", "title", title, FONT.title, defaults.title, onTitle, !!saving?.title],
-    ["Display text font size", "desc", desc, FONT.desc, defaults.desc, onDesc, !!saving?.desc],
+    [i18n.t("sceneEdit.titleSize"), "title", title, FONT.title, defaults.title, onTitle, !!saving?.title],
+    [i18n.t("sceneEdit.descSize"), "desc", desc, FONT.desc, defaults.desc, onDesc, !!saving?.desc],
   ] as const;
   return (
     <View style={styles.gap6}>

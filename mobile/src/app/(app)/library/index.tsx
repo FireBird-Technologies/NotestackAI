@@ -13,19 +13,20 @@ import { VideosList } from "@/video/list";
 import { colors, fonts, gutter, radius } from "@/ui/theme";
 import { Body, Button, Loading } from "@/ui";
 import { CARD_RADIUS, Pager } from "@/ui/widgets";
+import i18n from "@/i18n";
 
 /** The kinds to show, in the web Library's order. "videos" lists the Videos editor's videos. */
 const KINDS = [
-  { id: "all", label: "All" },
-  { id: "report", label: "Reports" },
-  { id: "summary", label: "Summaries" },
-  { id: "quiz", label: "Quizzes" },
-  { id: "flashcards", label: "Flashcards" },
-  { id: "mind_map", label: "Mind Constellations" },
-  { id: "infographic", label: "Infographics" },
-  { id: "slide_deck", label: "Slide decks" },
-  { id: "audio_overview", label: "Audio overviews" },
-  { id: "videos", label: "Videos" },
+  { id: "all", label: i18n.t("kinds.all") },
+  { id: "report", label: i18n.t("kinds.report") },
+  { id: "summary", label: i18n.t("kinds.summary") },
+  { id: "quiz", label: i18n.t("kinds.quiz") },
+  { id: "flashcards", label: i18n.t("kinds.flashcards") },
+  { id: "mind_map", label: i18n.t("kinds.mind_map") },
+  { id: "infographic", label: i18n.t("kinds.infographic") },
+  { id: "slide_deck", label: i18n.t("kinds.slide_deck") },
+  { id: "audio_overview", label: i18n.t("kinds.audio_overview") },
+  { id: "videos", label: i18n.t("kinds.videos") },
 ] as const;
 type Kind = (typeof KINDS)[number]["id"];
 
@@ -75,7 +76,7 @@ export default function Library() {
   const loading = list.isPending || list.isPlaceholderData;
   const items = loading ? [] : (list.data?.items ?? []);
   const total = list.data?.total ?? 0;
-  const label = KINDS.find((k) => k.id === kind)?.label ?? "All";
+  const label = KINDS.find((k) => k.id === kind)?.label ?? i18n.t("kinds.all");
 
   return (
     <View style={styles.fill}>
@@ -85,9 +86,9 @@ export default function Library() {
         contentContainerStyle={styles.page}
         keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={list.isRefetching && !list.isPlaceholderData} onRefresh={reload} tintColor={colors.blue} />}>
-        <Text style={styles.eyebrow}>Library</Text>
+        <Text style={styles.eyebrow}>{i18n.t("library.eyebrow")}</Text>
         <Text style={styles.title} accessibilityRole="header">
-          Everything you have made
+          {i18n.t("library.title")}
         </Text>
 
         {/* The chosen kind in a pill; its chevron opens the rest (the web's phone layout). */}
@@ -95,7 +96,7 @@ export default function Library() {
           <Pressable
             onPress={() => setPicking((p) => !p)}
             accessibilityRole="combobox"
-            accessibilityLabel={`Show ${label}`}
+            accessibilityLabel={i18n.t("library.show", { label })}
             accessibilityState={{ expanded: picking }}
             style={styles.filter}>
             <Text style={styles.filterText}>{label}</Text>
@@ -131,11 +132,11 @@ export default function Library() {
             style={styles.search}
             value={q}
             onChangeText={setQ}
-            placeholder={`Search ${total} items by post or notebook`}
+            placeholder={i18n.t("library.search", { count: total })}
             placeholderTextColor={colors.text3}
             clearButtonMode="while-editing"
             autoCapitalize="none"
-            accessibilityLabel="Search"
+            accessibilityLabel={i18n.t("library.searchLabel")}
           />
         ) : null}
 
@@ -143,19 +144,16 @@ export default function Library() {
         {kind !== "videos" && loading && !list.error ? <Loading /> : null}
         {list.error && !list.data ? (
           <View style={styles.empty}>
-            <Text style={styles.emptyTitle}>Could not load your library</Text>
-            <Body muted>Something went wrong reaching the server.</Body>
-            <Button title="Try again" onPress={reload} />
+            <Text style={styles.emptyTitle}>{i18n.t("library.loadFailed")}</Text>
+            <Body muted>{i18n.t("library.serverError")}</Body>
+            <Button title={i18n.t("common.tryAgain")} onPress={reload} />
           </View>
         ) : null}
         {kind !== "videos" && list.data && !loading && items.length === 0 ? (
           <View style={styles.empty}>
-            <Text style={styles.emptyTitle}>Nothing here yet</Text>
-            <Body muted>
-              Reports, summaries, quizzes, flashcards, Mind Constellations, slide decks, audio and more that you create
-              show up here.
-            </Body>
-            <Button title="Open a notebook" onPress={() => router.navigate("/notebooks")} />
+            <Text style={styles.emptyTitle}>{i18n.t("library.empty")}</Text>
+            <Body muted>{i18n.t("library.emptyBody")}</Body>
+            <Button title={i18n.t("library.openNotebook")} onPress={() => router.navigate("/notebooks")} />
           </View>
         ) : null}
 

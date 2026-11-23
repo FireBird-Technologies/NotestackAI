@@ -15,13 +15,14 @@ import { scheduleOnRN } from "react-native-worklets";
 
 import { colors, fonts } from "@/ui/theme";
 import { formatDate } from "@/ui";
+import i18n from "@/i18n";
 
 export type ColorMode = "recency" | "momentum";
 
 export const STATUS_LABEL: Record<TopicNode["status"], string> = {
-  rising: "Rising",
-  steady: "Steady orbit",
-  dormant: "Dormant",
+  rising: i18n.t("topicMap.rising"),
+  steady: i18n.t("topicMap.steady"),
+  dormant: i18n.t("topicMap.dormant"),
 };
 
 /** How far the map zooms in and out from where it opens (the web's MIN_W and MAX_W). */
@@ -244,8 +245,7 @@ export function StarMap({
           </>
         ) : (
           <Text style={styles.hudText}>
-            {data.nodes.length} stars · {galaxyCount} galaxies · pinch to zoom, drag to pan, tap a star to light it up, tap it
-            again to let go
+            {i18n.t("topicMap.hud", { stars: data.nodes.length, galaxies: galaxyCount })}
           </Text>
         )}
       </View>
@@ -329,32 +329,32 @@ export function StarMap({
       {/* Zoom and the legend sit under the map, clear of the stars. */}
       <View style={styles.footer}>
         <View style={styles.controls}>
-          <Pressable onPress={() => zoomBy(1.33)} accessibilityRole="button" accessibilityLabel="Zoom in" style={styles.control}>
+          <Pressable onPress={() => zoomBy(1.33)} accessibilityRole="button" accessibilityLabel={i18n.t("mindMap.zoomIn")} style={styles.control}>
             <Text style={styles.controlText}>+</Text>
           </Pressable>
-          <Pressable onPress={() => zoomBy(0.75)} accessibilityRole="button" accessibilityLabel="Zoom out" style={styles.control}>
+          <Pressable onPress={() => zoomBy(0.75)} accessibilityRole="button" accessibilityLabel={i18n.t("mindMap.zoomOut")} style={styles.control}>
             <Text style={styles.controlText}>-</Text>
           </Pressable>
-          <Pressable onPress={reset} accessibilityRole="button" accessibilityLabel="Reset view" style={styles.control}>
+          <Pressable onPress={reset} accessibilityRole="button" accessibilityLabel={i18n.t("topicMap.reset")} style={styles.control}>
             <Text style={[styles.controlText, styles.mono]}>1:1</Text>
           </Pressable>
         </View>
         <Pressable onPress={() => setLegend((l) => !l)} accessibilityRole="button" accessibilityState={{ expanded: legend }} style={styles.legendButton}>
-          <Text style={styles.legendButtonText}>Legend</Text>
+          <Text style={styles.legendButtonText}>{i18n.t("topicMap.legend")}</Text>
         </Pressable>
       </View>
       {legend ? (
         <View style={styles.legend}>
-          <Text style={styles.legendLine}>● size = posts</Text>
+          <Text style={styles.legendLine}>{i18n.t("topicMap.size")}</Text>
           {mode === "recency" ? (
-            <Text style={styles.legendLine}>● brighter = written about recently</Text>
+            <Text style={styles.legendLine}>{i18n.t("topicMap.brighter")}</Text>
           ) : (
             <>
-              <Text style={styles.legendLine}>➚ rising</Text>
-              <Text style={styles.legendLine}>◌ dormant</Text>
+              <Text style={styles.legendLine}>{i18n.t("topicMap.risingLegend")}</Text>
+              <Text style={styles.legendLine}>{i18n.t("topicMap.dormantLegend")}</Text>
             </>
           )}
-          <Text style={styles.legendLine}>— lines = shared posts</Text>
+          <Text style={styles.legendLine}>{i18n.t("topicMap.lines")}</Text>
         </View>
       ) : null}
     </View>

@@ -15,6 +15,7 @@ import { NotebookBar, type NotebookTab } from "@/notebook/tabs-bar";
 import { Starfield } from "@/shell/starfield";
 import { colors } from "@/ui/theme";
 import { Body, Button, Centered, Loading } from "@/ui";
+import i18n from "@/i18n";
 
 /**
  * A notebook, as the web app shows it on a phone: Sources (its chats and posts), Chat, Create and Library tabs. All four
@@ -77,7 +78,7 @@ export default function NotebookScreen() {
         {header}
         <Body muted>{(notebook.error ?? chats.error)?.message}</Body>
         <Button
-          title="Try again"
+          title={i18n.t("common.tryAgain")}
           onPress={() => {
             void notebook.refetch();
             void chats.refetch();
@@ -102,7 +103,7 @@ export default function NotebookScreen() {
       const a = await request();
       queryClient.setQueryData<Artifact[]>(["notebook", id, "artifacts"], (list) => [a, ...(list ?? []).filter((x) => x.id !== a.id)]);
     } catch (e) {
-      setMakeError(e instanceof Error ? e.message : "Could not start it. Try again.");
+      setMakeError(e instanceof Error ? e.message : i18n.t("common.couldNotStart"));
     } finally {
       setStarting((l) => {
         const i = l.indexOf(label);

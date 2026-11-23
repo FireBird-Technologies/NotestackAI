@@ -17,41 +17,42 @@ import { Composer } from "@/launchpad/editors";
 import { colors, fonts, radius } from "@/ui/theme";
 import { trackNewVideo } from "@/video/pending";
 import { pageStyles, Sheet } from "@/ui/widgets";
+import i18n from "@/i18n";
 
 export type Kind = Exclude<ArtifactType, "summary" | "quote_card" | "carousel" | "launch_kit" | "upload">;
 
 /** The things a notebook can make, in the web's order, with their icons. */
 const MAKES: { type: Kind; label: string; icon: ImageSource }[] = [
-  { type: "audio_overview", label: "Audio overview", icon: require("@/assets/images/create/headphones.png") },
-  { type: "slide_deck", label: "Slide deck", icon: require("@/assets/images/create/slides.png") },
-  { type: "video", label: "Video", icon: require("@/assets/images/create/video.png") },
-  { type: "report", label: "Report", icon: require("@/assets/images/create/report.png") },
-  { type: "infographic", label: "Infographic", icon: require("@/assets/images/create/infographic.png") },
-  { type: "quiz", label: "Quiz", icon: require("@/assets/images/create/quiz.png") },
-  { type: "flashcards", label: "Flashcards", icon: require("@/assets/images/create/flashcards.png") },
+  { type: "audio_overview", label: i18n.t("create.audio_overview"), icon: require("@/assets/images/create/headphones.png") },
+  { type: "slide_deck", label: i18n.t("create.slide_deck"), icon: require("@/assets/images/create/slides.png") },
+  { type: "video", label: i18n.t("create.video"), icon: require("@/assets/images/create/video.png") },
+  { type: "report", label: i18n.t("create.report"), icon: require("@/assets/images/create/report.png") },
+  { type: "infographic", label: i18n.t("create.infographic"), icon: require("@/assets/images/create/infographic.png") },
+  { type: "quiz", label: i18n.t("create.quiz"), icon: require("@/assets/images/create/quiz.png") },
+  { type: "flashcards", label: i18n.t("create.flashcards"), icon: require("@/assets/images/create/flashcards.png") },
 ];
 
 /** Each make's settings, as on the web: its dialog and the dialog's title. Video has its own wizard. */
 const DIALOGS: Record<Exclude<Kind, "video">, { title: string; Dialog: ComponentType<DialogProps> }> = {
-  mind_map: { title: "Mind Constellation", Dialog: MindMapDialog },
-  audio_overview: { title: "Customize audio overview", Dialog: AudioDialog },
-  slide_deck: { title: "Customize slide deck", Dialog: SlidesDialog },
-  report: { title: "Create report", Dialog: ReportDialog },
-  infographic: { title: "Infographic", Dialog: InfographicDialog },
-  quiz: { title: "Quiz", Dialog: QuizDialog },
-  flashcards: { title: "Flashcards", Dialog: FlashcardsDialog },
+  mind_map: { title: i18n.t("create.dialog.mind_map"), Dialog: MindMapDialog },
+  audio_overview: { title: i18n.t("create.dialog.audio_overview"), Dialog: AudioDialog },
+  slide_deck: { title: i18n.t("create.dialog.slide_deck"), Dialog: SlidesDialog },
+  report: { title: i18n.t("create.dialog.report"), Dialog: ReportDialog },
+  infographic: { title: i18n.t("create.dialog.infographic"), Dialog: InfographicDialog },
+  quiz: { title: i18n.t("create.dialog.quiz"), Dialog: QuizDialog },
+  flashcards: { title: i18n.t("create.dialog.flashcards"), Dialog: FlashcardsDialog },
 };
 
-/** What a make is called on its "Starting your ..." card. */
+/** A make's "Starting your ..." card title. */
 export const STARTING_LABEL: Record<string, string> = {
-  mind_map: "Mind Constellation",
-  audio_overview: "audio overview",
-  slide_deck: "slide deck",
-  video: "video",
-  report: "report",
-  infographic: "infographic",
-  quiz: "quiz",
-  flashcards: "flashcards",
+  mind_map: i18n.t("create.starting.mind_map"),
+  audio_overview: i18n.t("create.starting.audio_overview"),
+  slide_deck: i18n.t("create.starting.slide_deck"),
+  video: i18n.t("create.starting.video"),
+  report: i18n.t("create.starting.report"),
+  infographic: i18n.t("create.starting.infographic"),
+  quiz: i18n.t("create.starting.quiz"),
+  flashcards: i18n.t("create.starting.flashcards"),
 };
 
 /**
@@ -111,28 +112,28 @@ export function CreateTab({
   return (
     <ScrollView contentContainerStyle={styles.column}>
       <View style={styles.card}>
-        <Text style={styles.label}>CREATE</Text>
+        <Text style={styles.label}>{i18n.t("create.heading")}</Text>
         <Pressable
           onPress={() => open("mind_map")}
           accessibilityRole="button"
           style={({ pressed }) => [styles.tile, styles.stars, pressed && styles.pressed]}>
           <View style={styles.starsText}>
-            <Text style={styles.starsTitle}>Mind Constellation</Text>
-            <Text style={styles.starsSub}>Explore your posts as stars</Text>
+            <Text style={styles.starsTitle}>{i18n.t("create.mind_map")}</Text>
+            <Text style={styles.starsSub}>{i18n.t("create.starsSub")}</Text>
           </View>
           <Image source={require("@/assets/images/create/stars.png")} style={styles.starsArt} tintColor="#cfe0ff" />
         </Pressable>
         {MAKES.map((m) => (
           <Tile key={m.type} icon={m.icon} label={m.label} onPress={() => open(m.type)} />
         ))}
-        <Tile icon={require("@/assets/images/create/rocket.png")} label="Launch" onPress={() => setLaunching(true)} />
+        <Tile icon={require("@/assets/images/create/rocket.png")} label={i18n.t("create.launch")} onPress={() => setLaunching(true)} />
         <Pressable
           onPress={() => setConnecting(true)}
           accessibilityRole="button"
-          accessibilityLabel="Connect your app: Claude or ChatGPT"
+          accessibilityLabel={i18n.t("create.connectLabel")}
           style={({ pressed }) => [styles.tile, styles.connector, pressed && styles.pressed]}>
           <Image source={require("@/assets/images/create/connector.png")} style={styles.icon} tintColor={colors.text} />
-          <Text style={styles.connectorTitle}>Connect your app</Text>
+          <Text style={styles.connectorTitle}>{i18n.t("create.connect")}</Text>
           <View style={styles.divider} />
           <View style={styles.app}>
             <View style={styles.appLogo}>
@@ -141,7 +142,7 @@ export function CreateTab({
             <Text style={styles.appName}>Claude</Text>
           </View>
         </Pressable>
-        {off ? <Text style={pageStyles.body}>Add posts to this notebook to start creating.</Text> : null}
+        {off ? <Text style={pageStyles.body}>{i18n.t("create.addPostsFirst")}</Text> : null}
       </View>
 
       {(Object.keys(DIALOGS) as (keyof typeof DIALOGS)[]).map((type) => {
@@ -162,7 +163,7 @@ export function CreateTab({
           </Sheet>
         );
       })}
-      <Sheet visible={making === "video"} title="New video" onClose={() => setMaking(null)} onDismissed={dismissed}>
+      <Sheet visible={making === "video"} title={i18n.t("editor.newVideo")} onClose={() => setMaking(null)} onDismissed={dismissed}>
         {making === "video" ? (
           <VideoDialog
             key={presetKey}
@@ -177,7 +178,7 @@ export function CreateTab({
         ) : null}
       </Sheet>
       <ConnectorModal visible={connecting} onClose={() => setConnecting(false)} />
-      <Sheet visible={launching} title="New post" onClose={() => setLaunching(false)}>
+      <Sheet visible={launching} title={i18n.t("misc.newPost")} onClose={() => setLaunching(false)}>
         <Composer
           at={null}
           accounts={accounts.data ?? null}

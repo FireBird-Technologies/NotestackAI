@@ -5,6 +5,7 @@ import { Pressable } from "@/ui/pressable";
 
 import { Card, Eyebrow, Lede, PageTitle, PublicPage, publicText } from "@/shell/public-page";
 import { colors, fonts } from "@/ui/theme";
+import i18n from "@/i18n";
 
 const POSTS = [...blogPosts].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
 
@@ -12,12 +13,9 @@ const POSTS = [...blogPosts].sort((a, b) => b.publishedAt.localeCompare(a.publis
 export default function Blog() {
   return (
     <PublicPage>
-      <Eyebrow>Mission log</Eyebrow>
-      <PageTitle>Every post is a search for an answer</PageTitle>
-      <Lede>
-        Pick a question. Each mission follows it through a few waypoints until the answer comes into view: research,
-        deep writing, audio, video and distribution.
-      </Lede>
+      <Eyebrow>{i18n.t("marketing.missionLog")}</Eyebrow>
+      <PageTitle>{i18n.t("marketing.blogTitle")}</PageTitle>
+      <Lede>{i18n.t("marketing.blogLede")}</Lede>
       {POSTS.map((p) => (
         <Pressable
           key={p.slug}
@@ -26,13 +24,13 @@ export default function Blog() {
           style={({ pressed }) => pressed && styles.pressed}>
           <Card>
             <View style={styles.meta}>
-              <Text style={styles.mission}>Mission {missionNumber(p)}</Text>
+              <Text style={styles.mission}>{i18n.t("marketing.mission", { n: missionNumber(p) })}</Text>
               <Text style={publicText.mono}>{p.category}</Text>
             </View>
             <Text style={styles.question}>{missionOf(p).question}</Text>
             <Text style={publicText.cardTitle}>{p.title}</Text>
             <Text style={publicText.mono}>
-              {p.sections.length} waypoints · {p.readTime}
+              {i18n.t("marketing.waypoints", { count: p.sections.length, time: p.readTime })}
             </Text>
           </Card>
         </Pressable>

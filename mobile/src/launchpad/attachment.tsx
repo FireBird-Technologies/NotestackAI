@@ -6,19 +6,20 @@ import { Pressable } from "@/ui/pressable";
 
 import { colors, radius } from "@/ui/theme";
 import { pageStyles, PillButton } from "@/ui/widgets";
+import i18n from "@/i18n";
 
 const fmtDuration = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
 
 /** What an attachment carries, in a few words (web: launchpad/Attachment.tsx mediaLabel). */
 export function mediaLabel(a: PostableArtifact): string {
-  if (a.type === "upload") return a.media === "video" ? `Your video${a.duration_s ? ` ${fmtDuration(a.duration_s)}` : ""}` : "Your image";
-  if (a.media === "audio") return `Audio${a.duration_s ? ` ${fmtDuration(a.duration_s)}` : ""} · download only`;
-  if (a.media === "video" && a.rendering) return "Rendering: wait for it to finish";
-  if (a.media === "video" && a.needs_render) return "Not rendered yet: render it first";
-  if (a.media === "video") return a.duration_s ? `Video ${fmtDuration(a.duration_s)}` : "Video";
-  if (a.media === "image") return a.media_count > 1 ? `${a.media_count} images` : "Image";
-  if (a.media === "document") return "Document";
-  return "Text";
+  if (a.type === "upload") return a.media === "video" ? (a.duration_s ? i18n.t("lp.yourVideoDur", { dur: fmtDuration(a.duration_s) }) : i18n.t("lp.yourVideo")) : i18n.t("lp.yourImage");
+  if (a.media === "audio") return a.duration_s ? i18n.t("lp.audioDur", { dur: fmtDuration(a.duration_s) }) : i18n.t("lp.audio");
+  if (a.media === "video" && a.rendering) return i18n.t("lp.renderingWait");
+  if (a.media === "video" && a.needs_render) return i18n.t("lp.notRendered");
+  if (a.media === "video") return a.duration_s ? i18n.t("lp.videoDur", { dur: fmtDuration(a.duration_s) }) : i18n.t("lp.video");
+  if (a.media === "image") return a.media_count > 1 ? i18n.t("lp.images", { count: a.media_count }) : i18n.t("lp.image");
+  if (a.media === "document") return i18n.t("lp.document");
+  return i18n.t("lp.text");
 }
 
 /** An icon for each kind, when there is no picture (iOS SF Symbol, Android Material). */
@@ -55,9 +56,9 @@ export function AttachmentChip({ a, onChange, onRemove }: { a: PostableArtifact;
           {a.type_label} · {mediaLabel(a)}
         </Text>
       </View>
-      {onChange ? <PillButton title="Change" small onPress={onChange} /> : null}
+      {onChange ? <PillButton title={i18n.t("lp.change")} small onPress={onChange} /> : null}
       {onRemove ? (
-        <Pressable onPress={onRemove} hitSlop={10} accessibilityRole="button" accessibilityLabel={`Remove ${a.title}`}>
+        <Pressable onPress={onRemove} hitSlop={10} accessibilityRole="button" accessibilityLabel={i18n.t("lp.removeNamed", { title: a.title })}>
           <SymbolView name={{ ios: "xmark", android: "close" }} size={14} tintColor={colors.text2} />
         </Pressable>
       ) : null}

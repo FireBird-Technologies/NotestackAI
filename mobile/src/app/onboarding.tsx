@@ -1,4 +1,5 @@
 import { docsApi, jobsApi, notebooksApi, settingsApi } from "@notestack/shared/endpoints";
+import { combineJobs, jobFinished } from "@notestack/shared/jobState";
 import { firstNotebookName } from "@notestack/shared/notebook";
 import type { Job, Source } from "@notestack/shared/types";
 import { Image } from "expo-image";
@@ -16,6 +17,7 @@ import { AddSource } from "@/sources/add-source";
 import { colors, fonts, gutter, radius } from "@/ui/theme";
 import { Field } from "@/ui";
 import { JobProgress, Page, PillButton } from "@/ui/widgets";
+import i18n from "@/i18n";
 
 type Step = "connect" | "indexing";
 
@@ -30,7 +32,6 @@ async function toArchive() {
   }
 }
 
-const finishedJob = (j: Job | null) => j?.status === "done" || j?.status === "failed";
 
 /**
  * First run (web: pages/Welcome.tsx): connect a blog, import an article or upload files, watch it index, then land in a
@@ -54,7 +55,7 @@ function Onboarding() {
   const [yourName, setYourName] = useState("");
   const [savedName, setSavedName] = useState("");
   const [source, setSource] = useState<Source | null>(null);
-  // Every job the source started (an upload makes one per file); the last one drives the bar.
+  // Every job the source started (an upload makes one per file); together they drive the bar.
   const [jobIds, setJobIds] = useState<string[]>([]);
   const [live, setLive] = useState<Job | null>(null);
   const [allDone, setAllDone] = useState(false);
@@ -76,9 +77,9 @@ function Onboarding() {
       const ids = watching.split(",");
       const jobs = await Promise.all(ids.map((id) => jobsApi.get(id).catch(() => null)));
       if (stopped) return;
-      const last = jobs[jobs.length - 1];
-      if (last) setLive(last);
-      if (jobs.every((j) => j === null || finishedJob(j))) {
+      const all = combineJobs(jobs);
+      if (all) setLive(all);
+      if (jobs.every((j) => j === null || jobFinished(j))) {
         const list = await docsApi.list({ limit: 5000 }).catch(() => null);
         if (stopped) return;
         setPosts(list?.total ?? 0);
@@ -145,15 +146,14 @@ function Onboarding() {
   const lockedNotice = capped ? (
     <View style={styles.cap}>
       <Text style={styles.capTitle}>
-        We found {found} posts. The free plan indexed only your latest {available}.
+        {i18n.t("onboarding.foundCapped", { count: found, available })}
       </Text>
       <Text style={styles.muted}>
-        The other {locked} are sitting in your archive, unread. Until you upgrade, answers, audio overviews and Launch Kits can only use {available}{" "}
-        posts. Upgrade and all {found} are indexed automatically.
+        {i18n.t("onboarding.cappedBody", { locked, available, found })}
       </Text>
       <PillButton
         small
-        title={`Index all ${found} posts`}
+        title={i18n.t("onboarding.indexAll", { count: found })}
         onPress={() => {
           void markOnboarded();
           upgrade();
@@ -174,7 +174,7 @@ function Onboarding() {
             void markOnboarded().then(toArchive);
           }}
           hitSlop={10} accessibilityRole="button">
-          <Text style={styles.skip}>Skip for now</Text>
+          <Text style={styles.skip}>{i18n.t("onboarding.skip")}</Text>
         </Pressable>
       </View>
 
@@ -183,14 +183,14 @@ function Onboarding() {
         {step === "connect" ? (
           <View style={styles.card}>
             <Text style={styles.hello}>
-              Welcome aboard{first ? ", " : ""}
+              {first ? i18n.t("onboarding.welcomeName") : i18n.t("onboarding.welcome")}
               {first ? <Text style={styles.helloName}>{first}</Text> : null}
             </Text>
-            <Text style={[styles.h1, styles.center]}>Where does your writing live?</Text>
-            <Text style={[styles.muted, styles.center]}>Bring it in however suits you. We turn it into a research notebook you can question, hear and launch from.</Text>
+            <Text style={[styles.h1, styles.center]}>{i18n.t("onboarding.where")}</Text>
+            <Text style={[styles.muted, styles.center]}>{i18n.t("onboarding.whereBody")}</Text>
             {isApple && !user.name ? (
               <Field
-                label="What should we call you? (optional)"
+                label={i18n.t("onboarding.yourName")}
                 value={yourName}
                 onChangeText={setYourName}
                 onBlur={saveYourName}
@@ -207,15 +207,15 @@ function Onboarding() {
 
         {step === "indexing" ? (
           <View style={styles.card}>
-            <Text style={styles.eyebrow}>{source?.title ?? "Your archive"}</Text>
-            <Text style={styles.h1}>{indexingFailed ? "That did not land" : "Bringing your posts into orbit"}</Text>
+            <Text style={styles.eyebrow}>{source?.title ?? i18n.t("onboarding.yourArchive")}</Text>
+            <Text style={styles.h1}>{indexingFailed ? i18n.t("onboarding.failed") : i18n.t("onboarding.indexing")}</Text>
             {live ? <JobProgress job={live} /> : null}
             {lockedNotice}
             {indexingFailed ? (
               <View style={styles.row}>
                 <PillButton
                   variant="primary"
-                  title="Try again"
+                  title={i18n.t("common.tryAgain")}
                   onPress={() => {
                     setJobIds([]);
                     setLive(null);
@@ -223,27 +223,27 @@ function Onboarding() {
                     setStep("connect");
                   }}
                 />
-                <PillButton title="Add posts another way" onPress={() => void markOnboarded().then(() => router.replace("/sources"))} />
+                <PillButton title={i18n.t("onboarding.anotherWay")} onPress={() => void markOnboarded().then(() => router.replace("/sources"))} />
               </View>
             ) : (
               <>
                 {indexingDone ? (
                   <>
                     <Field
-                      label="Notebook name"
+                      label={i18n.t("onboarding.notebookName")}
                       value={name}
                       onChangeText={setName}
                       maxLength={120}
                       returnKeyType="done"
                       onSubmitEditing={() => void openNotebook()}
-                      accessibilityLabel="Notebook name"
+                      accessibilityLabel={i18n.t("onboarding.notebookName")}
                     />
                     <View style={styles.end}>
-                      <PillButton variant="primary" title="Open my notebook" busy={opening} disabled={opening || !name.trim()} onPress={() => void openNotebook()} />
+                      <PillButton variant="primary" title={i18n.t("onboarding.openNotebook")} busy={opening} disabled={opening || !name.trim()} onPress={() => void openNotebook()} />
                     </View>
                   </>
                 ) : (
-                  <Text style={styles.muted}>This takes a minute for big archives. Then name your notebook and open it.</Text>
+                  <Text style={styles.muted}>{i18n.t("onboarding.takesAMinute")}</Text>
                 )}
               </>
             )}

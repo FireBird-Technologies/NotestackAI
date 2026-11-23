@@ -16,6 +16,7 @@ import {
 } from "@/shell/public-page";
 import { colors, fonts, gutter, radius } from "@/ui/theme";
 import { Button } from "@/ui";
+import i18n from "@/i18n";
 
 /** One post: the question it answers and the short answer up front, then its sections, questions and related reads. */
 export default function BlogPost() {
@@ -25,8 +26,8 @@ export default function BlogPost() {
   if (!post) {
     return (
       <PublicPage>
-        <PageTitle>Post not found</PageTitle>
-        <Button title="See all posts" variant="secondary" onPress={() => router.navigate("/blogs")} />
+        <PageTitle>{i18n.t("marketing.postNotFound")}</PageTitle>
+        <Button title={i18n.t("marketing.seeAllPosts")} variant="secondary" onPress={() => router.navigate("/blogs")} />
       </PublicPage>
     );
   }

@@ -16,6 +16,8 @@ import { useUpgrade } from "@/account/upgrade";
 import { Dialog, Pager, PillButton, Sheet } from "@/ui/widgets";
 
 import { vstyles } from "./ui";
+import i18n from "@/i18n";
+import { Trans } from "react-i18next";
 
 const PAGE = 10;
 
@@ -57,7 +59,7 @@ export function VideosList() {
       void queryClient.invalidateQueries({ queryKey: ["videos"] });
       void queryClient.invalidateQueries({ queryKey: ["library"] });
     } catch (e) {
-      setDeleteError(e instanceof ApiError ? e.message : "Could not delete it. Try again.");
+      setDeleteError(e instanceof ApiError ? e.message : i18n.t("videoList.deleteFailed"));
     } finally {
       setBusy(false);
     }
@@ -67,21 +69,21 @@ export function VideosList() {
     <View style={vstyles.stack}>
       <View style={styles.head}>
         <Text style={styles.quota}>
-          {q ? `${q.used} of ${q.limit} video${q.limit === 1 ? "" : "s"} used${q.resets_at ? ` this period, refills ${formatDate(q.resets_at)}` : " on your plan"}` : ""}
+          {q ? (q.resets_at ? i18n.t("videoList.usedPeriod", { used: q.used, count: q.limit, date: formatDate(q.resets_at) }) : i18n.t("videoList.usedPlan", { used: q.used, count: q.limit })) : ""}
         </Text>
         {out ? (
-          <PillButton small variant="primary" title="Get more videos" onPress={() => upgrade()} />
+          <PillButton small variant="primary" title={i18n.t("videoList.getMore")} onPress={() => upgrade()} />
         ) : (
-          <PillButton small variant="primary" title="New video" onPress={() => router.push("/library/videos/new")} />
+          <PillButton small variant="primary" title={i18n.t("videoList.new")} onPress={() => router.push("/library/videos/new")} />
         )}
       </View>
       {list.error && !list.data ? <Text style={vstyles.error}>{list.error.message}</Text> : null}
       {!videos && !list.error ? <Loading /> : null}
       {videos?.length === 0 ? (
         <View style={styles.empty}>
-          <Text style={vstyles.h3}>No videos yet</Text>
-          <Text style={vstyles.muted}>Turn a post or any article link into a narrated video, then edit it scene by scene.</Text>
-          <PillButton variant="primary" title="Make your first video" onPress={() => router.push("/library/videos/new")} />
+          <Text style={vstyles.h3}>{i18n.t("videoList.none")}</Text>
+          <Text style={vstyles.muted}>{i18n.t("videoList.noneBody")}</Text>
+          <PillButton variant="primary" title={i18n.t("videoList.first")} onPress={() => router.push("/library/videos/new")} />
         </View>
       ) : null}
       {videos?.map((v) => {
@@ -97,11 +99,11 @@ export function VideosList() {
                 <View style={[styles.dot, st.tone === "failed" && styles.dotFailed]} />
                 <Text style={[vstyles.muted, vstyles.small]}>{st.label}</Text>
               </View>
-              <Text style={styles.meta}>{[source, v.scenes ? `${v.scenes} scene${v.scenes === 1 ? "" : "s"}` : null, v.created_at ? formatDate(v.created_at) : null].filter(Boolean).join(" · ")}</Text>
+              <Text style={styles.meta}>{[source, v.scenes ? i18n.t("videoList.scenes", { count: v.scenes }) : null, v.created_at ? formatDate(v.created_at) : null].filter(Boolean).join(" · ")}</Text>
             </Pressable>
             <View style={styles.actions}>
               {st.tone === "done" ? (
-                <Pressable onPress={() => setLaunching(v.id)} accessibilityRole="button" accessibilityLabel={`Launch ${v.title}`} style={styles.icon}>
+                <Pressable onPress={() => setLaunching(v.id)} accessibilityRole="button" accessibilityLabel={i18n.t("videoList.launchNamed", { title: v.title })} style={styles.icon}>
                   <RocketIcon size={16} />
                 </Pressable>
               ) : null}
@@ -111,7 +113,7 @@ export function VideosList() {
                   setDeleting(v);
                 }}
                 accessibilityRole="button"
-                accessibilityLabel={`Delete ${v.title}`}
+                accessibilityLabel={i18n.t("card.deleteNamed", { title: v.title })}
                 style={styles.icon}>
                 <TrashIcon size={16} />
               </Pressable>
@@ -122,17 +124,17 @@ export function VideosList() {
       <Pager page={page} pages={Math.ceil(total / PAGE)} onChange={setPage} />
 
       {/* While the delete runs, the backdrop and the close button do nothing */}
-      <Dialog visible={deleting !== null} title="Delete this video?" onClose={busy ? () => undefined : () => setDeleting(null)}>
+      <Dialog visible={deleting !== null} title={i18n.t("videoList.deleteTitle")} onClose={busy ? () => undefined : () => setDeleting(null)}>
         <Text style={vstyles.body}>
-          &quot;<Text style={vstyles.strong}>{deleting?.title}</Text>&quot; will be deleted permanently. This can&apos;t be undone.
+          <Trans i18nKey="videoList.deleteBody" values={{ title: deleting?.title ?? "" }} components={[<Text key="title" style={vstyles.strong} />]} />
         </Text>
         {deleteError ? <Text style={vstyles.error}>{deleteError}</Text> : null}
         <View style={vstyles.end}>
-          <PillButton small title="Cancel" disabled={busy} onPress={() => setDeleting(null)} />
-          <PillButton small variant="danger" title={busy ? "Deleting..." : "Delete video"} busy={busy} onPress={() => void confirmDelete()} />
+          <PillButton small title={i18n.t("common.cancel")} disabled={busy} onPress={() => setDeleting(null)} />
+          <PillButton small variant="danger" title={busy ? i18n.t("videoList.deleting") : i18n.t("videoList.deleteVideo")} busy={busy} onPress={() => void confirmDelete()} />
         </View>
       </Dialog>
-      <Sheet visible={launching !== null} title="New post" onClose={() => setLaunching(null)}>
+      <Sheet visible={launching !== null} title={i18n.t("videoList.newPost")} onClose={() => setLaunching(null)}>
         {launching !== null ? (
           <Composer
             at={null}

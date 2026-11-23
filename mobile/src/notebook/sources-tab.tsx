@@ -11,6 +11,7 @@ import { AddSource } from "@/sources/add-source";
 import { colors, fonts, radius } from "@/ui/theme";
 import { ErrorText, formatDate, Loading } from "@/ui";
 import { confirm, JobProgress, pageStyles, PillButton, Section, Sheet } from "@/ui/widgets";
+import i18n, { endChevron } from "@/i18n";
 
 /**
  * The Sources tab (web: NotebookView's chats column on a phone): the notebook's chats under date headings, with + New,
@@ -40,7 +41,7 @@ export function SourcesTab({
 }) {
   const groups = useMemo(() => groupChats(chats), [chats]);
   // Today's chats start open, as on the web.
-  const [open, setOpen] = useState<string[]>(["Today"]);
+  const [open, setOpen] = useState<string[]>(() => [i18n.t("shared.chats.today")]);
   // Sources connected from the sheet: their imports, followed until done, when the notebook reloads with the new posts.
   const [imports, setImports] = useState<Job[]>([]);
   const changed = useRef(onPostsChanged);
@@ -68,25 +69,25 @@ export function SourcesTab({
 
   const remove = (c: ChatSummary, title: string) =>
     confirm(
-      "Delete this chat?",
-      "Delete",
+      i18n.t("nbSources.deleteChat"),
+      i18n.t("common.delete"),
       async () => {
         setError("");
         try {
           await notebooksApi.removeChat(c.id);
           onChatRemoved(c.id);
         } catch (e) {
-          setError(e instanceof Error ? e.message : "Could not delete the chat.");
+          setError(e instanceof Error ? e.message : i18n.t("nbSources.deleteChatFailed"));
         }
       },
-      `"${title}" and its answers will be deleted.`,
+      i18n.t("nbSources.deleteChatBody", { title }),
     );
 
   return (
     <ScrollView contentContainerStyle={styles.column}>
-      <Section title="Chats" aside={<PillButton small title="+ New" onPress={onNewChat} />}>
+      <Section title={i18n.t("nbSources.chats")} aside={<PillButton small title={i18n.t("nbSources.newChat")} onPress={onNewChat} />}>
         <ErrorText>{error}</ErrorText>
-        {chats.length === 0 ? <Text style={pageStyles.body}>Your conversations in this notebook will appear here.</Text> : null}
+        {chats.length === 0 ? <Text style={pageStyles.body}>{i18n.t("nbSources.chatsEmpty")}</Text> : null}
         {groups.map((g) => {
           const shown = open.includes(g.label);
           return (
@@ -97,7 +98,7 @@ export function SourcesTab({
                 accessibilityState={{ expanded: shown }}
                 style={styles.groupHead}>
                 <SymbolView
-                  name={shown ? { ios: "chevron.down", android: "expand_more" } : { ios: "chevron.right", android: "chevron_right" }}
+                  name={shown ? { ios: "chevron.down", android: "expand_more" } : endChevron}
                   size={13}
                   tintColor={colors.text3}
                 />
@@ -106,7 +107,7 @@ export function SourcesTab({
               </Pressable>
               {shown
                 ? g.items.map((c) => {
-                    const title = c.title?.trim() || "Untitled chat";
+                    const title = c.title?.trim() || i18n.t("common.untitledChat");
                     const on = c.id === chatId;
                     return (
                       <View key={c.id} style={[styles.chat, on && styles.chatOn]}>
@@ -114,7 +115,7 @@ export function SourcesTab({
                           onPress={() => onOpenChat(c.id)}
                           style={styles.chatLink}
                           accessibilityRole="button"
-                          accessibilityLabel={`${title}, updated ${formatDate(c.updated_at)}`}>
+                          accessibilityLabel={i18n.t("nbSources.chatUpdated", { title, date: formatDate(c.updated_at) })}>
                           <Text style={[styles.chatTitle, on && styles.chatTitleOn]} numberOfLines={1}>
                             {title}
                           </Text>
@@ -123,7 +124,7 @@ export function SourcesTab({
                           onPress={() => remove(c, title)}
                           hitSlop={6}
                           accessibilityRole="button"
-                          accessibilityLabel={`Delete ${title}`}
+                          accessibilityLabel={i18n.t("sources.deleteNamed", { title })}
                           style={styles.trash}>
                           <SymbolView name={{ ios: "trash", android: "delete" }} size={15} tintColor={colors.text2} />
                         </Pressable>
@@ -136,24 +137,22 @@ export function SourcesTab({
         })}
       </Section>
 
-      <Section title="Posts" aside={<PillButton small title="Add & modify" onPress={() => onAdding(true)} />}>
+      <Section title={i18n.t("nbSources.posts")} aside={<PillButton small title={i18n.t("nbSources.addModify")} onPress={() => onAdding(true)} />}>
         {posts > 0 ? (
-          <Text style={pageStyles.body}>
-            {posts} {posts === 1 ? "post is" : "posts are"} connected to this notebook.
-          </Text>
+          <Text style={pageStyles.body}>{i18n.t("nbSources.connected", { count: posts })}</Text>
         ) : (
-          <Text style={pageStyles.body}>No posts yet. Add some to start asking and creating.</Text>
+          <Text style={pageStyles.body}>{i18n.t("nbSources.noPosts")}</Text>
         )}
         {imports.map((j) => (
           <JobProgress key={j.id} job={j} />
         ))}
       </Section>
 
-      <Sheet visible={adding} title={notebook.is_archive ? "Connect a source" : `Add to ${notebook.title}`} onClose={() => onAdding(false)}>
+      <Sheet visible={adding} title={notebook.is_archive ? i18n.t("nbSources.connectSource") : i18n.t("nbSources.addTo", { title: notebook.title })} onClose={() => onAdding(false)}>
         <Text style={pageStyles.body}>
           {notebook.is_archive
-            ? "This archive already contains all your posts. Posts from a new source join it automatically."
-            : "Every post it imports joins this notebook."}
+            ? i18n.t("nbSources.archiveBody")
+            : i18n.t("nbSources.importsJoin")}
         </Text>
         <AddSource
           compact
@@ -204,7 +203,7 @@ function PostsManager({ notebook, readOnly, onChanged }: { notebook: Notebook; r
       await call();
       onChanged();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not change the posts. Try again.");
+      setError(e instanceof Error ? e.message : i18n.t("nbSources.changeFailed"));
     } finally {
       setPending((p) => p.filter((x) => x !== id));
     }
@@ -212,10 +211,10 @@ function PostsManager({ notebook, readOnly, onChanged }: { notebook: Notebook; r
 
   const remove = (d: Doc) =>
     confirm(
-      "Remove this post?",
-      "Remove post",
+      i18n.t("nbSources.removeTitle"),
+      i18n.t("nbSources.removeAction"),
       () => void run(d.id, () => notebooksApi.removeDoc(notebook.id, d.id)),
-      `"${d.title}" will be removed from this notebook. The post itself is kept in your library, and you can add it back later.`,
+      i18n.t("nbSources.removeBody", { title: d.title }),
     );
 
   return (
@@ -224,22 +223,22 @@ function PostsManager({ notebook, readOnly, onChanged }: { notebook: Notebook; r
         style={styles.search}
         value={q}
         onChangeText={setQ}
-        placeholder="Search posts"
+        placeholder={i18n.t("nbSources.search")}
         placeholderTextColor={colors.text3}
         clearButtonMode="while-editing"
         autoCapitalize="none"
-        accessibilityLabel="Search posts"
+        accessibilityLabel={i18n.t("nbSources.search")}
       />
       <ErrorText>{error}</ErrorText>
 
       {readOnly ? (
-        <Text style={styles.eyebrow}>ALREADY ADDED POSTS ({docs.length})</Text>
+        <Text style={styles.eyebrow}>{i18n.t("nbSources.alreadyAdded", { count: docs.length })}</Text>
       ) : (
         <View style={styles.tabs} accessibilityRole="tablist">
           {(
             [
-              ["inside", "Added sources"],
-              ["outside", "Other sources"],
+              ["inside", i18n.t("nbSources.added")],
+              ["outside", i18n.t("nbSources.other")],
             ] as const
           ).map(([id, label]) => {
             const on = tab === id;
@@ -273,7 +272,7 @@ function PostsManager({ notebook, readOnly, onChanged }: { notebook: Notebook; r
                   disabled={pending.includes(d.id)}
                   hitSlop={8}
                   accessibilityRole="button"
-                  accessibilityLabel={`Remove ${d.title} from this notebook`}
+                  accessibilityLabel={i18n.t("nbSources.removeFrom", { title: d.title })}
                   style={styles.pmAction}>
                   {pending.includes(d.id) ? (
                     <ActivityIndicator size="small" color={colors.text2} />
@@ -284,7 +283,7 @@ function PostsManager({ notebook, readOnly, onChanged }: { notebook: Notebook; r
               ) : null}
             </View>
           ))}
-          {inside.length === 0 ? <Text style={styles.pmEmpty}>{docs.length ? "No posts match." : "No posts yet."}</Text> : null}
+          {inside.length === 0 ? <Text style={styles.pmEmpty}>{docs.length ? i18n.t("sources.noMatch") : i18n.t("nbSources.noPostsShort")}</Text> : null}
         </ScrollView>
       ) : all.isPending ? (
         <Loading />
@@ -310,7 +309,7 @@ function PostsManager({ notebook, readOnly, onChanged }: { notebook: Notebook; r
             </View>
           ))}
           {outsideShown.length === 0 ? (
-            <Text style={styles.pmEmpty}>{outside.length ? "No posts match." : "All your posts are in this notebook."}</Text>
+            <Text style={styles.pmEmpty}>{outside.length ? i18n.t("sources.noMatch") : i18n.t("nbSources.allIn")}</Text>
           ) : null}
         </ScrollView>
       )}

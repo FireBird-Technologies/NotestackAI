@@ -7,6 +7,8 @@ import { Pressable } from "@/ui/pressable";
 
 import { colors, fonts, radius } from "@/ui/theme";
 import { PillButton } from "@/ui/widgets";
+import i18n from "@/i18n";
+import { Trans } from "react-i18next";
 
 /** The address Claude and ChatGPT connect to (web: components/ConnectorModal.tsx). */
 export const MCP_SERVER_URL = "https://api.notestack.ai/mcp";
@@ -28,13 +30,13 @@ export function ConnectorModal({ visible, onClose }: { visible: boolean; onClose
           <ScrollView contentContainerStyle={styles.body} bounces={false}>
             <View style={styles.head}>
               <Text style={styles.title} accessibilityRole="header">
-                Connect to Notestack
+                {i18n.t("connectorModal.title")}
               </Text>
-              <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel="Close">
+              <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel={i18n.t("common.close")}>
                 <SymbolView name={{ ios: "xmark", android: "close" }} size={17} tintColor={colors.text2} />
               </Pressable>
             </View>
-            <Text style={styles.intro}>Paste this URL into Claude or ChatGPT, then sign in to approve access.</Text>
+            <Text style={styles.intro}>{i18n.t("connectorModal.intro")}</Text>
 
             <View style={styles.url}>
               <Text style={styles.urlText} selectable numberOfLines={1} adjustsFontSizeToFit>
@@ -43,23 +45,23 @@ export function ConnectorModal({ visible, onClose }: { visible: boolean; onClose
               <PillButton
                 small
                 variant="primary"
-                title={copied ? "Copied" : "Copy"}
+                title={copied ? i18n.t("ui.copied") : i18n.t("ui.copy")}
                 onPress={() => void Clipboard.setStringAsync(MCP_SERVER_URL).then(() => setCopied(true))}
               />
             </View>
 
             <Client logo={require("@/assets/images/ui/anthropic.png")} name="Claude">
               <Step n={1}>
-                Go to <B>Settings → Connectors → Add custom connector</B>.
+                <Trans i18nKey="connectorModal.claude1" components={{ b: <B /> }} />
               </Step>
-              <Step n={2}>Paste the URL, leave Client ID and Secret empty, and connect.</Step>
+              <Step n={2}>{i18n.t("connectorModal.claude2")}</Step>
             </Client>
             <Client logo={require("@/assets/images/ui/openai.png")} name="ChatGPT">
               <Step n={1}>
-                In <B>Settings → Apps → Advanced settings</B>, turn on <B>Developer mode</B>.
+                <Trans i18nKey="connectorModal.chatgpt1" components={{ b: <B /> }} />
               </Step>
               <Step n={2}>
-                Back in Apps, choose <B>Add app</B>, paste the URL and connect.
+                <Trans i18nKey="connectorModal.chatgpt2" components={{ b: <B /> }} />
               </Step>
             </Client>
           </ScrollView>
@@ -94,7 +96,7 @@ function Step({ n, children }: { n: number; children: ReactNode }) {
   );
 }
 
-const B = ({ children }: { children: ReactNode }) => <Text style={styles.strong}>{children}</Text>;
+const B = ({ children }: { children?: ReactNode }) => <Text style={styles.strong}>{children}</Text>;
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: "rgba(0, 0, 0, 0.65)", justifyContent: "center", padding: 20 },

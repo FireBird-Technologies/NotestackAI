@@ -8,6 +8,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } 
 import { FeedbackRow, StudyModal } from "@/artifacts/study-modal";
 import { colors, fonts, radius } from "@/ui/theme";
 import { PillButton } from "@/ui/widgets";
+import i18n from "@/i18n";
 
 const shuffled = <T,>(list: T[]): T[] => {
   const a = [...list];
@@ -60,7 +61,7 @@ export function FlashcardDeck({ cards, deck: given, fill = false }: {
   const touchX = useRef(0);
   const spin = useAnimatedStyle(() => ({ transform: [{ perspective: 900 }, { rotateY: `${turn.value}deg` }] }));
   const card = cards[order[pos]];
-  if (!card) return <Text style={styles.muted}>No cards.</Text>;
+  if (!card) return <Text style={styles.muted}>{i18n.t("flashcards.none")}</Text>;
 
   // A quick turn: the card turns edge on, its other side is shown, and it turns back.
   const flip = () => {
@@ -71,7 +72,7 @@ export function FlashcardDeck({ cards, deck: given, fill = false }: {
   return (
     <View style={[styles.deck, fill && styles.grow]}>
       <Text style={styles.count}>
-        Card {pos + 1} of {order.length}
+        {i18n.t("flashcards.cardOf", { n: pos + 1, total: order.length })}
       </Text>
       <View
         style={fill && styles.grow}
@@ -88,25 +89,25 @@ export function FlashcardDeck({ cards, deck: given, fill = false }: {
             silent
             onPress={flip}
             accessibilityRole="button"
-            accessibilityLabel={flipped ? "Show the front" : "Show the answer"}
+            accessibilityLabel={flipped ? i18n.t("flashcards.showFront") : i18n.t("flashcards.showAnswer")}
             style={({ pressed }) => [styles.card, fill && styles.grow, flipped && styles.flipped, pressed && styles.pressed]}>
-            <Text style={styles.side}>{flipped ? "ANSWER" : "CARD"}</Text>
+            <Text style={styles.side}>{flipped ? i18n.t("flashcards.answer") : i18n.t("flashcards.card")}</Text>
             <Text style={styles.text}>{flipped ? card.back : card.front}</Text>
             {flipped && card.sources?.length > 0 ? (
               <Text style={styles.src}>{card.sources.slice(0, 2).map((s) => `${s.title}, ${citedLines(s)}`).join(" · ")}</Text>
             ) : null}
-            {!flipped ? <Text style={styles.hint}>Tap to flip</Text> : null}
+            {!flipped ? <Text style={styles.hint}>{i18n.t("flashcards.tap")}</Text> : null}
           </Pressable>
         </Animated.View>
       </View>
       <View style={styles.actions}>
         <View style={styles.group}>
-          <PillButton small title="Skip" onPress={() => go(1)} disabled={pos === order.length - 1} />
-          <PillButton small title="Shuffle" onPress={shuffle} />
+          <PillButton small title={i18n.t("common.skip")} onPress={() => go(1)} disabled={pos === order.length - 1} />
+          <PillButton small title={i18n.t("flashcards.shuffle")} onPress={shuffle} />
         </View>
         <View style={styles.group}>
-          <PillButton small title="Previous" onPress={() => go(-1)} disabled={pos === 0} />
-          <PillButton small title="Next" variant="primary" onPress={() => go(1)} disabled={pos === order.length - 1} />
+          <PillButton small title={i18n.t("misc.previous")} onPress={() => go(-1)} disabled={pos === 0} />
+          <PillButton small title={i18n.t("misc.next")} variant="primary" onPress={() => go(1)} disabled={pos === order.length - 1} />
         </View>
       </View>
     </View>
@@ -120,7 +121,7 @@ export function FlashcardsScreen({ artifact, visible, onClose, feedback }: { art
   return (
     <StudyModal title={artifact.title} visible={visible} onClose={onClose} fill>
       <FlashcardDeck cards={cards} deck={deck} fill />
-      {feedback ? <FeedbackRow label="How are these cards?">{feedback}</FeedbackRow> : null}
+      {feedback ? <FeedbackRow label={i18n.t("flashcards.how")}>{feedback}</FeedbackRow> : null}
     </StudyModal>
   );
 }

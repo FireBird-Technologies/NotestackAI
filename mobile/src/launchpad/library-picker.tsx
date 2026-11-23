@@ -18,41 +18,42 @@ import { RenderVideoDialog } from "@/launchpad/render-dialog";
 import { colors, radius } from "@/ui/theme";
 import { ErrorText, formatDate, Loading } from "@/ui";
 import { confirm, Dialog, Pager, pageStyles, PillButton, PopMenu, Sheet, type MenuItem } from "@/ui/widgets";
+import i18n from "@/i18n";
 
 type Kind = "all" | "kits" | "video" | "decks" | "reports" | "infographics" | "audio" | "uploads";
 const PAGE = 10;
 const KINDS: { id: Kind; label: string }[] = [
-  { id: "all", label: "All" },
-  { id: "kits", label: "Launch Kits" },
-  { id: "video", label: "Videos" },
-  { id: "decks", label: "Slide Decks" },
-  { id: "reports", label: "Reports" },
-  { id: "infographics", label: "Infographics" },
-  { id: "audio", label: "Audio" },
-  { id: "uploads", label: "Uploads" },
+  { id: "all", label: i18n.t("lp.filter.all") },
+  { id: "kits", label: i18n.t("lp.filter.kits") },
+  { id: "video", label: i18n.t("lp.filter.video") },
+  { id: "decks", label: i18n.t("lp.filter.decks") },
+  { id: "reports", label: i18n.t("lp.filter.reports") },
+  { id: "infographics", label: i18n.t("lp.filter.infographics") },
+  { id: "audio", label: i18n.t("lp.filter.audio") },
+  { id: "uploads", label: i18n.t("lp.filter.uploads") },
 ];
 
 const EMPTY: Record<Kind, string> = {
-  all: "Nothing to attach here yet.",
-  kits: "No launch kits yet: create a new one.",
-  video: "Nothing to attach here yet.",
-  decks: "No slide decks yet: make one from a notebook.",
-  reports: "No reports yet: make one from a notebook.",
-  infographics: "No infographics yet: make one from a notebook.",
-  audio: "No audio overviews yet: make one from a notebook.",
-  uploads: "Nothing uploaded yet.",
+  all: i18n.t("lp.empty.all"),
+  kits: i18n.t("lp.empty.kits"),
+  video: i18n.t("lp.empty.video"),
+  decks: i18n.t("lp.empty.decks"),
+  reports: i18n.t("lp.empty.reports"),
+  infographics: i18n.t("lp.empty.infographics"),
+  audio: i18n.t("lp.empty.audio"),
+  uploads: i18n.t("lp.empty.uploads"),
 };
 
 /** The warning before deleting, by kind: what goes, and what happens to the posts that carry it. */
 function deleteWording(a: PostableArtifact): { title: string; body: string } {
-  if (a.type === "upload") return { title: "Delete this upload?", body: "The file is deleted for good. Posts on your calendar that carry it are removed too." };
+  if (a.type === "upload") return { title: i18n.t("lp.deleteUpload"), body: i18n.t("lp.deleteUploadBody") };
   if (a.type === "launch_kit") {
-    return { title: "Delete this launch kit?", body: "Its LinkedIn post and hooks are deleted for good. Posts already scheduled from it stay on your calendar." };
+    return { title: i18n.t("lp.deleteKit"), body: i18n.t("lp.deleteKitBody") };
   }
   if (a.media === "video") {
-    return { title: "Delete this video?", body: "It's deleted here and on the video service, for good. Posts on your calendar that carry it are removed too." };
+    return { title: i18n.t("lp.deleteVideo"), body: i18n.t("lp.deleteVideoBody") };
   }
-  return { title: "Delete this item?", body: "It's deleted for good. Posts on your calendar that carry it are removed too." };
+  return { title: i18n.t("lp.deleteItem"), body: i18n.t("lp.deleteItemBody") };
 }
 
 const MB = 1024 * 1024;
@@ -73,10 +74,10 @@ function uploadProblem(a: ImagePicker.ImagePickerAsset): string | null {
 }
 
 function badgeOf(a: PostableArtifact): { label: string; tone: "video" | "kit" | "deck" | null } {
-  if (a.type === "upload") return { label: "Upload", tone: null };
-  if (a.media === "video") return { label: "Video", tone: "video" };
-  if (a.media === "audio") return { label: "Audio", tone: null };
-  if (a.type === "launch_kit") return { label: "Launch Kit", tone: "kit" };
+  if (a.type === "upload") return { label: i18n.t("lp.badgeUpload"), tone: null };
+  if (a.media === "video") return { label: i18n.t("lp.badgeVideo"), tone: "video" };
+  if (a.media === "audio") return { label: i18n.t("lp.badgeAudio"), tone: null };
+  if (a.type === "launch_kit") return { label: i18n.t("lp.badgeKit"), tone: "kit" };
   return { label: a.type_label, tone: a.type === "slide_deck" ? "deck" : null };
 }
 
@@ -147,17 +148,17 @@ export function LibraryPicker({ onPick, onPickKit, onCreateKit, onReschedule, on
         setRendering(null);
         if (!found.needs_render) onPick(found);
       },
-      (e: unknown) => setError(e instanceof Error ? e.message : "Could not open the video. Try again."),
+      (e: unknown) => setError(e instanceof Error ? e.message : i18n.t("lp.openVideoFailed")),
     );
   };
 
   const remove = (a: PostableArtifact) => {
     const w = deleteWording(a);
-    confirm(w.title, "Delete", () => {
+    confirm(w.title, i18n.t("common.delete"), () => {
       artifactsApi.remove(a.id).then(
         // The last item on a page past the first: the page before it.
         () => (items?.length === 1 && page > 0 ? setPage(page - 1) : void refetch()),
-        (e: unknown) => setError(e instanceof Error ? e.message : "Could not delete it. Try again."),
+        (e: unknown) => setError(e instanceof Error ? e.message : i18n.t("lp.deleteFailed")),
       );
     }, `${a.title}\n\n${w.body}`);
   };
@@ -165,7 +166,7 @@ export function LibraryPicker({ onPick, onPickKit, onCreateKit, onReschedule, on
   const saveName = async () => {
     if (!renaming) return;
     const title = renaming.title.trim();
-    if (!title) return setError("Give it a name.");
+    if (!title) return setError(i18n.t("lp.giveName"));
     setRenaming({ ...renaming, busy: true });
     try {
       await artifactsApi.update(renaming.id, { title });
@@ -173,7 +174,7 @@ export function LibraryPicker({ onPick, onPickKit, onCreateKit, onReschedule, on
       setError("");
       void refetch();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not rename it. Try again.");
+      setError(e instanceof Error ? e.message : i18n.t("lp.renameFailed"));
       setRenaming((cur) => cur && { ...cur, busy: false });
     }
   };
@@ -192,7 +193,7 @@ export function LibraryPicker({ onPick, onPickKit, onCreateKit, onReschedule, on
       void refetch();
       onPick(item);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not upload it. Try again.");
+      setError(e instanceof Error ? e.message : i18n.t("lp.uploadFailed"));
     } finally {
       setUploading(false);
     }
@@ -201,22 +202,22 @@ export function LibraryPicker({ onPick, onPickKit, onCreateKit, onReschedule, on
   const menu = (a: PostableArtifact, next: { id: string } | undefined): MenuItem[] => {
     const kit = a.type === "launch_kit";
     return [
-      ...(a.view_url ? [{ label: "Preview", onPress: () => void WebBrowser.openBrowserAsync(a.view_url!, { controlsColor: colors.blue }) }] : []),
+      ...(a.view_url ? [{ label: i18n.t("lp.menuPreview"), onPress: () => void WebBrowser.openBrowserAsync(a.view_url!, { controlsColor: colors.blue }) }] : []),
       ...(a.download_url
-        ? [{ label: "Download", onPress: () => void saveFile({ url: a.download_url! }, fileName(a.title, a.type_label), extOf(a.download_url!, "bin")).catch(() => undefined) }]
+        ? [{ label: i18n.t("lp.menuDownload"), onPress: () => void saveFile({ url: a.download_url! }, fileName(a.title, a.type_label), extOf(a.download_url!, "bin")).catch(() => undefined) }]
         : []),
-      ...(next && onDuplicate ? [{ label: "Duplicate schedule", onPress: () => onDuplicate(a, next.id) }] : []),
+      ...(next && onDuplicate ? [{ label: i18n.t("lp.duplicate"), onPress: () => onDuplicate(a, next.id) }] : []),
       // Several posts of it coming up: each can be opened.
       ...(next && a.scheduled!.length > 1
-        ? a.scheduled!.map((sc) => ({ label: `Edit schedule: ${formatDate(sc.scheduled_at, true)}`, onPress: () => onReschedule!(a, sc.id) }))
+        ? a.scheduled!.map((sc) => ({ label: i18n.t("lp.editSchedule", { date: formatDate(sc.scheduled_at, true) }), onPress: () => onReschedule!(a, sc.id) }))
         : []),
-      ...(a.type === "upload" ? [{ label: "Rename", onPress: () => setRenaming({ id: a.id, title: a.title }) }] : []),
+      ...(a.type === "upload" ? [{ label: i18n.t("lp.rename"), onPress: () => setRenaming({ id: a.id, title: a.title }) }] : []),
       ...(kit
-        ? [{ label: "Open kit", onPress: () => (onPickKit ? onPickKit(a) : router.push({ pathname: "/launchpad/kits/[id]", params: { id: a.id } })) }]
+        ? [{ label: i18n.t("lp.openKit"), onPress: () => (onPickKit ? onPickKit(a) : router.push({ pathname: "/launchpad/kits/[id]", params: { id: a.id } })) }]
         : a.editable_video
-          ? [{ label: "Open", onPress: () => router.push({ pathname: "/library/videos/[id]", params: { id: a.id } }) }]
+          ? [{ label: i18n.t("lp.open"), onPress: () => router.push({ pathname: "/library/videos/[id]", params: { id: a.id } }) }]
           : []),
-      { label: kit ? "Delete kit" : "Delete", danger: true, onPress: () => remove(a) },
+      { label: kit ? i18n.t("lp.deleteKitShort") : i18n.t("common.delete"), danger: true, onPress: () => remove(a) },
     ];
   };
 
@@ -242,25 +243,25 @@ export function LibraryPicker({ onPick, onPickKit, onCreateKit, onReschedule, on
       </View>
       {onCreateKit ? (
         <Pressable onPress={onCreateKit} accessibilityRole="link" style={styles.kitLink}>
-          <Text style={styles.kitLinkText}>Create a new launch kit</Text>
+          <Text style={styles.kitLinkText}>{i18n.t("lp.newKit")}</Text>
           <ArrowRightIcon size={16} color={colors.text} />
         </Pressable>
       ) : null}
       {kind === "uploads" ? (
         <Pressable onPress={() => void upload()} disabled={uploading} accessibilityRole="button" style={({ pressed }) => [styles.drop, pressed && styles.pressed]}>
           {uploading ? <ActivityIndicator color={colors.blue} /> : <UploadIcon size={22} color={colors.blue} />}
-          <Text style={styles.dropTitle}>{uploading ? "Uploading..." : "Upload a photo or video"}</Text>
-          {!uploading ? <Text style={styles.dropHint}>JPG, PNG or GIF up to 36 MB · MP4 video up to 300 MB</Text> : null}
+          <Text style={styles.dropTitle}>{uploading ? i18n.t("lp.uploading") : i18n.t("lp.uploadMedia")}</Text>
+          {!uploading ? <Text style={styles.dropHint}>{i18n.t("lp.uploadHint")}</Text> : null}
         </Pressable>
       ) : null}
       <TextInput
         style={pageStyles.input}
         value={q}
         onChangeText={setQ}
-        placeholder="Search by title"
+        placeholder={i18n.t("lp.searchTitle")}
         placeholderTextColor={colors.text3}
         clearButtonMode="while-editing"
-        accessibilityLabel="Search"
+        accessibilityLabel={i18n.t("lp.search")}
       />
       <ErrorText>{error}</ErrorText>
       {list.error ? <ErrorText>{list.error.message}</ErrorText> : null}
@@ -282,8 +283,12 @@ export function LibraryPicker({ onPick, onPickKit, onCreateKit, onReschedule, on
         };
         const badge = badgeOf(a);
         const sub = [
-          kit ? "LinkedIn post and hooks ready to schedule" : mediaLabel(a),
-          next ? `Scheduled ${formatDate(next.scheduled_at, true)}${a.scheduled!.length > 1 ? ` +${a.scheduled!.length - 1} more` : ""}` : a.created_at ? formatDate(a.created_at) : "",
+          kit ? i18n.t("lp.kitReady") : mediaLabel(a),
+          next
+            ? a.scheduled!.length > 1
+              ? i18n.t("lp.scheduledMore", { date: formatDate(next.scheduled_at, true), count: a.scheduled!.length - 1 })
+              : i18n.t("lp.scheduled", { date: formatDate(next.scheduled_at, true) })
+            : a.created_at ? formatDate(a.created_at) : "",
         ]
           .filter(Boolean)
           .join(" · ");
@@ -307,7 +312,7 @@ export function LibraryPicker({ onPick, onPickKit, onCreateKit, onReschedule, on
                 </View>
               )}
             </Pressable>
-            <PopMenu label={`Options for ${a.title}`} items={menu(a, next)} style={({ pressed }) => [styles.more, pressed && styles.pressed]}>
+            <PopMenu label={i18n.t("lp.options", { title: a.title })} items={menu(a, next)} style={({ pressed }) => [styles.more, pressed && styles.pressed]}>
               <MoreIcon size={18} color={colors.text2} />
             </PopMenu>
           </View>
@@ -318,7 +323,7 @@ export function LibraryPicker({ onPick, onPickKit, onCreateKit, onReschedule, on
 
       {rendering ? <RenderVideoDialog video={rendering} onClose={() => setRendering(null)} onRendered={rendered} /> : null}
       <AudioOnlyDialog title={audio?.title ?? ""} downloadUrl={audio?.download_url} visible={audio !== null} onClose={() => setAudio(null)} />
-      <Dialog visible={renaming !== null} title="Rename" onClose={() => !renaming?.busy && setRenaming(null)}>
+      <Dialog visible={renaming !== null} title={i18n.t("lp.rename")} onClose={() => !renaming?.busy && setRenaming(null)}>
         <TextInput
           style={pageStyles.input}
           value={renaming?.title ?? ""}
@@ -326,12 +331,12 @@ export function LibraryPicker({ onPick, onPickKit, onCreateKit, onReschedule, on
           maxLength={200}
           autoFocus
           editable={!renaming?.busy}
-          accessibilityLabel="Name"
+          accessibilityLabel={i18n.t("lp.name")}
           onSubmitEditing={() => void saveName()}
         />
         <View style={styles.end}>
-          <PillButton title="Cancel" onPress={() => setRenaming(null)} disabled={renaming?.busy} />
-          <PillButton title={renaming?.busy ? "Saving..." : "Save"} variant="primary" busy={renaming?.busy} onPress={() => void saveName()} />
+          <PillButton title={i18n.t("common.cancel")} onPress={() => setRenaming(null)} disabled={renaming?.busy} />
+          <PillButton title={renaming?.busy ? i18n.t("common.saving") : i18n.t("common.save")} variant="primary" busy={renaming?.busy} onPress={() => void saveName()} />
         </View>
       </Dialog>
     </View>
@@ -350,7 +355,7 @@ export function AttachSheet({ visible, onPick, onCreateKit, onClose }: {
   onClose: () => void;
 }) {
   return (
-    <Sheet visible={visible} title="Attach from your Library" onClose={onClose}>
+    <Sheet visible={visible} title={i18n.t("lp.attachTitle")} onClose={onClose}>
       {visible ? <LibraryPicker onPick={onPick} onCreateKit={onCreateKit} /> : null}
     </Sheet>
   );

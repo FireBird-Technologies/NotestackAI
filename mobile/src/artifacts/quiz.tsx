@@ -35,6 +35,7 @@ import { colors, fonts, radius } from "@/ui/theme";
 import { Loading } from "@/ui";
 import { StudyModal, FeedbackRow } from "@/artifacts/study-modal";
 import { PillButton } from "@/ui/widgets";
+import i18n from "@/i18n";
 
 /* The web's quiz (frontend/src/components/Quiz.tsx QuizRunner and StudyOverlay), the same flow and the same result. */
 
@@ -76,10 +77,10 @@ function grade(q: QuizQuestion, a: Answer): boolean | null {
 }
 
 const TYPE_LABEL: Record<QuizQuestionType, string> = {
-  multiple_choice: "Multiple choice",
-  multiple_select: "Select all that apply",
-  fill_blank: "Fill in the blank",
-  short_answer: "Short answer",
+  multiple_choice: i18n.t("quiz.type.multiple_choice"),
+  multiple_select: i18n.t("quiz.type.multiple_select"),
+  fill_blank: i18n.t("quiz.type.fill_blank"),
+  short_answer: i18n.t("quiz.type.short_answer"),
 };
 
 type Tone = "gold" | "silver" | "bronze" | "low";
@@ -89,25 +90,25 @@ function resultTier(pct: number): { tone: Tone; title: string; note: string } {
   if (pct >= 90)
     return {
       tone: "gold",
-      title: "Outstanding!",
-      note: "You know this material inside out.",
+      title: i18n.t("quiz.tier.goldTitle"),
+      note: i18n.t("quiz.tier.goldNote"),
     };
   if (pct >= 70)
     return {
       tone: "silver",
-      title: "Great job!",
-      note: "A solid grasp. Review the ones you missed.",
+      title: i18n.t("quiz.tier.silverTitle"),
+      note: i18n.t("quiz.tier.silverNote"),
     };
   if (pct >= 50)
     return {
       tone: "bronze",
-      title: "Good effort",
-      note: "You are getting there. Another pass will help.",
+      title: i18n.t("quiz.tier.bronzeTitle"),
+      note: i18n.t("quiz.tier.bronzeNote"),
     };
   return {
     tone: "low",
-    title: "Back to the launchpad",
-    note: "Read the material again, then relaunch.",
+    title: i18n.t("quiz.tier.lowTitle"),
+    note: i18n.t("quiz.tier.lowNote"),
   };
 }
 
@@ -483,9 +484,9 @@ function ResultHero({ score, total }: { score: number; total: number }) {
         >
           {pct}%
         </Text>
-        <Text style={[styles.chip, styles.chipRight]}>{score} correct</Text>
+        <Text style={[styles.chip, styles.chipRight]}>{i18n.t("quiz.correctCount", { count: score })}</Text>
         <Text style={[styles.chip, styles.chipWrong]}>
-          {total - score} to review
+          {i18n.t("quiz.toReview", { count: total - score })}
         </Text>
       </View>
     </View>
@@ -634,7 +635,7 @@ export function QuizRunner({
   const shownScore = answers.filter((x) => x.revealed && x.correct).length;
 
   if (!q || !a)
-    return <Text style={styles.muted}>This quiz has no questions.</Text>;
+    return <Text style={styles.muted}>{i18n.t("quiz.empty")}</Text>;
 
   if (done) {
     const total = questions.length;
@@ -648,7 +649,7 @@ export function QuizRunner({
           accessibilityState={{ expanded: detail }}
           style={[styles.detailToggle, detail && styles.detailToggleOpen]}
         >
-          <Text style={styles.detailToggleText}>View details</Text>
+          <Text style={styles.detailToggleText}>{i18n.t("quiz.viewDetails")}</Text>
           <View style={detail && styles.chevronOpen}>
             <SymbolView
               name={{ ios: "chevron.down", android: "expand_more" }}
@@ -693,7 +694,7 @@ export function QuizRunner({
                             mark={right}
                             square={x.type === "multiple_select"}
                             state={right ? "right" : picked ? "wrong" : null}
-                            suffix={picked ? " · your answer" : undefined}
+                            suffix={picked ? i18n.t("quiz.yourAnswerSuffix") : undefined}
                           />
                         );
                       })}
@@ -701,16 +702,16 @@ export function QuizRunner({
                   ) : (
                     <View style={styles.detailText}>
                       <Text style={styles.small}>
-                        <Text style={styles.muted}>Your answer: </Text>
+                        <Text style={styles.muted}>{i18n.t("quiz.yourAnswer")}</Text>
                         {ans.text.trim() || (
-                          <Text style={styles.muted}>no answer</Text>
+                          <Text style={styles.muted}>{i18n.t("quiz.noAnswer")}</Text>
                         )}
                       </Text>
                       <Text style={styles.small}>
                         <Text style={styles.muted}>
                           {x.type === "fill_blank"
-                            ? "Answer: "
-                            : "Model answer: "}
+                            ? i18n.t("quiz.answer")
+                            : i18n.t("quiz.modelAnswer")}
                         </Text>
                         {x.answer}
                       </Text>
@@ -729,8 +730,8 @@ export function QuizRunner({
 
         {feedback}
         <View style={styles.nav}>
-          {onExit ? <PillButton title="Close" onPress={onExit} /> : null}
-          <PillButton title="Retake" variant="primary" onPress={restart} />
+          {onExit ? <PillButton title={i18n.t("quiz.close")} onPress={onExit} /> : null}
+          <PillButton title={i18n.t("quiz.retake")} variant="primary" onPress={restart} />
         </View>
       </View>
     );
@@ -765,7 +766,7 @@ export function QuizRunner({
     <View style={styles.play}>
       <View
         style={styles.progress}
-        accessibilityLabel={`Question ${i + 1} of ${questions.length}`}
+        accessibilityLabel={i18n.t("quiz.questionOf", { n: i + 1, total: questions.length })}
       >
         <View
           style={[
@@ -778,11 +779,11 @@ export function QuizRunner({
       </View>
       <View style={styles.meta}>
         <Text style={styles.metaText}>
-          Question {i + 1} of {questions.length} · {TYPE_LABEL[q.type]}
+          {i18n.t("quiz.questionMeta", { n: i + 1, total: questions.length, type: TYPE_LABEL[q.type] })}
         </Text>
         <View
           style={styles.count}
-          accessibilityLabel={`${shownScore} correct out of ${questions.length}`}
+          accessibilityLabel={i18n.t("quiz.scoreLabel", { score: shownScore, total: questions.length })}
         >
           <Check size={13} color={colors.blue} />
           <Text style={styles.countText}>
@@ -830,9 +831,9 @@ export function QuizRunner({
           style={[styles.input, a.checked && styles.inputOff]}
           value={a.text}
           editable={!a.checked}
-          placeholder="Your answer"
+          placeholder={i18n.t("quiz.answerPlaceholder")}
           placeholderTextColor={colors.text3}
-          accessibilityLabel="Your answer"
+          accessibilityLabel={i18n.t("quiz.answerPlaceholder")}
           returnKeyType="next"
           onChangeText={(text) => patch({ text })}
           onSubmitEditing={() => (canCheck || a.checked) && next()}
@@ -845,9 +846,9 @@ export function QuizRunner({
           editable={!a.checked}
           multiline
           textAlignVertical="top"
-          placeholder="Write your answer"
+          placeholder={i18n.t("quiz.writeAnswer")}
           placeholderTextColor={colors.text3}
-          accessibilityLabel="Your answer"
+          accessibilityLabel={i18n.t("quiz.answerPlaceholder")}
           onChangeText={(text) => patch({ text })}
         />
       ) : null}
@@ -856,13 +857,13 @@ export function QuizRunner({
         <View style={[styles.feedback, a.correct && styles.feedbackRight]}>
           {q.type !== "short_answer" ? (
             <Text style={styles.feedbackTitle}>
-              {a.correct ? "Correct" : "Not quite"}
+              {a.correct ? i18n.t("quiz.correct") : i18n.t("quiz.notQuite")}
             </Text>
           ) : null}
           {q.type === "fill_blank" || q.type === "short_answer" ? (
             <Text style={styles.body}>
               <Text style={styles.muted}>
-                {q.type === "fill_blank" ? "Answer: " : "Model answer: "}
+                {q.type === "fill_blank" ? i18n.t("quiz.answer") : i18n.t("quiz.modelAnswer")}
               </Text>
               {q.answer}
             </Text>
@@ -876,22 +877,24 @@ export function QuizRunner({
                 .slice(0, 2)
                 .map(
                   (s) =>
-                    `${s.title}, lines ${s.line_start}${s.line_end > s.line_start ? ` to ${s.line_end}` : ""}`,
+                    s.line_end > s.line_start
+                      ? i18n.t("quiz.sourceLinesRange", { title: s.title, start: s.line_start, end: s.line_end })
+                      : i18n.t("quiz.sourceLines", { title: s.title, start: s.line_start }),
                 )
                 .join(" · ")}
             </Text>
           ) : null}
           {q.type === "short_answer" && a.correct === null ? (
             <View style={styles.gotIt}>
-              <Text style={[styles.small, styles.muted]}>Did you get it?</Text>
+              <Text style={[styles.small, styles.muted]}>{i18n.t("quiz.didYou")}</Text>
               <PillButton
                 small
-                title="Yes"
+                title={i18n.t("quiz.yes")}
                 onPress={() => patch({ correct: true })}
               />
               <PillButton
                 small
-                title="Not quite"
+                title={i18n.t("quiz.notQuite")}
                 onPress={() => patch({ correct: false })}
               />
             </View>
@@ -901,13 +904,13 @@ export function QuizRunner({
 
       <View style={styles.nav}>
         {i > 0 ? (
-          <PillButton small title="Back" onPress={() => setI(i - 1)} />
+          <PillButton small title={i18n.t("common.back")} onPress={() => setI(i - 1)} />
         ) : null}
         {/* Not looked at yet: View answer first, or straight on. Once looked at, only on. */}
         {!shown ? (
           <PillButton
             small
-            title="View answer"
+            title={i18n.t("quiz.viewAnswer")}
             disabled={!canCheck && !a.checked}
             onPress={reveal}
           />
@@ -915,7 +918,7 @@ export function QuizRunner({
         <PillButton
           small
           variant="primary"
-          title={last ? "See results" : "Next"}
+          title={last ? i18n.t("quiz.seeResults") : i18n.t("quiz.next")}
           onPress={next}
           disabled={
             (!canCheck && !a.checked) ||
@@ -969,7 +972,7 @@ export function QuizScreen({
 
 /** "How was this quiz?" with the thumbs (web: ArtifactFeedback's label). */
 export function QuizFeedbackRow({ children }: { children: ReactNode }) {
-  return <FeedbackRow label="How was this quiz?">{children}</FeedbackRow>;
+  return <FeedbackRow label={i18n.t("quiz.how")}>{children}</FeedbackRow>;
 }
 
 const styles = StyleSheet.create({

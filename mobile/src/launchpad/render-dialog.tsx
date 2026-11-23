@@ -8,6 +8,7 @@ import { ErrorText } from "@/ui";
 import { Spinner } from "@/video/ui";
 import { CRASH_BODY, CRASH_TITLE, renderStartError } from "@/video/live-player";
 import { Dialog, pageStyles, PillButton } from "@/ui/widgets";
+import i18n from "@/i18n";
 
 type Step = "confirm" | "rendering" | "done" | "failed";
 
@@ -61,7 +62,7 @@ export function RenderVideoDialog({ video, onClose, onRendered, watch }: {
               setStep("done");
               onRenderedRef.current(video.id, false);
             } else {
-              setError(st.error ?? "The render stopped before the MP4 was made.");
+              setError(st.error ?? i18n.t("lp.renderStopped"));
               setStep("failed");
             }
             return;
@@ -97,37 +98,37 @@ export function RenderVideoDialog({ video, onClose, onRendered, watch }: {
 
   const title =
     step === "done"
-      ? "Video rendered"
+      ? i18n.t("lp.rendered")
       : step === "failed"
-        ? "Render failed"
+        ? i18n.t("lp.renderFailed")
         : waiting
-          ? "Still rendering"
+          ? i18n.t("lp.stillRendering")
           : step === "rendering"
-            ? "Rendering your video"
+            ? i18n.t("lp.renderingYour")
             : watch
               ? CRASH_TITLE
-              : "Render this video?";
+              : i18n.t("lp.renderThis");
   return (
     <Dialog visible title={title} onClose={onClose}>
       {watch && step === "confirm" ? null : <Text style={styles.name}>{video.title}</Text>}
       {step === "confirm" ? (
         <Text style={styles.muted}>
-          {watch ? `${CRASH_BODY} Render the video to watch it smoothly.` : "It has no MP4 yet, so it can't be posted. Render it now; it takes a few minutes and you can close this while it runs."}
+          {watch ? `${CRASH_BODY} ${i18n.t("player.watchRender")}` : i18n.t("lp.noMp4")}
         </Text>
       ) : null}
       {step === "rendering" ? (
         <>
           <Text style={styles.muted}>
             {watch
-              ? "It takes a few minutes. You can close this: the render keeps going and the MP4 plays here when it's ready."
+              ? i18n.t("lp.watchRendering")
               : waiting
-                ? "Wait for the render to complete before scheduling it."
-                : "You can close this: the render keeps going and the video shows as Rendering until it's done."}
+                ? i18n.t("lp.waitRender")
+                : i18n.t("lp.closeRendering")}
           </Text>
           <View style={styles.status} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: pct ?? 0 }}>
             <View style={styles.line}>
               <Spinner />
-              <Text style={styles.lineText}>{pct ? "Rendering MP4" : "Preparing the render"}</Text>
+              <Text style={styles.lineText}>{pct ? i18n.t("lp.renderingMp4") : i18n.t("lp.preparing")}</Text>
               {pct ? <Text style={styles.pct}>{pct}%</Text> : null}
             </View>
             <View style={styles.track}>
@@ -138,28 +139,28 @@ export function RenderVideoDialog({ video, onClose, onRendered, watch }: {
       ) : null}
       {step === "done" ? (
         <Text style={styles.muted}>
-          {watch ? "The MP4 is ready to watch. We've also emailed you a link to download it." : "The MP4 is ready. Schedule it now, or pick it from the list later. We've also emailed you a link to download it."}
+          {watch ? i18n.t("lp.readyWatch") : i18n.t("lp.readySchedule")}
         </Text>
       ) : null}
       <ErrorText>{error}</ErrorText>
       <View style={styles.end}>
         {step === "confirm" ? (
           <>
-            <PillButton title="Cancel" onPress={onClose} disabled={busy} />
-            <PillButton title={busy ? "Starting..." : "Render"} variant="primary" busy={busy} onPress={() => void render()} />
+            <PillButton title={i18n.t("common.cancel")} onPress={onClose} disabled={busy} />
+            <PillButton title={busy ? i18n.t("common.starting") : i18n.t("lp.render")} variant="primary" busy={busy} onPress={() => void render()} />
           </>
         ) : null}
-        {step === "rendering" ? <PillButton title={waiting ? "OK" : "Close"} onPress={onClose} /> : null}
+        {step === "rendering" ? <PillButton title={waiting ? i18n.t("lp.ok") : i18n.t("common.close")} onPress={onClose} /> : null}
         {step === "failed" ? (
           <>
-            <PillButton title="Close" onPress={onClose} />
-            <PillButton title={busy ? "Starting..." : "Try again"} variant="primary" busy={busy} onPress={() => void render()} />
+            <PillButton title={i18n.t("common.close")} onPress={onClose} />
+            <PillButton title={busy ? i18n.t("common.starting") : i18n.t("common.tryAgain")} variant="primary" busy={busy} onPress={() => void render()} />
           </>
         ) : null}
         {step === "done" ? (
           <>
-            <PillButton title="Close" onPress={onClose} />
-            {watch ? <PillButton title="Watch now" variant="primary" onPress={watch.onWatch} /> : <PillButton title="Schedule it" variant="primary" onPress={() => onRendered(video.id, true)} />}
+            <PillButton title={i18n.t("common.close")} onPress={onClose} />
+            {watch ? <PillButton title={i18n.t("lp.watchNow")} variant="primary" onPress={watch.onWatch} /> : <PillButton title={i18n.t("lp.scheduleIt")} variant="primary" onPress={() => onRendered(video.id, true)} />}
           </>
         ) : null}
       </View>

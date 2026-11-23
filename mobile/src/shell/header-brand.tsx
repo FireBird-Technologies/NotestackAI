@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useDrawer } from "@/shell/nav-drawer";
 import { colors, fonts, gutter } from "@/ui/theme";
+import i18n from "@/i18n";
 
 /** A section's top bar as on the web app on a phone: the menu button, the logo and the section name, on the left. */
 function AppBar({ title }: { title: string }) {
@@ -14,10 +15,10 @@ function AppBar({ title }: { title: string }) {
   return (
     <View style={[styles.bar, { paddingTop: insets.top }]}>
       <View style={styles.row}>
-        <Pressable onPress={open} hitSlop={10} accessibilityRole="button" accessibilityLabel="Open menu" style={styles.menu}>
+        <Pressable onPress={open} hitSlop={10} accessibilityRole="button" accessibilityLabel={i18n.t("ui.openMenu")} style={styles.menu}>
           <Image source={require("@/assets/images/ui/menu.png")} style={styles.menuIcon} tintColor={colors.text} />
         </Pressable>
-        <Pressable onPress={() => router.navigate("/notebooks")} accessibilityRole="link" accessibilityLabel="Notestack home">
+        <Pressable onPress={() => router.navigate("/notebooks")} accessibilityRole="link" accessibilityLabel={i18n.t("nav.home")}>
           <Image source={require("@/assets/images/logo.png")} style={styles.logo} accessibilityIgnoresInvertColors />
         </Pressable>
         <Text style={styles.title} accessibilityRole="header" numberOfLines={1}>

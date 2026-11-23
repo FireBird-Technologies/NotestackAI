@@ -12,6 +12,7 @@ import { colors, fonts, gutter, radius } from "@/ui/theme";
 import { ErrorText, formatDate, Loading } from "@/ui";
 import { BackLink } from "@/video/back";
 import { confirm, JobProgress, Page, PillButton, Sheet, StatusPill } from "@/ui/widgets";
+import i18n from "@/i18n";
 
 /** LinkedIn's limit for one post. */
 const LIMIT = 3000;
@@ -21,7 +22,7 @@ function CopyButton({ text }: { text: string }) {
   return (
     <PillButton
       small
-      title={done ? "Copied" : "Copy"}
+      title={done ? i18n.t("ui.copied") : i18n.t("ui.copy")}
       onPress={async () => {
         await Clipboard.setStringAsync(text);
         setDone(true);
@@ -76,7 +77,7 @@ function KitBody({ kit, onSaved }: { kit: Artifact; onSaved: (k: Artifact) => vo
       onSaved(await artifactsApi.update(kit.id, { content: { posts: { ...c.posts, linkedin: posts } } }));
       setDirty(false);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Could not save the edits. Try again.");
+      setError(e instanceof ApiError ? e.message : i18n.t("kit.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -84,8 +85,8 @@ function KitBody({ kit, onSaved }: { kit: Artifact; onSaved: (k: Artifact) => vo
 
   const remove = () =>
     confirm(
-      "Delete launch kit?",
-      "Delete",
+      i18n.t("kit.deleteTitle"),
+      i18n.t("common.delete"),
       () => {
         artifactsApi.remove(kit.id).then(
           () => {
@@ -94,7 +95,7 @@ function KitBody({ kit, onSaved }: { kit: Artifact; onSaved: (k: Artifact) => vo
             if (router.canGoBack()) router.back();
             else router.replace("/launchpad/kits");
           },
-          (e: unknown) => setError(e instanceof ApiError ? e.message : "Could not delete it. Try again."),
+          (e: unknown) => setError(e instanceof ApiError ? e.message : i18n.t("card.deleteFailed")),
         );
       },
       title,
@@ -104,14 +105,14 @@ function KitBody({ kit, onSaved }: { kit: Artifact; onSaved: (k: Artifact) => vo
     <Page>
       <BackLink fallback="/launchpad" />
       <View style={styles.section}>
-        <Text style={styles.eyebrow}>LAUNCH KIT</Text>
+        <Text style={styles.eyebrow}>{i18n.t("kit.eyebrow")}</Text>
         <Text style={styles.title} accessibilityRole="header">
           {title}
         </Text>
         <Text style={styles.date}>{formatDate(kit.created_at, true)}</Text>
         <View style={styles.row}>
           <StatusPill status={running ? "working" : kit.status} />
-          <PillButton small title="Delete" onPress={remove} />
+          <PillButton small title={i18n.t("common.delete")} onPress={remove} />
         </View>
         {kit.job && (running || kit.status === "failed") ? <JobProgress job={kit.job} /> : null}
         <ErrorText>{error}</ErrorText>
@@ -119,8 +120,8 @@ function KitBody({ kit, onSaved }: { kit: Artifact; onSaved: (k: Artifact) => vo
         {kit.status === "ready" ? (
           <>
             <View style={styles.rule} />
-            <Text style={styles.h}>LinkedIn post</Text>
-            <Text style={styles.muted}>The full post, written from the article. Edit it here, then schedule it.</Text>
+            <Text style={styles.h}>{i18n.t("kit.linkedinPost")}</Text>
+            <Text style={styles.muted}>{i18n.t("kit.linkedinBody")}</Text>
             {posts.map((p, i) => (
               <View key={i} style={styles.post}>
                 <Text style={[styles.count, p.length > LIMIT && styles.over]}>
@@ -136,13 +137,13 @@ function KitBody({ kit, onSaved }: { kit: Artifact; onSaved: (k: Artifact) => vo
                     setPosts(posts.map((x, j) => (j === i ? v : x)));
                     setDirty(true);
                   }}
-                  accessibilityLabel="LinkedIn post"
+                  accessibilityLabel={i18n.t("kit.linkedinPost")}
                 />
                 <View style={styles.row}>
                   <CopyButton text={p} />
                   {/* Just this post, as it reads on screen, saved or not */}
-                  <PillButton small title="Schedule" onPress={() => setSchedule(p)} />
-                  {dirty ? <PillButton small variant="primary" title={saving ? "Saving..." : "Save edits"} busy={saving} onPress={() => void save()} /> : null}
+                  <PillButton small title={i18n.t("kit.schedule")} onPress={() => setSchedule(p)} />
+                  {dirty ? <PillButton small variant="primary" title={saving ? i18n.t("common.saving") : i18n.t("kit.saveEdits")} busy={saving} onPress={() => void save()} /> : null}
                 </View>
               </View>
             ))}
@@ -150,19 +151,19 @@ function KitBody({ kit, onSaved }: { kit: Artifact; onSaved: (k: Artifact) => vo
             {(c.hooks?.length ?? 0) > 0 ? (
               <>
                 <View style={styles.rule} />
-                <Text style={styles.h}>Hooks</Text>
+                <Text style={styles.h}>{i18n.t("kit.hooks")}</Text>
                 <Text style={styles.muted}>{c.hooks.length} short lines to lead with, strongest first. Each can go out on its own.</Text>
                 {c.hooks.map((h, i) => (
                   <View key={i} style={styles.hook}>
                     <View style={styles.between}>
-                      <Text style={styles.hookNum}>Hook {i + 1}</Text>
-                      <Text style={styles.strength}>strength {Math.round(h.strength * 100)}</Text>
+                      <Text style={styles.hookNum}>{i18n.t("kit.hookN", { n: i + 1 })}</Text>
+                      <Text style={styles.strength}>{i18n.t("kit.strength", { n: Math.round(h.strength * 100) })}</Text>
                     </View>
                     <Text style={styles.hookText}>{h.text}</Text>
                     <Text style={styles.muted}>{h.rationale}</Text>
                     <View style={styles.row}>
                       <CopyButton text={h.text} />
-                      <PillButton small title="Schedule" onPress={() => setSchedule(h.text)} />
+                      <PillButton small title={i18n.t("kit.schedule")} onPress={() => setSchedule(h.text)} />
                     </View>
                   </View>
                 ))}
@@ -172,7 +173,7 @@ function KitBody({ kit, onSaved }: { kit: Artifact; onSaved: (k: Artifact) => vo
         ) : null}
       </View>
 
-      <Sheet visible={schedule !== null} title="Create post" onClose={() => setSchedule(null)}>
+      <Sheet visible={schedule !== null} title={i18n.t("launchpad.createPost")} onClose={() => setSchedule(null)}>
         {schedule !== null ? (
           <Composer
             at={null}

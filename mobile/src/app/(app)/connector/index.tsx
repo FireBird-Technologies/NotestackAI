@@ -7,6 +7,8 @@ import { ConnectedApps } from "@/sources/connected-apps";
 import { MCP_SERVER_URL } from "@/sources/connector-modal";
 import { colors, fonts, radius } from "@/ui/theme";
 import { Page, PageHead, pageStyles, PillButton, Section } from "@/ui/widgets";
+import i18n from "@/i18n";
+import { Trans } from "react-i18next";
 
 
 /** Connect to Notestack (web: pages/Connector.tsx): how to add Notestack to Claude or ChatGPT, and the apps added. */
@@ -26,46 +28,43 @@ export default function Connector() {
 
   return (
     <Page>
-      <PageHead eyebrow="Connector" title="Connect to Notestack" />
+      <PageHead eyebrow={i18n.t("connector.eyebrow")} title={i18n.t("connector.title")} />
 
-      <Section kicker="SETUP" title="Add Notestack to your AI">
-        <Text style={pageStyles.body}>
-          Use your archive and create Notestack projects from Claude or ChatGPT. Paste this MCP server address into the
-          app you want to connect; Notestack will ask you to sign in and approve access.
-        </Text>
+      <Section kicker={i18n.t("connector.setup")} title={i18n.t("connector.addTitle")}>
+        <Text style={pageStyles.body}>{i18n.t("connector.body")}</Text>
 
         <View style={styles.urlCard}>
           <View style={styles.urlText}>
-            <Text style={pageStyles.mono}>MCP server URL</Text>
+            <Text style={pageStyles.mono}>{i18n.t("connector.url")}</Text>
             <Text style={styles.url} selectable>
               {MCP_SERVER_URL}
             </Text>
           </View>
-          <PillButton title={copied ? "Copied" : "Copy URL"} variant="primary" small onPress={() => void copy()} />
+          <PillButton title={copied ? i18n.t("ui.copied") : i18n.t("connector.copyUrl")} variant="primary" small onPress={() => void copy()} />
         </View>
 
-        <Client logo={require("@/assets/images/ui/anthropic.png")} name="Claude" note="Claude web and desktop">
+        <Client logo={require("@/assets/images/ui/anthropic.png")} name="Claude" note={i18n.t("connector.claudeNote")}>
           <Step n={1}>
-            Open Claude and go to <B>Settings → Connectors</B>.
+            <Trans i18nKey="connector.claude1" components={{ b: <B /> }} />
           </Step>
           <Step n={2}>
-            Choose <B>Add custom connector</B> and paste the URL above.
+            <Trans i18nKey="connector.claude2" components={{ b: <B /> }} />
           </Step>
-          <Step n={3}>Leave Client ID and Client Secret empty, then connect and approve Notestack.</Step>
+          <Step n={3}>{i18n.t("connector.claude3")}</Step>
         </Client>
 
-        <Client logo={require("@/assets/images/ui/openai.png")} name="ChatGPT" note="OpenAI apps and connectors">
+        <Client logo={require("@/assets/images/ui/openai.png")} name="ChatGPT" note={i18n.t("connector.chatgptNote")}>
           <Step n={1}>
-            Open ChatGPT and go to <B>Settings → Apps → Advanced settings</B>.
+            <Trans i18nKey="connector.chatgpt1" components={{ b: <B /> }} />
           </Step>
           <Step n={2}>
-            Turn on <B>Developer mode</B>, return to Apps, then choose <B>Add app</B>.
+            <Trans i18nKey="connector.chatgpt2" components={{ b: <B /> }} />
           </Step>
-          <Step n={3}>Paste the URL above, connect, and approve Notestack when prompted.</Step>
+          <Step n={3}>{i18n.t("connector.chatgpt3")}</Step>
         </Client>
       </Section>
 
-      <Section kicker="SETTINGS" title="Connected apps">
+      <Section kicker={i18n.t("connector.settings")} title={i18n.t("settings.connectedApps")}>
         <ConnectedApps />
       </Section>
     </Page>
@@ -100,7 +99,7 @@ function Step({ n, children }: { n: number; children: ReactNode }) {
   );
 }
 
-const B = ({ children }: { children: ReactNode }) => <Text style={styles.strong}>{children}</Text>;
+const B = ({ children }: { children?: ReactNode }) => <Text style={styles.strong}>{children}</Text>;
 
 const styles = StyleSheet.create({
   urlCard: {

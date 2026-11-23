@@ -15,6 +15,7 @@ import { PillButton, Sheet } from "@/ui/widgets";
 import { ConfirmModal } from "./scene-media";
 import type { PanelProps } from "./types";
 import { Label, Slider, vstyles } from "./ui";
+import i18n, { tKey } from "@/i18n";
 
 const SPEEDS = [0.5, 1, 1.5, 2, 2.5];
 const NO_VOICE = "__none";
@@ -24,7 +25,7 @@ const cap = (s?: string | null) => (s ? s[0].toUpperCase() + s.slice(1) : "");
 type SaveKey = "colors" | "font" | "captions" | "speed" | "template" | "voice" | "language";
 
 /** A card's save button: off until something changed, a spinner while it saves. */
-function SaveButton({ dirty, saving, off, onPress, title, busyLabel = "Saving..." }: { dirty: boolean; saving: boolean; off: boolean; onPress: () => void; title: string; busyLabel?: string }) {
+function SaveButton({ dirty, saving, off, onPress, title, busyLabel = i18n.t("common.saving") }: { dirty: boolean; saving: boolean; off: boolean; onPress: () => void; title: string; busyLabel?: string }) {
   return <PillButton small variant="primary" title={saving ? busyLabel : title} busy={saving} disabled={off || !dirty} onPress={onPress} />;
 }
 
@@ -47,8 +48,8 @@ function TemplatePickerModal({ templates, current, portrait, onPick, onClose }: 
     onClose();
   };
   return (
-    <Sheet visible title="Change template" onClose={busy ? () => undefined : onClose}>
-      <Text style={vstyles.muted}>Pick a new look. Scenes, narration and voiceovers stay; the layouts are redone for the new template.</Text>
+    <Sheet visible title={i18n.t("videoSettings.changeTemplate")} onClose={busy ? () => undefined : onClose}>
+      <Text style={vstyles.muted}>{i18n.t("videoSettings.templateHint")}</Text>
       <ScrollView
         ref={box}
         style={[styles.box, { height: boxHeight }]}
@@ -91,9 +92,9 @@ function TemplatePickerModal({ templates, current, portrait, onPick, onClose }: 
         </View>
       </ScrollView>
       <View style={vstyles.end}>
-        <Text style={[vstyles.muted, vstyles.small, styles.grow]}>Uses 1 video</Text>
-        <PillButton small title="Cancel" disabled={busy} onPress={onClose} />
-        <PillButton small variant="primary" title={busy ? "Starting..." : "Change template"} busy={busy} disabled={!picked} onPress={() => void go()} />
+        <Text style={[vstyles.muted, vstyles.small, styles.grow]}>{i18n.t("videoSettings.usesVideo")}</Text>
+        <PillButton small title={i18n.t("common.cancel")} disabled={busy} onPress={onClose} />
+        <PillButton small variant="primary" title={busy ? i18n.t("common.starting") : i18n.t("videoSettings.changeTemplate")} busy={busy} disabled={!picked} onPress={() => void go()} />
       </View>
     </Sheet>
   );
@@ -206,13 +207,13 @@ export function LookPanel(p: PanelProps & { catalog: VideoCatalog | null }) {
 
   return (
     <View style={styles.settings}>
-      <Card title="Colors & Font" note="Theme colors and font applied across all scenes.">
+      <Card title={i18n.t("videoSettings.colorsFont")} note={i18n.t("videoSettings.colorsNote")}>
         <View style={styles.colors}>
           {(
             [
-              ["accent_color", "Accent", "Buttons & highlights"],
-              ["text_color", "Text", "On-screen text"],
-              ["bg_color", "Background", "Scene background"],
+              ["accent_color", i18n.t("videoSettings.accent"), i18n.t("videoSettings.accentHint")],
+              ["text_color", i18n.t("videoSettings.text"), i18n.t("videoSettings.textHint")],
+              ["bg_color", i18n.t("videoSettings.background"), i18n.t("videoSettings.backgroundHint")],
             ] as const
           ).map(([k, label, hint]) => (
             <View key={k} style={styles.colorRow}>
@@ -222,19 +223,19 @@ export function LookPanel(p: PanelProps & { catalog: VideoCatalog | null }) {
           ))}
         </View>
         <View style={vstyles.end}>
-          <SaveButton title="Save colors" dirty={colorsChanged} saving={saving === "colors"} off={off} onPress={() => void save("colors", () => videoEditApi.updateProject(p.id, col))} />
+          <SaveButton title={i18n.t("videoSettings.saveColors")} dirty={colorsChanged} saving={saving === "colors"} off={off} onPress={() => void save("colors", () => videoEditApi.updateProject(p.id, col))} />
         </View>
         <View style={styles.rule} />
         <View style={styles.field}>
-          <Label>Font family</Label>
-          <Select label="Font family" value={font} onChange={(v) => set({ font: v })} options={[{ value: DEFAULT_FONT, label: "Default (template)" }, ...fontOptions]} />
+          <Label>{i18n.t("videoSettings.fontFamily")}</Label>
+          <Select label={i18n.t("videoSettings.fontFamily")} value={font} onChange={(v) => set({ font: v })} options={[{ value: DEFAULT_FONT, label: i18n.t("videoSettings.defaultFont") }, ...fontOptions]} />
         </View>
         <View style={vstyles.end}>
-          <SaveButton title="Save font" dirty={fontChanged} saving={saving === "font"} off={off} onPress={() => void save("font", () => videoEditApi.updateProject(p.id, { font_family: font === DEFAULT_FONT ? null : font }))} />
+          <SaveButton title={i18n.t("videoSettings.saveFont")} dirty={fontChanged} saving={saving === "font"} off={off} onPress={() => void save("font", () => videoEditApi.updateProject(p.id, { font_family: font === DEFAULT_FONT ? null : font }))} />
         </View>
       </Card>
 
-      <Card title="Project Template" note="Change the look for your video.">
+      <Card title={i18n.t("videoSettings.projectTemplate")} note={i18n.t("videoSettings.templateNote")}>
         <View style={styles.templateNow}>
           {current ? (
             <View style={styles.nowThumb}>
@@ -245,7 +246,7 @@ export function LookPanel(p: PanelProps & { catalog: VideoCatalog | null }) {
             </View>
           ) : null}
           <View style={styles.grow}>
-            <Label>Current template</Label>
+            <Label>{i18n.t("videoSettings.currentTemplate")}</Label>
             <Text style={vstyles.strong}>{current?.name ?? pr.template}</Text>
             {current?.description ? (
               <Text style={[vstyles.muted, vstyles.small]} numberOfLines={3}>
@@ -255,53 +256,53 @@ export function LookPanel(p: PanelProps & { catalog: VideoCatalog | null }) {
           </View>
         </View>
         <View style={vstyles.end}>
-          <SaveButton title="Change template" busyLabel="Changing..." dirty={builtIn.length > 0} saving={saving === "template"} off={off} onPress={() => setPicking(true)} />
+          <SaveButton title={i18n.t("videoSettings.changeTemplate")} busyLabel={i18n.t("videoSettings.changing")} dirty={builtIn.length > 0} saving={saving === "template"} off={off} onPress={() => setPicking(true)} />
         </View>
       </Card>
 
-      <Card title="Captions & Speed" note="How captions look and how fast the video plays, in the preview and the final render.">
+      <Card title={i18n.t("videoSettings.captionsSpeed")} note={i18n.t("videoSettings.captionsNote")}>
         <View style={styles.field}>
-          <Text style={vstyles.strong}>Captions</Text>
-          <Text style={[vstyles.muted, vstyles.small]}>Shown on the preview and the final rendered video.</Text>
+          <Text style={vstyles.strong}>{i18n.t("videoSettings.captions")}</Text>
+          <Text style={[vstyles.muted, vstyles.small]}>{i18n.t("videoSettings.captionsHint")}</Text>
         </View>
         <View style={vstyles.row}>
           <Switch
             value={captions.captions_enabled}
             onValueChange={(v) => set({ captions: { ...captions, captions_enabled: v } })}
             trackColor={{ true: colors.blue, false: colors.surface2 }}
-            accessibilityLabel="Enable captions"
+            accessibilityLabel={i18n.t("videoSettings.enableCaptions")}
           />
-          <Text style={vstyles.body}>Enable captions</Text>
+          <Text style={vstyles.body}>{i18n.t("videoSettings.enableCaptions")}</Text>
         </View>
         <View style={[styles.field, !captions.captions_enabled && styles.dim]} pointerEvents={captions.captions_enabled ? "auto" : "none"}>
           <View style={vstyles.between}>
-            <Label>Offset</Label>
+            <Label>{i18n.t("videoSettings.offset")}</Label>
             <Text style={styles.value}>{captions.caption_offset === 0 ? "Default" : captions.caption_offset}</Text>
           </View>
-          <Slider value={captions.caption_offset} min={-100} max={100} onChange={(v) => set({ captions: { ...captions, caption_offset: v } })} label="Caption offset" />
+          <Slider value={captions.caption_offset} min={-100} max={100} onChange={(v) => set({ captions: { ...captions, caption_offset: v } })} label={i18n.t("videoSettings.captionOffset")} />
           <View style={vstyles.between}>
-            <Text style={[vstyles.muted, vstyles.small]}>Down</Text>
-            <Text style={[vstyles.muted, vstyles.small]}>Up</Text>
+            <Text style={[vstyles.muted, vstyles.small]}>{i18n.t("videoSettings.down")}</Text>
+            <Text style={[vstyles.muted, vstyles.small]}>{i18n.t("videoSettings.up")}</Text>
           </View>
           <View style={vstyles.between}>
-            <Label>Size</Label>
+            <Label>{i18n.t("videoSettings.size")}</Label>
             <Text style={styles.value}>{captions.caption_font_size}px</Text>
           </View>
-          <Slider value={captions.caption_font_size} min={12} max={64} onChange={(v) => set({ captions: { ...captions, caption_font_size: v } })} label="Caption size" />
+          <Slider value={captions.caption_font_size} min={12} max={64} onChange={(v) => set({ captions: { ...captions, caption_font_size: v } })} label={i18n.t("videoSettings.captionSize")} />
           <View style={vstyles.between}>
             <Text style={[vstyles.muted, vstyles.small]}>12</Text>
             <Text style={[vstyles.muted, vstyles.small]}>64px</Text>
           </View>
-          <Label>Font</Label>
-          <Select label="Caption font" value={captions.caption_font_family} onChange={(v) => set({ captions: { ...captions, caption_font_family: v } })} options={fontOptions} />
+          <Label>{i18n.t("videoSettings.font")}</Label>
+          <Select label={i18n.t("videoSettings.captionFont")} value={captions.caption_font_family} onChange={(v) => set({ captions: { ...captions, caption_font_family: v } })} options={fontOptions} />
         </View>
         <View style={vstyles.end}>
-          <SaveButton title="Save captions" dirty={captionsChanged} saving={saving === "captions"} off={off} onPress={() => void save("captions", () => videoEditApi.updateProject(p.id, captions))} />
+          <SaveButton title={i18n.t("videoSettings.saveCaptions")} dirty={captionsChanged} saving={saving === "captions"} off={off} onPress={() => void save("captions", () => videoEditApi.updateProject(p.id, captions))} />
         </View>
         <View style={styles.rule} />
         <View style={styles.field}>
-          <Text style={vstyles.strong}>Playback speed</Text>
-          <Text style={[vstyles.muted, vstyles.small]}>Applies to the preview and the final video, voiceover included.</Text>
+          <Text style={vstyles.strong}>{i18n.t("videoSettings.speed")}</Text>
+          <Text style={[vstyles.muted, vstyles.small]}>{i18n.t("videoSettings.speedHint")}</Text>
         </View>
         <View style={vstyles.row}>
           {SPEEDS.map((v) => (
@@ -311,86 +312,86 @@ export function LookPanel(p: PanelProps & { catalog: VideoCatalog | null }) {
           ))}
         </View>
         <View style={vstyles.between}>
-          <Text style={vstyles.body}>Custom speed</Text>
+          <Text style={vstyles.body}>{i18n.t("videoSettings.customSpeed")}</Text>
           <Text style={styles.value}>{speed.toFixed(2)}x</Text>
         </View>
-        <Slider value={speed} min={0.5} max={2.5} step={0.05} onChange={(v) => set({ speed: Math.round(v * 100) / 100 })} label="Playback speed" />
+        <Slider value={speed} min={0.5} max={2.5} step={0.05} onChange={(v) => set({ speed: Math.round(v * 100) / 100 })} label={i18n.t("videoSettings.speed")} />
         <View style={vstyles.end}>
-          <SaveButton title="Save speed" dirty={speedChanged} saving={saving === "speed"} off={off} onPress={() => void save("speed", () => videoEditApi.updateProject(p.id, { playback_speed: speed }))} />
+          <SaveButton title={i18n.t("videoSettings.saveSpeed")} dirty={speedChanged} saving={saving === "speed"} off={off} onPress={() => void save("speed", () => videoEditApi.updateProject(p.id, { playback_speed: speed }))} />
         </View>
       </Card>
 
-      <Card title="Voice & Language" note="The narration voice and the language of this video.">
+      <Card title={i18n.t("videoSettings.voiceLanguage")} note={i18n.t("videoSettings.voiceLanguageNote")}>
         <View style={styles.field}>
-          <Text style={vstyles.strong}>Voice</Text>
-          <Text style={[vstyles.muted, vstyles.small]}>The narration voice for this project.</Text>
+          <Text style={vstyles.strong}>{i18n.t("videoSettings.voice")}</Text>
+          <Text style={[vstyles.muted, vstyles.small]}>{i18n.t("videoSettings.voiceHint")}</Text>
         </View>
         <View style={styles.voiceNow}>
           <Pressable
             onPress={() => currentVoice && play(currentVoice.voice_id, currentVoice.preview_url)}
             disabled={!currentVoice?.preview_url}
             accessibilityRole="button"
-            accessibilityLabel={playing === currentVoice?.voice_id ? `Stop ${currentVoice?.name}` : `Play ${currentVoice?.name ?? "voice"}`}
+            accessibilityLabel={playing === currentVoice?.voice_id ? i18n.t("videoSettings.stopNamed", { name: currentVoice?.name }) : i18n.t("videoSettings.playNamed", { name: currentVoice?.name ?? i18n.t("videoSettings.voiceWord") })}
             style={[styles.play, !currentVoice?.preview_url && styles.dim]}>
             {playing === currentVoice?.voice_id ? <View style={styles.stop} /> : <View style={styles.tri} />}
           </Pressable>
           <View style={styles.grow}>
-            <Text style={vstyles.strong}>{pr.voice_gender === "none" ? "No voiceover" : (currentVoice?.name ?? "Current voice")}</Text>
+            <Text style={vstyles.strong}>{pr.voice_gender === "none" ? i18n.t("videoSettings.noVoiceover") : (currentVoice?.name ?? i18n.t("videoSettings.currentVoice"))}</Text>
             {currentVoice ? <Text style={[vstyles.muted, vstyles.small]}>{[cap(currentVoice.gender), cap(currentVoice.accent)].filter(Boolean).join(" • ")}</Text> : null}
           </View>
         </View>
         <Select
-          label="Voice"
+          label={i18n.t("videoSettings.voice")}
           value={voiceId || NO_VOICE}
           onChange={(v) => set({ voiceId: v })}
           options={[
-            { value: NO_VOICE, label: "No voiceover" },
+            { value: NO_VOICE, label: i18n.t("videoSettings.noVoiceover") },
             ...voices.map((v) => ({ value: v.voice_id, label: v.name, hint: [cap(v.gender), cap(v.accent)].filter(Boolean).join(" • ") || undefined })),
           ]}
         />
         <View style={vstyles.row}>
-          <PillButton small variant="danger" title="Delete voiceover" disabled={off || pr.voice_gender === "none"} onPress={() => setDeletingVoice(true)} />
-          <SaveButton title="Change voice" busyLabel="Changing..." dirty={voiceChanged} saving={saving === "voice"} off={off} onPress={changeVoice} />
+          <PillButton small variant="danger" title={i18n.t("videoSettings.deleteVoiceover")} disabled={off || pr.voice_gender === "none"} onPress={() => setDeletingVoice(true)} />
+          <SaveButton title={i18n.t("videoSettings.changeVoice")} busyLabel={i18n.t("videoSettings.changing")} dirty={voiceChanged} saving={saving === "voice"} off={off} onPress={changeVoice} />
         </View>
-        <Text style={[vstyles.muted, vstyles.small]}>Changing the voice uses one video credit.</Text>
+        <Text style={[vstyles.muted, vstyles.small]}>{i18n.t("videoSettings.voiceCredit")}</Text>
         <View style={styles.rule} />
         <View style={styles.field}>
-          <Text style={vstyles.strong}>Language</Text>
-          <Text style={[vstyles.muted, vstyles.small]}>Translate the video: text, narration and voiceover.</Text>
+          <Text style={vstyles.strong}>{i18n.t("videoSettings.language")}</Text>
+          <Text style={[vstyles.muted, vstyles.small]}>{i18n.t("videoSettings.languageHint")}</Text>
         </View>
         <View style={styles.field}>
-          <Text style={[vstyles.muted, vstyles.small]}>Current language</Text>
+          <Text style={[vstyles.muted, vstyles.small]}>{i18n.t("videoSettings.currentLanguage")}</Text>
           <Text style={styles.langNow}>{currentLanguage}</Text>
         </View>
         <View style={styles.field}>
-          <Text style={[vstyles.muted, vstyles.small]}>Translate to</Text>
+          <Text style={[vstyles.muted, vstyles.small]}>{i18n.t("videoSettings.translateTo")}</Text>
           <Select
-            label="Translate to"
+            label={i18n.t("videoSettings.translateTo")}
             value={language}
             onChange={setLanguage}
-            options={[{ value: "", label: "Select a language" }, ...languages.filter((l) => l.code !== pr.content_language).map((l) => ({ value: l.code, label: l.name }))]}
+            options={[{ value: "", label: i18n.t("videoSettings.selectLanguage") }, ...languages.filter((l) => l.code !== pr.content_language).map((l) => ({ value: l.code, label: tKey(`options.languages.${l.name}`, l.name) }))]}
           />
         </View>
         <View style={vstyles.row}>
           <SaveButton
-            title="Change language"
-            busyLabel="Changing..."
+            title={i18n.t("videoSettings.changeLanguage")}
+            busyLabel={i18n.t("videoSettings.changing")}
             dirty={!!language}
             saving={saving === "language"}
             off={off}
             onPress={() => void job("language", () => p.startJob("Translating", () => videoEditApi.changeLanguage(p.id, language), () => videoEditApi.languageStatus(p.id)).then(() => setLanguage("")))}
           />
         </View>
-        <Text style={[vstyles.muted, vstyles.small]}>Counts as a new video (1 credit).</Text>
+        <Text style={[vstyles.muted, vstyles.small]}>{i18n.t("videoSettings.newVideoCredit")}</Text>
       </Card>
 
       {deletingVoice ? (
         <ConfirmModal
-          title="Delete the voiceover?"
-          body="Every scene's narration is removed and the video becomes silent. This can't be undone; you'd need to pick a voice again to get narration back. Render again afterwards for a silent MP4."
-          confirm="Delete voiceover"
-          busyLabel="Starting..."
-          failedText="Couldn't delete the voiceover. Try again."
+          title={i18n.t("videoSettings.deleteVoiceTitle")}
+          body={i18n.t("videoSettings.deleteVoiceBody")}
+          confirm={i18n.t("videoSettings.deleteVoiceover")}
+          busyLabel={i18n.t("common.starting")}
+          failedText={i18n.t("videoSettings.deleteVoiceFailed")}
           run={async () => {
             await job("voice", () => p.startJob("Deleting the voiceover", () => videoEditApi.deleteVoiceover(p.id), () => videoEditApi.voiceStatus(p.id)));
             return true;

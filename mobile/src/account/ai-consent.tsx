@@ -7,6 +7,8 @@ import { useAuth } from "@/account/auth";
 import { Pressable } from "@/ui/pressable";
 import { colors } from "@/ui/theme";
 import { pageStyles, PillButton } from "@/ui/widgets";
+import i18n from "@/i18n";
+import { Trans } from "react-i18next";
 
 /**
  * Permission to send a person's content to third-party AI services, which App Store guideline 5.1.2(i) requires first.
@@ -92,12 +94,12 @@ export function AiConsentGate() {
         <ScrollView contentContainerStyle={[styles.center, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 }]}>
           <View style={[pageStyles.dialog, styles.card]} accessibilityViewIsModal>
             <Text style={pageStyles.sheetTitle} accessibilityRole="header">
-              Notestack uses AI services
+              {i18n.t("consent.title")}
             </Text>
             <Text style={styles.body}>
-              To work, Notestack sends your content and requests to these third-party services: <Text style={styles.name}>Z.ai, TypeSafe, ElevenLabs, Blog2Video and Firecrawl</Text>. You can withdraw permission in Settings.
+              <Trans i18nKey="consent.body" components={[<Text key="names" style={styles.name} />]} />
             </Text>
-            <PillButton variant="primary" title="Allow and continue" disabled={leaving} onPress={allow} style={styles.allow} />
+            <PillButton variant="primary" title={i18n.t("consent.allow")} disabled={leaving} onPress={allow} style={styles.allow} />
             <Pressable
               style={styles.decline}
               hitSlop={10}
@@ -107,9 +109,9 @@ export function AiConsentGate() {
                 setLeaving(true);
                 void logout().finally(() => setLeaving(false));
               }}>
-              <Text style={styles.declineText}>{leaving ? "Signing out..." : "No thanks"}</Text>
+              <Text style={styles.declineText}>{leaving ? i18n.t("consent.signingOut") : i18n.t("consent.noThanks")}</Text>
             </Pressable>
-            <Text style={styles.note}>No thanks signs you out, as Notestack can&apos;t work without them.</Text>
+            <Text style={styles.note}>{i18n.t("consent.note")}</Text>
           </View>
         </ScrollView>
       )}

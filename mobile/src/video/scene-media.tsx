@@ -14,6 +14,7 @@ import { Dialog, PillButton, Sheet } from "@/ui/widgets";
 
 import type { PanelProps } from "./types";
 import { clock, ClipView, Spinner, vstyles } from "./ui";
+import i18n from "@/i18n";
 
 /* The scene media dialogs (web: components/video/SceneMedia.tsx): pick an existing image or clip, upload, search stock
    footage, and write / review an AI image. A scene has one visual slot, so whatever is picked replaces the current one. */
@@ -21,7 +22,7 @@ import { clock, ClipView, Spinner, vstyles } from "./ui";
 export const IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"];
 export const IMAGE_MAX = 5 * 1024 * 1024; // blog2video's limit for a scene image
 
-const message = (e: unknown) => (e instanceof ApiError || e instanceof Error ? e.message : "Something went wrong. Try again.");
+const message = (e: unknown) => (e instanceof ApiError || e instanceof Error ? e.message : i18n.t("common.somethingWrong"));
 
 /** Cancel and a confirm button in one row, as the web's .vw-nav. */
 function Nav({ busy, danger, confirm, busyLabel, onCancel, onConfirm, disabled, note }: {
@@ -37,7 +38,7 @@ function Nav({ busy, danger, confirm, busyLabel, onCancel, onConfirm, disabled, 
   return (
     <View style={vstyles.end}>
       {note ? <Text style={[vstyles.muted, vstyles.small, styles.grow]}>{note}</Text> : null}
-      <PillButton small title="Cancel" disabled={busy} onPress={onCancel} />
+      <PillButton small title={i18n.t("common.cancel")} disabled={busy} onPress={onCancel} />
       <PillButton small variant={danger ? "danger" : "primary"} title={busy ? busyLabel : confirm} busy={busy} disabled={disabled} onPress={onConfirm} />
     </View>
   );
@@ -91,22 +92,22 @@ export function AssetPickerModal(p: PanelProps & { scene: VideoScene; kind: "ima
   }
 
   return (
-    <Sheet visible title={p.kind === "image" ? "Use an existing image" : "Choose existing stock footage"} onClose={busy ? () => undefined : p.onClose}>
+    <Sheet visible title={p.kind === "image" ? i18n.t("sceneMedia.existingImage") : i18n.t("sceneMedia.existingClip")} onClose={busy ? () => undefined : p.onClose}>
       {assets.length === 0 ? (
         <View style={styles.empty}>
-          <Text style={vstyles.muted}>This video has no {p.kind === "image" ? "images" : "stock clips"} yet.</Text>
-          <PillButton small title={p.kind === "image" ? "Upload an image" : "Find a new clip"} onPress={p.onNew} />
+          <Text style={vstyles.muted}>{p.kind === "image" ? i18n.t("sceneMedia.noImages") : i18n.t("sceneMedia.noClips")}</Text>
+          <PillButton small title={p.kind === "image" ? i18n.t("sceneMedia.uploadImage") : i18n.t("sceneMedia.findClip")} onPress={p.onNew} />
         </View>
       ) : (
         <>
-          <Text style={[vstyles.muted, vstyles.small]}>Replaces this scene&apos;s current image or clip.</Text>
+          <Text style={[vstyles.muted, vstyles.small]}>{i18n.t("sceneMedia.replaces")}</Text>
           <View style={styles.grid}>
             {assets.map((a) => {
               const on = picked?.id === a.id;
               return (
                 <Pressable key={a.id} onPress={() => setPicked(a)} disabled={busy} accessibilityRole="radio" accessibilityState={{ checked: on }} style={[styles.asset, on && styles.assetOn]}>
                   {p.kind === "video" ? <ClipView uri={a.r2_url!} playing={on} /> : <Image source={{ uri: a.r2_url! }} style={styles.fill} contentFit="cover" />}
-                  {onScene.has(a.filename) ? <Text style={styles.tag}>On this scene</Text> : null}
+                  {onScene.has(a.filename) ? <Text style={styles.tag}>{i18n.t("sceneMedia.onScene")}</Text> : null}
                   {a.duration_seconds ? <Text style={styles.time}>{clock(a.duration_seconds)}</Text> : null}
                   {on ? (
                     <View style={styles.check}>
@@ -119,8 +120,8 @@ export function AssetPickerModal(p: PanelProps & { scene: VideoScene; kind: "ima
           </View>
         </>
       )}
-      {failed ? <Text style={vstyles.error}>Couldn&apos;t add it. Try again.</Text> : null}
-      <Nav busy={busy} confirm={`Use this ${noun}`} busyLabel="Adding..." disabled={!picked} onCancel={p.onClose} onConfirm={() => void use()} />
+      {failed ? <Text style={vstyles.error}>{i18n.t("sceneMedia.addFailed")}</Text> : null}
+      <Nav busy={busy} confirm={noun === "image" ? i18n.t("sceneMedia.useImage") : i18n.t("sceneMedia.useClip")} busyLabel={i18n.t("common.adding")} disabled={!picked} onCancel={p.onClose} onConfirm={() => void use()} />
     </Sheet>
   );
 }
@@ -172,24 +173,24 @@ export function StockSearchModal(p: PanelProps & { scene: VideoScene; onClose: (
   }
 
   return (
-    <Sheet visible title="Add stock footage" onClose={busy ? () => undefined : p.onClose}>
-      <Text style={vstyles.muted}>Clips are converted to 30 fps so they stay in sync with your video.</Text>
+    <Sheet visible title={i18n.t("sceneMedia.addStock")} onClose={busy ? () => undefined : p.onClose}>
+      <Text style={vstyles.muted}>{i18n.t("sceneMedia.fps")}</Text>
       <View style={styles.search}>
         <TextInput
           style={[vstyles.input, styles.grow]}
           value={query}
           onChangeText={setQuery}
-          placeholder="Search stock footage"
+          placeholder={i18n.t("sceneMedia.searchStock")}
           placeholderTextColor={colors.text3}
           editable={!busy}
           returnKeyType="search"
           onSubmitEditing={() => void search(query)}
         />
-        <PillButton small variant="primary" title="Search" disabled={!query.trim() || searching || busy} onPress={() => void search(query)} />
+        <PillButton small variant="primary" title={i18n.t("sceneMedia.search")} disabled={!query.trim() || searching || busy} onPress={() => void search(query)} />
       </View>
       {searching ? <Spinner /> : null}
       {searchError ? <Text style={vstyles.error}>{searchError}</Text> : null}
-      {!searching && clips?.length === 0 ? <Text style={vstyles.muted}>No clips found. Try other words.</Text> : null}
+      {!searching && clips?.length === 0 ? <Text style={vstyles.muted}>{i18n.t("sceneMedia.noClipsFound")}</Text> : null}
       {!searching && clips && clips.length > 0 ? (
         <View style={styles.grid}>
           {clips.map((c) => {
@@ -217,8 +218,8 @@ export function StockSearchModal(p: PanelProps & { scene: VideoScene; onClose: (
           })}
         </View>
       ) : null}
-      {failed ? <Text style={vstyles.error}>Couldn&apos;t add the clip. Try again.</Text> : null}
-      <Nav busy={busy} confirm="Use this clip" busyLabel="Adding the clip..." disabled={!picked} note="Uses 1 AI edit" onCancel={p.onClose} onConfirm={() => void use()} />
+      {failed ? <Text style={vstyles.error}>{i18n.t("sceneMedia.clipFailed")}</Text> : null}
+      <Nav busy={busy} confirm={i18n.t("sceneMedia.useClip")} busyLabel={i18n.t("sceneMedia.addingClip")} disabled={!picked} note={i18n.t("sceneMedia.usesAiEdit")} onCancel={p.onClose} onConfirm={() => void use()} />
     </Sheet>
   );
 }
@@ -256,11 +257,11 @@ function ConfirmModal({ title, body, confirm, busyLabel, failedText, run, onClos
 export function RemoveMediaModal(p: PanelProps & { scene: VideoScene; filename: string; kind: string; onClose: () => void }) {
   return (
     <ConfirmModal
-      title={p.kind === "video" ? "Remove this stock clip?" : "Remove this image?"}
-      body="It comes off this scene only. It stays in the video's media, so you can add it back from Images/footage."
-      confirm="Remove"
-      busyLabel="Removing..."
-      failedText="Couldn't remove it. Try again."
+      title={p.kind === "video" ? i18n.t("sceneMedia.removeClip") : i18n.t("sceneMedia.removeImage")}
+      body={i18n.t("sceneMedia.removeBody")}
+      confirm={i18n.t("common.remove")}
+      busyLabel={i18n.t("common.removing")}
+      failedText={i18n.t("sceneMedia.removeFailed")}
       run={() => p.act(() => videoEditApi.updateScene(p.id, p.scene.id, { remotion_code: withoutMedia(p.scene, p.project.template, p.filename) }))}
       onClose={p.onClose}
     />
@@ -272,11 +273,11 @@ export function DeleteAssetModal(p: PanelProps & { asset: { id: number; kind: st
   const clip = p.asset.kind === "video";
   return (
     <ConfirmModal
-      title={clip ? "Delete this stock clip?" : "Delete this image?"}
-      body={`This permanently deletes the ${clip ? "stock clip" : "image"} from this video. It can't be recovered, and you'll need to add it again if you want it back.`}
-      confirm="Delete"
-      busyLabel="Deleting..."
-      failedText="Couldn't delete it. Try again."
+      title={clip ? i18n.t("sceneMedia.deleteClip") : i18n.t("sceneMedia.deleteImage")}
+      body={clip ? i18n.t("sceneMedia.deleteClipBody") : i18n.t("sceneMedia.deleteImageBody")}
+      confirm={i18n.t("common.delete")}
+      busyLabel={i18n.t("sceneMedia.deleting")}
+      failedText={i18n.t("sceneMedia.deleteFailed")}
       run={() => p.act(() => videoEditApi.deleteAsset(p.id, p.asset.id))}
       onClose={p.onClose}
     />
@@ -289,7 +290,7 @@ export { ConfirmModal };
 export function AiImageModal({ scene, aiEditsLeft, onGenerate, onClose }: { scene: VideoScene; aiEditsLeft: number | null; onGenerate: (prompt: string) => void; onClose: () => void }) {
   const [prompt, setPrompt] = useState("");
   return (
-    <Sheet visible title="Generate image with AI" onClose={onClose}>
+    <Sheet visible title={i18n.t("sceneMedia.aiTitle")} onClose={onClose}>
       <Text style={vstyles.muted}>
         Describe the image you want. Uses 1 AI edit{aiEditsLeft !== null ? ` · ${aiEditsLeft} left` : ""}.
       </Text>
@@ -301,11 +302,11 @@ export function AiImageModal({ scene, aiEditsLeft, onGenerate, onClose }: { scen
         multiline
         maxLength={4000}
         autoFocus
-        placeholder={scene.visual_description || "What should the image show?"}
+        placeholder={scene.visual_description || i18n.t("sceneMedia.aiPlaceholder")}
         placeholderTextColor={colors.text3}
       />
-      <Text style={[vstyles.muted, vstyles.small]}>The scene&apos;s description is also used to generate the image.</Text>
-      <Nav busy={false} confirm="Generate" busyLabel="Generate" disabled={prompt.trim().length < 3} onCancel={onClose} onConfirm={() => onGenerate(prompt.trim())} />
+      <Text style={[vstyles.muted, vstyles.small]}>{i18n.t("sceneMedia.aiHint")}</Text>
+      <Nav busy={false} confirm={i18n.t("sceneMedia.generate")} busyLabel={i18n.t("sceneMedia.generate")} disabled={prompt.trim().length < 3} onCancel={onClose} onConfirm={() => onGenerate(prompt.trim())} />
     </Sheet>
   );
 }
@@ -330,15 +331,15 @@ export function AiReviewModal(p: PanelProps & { scene: VideoScene; base64: strin
   }
 
   return (
-    <Sheet visible title="AI generated image" onClose={busy ? () => undefined : p.onDone}>
-      <Image source={{ uri: `data:image/png;base64,${p.base64}` }} style={styles.preview} contentFit="contain" accessibilityLabel="The generated image" />
-      <Text style={[vstyles.muted, vstyles.small]}>{busy ? "Adding the image to the scene..." : "Keeping it replaces this scene's current image or clip. The AI edit is used either way."}</Text>
-      {failed ? <Text style={vstyles.error}>Couldn&apos;t add the image. Try again.</Text> : null}
+    <Sheet visible title={i18n.t("sceneMedia.aiResult")} onClose={busy ? () => undefined : p.onDone}>
+      <Image source={{ uri: `data:image/png;base64,${p.base64}` }} style={styles.preview} contentFit="contain" accessibilityLabel={i18n.t("sceneMedia.generated")} />
+      <Text style={[vstyles.muted, vstyles.small]}>{busy ? i18n.t("sceneMedia.addingImage") : i18n.t("sceneMedia.keepHint")}</Text>
+      {failed ? <Text style={vstyles.error}>{i18n.t("sceneMedia.imageFailed")}</Text> : null}
       <View style={vstyles.end}>
-        <Pressable onPress={() => void keep()} disabled={busy} accessibilityRole="button" accessibilityLabel="Keep the image" style={[styles.round, styles.keep]}>
+        <Pressable onPress={() => void keep()} disabled={busy} accessibilityRole="button" accessibilityLabel={i18n.t("sceneMedia.keep")} style={[styles.round, styles.keep]}>
           {busy ? <Spinner /> : <CheckIcon size={18} color={colors.white} />}
         </Pressable>
-        <Pressable onPress={p.onDone} disabled={busy} accessibilityRole="button" accessibilityLabel="Discard the image" style={styles.round}>
+        <Pressable onPress={p.onDone} disabled={busy} accessibilityRole="button" accessibilityLabel={i18n.t("sceneMedia.discard")} style={styles.round}>
           <CloseIcon size={18} />
         </Pressable>
       </View>

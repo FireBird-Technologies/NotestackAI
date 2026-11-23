@@ -19,6 +19,7 @@ import {
 } from "@/shell/public-page";
 import { colors, fonts, radius } from "@/ui/theme";
 import { Button } from "@/ui";
+import i18n from "@/i18n";
 
 /** A free tool: its pitch and sections, with the script builder for anyone signed in (as on the web). */
 export default function ToolScreen() {
@@ -29,8 +30,8 @@ export default function ToolScreen() {
   if (!tool) {
     return (
       <PublicPage>
-        <PageTitle>Tool not found</PageTitle>
-        <Button title="See all free tools" variant="secondary" onPress={() => router.navigate("/tools")} />
+        <PageTitle>{i18n.t("marketing.toolNotFound")}</PageTitle>
+        <Button title={i18n.t("marketing.seeAllTools")} variant="secondary" onPress={() => router.navigate("/tools")} />
       </PublicPage>
     );
   }
@@ -54,10 +55,10 @@ export default function ToolScreen() {
 function SignInGate({ tool }: { tool: ToolDef }) {
   return (
     <Card highlight>
-      <Text style={publicText.cardTitle}>Sign in to use the {tool.eyebrow.toLowerCase()}</Text>
-      <Text style={publicText.body}>It is free. Create an account in seconds and come straight back to this tool.</Text>
-      <Button title="Sign up free" onPress={() => router.navigate("/sign-up")} />
-      <Button title="Sign in" variant="secondary" onPress={() => router.navigate("/sign-in")} />
+      <Text style={publicText.cardTitle}>{i18n.t("marketing.signInToUse", { tool: tool.eyebrow.toLowerCase() })}</Text>
+      <Text style={publicText.body}>{i18n.t("marketing.signInToUseBody")}</Text>
+      <Button title={i18n.t("marketing.signUpFree")} onPress={() => router.navigate("/sign-up")} />
+      <Button title={i18n.t("auth.signIn")} variant="secondary" onPress={() => router.navigate("/sign-in")} />
     </Card>
   );
 }
@@ -85,7 +86,7 @@ function ScriptWidget({ tool }: { tool: ToolDef }) {
       />
       {tool.inputHint ? <Inline text={tool.inputHint} style={publicText.small} /> : null}
       {text.trim() && !script ? (
-        <Text style={publicText.small}>Paste a little more: the script needs at least three full sentences.</Text>
+        <Text style={publicText.small}>{i18n.t("marketing.needMore")}</Text>
       ) : null}
       {script ? (
         <View style={styles.output}>
@@ -95,17 +96,17 @@ function ScriptWidget({ tool }: { tool: ToolDef }) {
           </Text>
           {script.lines.map((l, i) => (
             <View key={i} style={[styles.line, l.host === "B" && styles.lineB]}>
-              <Text style={styles.host}>Host {l.host}</Text>
+              <Text style={styles.host}>{i18n.t("marketing.host", { host: l.host })}</Text>
               <Text style={publicText.body}>{l.text}</Text>
             </View>
           ))}
           <Button
-            title="Share script"
+            title={i18n.t("marketing.shareScript")}
             variant="secondary"
             onPress={() => void Share.share({ message: scriptToText(script), title: `${tool.slug}-script` })}
           />
-          <Text style={publicText.small}>Hear it with two natural voices, grounded in your whole archive.</Text>
-          <Button title="Make an audio overview" onPress={() => router.navigate("/notebooks")} />
+          <Text style={publicText.small}>{i18n.t("marketing.hearIt")}</Text>
+          <Button title={i18n.t("marketing.makeAudio")} onPress={() => router.navigate("/notebooks")} />
         </View>
       ) : null}
     </Card>

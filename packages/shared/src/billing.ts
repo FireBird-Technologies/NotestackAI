@@ -1,4 +1,5 @@
 import type { BillingStatus } from "./types";
+import { tr } from "./i18n";
 
 /** The plan marked "Most popular" and highlighted on every pricing view (web tiers, the app's pricing and Plans). */
 export const POPULAR_PLAN = "studio";
@@ -17,10 +18,11 @@ export function deletePlanWarning(status: BillingStatus | null | undefined): str
   if (!status || !by) return null;
   const plan = status.plan.name;
   if (by === "app_store") {
-    return `Cancel your App Store subscription right away, or Apple keeps charging you. Deleting the account ends your ${plan} plan here and marks it Free, but Apple doesn't let us cancel App Store subscriptions: only you can. ${APPLE_CANCEL_STEPS}`;
+    return tr("billing.deleteApple", "Cancel your App Store subscription right away, or Apple keeps charging you. Deleting the account ends your {{plan}} plan here and marks it Free, but Apple doesn't let us cancel App Store subscriptions: only you can. {{steps}}", { plan, steps: tr("billing.appleCancelSteps", APPLE_CANCEL_STEPS) });
   }
-  const where = by === "play_store" ? "Google Play subscription" : "subscription";
-  return `Your ${plan} ${where} is cancelled right away and the account is marked Free. You won't be charged again, and the time left in this period isn't refunded.`;
+  return by === "play_store"
+    ? tr("billing.deletePlay", "Your {{plan}} Google Play subscription is cancelled right away and the account is marked Free. You won't be charged again, and the time left in this period isn't refunded.", { plan })
+    : tr("billing.deleteOther", "Your {{plan}} subscription is cancelled right away and the account is marked Free. You won't be charged again, and the time left in this period isn't refunded.", { plan });
 }
 
 /** Where a paid plan is bought and managed: the web (Stripe), or one of the phone stores. */
@@ -46,11 +48,11 @@ export function managedElsewhere(
   if (!status || !by) return null;
   if (by === "test_store") {
     // RevenueCat's test store (development builds only): bought in the app on either phone.
-    return here === "web" ? { text: "Bought in the Notestack app. Manage it there." } : null;
+    return here === "web" ? { text: tr("billing.boughtApp", "Bought in the Notestack app. Manage it there.") } : null;
   }
   const place: BillingPlace = by === "stripe" ? "web" : by;
   if (place === here) return null;
-  if (place === "web") return { text: "Bought on the Notestack website. Manage it there." };
-  if (place === "app_store") return { text: "Bought on iPhone or iPad. Manage it in the App Store.", url: here === "web" ? STORE_PAGES.app_store : undefined };
-  return { text: "Bought on Android. Manage it in Google Play.", url: here === "web" ? STORE_PAGES.play_store : undefined };
+  if (place === "web") return { text: tr("billing.boughtWeb", "Bought on the Notestack website. Manage it there.") };
+  if (place === "app_store") return { text: tr("billing.boughtIos", "Bought on iPhone or iPad. Manage it in the App Store."), url: here === "web" ? STORE_PAGES.app_store : undefined };
+  return { text: tr("billing.boughtAndroid", "Bought on Android. Manage it in Google Play."), url: here === "web" ? STORE_PAGES.play_store : undefined };
 }

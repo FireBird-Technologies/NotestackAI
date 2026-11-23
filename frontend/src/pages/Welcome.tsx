@@ -3,7 +3,7 @@ import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { docsApi, jobsApi, MAX_SOURCE_FILE_BYTES, MAX_SOURCE_FILE_LABEL, notebooksApi, settingsApi, sourcesApi, type NotebookLmImportResult } from "@notestack/shared/endpoints";
 import type { Job, Source } from "@notestack/shared/types";
 import { NotebookLmTransferButton } from "../components/NotebookLmTransferButton";
-import { CloseIcon, UploadIcon } from "../components/icons/Icons";
+import { CloseIcon, EyeIcon, UploadIcon } from "../components/icons/Icons";
 import Logo from "../components/Logo";
 import SkyCanvas from "../components/SkyCanvas";
 import { SourceUrlHint, useSourceUrlCheck } from "../components/SourceUrlCheck";
@@ -21,7 +21,8 @@ import {
   pendingNotebookLmTransfer,
   reportNotebookLmTransferStatus,
 } from "../lib/notebooklm";
-import { SAMPLE_DOCUMENT, SAMPLE_LINK } from "@notestack/shared/content/samples";
+import { SAMPLE_DOCUMENTS, SAMPLE_LINK } from "@notestack/shared/content/samples";
+import { combineJobs, jobFinished } from "@notestack/shared/jobState";
 import { firstNotebookName } from "@notestack/shared/notebook";
 import { classifyUrl, looksLikeArticle } from "@notestack/shared/urlScrapability";
 import { PENDING_SOURCE_KEY } from "./Landing";
@@ -104,6 +105,7 @@ export default function Welcome() {
   const [files, setFiles] = useState<File[]>([]);
   const [dragging, setDragging] = useState(false);
   const earlierJobs = useRef<string[]>([]);
+  const uploading = useRef(false);
   const [url, setUrl] = useState(takePending);
   // Only a link brought from the landing page connects by itself; anything typed or filled in here waits for Connect.
   const landingUrl = useRef(url);
@@ -141,6 +143,30 @@ export default function Welcome() {
     setReady(true);
   });
 
+  // A multi-file upload: every file's job together, so the bar moves as each lands (not only with the last one).
+  const [allJobs, setAllJobs] = useState<Job | null>(null);
+  const jobId = job?.id;
+  useEffect(() => {
+    setAllJobs(null);
+    const ids = jobId && earlierJobs.current.length ? [...earlierJobs.current, jobId] : [];
+    if (!ids.length) return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const tick = async () => {
+      const jobs = await Promise.all(ids.map((id) => jobsApi.get(id).catch(() => null)));
+      if (stopped) return;
+      setAllJobs(combineJobs(jobs));
+      if (!jobs.every((j) => j === null || jobFinished(j))) timer = setTimeout(tick, 1500);
+    };
+    void tick();
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
+  }, [jobId]);
+
+  const progressJob = allJobs ?? live;
+
   const { check, modal } = useSourceUrlCheck();
 
   const connect = async (value: string, as: LinkAs = looksLikeArticle(value) ? "url" : "feed") => {
@@ -163,27 +189,30 @@ export default function Welcome() {
   const upload = async () => {
     if (!files.length) return;
     setBusy(true);
+    uploading.current = true;
     setError(null);
     try {
-      // One import job per file: the last drives the progress bar, the rest are awaited before moving on.
-      const jobs: Job[] = [];
-      let res: Awaited<ReturnType<typeof sourcesApi.importFile>> | null = null;
-      for (const f of files) {
-        res = await sourcesApi.importFile(f);
-        jobs.push(res.job);
-      }
-      earlierJobs.current = jobs.slice(0, -1).map((j) => j.id);
-      setSource(res!.source);
-      setJob(res!.job);
+      // One import job per file, sent a few at a time. The bar shows them all; the last one's watcher waits for the
+      // rest before moving on.
+      const results = await sourcesApi.importFiles(files);
+      const failed = results.find((r) => r.status === "rejected");
+      if (failed) throw failed.reason;
+      const ok = results.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
+      const res = ok[ok.length - 1];
+      earlierJobs.current = ok.slice(0, -1).map((r) => r.job.id);
+      setSource(res.source);
+      setJob(res.job);
       setStep("indexing");
     } catch (e) {
       setError(errorMessage(e, "That upload did not go through."));
     } finally {
       setBusy(false);
+      uploading.current = false;
     }
   };
 
   const addFiles = (list: FileList | File[] | null) => {
+    if (uploading.current) return; // the list is frozen while it uploads (a sample download can finish mid-upload)
     const all = Array.from(list ?? []);
     if (!all.length) return;
     const large = all.filter((f) => f.size > MAX_SOURCE_FILE_BYTES);
@@ -199,15 +228,22 @@ export default function Welcome() {
     }
   };
 
-  /** The sample PDF (public/samples), added to the list like a picked file; Upload still sends it. */
-  const addSampleDocument = async () => {
-    try {
-      const res = await fetch(SAMPLE_DOCUMENT.path);
-      if (!res.ok) throw new Error(String(res.status));
-      addFiles([new File([await res.blob()], SAMPLE_DOCUMENT.name, { type: SAMPLE_DOCUMENT.type })]);
-    } catch {
-      setError("We could not load the sample document. Try again in a moment.");
-    }
+  /** The sample PDFs (public/samples), added to the list like picked files; Upload still sends them. */
+  const addSampleDocuments = async () => {
+    const loaded = await Promise.all(
+      SAMPLE_DOCUMENTS.map(async (doc) => {
+        try {
+          const res = await fetch(doc.path);
+          if (!res.ok) throw new Error(String(res.status));
+          return new File([await res.blob()], doc.name, { type: doc.type });
+        } catch {
+          return null;
+        }
+      }),
+    );
+    const ok = loaded.filter((f): f is File => f !== null);
+    if (ok.length) addFiles(ok);
+    else setError("We could not load the sample documents. Try again in a moment.");
   };
 
   useEffect(() => {
@@ -645,10 +681,11 @@ export default function Welcome() {
                 <form onSubmit={submit} className="welcome-form">
                   {mode === "file" ? (
                     <label
-                      className={`welcome-drop${dragging ? " over" : ""}`}
+                      className={`welcome-drop${dragging ? " over" : ""}${busy ? " off" : ""}`}
+                      aria-disabled={busy}
                       onDragOver={(e) => {
                         e.preventDefault();
-                        setDragging(true);
+                        if (!busy) setDragging(true);
                       }}
                       onDragLeave={() => setDragging(false)}
                       onDrop={(e) => {
@@ -660,6 +697,7 @@ export default function Welcome() {
                       <input
                         type="file"
                         multiple
+                        disabled={busy}
                         accept={FILE_ACCEPT}
                         onChange={(e) => {
                           addFiles(e.target.files);
@@ -704,30 +742,32 @@ export default function Welcome() {
                   {mode === "file" && (
                     // Only adds it to the list below: Upload still sends it
                     <p className="muted small welcome-sample welcome-sample-row">
-                      Instead, use a{" "}
+                      Instead, use the{" "}
                       <button
                         type="button"
                         className="link-btn"
                         disabled={busy}
-                        onClick={() => void addSampleDocument()}
+                        onClick={() => void addSampleDocuments()}
                       >
-                        sample document
+                        sample documents
                       </button>{" "}
-                      (
-                      <a href={SAMPLE_DOCUMENT.path} target="_blank" rel="noreferrer" className="link-btn">
-                        preview
-                      </a>
-                      )
+                      ({SAMPLE_DOCUMENTS.length} articles)
                     </p>
                   )}
                   {mode === "file" && files.length > 0 && (
                     <ul className="welcome-files mono small">
-                      {files.map((f) => (
+                      {files.map((f) => {
+                        const sample = SAMPLE_DOCUMENTS.find((d) => d.name === f.name);
+                        return (
                         <li key={`${f.name}-${f.size}`}>
-                          <span>{f.name}</span>
-                          <button type="button" className="icon-btn" onClick={() => setFiles(files.filter((x) => x !== f))} aria-label={`Remove ${f.name}`} title="Remove"><CloseIcon size={14} /></button>
+                          <span className="welcome-file-name">{f.name}</span>
+                          {sample && (
+                            <a href={sample.path} target="_blank" rel="noreferrer" className="icon-btn" aria-label={`Preview ${f.name}`} title="Preview"><EyeIcon size={14} /></a>
+                          )}
+                          <button type="button" className="icon-btn" disabled={busy} onClick={() => setFiles(files.filter((x) => x !== f))} aria-label={`Remove ${f.name}`} title="Remove"><CloseIcon size={14} /></button>
                         </li>
-                      ))}
+                        );
+                      })}
                     </ul>
                   )}
                   <button className="btn btn-primary" disabled={busy || (mode === "file" ? !files.length : !url.trim())}>
@@ -826,7 +866,7 @@ export default function Welcome() {
               <>
                 <p className="eyebrow">{source?.title ?? "Your archive"}</p>
                 <h1>{indexingFailed ? "That did not land" : "Bringing your posts into orbit"}</h1>
-                {live && <JobProgress job={live} />}
+                {progressJob && <JobProgress job={progressJob} />}
                 {standardLockedNotice}
                 {indexingFailed ? (
                   <div className="row">

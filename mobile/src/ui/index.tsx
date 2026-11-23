@@ -6,6 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PUBLIC_HEADER_HEIGHT, PublicHeader } from "@/shell/public-header";
 import { colors, fonts, gutter, radius } from "@/ui/theme";
+import i18n, { locale } from "@/i18n";
 
 /**
  * A signed out form (sign in, sign up, reset): just the navbar's menu on top (the page shows the logo itself), keyboard
@@ -34,7 +35,7 @@ export function Brand() {
     <View style={styles.brand}>
       <Image source={require("@/assets/images/logo.png")} style={styles.brandLogo} accessibilityLabel="Notestack" accessibilityIgnoresInvertColors />
       <Text style={styles.brandLine} accessibilityRole="header">
-        Your knowledge, in orbit.
+        {i18n.t("misc.tagline")}
       </Text>
     </View>
   );
@@ -111,14 +112,14 @@ export function Centered({ children }: { children: ReactNode }) {
   return <View style={styles.centered}>{children}</View>;
 }
 
-/** A date as the web app shows it in English: "Oct 16, 2026", with the time "Oct 17, 1:29 PM", or "Undated". */
+/** A date in the app language: "Oct 16, 2026", with the time "Oct 17, 1:29 PM", or "Undated". */
 export function formatDate(iso: string | null | undefined, withTime = false): string {
-  if (!iso) return "Undated";
+  if (!iso) return i18n.t("ui.undated");
   const d = new Date(iso);
-  if (!withTime) return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+  if (!withTime) return d.toLocaleDateString(locale(), { year: "numeric", month: "short", day: "numeric" });
   // Built from its parts: Hermes words a combined date and time as "Oct 17 at 1:29 PM".
-  const day = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  return `${day}, ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
+  const day = d.toLocaleDateString(locale(), { month: "short", day: "numeric" });
+  return `${day}, ${d.toLocaleTimeString(locale(), { hour: "numeric", minute: "2-digit" })}`;
 }
 
 export function Loading() {
