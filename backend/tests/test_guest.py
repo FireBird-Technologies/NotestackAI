@@ -575,6 +575,66 @@ def test_a_subscribed_guest_who_signs_in_elsewhere_keeps_the_plan_there(client, 
     assert effective_plan(db_session, ws).id == "writer"
 
 
+@pytest.fixture
+def store(monkeypatch):
+    """RevenueCat: which workspace holds the subscription. No webhook is ever sent."""
+    from app.services import revenuecat
+    from tests.test_billing_iap import customer
+
+    monkeypatch.setattr(settings, "revenuecat_secret_key", "sk")
+    held: dict = {}
+    monkeypatch.setattr(revenuecat, "fetch_customer", lambda i: customer("starter") if held.get("by") == i else {})
+    return held
+
+
+def _subscribed_guest_and_account(client, db, store, device):
+    account = _signup(client)
+    mine = {"Authorization": f"Bearer {account['access_token']}"}
+    data, headers = guest(client, device)
+    ws, aws = workspace_of(db, data), workspace_of(db, account)
+    store["by"] = str(ws.id)
+    assert client.post("/api/billing/iap/sync", headers=headers).json()["plan"]["id"] == "starter"
+    return ws, aws, mine
+
+
+def test_restoring_on_an_account_takes_the_plan_from_the_guest_without_a_webhook(client, db_session, store):
+    ws, aws, mine = _subscribed_guest_and_account(client, db_session, store, uuid.uuid4())
+    store["by"] = str(aws.id)
+    assert client.post("/api/billing/iap/sync", headers=mine).json()["plan"]["id"] == "starter"
+    db_session.expire_all()
+    assert effective_plan(db_session, ws) is GUEST_PLAN
+
+
+def test_a_guest_coming_back_after_moving_the_plan_is_checked(client, db_session, store):
+    device = uuid.uuid4()
+    ws, aws, _ = _subscribed_guest_and_account(client, db_session, store, device)
+    store["by"] = str(aws.id)  # moved, and neither the restore nor a webhook told us about the guest
+    guest(client, device)
+    db_session.expire_all()
+    assert effective_plan(db_session, ws) is GUEST_PLAN
+
+
+def test_the_check_never_takes_a_plan_that_is_still_theirs(client, db_session, store, monkeypatch):
+    import httpx
+
+    from app.services import revenuecat
+
+    device = uuid.uuid4()
+    ws, _, mine = _subscribed_guest_and_account(client, db_session, store, device)
+    client.post("/api/billing/iap/sync", headers=mine)  # a restore that found nothing for the account
+    guest(client, device)
+    db_session.expire_all()
+    assert effective_plan(db_session, ws).id == "starter"
+
+    def down(_):
+        raise httpx.ConnectError("down")
+
+    monkeypatch.setattr(revenuecat, "fetch_customer", down)
+    guest(client, device)  # RevenueCat unreachable: opens all the same, plan untouched
+    db_session.expire_all()
+    assert effective_plan(db_session, ws).id == "starter"
+
+
 def test_a_normal_account_signed_in_is_never_taken_over(client, db_session):
     account = _signup(client)
     headers = {"Authorization": f"Bearer {account['access_token']}"}
