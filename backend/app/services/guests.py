@@ -170,7 +170,20 @@ def open_guest(db: Session, *, device_id: str, device_token: str | None, ip: str
             # Written the next time this device opens a guest session; its row here still holds the allowance.
             log.error("DeviceCheck could not be written: %s", exc)
             verified = False
+    if not created:
+        _recheck_plan(db, guest)
     return Opened(guest, created, not device.exhausted, verified)
+
+
+def _recheck_plan(db: Session, guest: User) -> None:
+    """A guest coming back may have moved their subscription to an account meanwhile (Restore purchases there)."""
+    from app.services import revenuecat
+    from app.services.billing import billed_by
+
+    sub = db.scalar(select(Subscription).join(Workspace, Workspace.id == Subscription.workspace_id)
+                    .where(Workspace.owner_id == guest.id))
+    if sub and billed_by(sub) and settings.billing_enabled and settings.revenuecat_secret_key:
+        revenuecat.recheck(db, sub.workspace_id)
 
 
 # The allowance

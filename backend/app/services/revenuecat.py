@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 
 import httpx
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -118,6 +119,27 @@ def sync_workspace(db: Session, workspace_id: uuid.UUID) -> str:
                        provider=provider, customer_id=str(workspace_id),
                        subscription_id=state.transaction_id, current_period_end=state.expires)
     return state.plan
+
+
+def sync_former_holders(db: Session, workspace_id: uuid.UUID) -> None:
+    """A restore moves a purchase here from another workspace (a guest's, say), which must lose it. RevenueCat's webhook
+    says so too; this does not wait for it. Only re-reads RevenueCat: one it still counts as subscribed keeps its plan."""
+    sub = db.query(Subscription).filter_by(workspace_id=workspace_id).one_or_none()
+    if not sub or not _ours(sub.provider) or not sub.provider_subscription_id:
+        return
+    others = db.scalars(select(Subscription.workspace_id).where(
+        Subscription.provider_subscription_id == sub.provider_subscription_id, Subscription.provider == sub.provider,
+        Subscription.workspace_id != workspace_id)).all()
+    for other in others:
+        recheck(db, other)
+
+
+def recheck(db: Session, workspace_id: uuid.UUID) -> None:
+    """Re-read a workspace's store plan when nothing hangs on it working: a failure leaves the plan as it is."""
+    try:
+        sync_workspace(db, workspace_id)
+    except httpx.HTTPError as exc:
+        log.warning("revenuecat recheck of workspace %s failed: %s", workspace_id, exc)
 
 
 def cancel_play(app_user_id: str) -> bool:

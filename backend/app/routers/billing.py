@@ -115,6 +115,7 @@ def iap_sync(ctx: Ctx = Depends(get_ctx)):
         log.warning("revenuecat sync for workspace %s failed: %s", ctx.workspace.id, exc)
         message = "Couldn't confirm your purchase with the store yet. Tap Restore purchases in a moment."
         raise HTTPException(502, {"code": "store_unreachable", "message": message}) from exc
+    revenuecat.sync_former_holders(ctx.db, ctx.workspace.id)
     return billing_status(ctx.db, ctx.workspace)
 
 
