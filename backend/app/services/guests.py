@@ -46,7 +46,7 @@ LIMITS = {
 KINDS = {"audio_overview": "audio_overviews", "report": "reports", "infographic": "infographics", "launch_kit": "launch_kits"}
 RESERVED = "guest_reserved"  # job param: what the job took from the allowance, given back if it fails
 
-VERIFIED_PER_IP_HOUR, UNVERIFIED_PER_IP_HOUR = 10, 2
+VERIFIED_PER_IP_HOUR, UNVERIFIED_PER_IP_HOUR = 500, 50
 INACTIVE_AFTER = timedelta(days=90)
 
 _made: dict[str, deque] = defaultdict(deque)

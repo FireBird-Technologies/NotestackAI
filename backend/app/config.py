@@ -41,8 +41,8 @@ class Settings(BaseSettings):
     # and from devices Apple could not vouch for.
     guest_mode_enabled: bool = True
     guest_epoch: int = Field(1, ge=1, le=3)
-    guest_daily_cap: int = 1000
-    guest_daily_cap_unverified: int = 50
+    guest_daily_cap: int = 100000
+    guest_daily_cap_unverified: int = 1000
     # Apple DeviceCheck: a key (.p8) with DeviceCheck turned on, of the team in APPLE_TEAM_ID. Builds run from Xcode use
     # Apple's development server; TestFlight and the App Store use production.
     devicecheck_key_id: str = ""

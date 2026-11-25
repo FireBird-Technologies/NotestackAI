@@ -156,7 +156,8 @@ def test_a_token_apple_rejects_is_refused(client, db_session):
     assert db_session.scalar(select(GuestDevice)) is None
 
 
-def test_apple_unreachable_falls_back_to_the_device_with_tighter_caps(client, apple_bits):
+def test_apple_unreachable_falls_back_to_the_device_with_tighter_caps(client, apple_bits, monkeypatch):
+    monkeypatch.setattr(guests, "UNVERIFIED_PER_IP_HOUR", 2)
     device = uuid.uuid4()
     data, _ = guest(client, device, token="down")
     assert data["allowance"] and data["verified"] is False
@@ -167,7 +168,8 @@ def test_apple_unreachable_falls_back_to_the_device_with_tighter_caps(client, ap
     assert guest(client, device, token="phone")[0]["verified"] and apple_bits["phone"] == 1
 
 
-def test_a_faked_forwarded_address_does_not_dodge_the_cap(client):
+def test_a_faked_forwarded_address_does_not_dodge_the_cap(client, monkeypatch):
+    monkeypatch.setattr(guests, "UNVERIFIED_PER_IP_HOUR", 2)
     got = [open_guest(client, token="down", **{"X-Forwarded-For": f"10.0.0.{i}, 203.0.113.9"}).status_code for i in range(4)]
     assert got == [200, 200, 429, 429]
 

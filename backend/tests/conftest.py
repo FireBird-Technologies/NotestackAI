@@ -29,7 +29,7 @@ os.environ["STRIPE_PRICE_STUDIO_ANNUAL"] = ""
 for _name in ("DEVICECHECK_KEY_ID", "DEVICECHECK_PRIVATE_KEY"):
     os.environ[_name] = ""
 for _name, _value in (("GUEST_MODE_ENABLED", "true"), ("GUEST_EPOCH", "1"), ("GUEST_DAILY_CAP", "1000"),
-                      ("GUEST_DAILY_CAP_UNVERIFIED", "50"), ("DEVICECHECK_DEVELOPMENT", "false")):
+                      ("GUEST_DAILY_CAP_UNVERIFIED", "1000"), ("DEVICECHECK_DEVELOPMENT", "false")):
     os.environ[_name] = _value
 os.environ["B2V_API_BASE_URL"] = ""
 os.environ["B2V_API_KEY"] = ""
