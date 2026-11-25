@@ -591,7 +591,7 @@ export type Usage = {
 };
 
 export type Settings = {
-  user: { name: string | null; email: string; auth_provider: string; email_unsubscribed: boolean };
+  user: { name: string | null; email: string; is_guest?: boolean; auth_provider: string; email_unsubscribed: boolean };
   workspace: { id: string; name: string; training_opt_in: boolean; allow_public_links: boolean };
   plan: Plan;
   billing_enabled: boolean;

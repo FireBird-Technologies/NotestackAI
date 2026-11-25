@@ -36,12 +36,12 @@ from app.pipeline.passages import notebook_docs
 from app.pipeline.video_material import topic_material
 from app.routers.notebooks import ensure_archive_notebook
 from app.routers.sources import is_locked
-from app.services import b2v_access, video_focus, video_limits, video_quota
+from app.services import b2v_access, guests, video_focus, video_limits, video_quota
 from app.services import blog2video as b2v
 from app.services import video_status as vstatus
 from app.services.artifacts import serialize_artifact
 from app.services.notebook_titles import visible_notebook_title
-from app.services.plans import Plan, plan_limit_error
+from app.services.plans import GUEST_PLAN, Plan, plan_limit_error
 from app.services.storage import storage
 from app.services.video_quota import sync_video_quota, video_usage
 
@@ -435,6 +435,8 @@ def _start(ctx: Ctx, plan: Plan, title: str, aspect_ratio: str, template: str, c
            notebook_id: uuid.UUID | None = None) -> Artifact:
     """Reserve one video, record it, ask blog2video for it (call returns its id), refund if that fails."""
     if not video_quota.reserve(ctx.db, ctx.workspace.id):
+        if plan.id == GUEST_PLAN.id:
+            raise guests.limit_error("videos")
         usage = video_usage(ctx.db, ctx.workspace)
         raise plan_limit_error(plan, "videos",
                                f"You have made {usage['used']} of {usage['limit']} videos this period.")

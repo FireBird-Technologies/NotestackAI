@@ -10,7 +10,7 @@ from app.auth import Ctx, get_ctx
 from app.config import settings
 from app.db import get_db
 from app.services.billing import STORE_NAMES, billing_status, create_checkout_url, create_portal_url, store_billed
-from app.services.plans import PLANS, effective_plan, plan_dict, plan_order
+from app.services.plans import PLANS, effective_plan, plan_dict, plan_order, plan_rank
 
 log = logging.getLogger(__name__)
 
@@ -57,7 +57,7 @@ def checkout(body: CheckoutIn, ctx: Ctx = Depends(get_ctx)):
     _not_billed_by_store(ctx)
     current = effective_plan(ctx.db, ctx.workspace)
     order = plan_order()
-    if body.plan not in PLANS or order.index(body.plan) <= order.index(current.id):
+    if body.plan not in PLANS or order.index(body.plan) <= plan_rank(current):
         raise HTTPException(409, {"code": "already_on_plan", "message": f"You are already on {current.name}."})
     return {"url": create_checkout_url(ctx.db, ctx.user, ctx.workspace, PLANS[body.plan], body.cycle)}
 

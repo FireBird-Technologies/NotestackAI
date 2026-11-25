@@ -5,6 +5,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { useMemo, useState } from "react";
 import { FlatList, StyleSheet, Text, TextInput, View } from "react-native";
+import { useAuth } from "@/account/auth";
+import { useUpgrade } from "@/account/upgrade";
 import { Pressable } from "@/ui/pressable";
 import { track } from "@/lib/analytics";
 import { useBottomInset } from "@/lib/insets";
@@ -15,6 +17,8 @@ import i18n from "@/i18n";
 
 /** New notebook, as the web's dialog: what it is about, and the posts it reads from. */
 export default function NewNotebook() {
+  const { user } = useAuth();
+  const upgrade = useUpgrade();
   const queryClient = useQueryClient();
   const bottomInset = useBottomInset();
   const [topic, setTopic] = useState("");
@@ -35,7 +39,7 @@ export default function NewNotebook() {
   }, [posts.data, filter]);
 
   const toggle = (d: Doc) => {
-    if (d.locked) return;
+    if (d.locked) return upgrade();
     setSelected((s) => (s.includes(d.id) ? s.filter((x) => x !== d.id) : [...s, d.id]));
   };
 
@@ -90,7 +94,7 @@ export default function NewNotebook() {
           return (
             <Pressable
               onPress={() => toggle(d)}
-              disabled={d.locked}
+              disabled={d.locked && !user?.is_guest}
               accessibilityRole="checkbox"
               accessibilityState={{ checked: on, disabled: d.locked }}
               style={[styles.row, on && styles.rowOn, d.locked && styles.locked]}>

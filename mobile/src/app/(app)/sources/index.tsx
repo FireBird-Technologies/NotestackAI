@@ -6,6 +6,8 @@ import { SymbolView } from "expo-symbols";
 import * as WebBrowser from "expo-web-browser";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useAuth } from "@/account/auth";
+import { useUpgrade } from "@/account/upgrade";
 import { Pressable } from "@/ui/pressable";
 
 import { AddSource } from "@/sources/add-source";
@@ -13,7 +15,7 @@ import { SourcesNav } from "@/sources/sources-nav";
 import { Starfield } from "@/shell/starfield";
 import { colors, fonts, gutter } from "@/ui/theme";
 import { Body, Centered, ErrorText, Loading, formatDate } from "@/ui";
-import { CARD_RADIUS, JobProgress, Pager, StatusPill } from "@/ui/widgets";
+import { CARD_RADIUS, JobProgress, Pager, PillButton, StatusPill } from "@/ui/widgets";
 import i18n from "@/i18n";
 
 const PAGE = 10; // posts on one page of the list, as on the web
@@ -164,6 +166,8 @@ function SourceCard({
   onSync: (sourceId: string, job: Job) => void;
   onRemoved: () => void;
 }) {
+  const { user } = useAuth();
+  const upgrade = useUpgrade();
   const active = Boolean(job && (job.status === "queued" || job.status === "running"));
   const failed = !active && (s.sync_status === "error" || job?.status === "failed");
   const posts = Math.max(s.document_count - s.locked_count, 0);
@@ -207,6 +211,7 @@ function SourceCard({
         <View style={styles.locked}>
           <Text style={styles.lockedTitle}>{i18n.t("sources.notIndexedCount", { count: s.locked_count })}</Text>
           <Text style={styles.body}>{i18n.t("sources.planLatest")}</Text>
+          {user?.is_guest ? <PillButton small title={i18n.t("guest.createAccount")} onPress={() => upgrade()} /> : null}
         </View>
       ) : null}
       {s.sync_status === "error" && s.sync_error && !active ? <ErrorText>{s.sync_error}</ErrorText> : null}

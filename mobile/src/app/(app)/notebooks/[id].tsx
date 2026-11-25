@@ -5,7 +5,8 @@ import { Stack, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Keyboard, Platform, StyleSheet, View } from "react-native";
 
-import { isMaking } from "@/artifacts/artifact-card";
+import { useGuestLimitWhenReady } from "@/account/guest-limit";
+import { isMaking } from "@/artifacts/making";
 import { prefetchFocus, prefetchSuggestions, useArtifactLimits } from "@/create/fields";
 import { ChatTab } from "@/notebook/chat";
 import { CreateTab, type Kind } from "@/notebook/create-tab";
@@ -49,6 +50,7 @@ export default function NotebookScreen() {
     // Something still being made: ask again every few seconds, so its bar moves, until it is ready.
     refetchInterval: (q) => (q.state.data?.some(isMaking) ? 4_000 : false),
   });
+  useGuestLimitWhenReady(artifacts.data);
 
   // The dialogs' topic suggestions and report templates, asked for now so they are waiting when a dialog opens.
   const startIds = useMemo(() => {

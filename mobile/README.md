@@ -25,6 +25,14 @@ Rebuild (`npm run ios` again) after adding a native package or changing `app.con
 Both variants share one id, because Google and Apple sign in are registered for it, so the dev build replaces a
 store install on the same device. Only the development variant allows plain HTTP, for the local API.
 
+## Guest mode (iOS)
+
+`modules/device-check` is a local native module: run `npx pod-install` (or `npx expo prebuild`) after pulling it. The
+simulator has no DeviceCheck, so there the server goes by the device id alone. On the server, set
+`DEVICECHECK_KEY_ID` and `DEVICECHECK_PRIVATE_KEY` (a key with DeviceCheck turned on, of the team in `APPLE_TEAM_ID`);
+`DEVICECHECK_DEVELOPMENT=true` for builds run from Xcode. `GUEST_MODE_ENABLED=false` turns guests off, and raising
+`GUEST_EPOCH` (1 to 3) gives every device one more free allowance, so it can only be done twice.
+
 ## Checks
 
 `npm run typecheck` and `npx eslint src`.

@@ -51,6 +51,7 @@ export function webUrl(): string {
 /** The native side of the shared API layer: tokens in the Keychain / Keystore, signals through a small emitter. */
 export const mobilePlatform: Platform = {
   baseUrl: apiUrl(),
+  client: RNPlatform.OS,
   storage: {
     get: (key) => SecureStore.getItem(key),
     set: (key, value) => SecureStore.setItem(key, value),

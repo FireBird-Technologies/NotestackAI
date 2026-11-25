@@ -10,10 +10,10 @@ from sqlalchemy import func, select
 from app.auth import Ctx, get_ctx
 from app.config import settings
 from app.models import Document, Job, Upload, VoiceConsent, VoiceProfile
-from app.services import tts
+from app.services import guests, tts
 from app.services.jobs import create_job, record_usage, serialize_job
 from app.services.notestack_voices import forget_video_voice, save_notestack_voice
-from app.services.plans import effective_plan, plan_limit_error
+from app.services.plans import GUEST_PLAN, effective_plan, plan_limit_error
 from app.services.storage import storage
 
 router = APIRouter(prefix="/api/voice", tags=["voice"])
@@ -203,6 +203,9 @@ async def library(ctx: Ctx = Depends(get_ctx), search: str = "", gender: str = "
 
 @router.post("/library/add")
 async def add_from_library(body: LibraryAddIn, ctx: Ctx = Depends(get_ctx)):
+    plan = effective_plan(ctx.db, ctx.workspace)
+    if plan.id == GUEST_PLAN.id:  # nothing to count a guest's free use against, and each takes a slot of the account's
+        raise plan_limit_error(plan, "voice_cloning", "Adding voices from the library is not part of guest use.")
     try:
         voice_id = await run_in_threadpool(tts.add_library_voice, body.public_owner_id, body.voice_id, body.name)
     except tts.TTSError as exc:
@@ -236,6 +239,8 @@ async def preview(body: PreviewIn, ctx: Ctx = Depends(get_ctx)):
     key = tts.clip_key(ctx.workspace.id, text, body.voice_id, vs)
     if await run_in_threadpool(storage.exists, key):
         return {"url": storage.presign_get(key), "seconds": None}
+    if guests.take(ctx.db, ctx.workspace, "extras"):
+        ctx.db.commit()
     try:
         clip = await run_in_threadpool(tts.synthesize, ctx.workspace.id, text, body.voice_id, vs)
     except tts.TTSError as exc:
@@ -265,15 +270,28 @@ def _design_description(body: DesignIn) -> str:
     return sentence + " Clear studio quality, suited to podcasts and narration."
 
 
+def _give_back(ctx: Ctx, guest: bool, kind: str) -> None:
+    if guest:
+        guests.unreserve(ctx.db, ctx.workspace.id, kind)
+        ctx.db.commit()
+
+
 @router.post("/design")
 async def design(body: DesignIn, ctx: Ctx = Depends(get_ctx)):
-    """Three previews of a new voice. Nothing is saved until the writer picks one."""
+    """Three previews of a new voice. Nothing is saved until the writer picks one. A guest may save one voice, and has
+    a few tries at it."""
     if not settings.elevenlabs_api_key:
         raise HTTPException(503, "Set ELEVENLABS_API_KEY in .env to generate voices.")
     description = _design_description(body)
+    guest = guests.on_guest_plan(ctx.db, ctx.workspace.id)
+    if guest and guests.used(guests.device_of(ctx.db, ctx.workspace.id), "voice_designs") >= guests.LIMITS["voice_designs"]:
+        raise guests.limit_error("voice_designs")
+    if guests.take(ctx.db, ctx.workspace, "voice_tries"):
+        ctx.db.commit()
     try:
         previews = await run_in_threadpool(tts.design_voice, description)
     except tts.TTSError as exc:
+        _give_back(ctx, guest, "voice_tries")
         raise HTTPException(502, str(exc)) from exc
     out = []
     for p in previews:
@@ -288,10 +306,14 @@ async def design(body: DesignIn, ctx: Ctx = Depends(get_ctx)):
 
 @router.post("/design/save")
 async def save_design(body: DesignSaveIn, ctx: Ctx = Depends(get_ctx)):
+    guest = bool(guests.take(ctx.db, ctx.workspace, "voice_designs"))
+    if guest:
+        ctx.db.commit()
     try:
         voice_id = await run_in_threadpool(tts.create_designed_voice, body.name, body.description,
                                            body.generated_voice_id)
     except tts.TTSError as exc:
+        _give_back(ctx, guest, "voice_designs")
         raise HTTPException(502, str(exc)) from exc
     vp = _ensure_profile(ctx)
     voices = dict(vp.host_voices or {})

@@ -4,8 +4,10 @@ import { BackHandler, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAuth } from "@/account/auth";
+import { useDeleteAccount } from "@/account/delete-account";
 import { Pressable } from "@/ui/pressable";
 import { colors } from "@/ui/theme";
+import { ErrorText } from "@/ui";
 import { pageStyles, PillButton } from "@/ui/widgets";
 import i18n from "@/i18n";
 import { Trans } from "react-i18next";
@@ -71,7 +73,7 @@ export function AiConsentProvider({ children }: { children: ReactNode }) {
  * A modal over the signed-in app until permission is given; only the dimmed backdrop shows while the stored choice loads.
  * It is a view over the navigator, not a RN Modal: the screens below stay mounted, so where signing in leads doesn't
  * change, and it can't compete with the app's sheets on iOS. It blocks touches below it and has no close button: No
- * thanks signs out, as the app can't work without AI.
+ * thanks signs out, as the app can't work without AI; the account can also be deleted here.
  */
 export function AiConsentGate() {
   const { user, logout } = useAuth();
@@ -79,6 +81,8 @@ export function AiConsentGate() {
   const insets = useSafeAreaInsets();
   const [leaving, setLeaving] = useState(false);
   const showing = Boolean(user) && allowed !== true;
+  const remove = useDeleteAccount(showing && allowed === false);
+  const off = leaving || remove.deleting;
 
   // Android's back button would otherwise move the screens hidden behind this one.
   useEffect(() => {
@@ -99,11 +103,11 @@ export function AiConsentGate() {
             <Text style={styles.body}>
               <Trans i18nKey="consent.body" components={[<Text key="names" style={styles.name} />]} />
             </Text>
-            <PillButton variant="primary" title={i18n.t("consent.allow")} disabled={leaving} onPress={allow} style={styles.allow} />
+            <PillButton variant="primary" title={i18n.t("consent.allow")} disabled={off} onPress={allow} style={styles.allow} />
             <Pressable
               style={styles.decline}
               hitSlop={10}
-              disabled={leaving}
+              disabled={off}
               accessibilityRole="button"
               onPress={() => {
                 setLeaving(true);
@@ -111,7 +115,12 @@ export function AiConsentGate() {
               }}>
               <Text style={styles.declineText}>{leaving ? i18n.t("consent.signingOut") : i18n.t("consent.noThanks")}</Text>
             </Pressable>
-            <Text style={styles.note}>{i18n.t("consent.note")}</Text>
+            <Text style={styles.note}>{i18n.t(user?.is_guest ? "consent.noteGuest" : "consent.note")}</Text>
+            {/* Saying no must not be the end of it: the account can be deleted from here too (App Store 5.1.1(v)). */}
+            <Pressable style={styles.decline} hitSlop={10} disabled={off} accessibilityRole="button" onPress={remove.start}>
+              <Text style={styles.deleteText}>{remove.deleting ? i18n.t("settings.account.deleting") : remove.label}</Text>
+            </Pressable>
+            <ErrorText>{remove.error}</ErrorText>
           </View>
         </ScrollView>
       )}
@@ -128,5 +137,6 @@ const styles = StyleSheet.create({
   allow: { alignSelf: "stretch", marginTop: 4 },
   decline: { alignSelf: "center" },
   declineText: { color: colors.text, fontSize: 14.5, fontWeight: "600" },
+  deleteText: { color: colors.text3, fontSize: 13.5, textDecorationLine: "underline" },
   note: { color: colors.text3, fontSize: 13.5, lineHeight: 19, textAlign: "center" },
 });

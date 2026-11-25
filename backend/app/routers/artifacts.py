@@ -13,7 +13,7 @@ from app.infographics.image import ImageUnavailable, render_png
 from app.infographics.themes import theme_id
 from app.models import Artifact, ArtifactFeedback, CalendarItem, Chat, Document, Job, Notebook, UserSavedVoice
 from app.routers.notebooks import ensure_archive_notebook
-from app.services import artifact_feedback
+from app.services import artifact_feedback, guests
 from app.services.artifacts import latest_jobs, serialize_artifact, start_artifact
 from app.services.jobs import create_job, serialize_job
 from app.services.notebook_titles import visible_notebook_title
@@ -146,7 +146,8 @@ def generate(body: GenerateIn, ctx: Ctx = Depends(get_ctx)):
             raise HTTPException(400, "Pick an audio overview for the audiogram")
         source = get_artifact_or_404(ctx, body.audio_artifact_id)
         title = f"Audiogram: {(source.content_json or {}).get('title', 'Audio overview')}"
-        params = {"style": "audiogram", "audio_artifact_id": str(source.id)}
+        params = {"style": "audiogram", "audio_artifact_id": str(source.id),
+                  **guests.take(ctx.db, ctx.workspace, "study_items")}
         artifact, job = start_artifact(ctx.db, ctx.workspace.id, "video", title=title, notebook_id=source.notebook_id,
                                        document_id=source.document_id, params=params, job_kind="video")
         return serialize_artifact(artifact, job)
@@ -228,6 +229,7 @@ def generate(body: GenerateIn, ctx: Ctx = Depends(get_ctx)):
         title = f"Launch Kit: {target}"
     else:
         title = {"summary": "Summary", "quote_card": "Quote", "carousel": "Carousel"}[body.type] + f": {target}"
+    params = {**params, **guests.reserved(ctx.db, ctx.workspace, body.type)}
     artifact, job = start_artifact(ctx.db, ctx.workspace.id, body.type, title=title, notebook_id=body.notebook_id,
                                    document_id=body.document_id, content=content, params=params,
                                    max_attempts=1 if body.type in {"quote_card", "carousel"} else 2)
@@ -509,7 +511,8 @@ def retry_artifact(artifact_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
     content = dict(a.content_json or {})
     content.pop("error", None)
     a.content_json = content
-    job = create_job(ctx.db, ctx.workspace.id, last.kind, last.params, artifact_id=a.id, max_attempts=last.max_attempts)
+    params = guests.retry_params(ctx.db, ctx.workspace, last.params)
+    job = create_job(ctx.db, ctx.workspace.id, last.kind, params, artifact_id=a.id, max_attempts=last.max_attempts)
     return serialize_artifact(a, job)
 
 

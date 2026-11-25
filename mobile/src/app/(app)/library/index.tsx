@@ -7,7 +7,9 @@ import { useEffect, useRef, useState } from "react";
 import { RefreshControl, ScrollView, StyleSheet, Text, TextInput, View, type ScrollViewInstance } from "react-native";
 import { Pressable } from "@/ui/pressable";
 
-import { ArtifactCard, isMaking } from "@/artifacts/artifact-card";
+import { useGuestLimitWhenReady } from "@/account/guest-limit";
+import { ArtifactCard } from "@/artifacts/artifact-card";
+import { isMaking } from "@/artifacts/making";
 import { Starfield } from "@/shell/starfield";
 import { VideosList } from "@/video/list";
 import { colors, fonts, gutter, radius } from "@/ui/theme";
@@ -60,6 +62,7 @@ export default function Library() {
     // While something is still being made, ask again now and then so its status and progress move.
     refetchInterval: (query) => (query.state.data?.items.some(isMaking) ? 4000 : false),
   });
+  useGuestLimitWhenReady(list.data?.items);
   const reload = () => void queryClient.invalidateQueries({ queryKey: ["library"] });
 
   const pick = (k: Kind) => {

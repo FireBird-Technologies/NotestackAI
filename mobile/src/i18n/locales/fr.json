@@ -80,16 +80,21 @@
     "account": {
       "title": "Compte",
       "deletingWarning": "Suppression de votre compte : {{warning}}",
-      "signOutEverywhere": "Se déconnecter partout",
       "delete": "Supprimer le compte",
-      "deleting": "Suppression du compte...",
+      "deleting": "Suppression...",
       "deleteTitle": "Supprimer le compte définitivement ?",
       "deleteMessage": "Votre compte est fermé immédiatement, et vos carnets, sources et tout ce que vous avez créé sont définitivement supprimés sous 30 jours. Cette action est irréversible.",
+      "deleteMessageNow": "Votre compte, vos carnets, vos sources et tout ce que vous avez créé sont supprimés définitivement maintenant. C'est irréversible.",
       "deleteFailed": "Impossible de supprimer le compte. Réessayez.",
       "cancelFirstTitle": "Résiliez d'abord votre abonnement",
       "cancelFirstMessage": "Apple continue de vous facturer Notestack tant que vous n'avez pas résilié votre abonnement App Store, même après la suppression du compte. Nous ne pouvons pas le résilier pour vous.",
       "cancelSubscription": "Résilier l'abonnement",
-      "cancelledDelete": "Je l'ai résilié, supprimer"
+      "cancelledDelete": "Je l'ai résilié, supprimer",
+      "deletedTitle": "Compte supprimé",
+      "deletedBody": "Votre compte et tout son contenu ont été supprimés définitivement.",
+      "closedTitle": "Compte fermé",
+      "closedBody": "Votre compte est fermé. Votre contenu sera supprimé définitivement sous 30 jours.",
+      "finishingBody": "Votre compte est fermé et sa suppression est en cours. Elle se terminera dans quelques minutes."
     }
   },
   "ui": {
@@ -194,13 +199,40 @@
     "useExisting": "Utiliser mon compte existant",
     "continueApple": "Continuer avec Apple"
   },
+  "guest": {
+    "continue": "Continuer en tant qu'invité",
+    "keep": "Continuer en tant qu'invité",
+    "keepsWork": "Créer un compte conserve votre travail. Vous connecter à un compte existant ne le transfère pas.",
+    "usedTitle": "Usage gratuit épuisé",
+    "usedBody": "Cet iPhone a épuisé son usage gratuit en tant qu'invité. Vous pouvez encore explorer, vous abonner ou créer un compte gratuit.",
+    "name": "Invité",
+    "using": "Vous utilisez Notestack sans compte",
+    "createAccount": "Créer un compte gratuit",
+    "limitTitle": "Vous avez atteint la limite invité",
+    "limitBody": "Créez un compte gratuit pour conserver votre travail et en faire plus, ou abonnez-vous sans compte.",
+    "subscribe": "S'abonner sans compte",
+    "subscribeNote": "Sans compte, votre travail reste sur cet iPhone. Sur un nouvel iPhone, Restaurer les achats rétablit votre forfait, mais pas votre travail.",
+    "accountTitle": "Un compte est nécessaire",
+    "accountBody": "Cela connecte un autre service à Notestack, un compte est donc nécessaire. C'est gratuit et vous gardez votre travail.",
+    "deleteData": "Supprimer mes données",
+    "deleteTitle": "Supprimer définitivement vos données ?",
+    "deleteMessage": "Vos carnets, vos sources et tout ce que vous avez créé sont supprimés définitivement maintenant. C'est irréversible et cela ne renouvelle pas l'usage gratuit.",
+    "exit": "Quitter le mode invité",
+    "exitBody": "Votre travail reste lié à cet iPhone : choisissez Continuer en tant qu'invité pour le retrouver. Pour le transférer vers un compte, créez-le avant de quitter.",
+    "planLeftTitle": "Votre abonnement est toujours lié au mode invité",
+    "planLeftBody": "Vous vous êtes abonné en tant qu'invité, ce compte n'a donc pas encore ce forfait. Touchez {{restore}} dans les forfaits pour le transférer ici.",
+    "planLeftElsewhere": "Ce compte a déjà un forfait facturé ailleurs, celui acheté en tant qu'invité reste donc lié au mode invité. Vous pouvez le résilier dans vos abonnements Apple.",
+    "deletedTitle": "Données supprimées",
+    "deletedBody": "Vos données ont été supprimées définitivement."
+  },
   "consent": {
     "title": "Notestack utilise des services d'IA",
     "body": "Pour fonctionner, Notestack envoie votre contenu et vos demandes à ces services tiers : <0>Z.ai, TypeSafe, ElevenLabs, Blog2Video et Firecrawl</0>. Vous pouvez retirer votre autorisation dans les Réglages.",
     "allow": "Autoriser et continuer",
     "signingOut": "Déconnexion...",
     "noThanks": "Non merci",
-    "note": "« Non merci » vous déconnecte, car Notestack ne peut pas fonctionner sans eux."
+    "note": "« Non merci » vous déconnecte, car Notestack ne peut pas fonctionner sans eux.",
+    "noteGuest": "Si vous refusez, vous revenez au début, car Notestack ne peut pas fonctionner sans eux."
   },
   "plans": {
     "monthly": "Mensuel",

@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import { useState } from "react";
 
 import { useAuth } from "@/account/auth";
+import { ContinueAsGuest, GuestReturn } from "@/account/continue-as-guest";
 import { SocialButtons } from "@/account/social-buttons";
 import { Brand, Button, ErrorText, Field, FormScreen, Notice, Title } from "@/ui";
 import i18n from "@/i18n";
@@ -99,6 +100,7 @@ export default function SignUp() {
   return (
     <FormScreen>
       <Brand />
+      <ContinueAsGuest />
       <SocialButtons mode="signup" />
       <Field label={i18n.t("auth.name")} value={name} onChangeText={setName} autoComplete="name" textContentType="name" />
       <Field
@@ -125,6 +127,7 @@ export default function SignUp() {
         busy={busy}
         disabled={!email.trim() || password.length < MIN_PASSWORD}
       />
+      <GuestReturn />
       <Button title={i18n.t("auth.haveAccount")} variant="link" onPress={() => router.navigate("/sign-in")} />
     </FormScreen>
   );

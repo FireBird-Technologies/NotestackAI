@@ -1,5 +1,5 @@
 import type { ConfigContext, ExpoConfig } from "expo/config";
-import { type ConfigPlugin, withAndroidManifest } from "expo/config-plugins";
+import { type ConfigPlugin, withAndroidManifest, withInfoPlist } from "expo/config-plugins";
 
 // development: the dev client against a local API over plain HTTP; production: the store app.
 const VARIANT =
@@ -28,6 +28,17 @@ const withOptionalPortraitScreen: ConfigPlugin = (config) =>
     const existing = features.find((f) => f.$["android:name"] === name);
     if (existing) existing.$["android:required"] = "false";
     else features.push({ $: { "android:name": name, "android:required": "false" } });
+    return mod;
+  });
+
+// Nothing plays with the app in the background, but expo-audio's plugin declares it unless told otherwise, and App Review
+// refuses the mode unused (guideline 2.5.4). Its own option would change Android too, so it is taken out on iOS only.
+// Mods run newest first: this one is added before the plugins' own, so it runs after them.
+const withoutIosBackgroundAudio: ConfigPlugin = (config) =>
+  withInfoPlist(config, (mod) => {
+    const modes = (mod.modResults.UIBackgroundModes ?? []).filter((m) => m !== "audio");
+    if (modes.length) mod.modResults.UIBackgroundModes = modes;
+    else delete mod.modResults.UIBackgroundModes;
     return mod;
   });
 
@@ -145,5 +156,5 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       reactCompiler: true,
     },
   };
-  return withOptionalPortraitScreen(app);
+  return withoutIosBackgroundAudio(withOptionalPortraitScreen(app));
 };

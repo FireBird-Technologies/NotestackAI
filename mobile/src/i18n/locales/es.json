@@ -80,16 +80,21 @@
     "account": {
       "title": "Cuenta",
       "deletingWarning": "Al eliminar tu cuenta: {{warning}}",
-      "signOutEverywhere": "Cerrar sesión en todos los dispositivos",
       "delete": "Eliminar cuenta",
-      "deleting": "Eliminando cuenta...",
+      "deleting": "Eliminando...",
       "deleteTitle": "¿Eliminar la cuenta definitivamente?",
       "deleteMessage": "Tu cuenta se cierra ahora, y tus cuadernos, fuentes y todo lo que creaste se eliminan de forma permanente en un plazo de 30 días. Esto no se puede deshacer.",
+      "deleteMessageNow": "Tu cuenta, tus cuadernos, tus fuentes y todo lo que has creado se eliminan de forma permanente ahora. No se puede deshacer.",
       "deleteFailed": "No se pudo eliminar la cuenta. Inténtalo de nuevo.",
       "cancelFirstTitle": "Primero cancela tu suscripción",
       "cancelFirstMessage": "Apple te seguirá cobrando Notestack hasta que canceles tu suscripción de App Store, incluso después de eliminar la cuenta. Nosotros no podemos cancelarla por ti.",
       "cancelSubscription": "Cancelar suscripción",
-      "cancelledDelete": "Ya la cancelé, eliminar"
+      "cancelledDelete": "Ya la cancelé, eliminar",
+      "deletedTitle": "Cuenta eliminada",
+      "deletedBody": "Tu cuenta y todo su contenido se han eliminado de forma permanente.",
+      "closedTitle": "Cuenta cerrada",
+      "closedBody": "Tu cuenta está cerrada. Tu contenido se eliminará de forma permanente en un plazo de 30 días.",
+      "finishingBody": "Tu cuenta está cerrada y se está eliminando ahora. Terminará en unos minutos."
     }
   },
   "ui": {
@@ -194,13 +199,40 @@
     "useExisting": "Usar mi cuenta existente",
     "continueApple": "Continuar con Apple"
   },
+  "guest": {
+    "continue": "Continuar como invitado",
+    "keep": "Seguir como invitado",
+    "keepsWork": "Si creas una cuenta, conservas tu trabajo. Si inicias sesión en una cuenta que ya tienes, no se traslada.",
+    "usedTitle": "Uso gratuito agotado",
+    "usedBody": "Este iPhone ya ha agotado su uso gratuito como invitado. Puedes seguir explorando, suscribirte o crear una cuenta gratuita.",
+    "name": "Invitado",
+    "using": "Usando Notestack sin cuenta",
+    "createAccount": "Crear una cuenta gratuita",
+    "limitTitle": "Has alcanzado el límite de invitado",
+    "limitBody": "Crea una cuenta gratuita para conservar tu trabajo y hacer más, o suscríbete sin cuenta.",
+    "subscribe": "Suscribirme sin cuenta",
+    "subscribeNote": "Sin una cuenta, tu trabajo se queda en este iPhone. En un iPhone nuevo, Restaurar compras recupera tu plan, pero no tu trabajo.",
+    "accountTitle": "Esto necesita una cuenta",
+    "accountBody": "Conecta otro servicio con Notestack, así que necesita una cuenta. Es gratis y conservas tu trabajo.",
+    "deleteData": "Eliminar mis datos",
+    "deleteTitle": "¿Eliminar tus datos para siempre?",
+    "deleteMessage": "Tus cuadernos, fuentes y todo lo que has creado se eliminan de forma permanente ahora. No se puede deshacer y no renueva el uso gratuito.",
+    "exit": "Salir del modo invitado",
+    "exitBody": "Tu trabajo se queda con este iPhone: elige Continuar como invitado para volver a él. Para pasarlo a una cuenta, créala antes de salir.",
+    "planLeftTitle": "Tu suscripción sigue en el modo invitado",
+    "planLeftBody": "Te suscribiste como invitado, así que esta cuenta aún no tiene ese plan. Toca {{restore}} en los planes para traerlo aquí.",
+    "planLeftElsewhere": "Esta cuenta ya tiene un plan que se cobra por otra vía, así que el que compraste como invitado se queda en el modo invitado. Puedes cancelarlo en tus suscripciones de Apple.",
+    "deletedTitle": "Datos eliminados",
+    "deletedBody": "Tus datos se han eliminado de forma permanente."
+  },
   "consent": {
     "title": "Notestack usa servicios de IA",
     "body": "Para funcionar, Notestack envía tu contenido y tus solicitudes a estos servicios de terceros: <0>Z.ai, TypeSafe, ElevenLabs, Blog2Video y Firecrawl</0>. Puedes retirar el permiso en Ajustes.",
     "allow": "Permitir y continuar",
     "signingOut": "Cerrando sesión...",
     "noThanks": "No, gracias",
-    "note": "\"No, gracias\" cierra tu sesión, ya que Notestack no puede funcionar sin ellos."
+    "note": "\"No, gracias\" cierra tu sesión, ya que Notestack no puede funcionar sin ellos.",
+    "noteGuest": "Si no aceptas, vuelves al inicio, ya que Notestack no puede funcionar sin ellos."
   },
   "plans": {
     "monthly": "Mensual",

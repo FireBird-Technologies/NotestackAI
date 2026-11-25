@@ -20,6 +20,9 @@ export class ApiError extends Error {
 /** Fired on every 402 plan_limit so the upgrade popup opens wherever the request came from. */
 export const PLAN_LIMIT_EVENT = "ns:plan-limit";
 
+/** Fired on every 403 account_required: a guest asked for something that belongs to an account. */
+export const ACCOUNT_REQUIRED_EVENT = "ns:account-required";
+
 /** Fired when a signed in request gets a 401 that a refresh cannot fix, so the app signs the user out. */
 export const SESSION_EXPIRED_EVENT = "ns:session-expired";
 
@@ -89,6 +92,7 @@ export async function parseError(res: Response): Promise<ApiError> {
   if (res.status === 402 && code === "plan_limit") {
     platform().emit(PLAN_LIMIT_EVENT, { ...extra, message } satisfies PlanLimitDetail);
   }
+  if (res.status === 403 && code === "account_required") platform().emit(ACCOUNT_REQUIRED_EVENT, { message });
   return new ApiError(res.status, message, code, extra);
 }
 
@@ -114,6 +118,8 @@ async function request(path: string, init: RequestInit, retry: boolean): Promise
   }
   const signedIn = Boolean(tokens.access);
   if (signedIn) headers.set("Authorization", `Bearer ${tokens.access}`);
+  const client = platform().client;
+  if (client) headers.set("X-Client-Platform", client);
   applyAppLanguage(headers);
   // OAuth start endpoints set a short-lived, HTTP-only state cookie on the API origin. In production the app and API
   // are different origins, so Fetch otherwise ignores that Set-Cookie response and the returning callback cannot bind

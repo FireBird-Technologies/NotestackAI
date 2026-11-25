@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import { useState } from "react";
 
 import { useAuth } from "@/account/auth";
+import { ContinueAsGuest, GuestReturn } from "@/account/continue-as-guest";
 import { LegalLinks } from "@/account/plans";
 import { SocialButtons } from "@/account/social-buttons";
 import { Brand, Button, ErrorText, Field, FormScreen } from "@/ui";
@@ -31,6 +32,7 @@ export default function SignIn() {
   return (
     <FormScreen>
       <Brand />
+      <ContinueAsGuest />
       <SocialButtons mode="signin" />
       <Field
         label={i18n.t("auth.email")}
@@ -54,6 +56,7 @@ export default function SignIn() {
       />
       <ErrorText>{error}</ErrorText>
       <Button title={i18n.t("auth.signIn")} onPress={submit} busy={busy} disabled={!email.trim() || !password} />
+      <GuestReturn />
       <Button title={i18n.t("auth.forgot")} variant="link" onPress={() => router.push("/forgot")} />
       <Button title={i18n.t("auth.newHere")} variant="link" onPress={() => router.navigate("/sign-up")} />
       <LegalLinks />

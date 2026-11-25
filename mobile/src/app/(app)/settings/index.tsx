@@ -1,17 +1,20 @@
-import { authApi } from "@notestack/shared/auth";
-import { ApiError, tokens } from "@notestack/shared/client";
-import { deletePlanWarning, managedElsewhere, type BillingPlace } from "@notestack/shared/billing";
+import { ApiError } from "@notestack/shared/client";
+import { managedElsewhere, type BillingPlace } from "@notestack/shared/billing";
 import { settingsApi, type SettingsPatch } from "@notestack/shared/endpoints";
 import type { Settings as SettingsData } from "@notestack/shared/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { router } from "expo-router";
+import { SymbolView } from "expo-symbols";
 import { useEffect, useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
-import { Alert, Platform, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { Platform, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 
-import { analyticsEnabled, resetAnalytics, setAnalyticsEnabled } from "@/lib/analytics";
+import { analyticsEnabled, setAnalyticsEnabled } from "@/lib/analytics";
 import { setSoundsEnabled, soundsEnabled } from "@/lib/click-sound";
 import { useAiConsent } from "@/account/ai-consent";
 import { useAuth } from "@/account/auth";
+import { useDeleteAccount } from "@/account/delete-account";
+import { confirmExitGuest } from "@/account/exit-guest";
 import { planQuery } from "@/account/plan";
 import { LegalLinks } from "@/account/plans";
 import { manageSubscriptions } from "@/account/purchases";
@@ -27,7 +30,6 @@ import { confirm, Meter, Page, PageHead, pageStyles, PillButton, Section } from 
 export default function Settings() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const { logout } = useAuth();
   const { withdraw: withdrawAi } = useAiConsent();
   const settings = useQuery({ queryKey: ["settings"], queryFn: settingsApi.get });
   const s = settings.data;
@@ -37,51 +39,14 @@ export default function Settings() {
   const here: BillingPlace = Platform.OS === "ios" ? "app_store" : "play_store";
   const elsewhere = managedElsewhere(billing.data, here);
   const storeBilled = billing.data?.billed_by === here || billing.data?.billed_by === "test_store";
-  const planWarning = deletePlanWarning(billing.data);
-  // Only the iPhone / iPad app can open Apple's subscription page to cancel first.
-  const appleBilled = billing.data?.billed_by === "app_store" && Platform.OS === "ios";
-
-  // Deleting: the button says so (and takes no second tap) until the account is gone or it failed.
-  const [deleting, setDeleting] = useState(false);
   const [sounds, setSounds] = useState(soundsEnabled);
   const [analytics, setAnalytics] = useState(analyticsEnabled);
   const [language, setLanguage] = useState<LanguagePref>(getLanguagePref);
-  const confirmDelete = () =>
-    confirm(
-      t("settings.account.deleteTitle"),
-      t("settings.account.delete"),
-      async () => {
-        setDeleting(true);
-        try {
-          await authApi.deleteAccount();
-          resetAnalytics();
-          tokens.clear();
-          await logout();
-        } catch (e) {
-          setError(e instanceof ApiError ? e.message : t("settings.account.deleteFailed"));
-          setDeleting(false);
-        }
-      },
-      `${t("settings.account.deleteMessage")}${planWarning ? `\n\n${planWarning}` : ""}`,
-    );
-
-  // An App Store subscription outlives the account unless the person cancels it (only they can): offer that first.
-  const cancelAppleFirst = () =>
-    Alert.alert(
-      t("settings.account.cancelFirstTitle"),
-      t("settings.account.cancelFirstMessage"),
-      [
-        { text: t("settings.account.cancelSubscription"), onPress: () => void manageSubscriptions() },
-        { text: t("settings.account.cancelledDelete"), style: "destructive", onPress: confirmDelete },
-        { text: t("common.back"), style: "cancel" },
-      ],
-    );
   // What is being typed, until it is saved; otherwise the fields show what is saved.
   const [nameDraft, setNameDraft] = useState<string | null>(null);
   const [workspaceDraft, setWorkspaceDraft] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const [leaving, setLeaving] = useState(false);
 
   // "Saved" shows for a moment after a change goes through.
   useEffect(() => {
@@ -107,6 +72,7 @@ export default function Settings() {
       <Page>
         <ErrorText>{t("settings.loadFailed")}</ErrorText>
         <PillButton title={t("common.tryAgain")} onPress={() => void settings.refetch()} />
+        <AccountSection />
       </Page>
     );
   }
@@ -120,6 +86,7 @@ export default function Settings() {
     setWorkspaceDraft(null);
   };
   const u = s.usage;
+  const guest = Boolean(s.user.is_guest);
   const savedNote = (what: string) => (saved === what ? <Text style={pageStyles.mono}>{t("common.saved")}</Text> : null);
 
   return (
@@ -133,7 +100,7 @@ export default function Settings() {
           <TextInput style={pageStyles.input} value={name} onChangeText={setNameDraft} onBlur={() => void saveProfile()} returnKeyType="done" />
         </View>
         <Text style={pageStyles.mono}>
-          {t("settings.profile.signedInWith", {
+          {guest ? t("guest.using") : t("settings.profile.signedInWith", {
             email: s.user.email,
             provider:
               s.user.auth_provider === "google"
@@ -148,6 +115,8 @@ export default function Settings() {
           <TextInput style={pageStyles.input} value={workspace} onChangeText={setWorkspaceDraft} onBlur={() => void saveProfile()} returnKeyType="done" />
         </View>
       </Section>
+
+      <AccountSection />
 
       <Section title={t("settings.language.title")} aside={savedNote("language")}>
         <View style={styles.field}>
@@ -169,9 +138,11 @@ export default function Settings() {
         <Text style={pageStyles.mono}>{t("settings.language.hint")}</Text>
       </Section>
 
-      <Section title={t("settings.connectedApps")}>
-        <ConnectedApps />
-      </Section>
+      {guest ? null : (
+        <Section title={t("settings.connectedApps")}>
+          <ConnectedApps />
+        </Section>
+      )}
 
       <Section title={t("settings.privacy.title")} aside={savedNote("privacy")}>
         <Toggle
@@ -184,11 +155,13 @@ export default function Settings() {
           onChange={(v) => save({ allow_public_links: v }, "privacy")}
           label={t("settings.privacy.publicLinks")}
         />
-        <Toggle
-          value={!s.user.email_unsubscribed}
-          onChange={(v) => save({ email_unsubscribed: !v }, "privacy")}
-          label={t("settings.privacy.email")}
-        />
+        {guest ? null : (
+          <Toggle
+            value={!s.user.email_unsubscribed}
+            onChange={(v) => save({ email_unsubscribed: !v }, "privacy")}
+            label={t("settings.privacy.email")}
+          />
+        )}
         <Toggle
           value={analytics}
           onChange={(v) => {
@@ -242,7 +215,7 @@ export default function Settings() {
         {billing.data?.billing_enabled ? (
           <View style={pageStyles.row}>
             {billing.data.can_upgrade && !elsewhere ? (
-              <PillButton small variant="primary" title={t("settings.plan.upgrade")} onPress={() => upgrade()} />
+              <PillButton small variant="primary" title={t("settings.plan.upgrade")} onPress={() => upgrade({ plans: true })} />
             ) : null}
             {storeBilled ? <PillButton small title={t("settings.plan.manage")} onPress={() => void manageSubscriptions()} /> : null}
           </View>
@@ -252,29 +225,48 @@ export default function Settings() {
         ) : null}
       </Section>
 
-      <Section title={t("settings.account.title")}>
-        {planWarning ? <Text style={styles.warning}>{t("settings.account.deletingWarning", { warning: planWarning })}</Text> : null}
-        <View style={pageStyles.row}>
-          <PillButton
-            title={t("settings.account.signOutEverywhere")}
-            busy={leaving}
-            disabled={deleting}
-            onPress={() => {
-              setLeaving(true);
-              void logout();
-            }}
-          />
-          <PillButton
-            title={deleting ? t("settings.account.deleting") : t("settings.account.delete")}
-            variant="danger"
-            busy={deleting}
-            disabled={leaving}
-            onPress={() => (appleBilled ? cancelAppleFirst() : confirmDelete())}
-          />
-        </View>
-        <LegalLinks />
-      </Section>
+      <LegalLinks />
     </Page>
+  );
+}
+
+/** Leaving: sign out, and delete the account. Shown whether or not the settings themselves could be loaded. */
+function AccountSection() {
+  const { t } = useTranslation();
+  const { user, logout } = useAuth();
+  const [leaving, setLeaving] = useState(false);
+  const remove = useDeleteAccount();
+  const guest = Boolean(user?.is_guest);
+  return (
+    <Section title={t("settings.account.title")}>
+      {remove.planWarning ? <Text style={styles.warning}>{t("settings.account.deletingWarning", { warning: remove.planWarning })}</Text> : null}
+      <ErrorText>{remove.error}</ErrorText>
+      {guest ? (
+        <PillButton title={t("guest.createAccount")} variant="primary" disabled={leaving || remove.deleting} onPress={() => router.navigate("/sign-up")} />
+      ) : null}
+      <View style={styles.pair}>
+        <PillButton
+          share
+          title={guest ? t("guest.exit") : t("nav.signOut")}
+          icon={guest ? undefined : <SymbolView name={{ ios: "rectangle.portrait.and.arrow.forward", android: "logout" }} size={17} tintColor={colors.white} />}
+          busy={leaving}
+          disabled={remove.deleting}
+          onPress={() => {
+            if (guest) return confirmExitGuest(logout, () => setLeaving(true));
+            setLeaving(true);
+            void logout();
+          }}
+        />
+        <PillButton
+          share
+          title={remove.deleting ? t("settings.account.deleting") : remove.label}
+          variant="danger"
+          busy={remove.deleting}
+          disabled={leaving}
+          onPress={remove.start}
+        />
+      </View>
+    </Section>
   );
 }
 
@@ -295,6 +287,7 @@ function Toggle({ value, onChange, label }: { value: boolean; onChange: (v: bool
 
 const styles = StyleSheet.create({
   field: { gap: 6 },
+  pair: { flexDirection: "row", gap: 10 },
   warning: { color: colors.text2, fontSize: 14, lineHeight: 20 },
   toggle: { flexDirection: "row", alignItems: "flex-start", gap: 12, paddingVertical: 4 },
   toggleText: { flex: 1 },

@@ -125,7 +125,7 @@ function Onboarding() {
   if (!user) return null;
   // Apple may send no name, and its hidden addresses are random letters: greet by name or not at all, and ask for one.
   const isApple = user.auth_provider === "apple";
-  const known = user.name ?? (savedName || (isApple ? null : user.email));
+  const known = user.name ?? (savedName || (isApple || user.is_guest ? null : user.email));
   const first = known?.split(/[ @]/)[0];
   const saveYourName = () => {
     const given = yourName.trim();
