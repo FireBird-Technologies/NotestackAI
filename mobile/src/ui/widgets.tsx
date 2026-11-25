@@ -7,6 +7,7 @@ import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTim
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Starfield } from "@/shell/starfield";
+import { SheetHost } from "@/ui/sheet-host";
 import { colors, fonts, gutter, radius } from "@/ui/theme";
 import i18n, { endChevron, startChevron, tKey } from "@/i18n";
 
@@ -174,8 +175,9 @@ const styles = StyleSheet.create({
 export const CARD_RADIUS = radius.md + 2;
 
 /** A page sheet over the screen (the web's modals): a title, a close button and a scrolling body. `onDismissed` runs
- * once it has finished sliding away (iOS), the moment the screen behind it may change. */
-export function Sheet({ visible, title, onClose, onDismissed, children }: { visible: boolean; title: string; onClose: () => void; onDismissed?: () => void; children: ReactNode }) {
+ * once it has finished sliding away (iOS), the moment the screen behind it may change. `prompt`: this is the prompt shown
+ * over other sheets (ui/sheet-host.tsx), not one to show it in. */
+export function Sheet({ visible, title, onClose, onDismissed, prompt, children }: { visible: boolean; title: string; onClose: () => void; onDismissed?: () => void; prompt?: boolean; children: ReactNode }) {
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose} onDismiss={onDismissed}>
       <SafeAreaView style={pageStyles.sheet} edges={["top", "bottom"]}>
@@ -188,6 +190,7 @@ export function Sheet({ visible, title, onClose, onDismissed, children }: { visi
         <ScrollView contentContainerStyle={pageStyles.sheetBody} keyboardShouldPersistTaps="handled">
           {children}
         </ScrollView>
+        {prompt ? null : <SheetHost visible={visible} onClose={onClose} />}
       </SafeAreaView>
     </Modal>
   );
@@ -208,6 +211,7 @@ export function Dialog({ visible, title, onClose, children }: { visible: boolean
           <View style={pageStyles.dialogBody}>{children}</View>
         </Pressable>
       </Pressable>
+      <SheetHost visible={visible} onClose={onClose} />
     </Modal>
   );
 }
@@ -276,6 +280,7 @@ export function PillButton({
   small,
   icon,
   iconEnd,
+  share,
   style,
 }: {
   title: ReactNode;
@@ -287,6 +292,8 @@ export function PillButton({
   icon?: ReactNode;
   /** An icon after the title; the title wraps on a narrow phone so the icon stays inside the pill. */
   iconEnd?: ReactNode;
+  /** One of several sharing a row's width equally; a long title wraps inside it. */
+  share?: boolean;
   style?: StyleProp<ViewStyle>;
 }) {
   const off = disabled || busy;
@@ -303,10 +310,11 @@ export function PillButton({
         variant === "danger" && pageStyles.pillDanger,
         off && pageStyles.pillOff,
         pressed && pageStyles.pressed,
+        share && pageStyles.pillShare,
         style,
       ]}>
       {busy ? <ActivityIndicator size="small" color={colors.white} /> : icon}
-      <Text style={[pageStyles.pillText, small && pageStyles.pillTextSmall, variant === "danger" && pageStyles.dangerText, iconEnd ? pageStyles.pillTextShrink : null]}>
+      <Text style={[pageStyles.pillText, share && pageStyles.pillTextShare, small && pageStyles.pillTextSmall, variant === "danger" && pageStyles.dangerText, iconEnd ? pageStyles.pillTextShrink : null]}>
         {title}
       </Text>
       {iconEnd}
@@ -464,6 +472,8 @@ export const pageStyles = StyleSheet.create({
     borderColor: colors.lineStrong,
   },
   pillSmall: { paddingHorizontal: 14, paddingVertical: 7 },
+  pillShare: { flex: 1, justifyContent: "center", paddingHorizontal: 10 },
+  pillTextShare: { flexShrink: 1, textAlign: "center" },
   pillPrimary: { backgroundColor: colors.blue, borderColor: colors.blue },
   pillDanger: { borderColor: "rgba(255, 107, 107, 0.55)" },
   pillOff: { opacity: 0.45 },

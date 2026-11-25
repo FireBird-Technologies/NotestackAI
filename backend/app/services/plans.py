@@ -14,7 +14,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models import PlanRecord, Subscription, Workspace
+from app.models import AuthProvider, PlanRecord, Subscription, User, Workspace
 
 log = logging.getLogger(__name__)
 
@@ -189,6 +189,30 @@ DEFAULT_PLANS: dict[str, Plan] = {
 CACHE_SECONDS = 60
 
 
+# The iOS app without an account (services/guests.py). Not in PLANS: it is not for sale and never listed. These are
+# totals for the device, counted on guest_devices, not monthly.
+GUEST_PLAN = Plan(
+    id="guest",
+    name="Guest",
+    tagline="Trying Notestack without an account",
+    price_monthly_usd=0,
+    price_annual_usd=None,
+    sources=-1,
+    indexed_posts=5,
+    audio_minutes=-1,
+    audio_overviews=1,
+    videos=1,
+    launch_kits=1,
+    reports=1,
+    infographics=1,
+    chat_messages=5,
+    voice_cloning=False,
+    features=(),
+    video_limits={"ai_edits": 5, "templates": 0, "template_ai_daily": 0},
+    videos_monthly=False,
+)
+
+
 def _plan_from_row(row: PlanRecord) -> Plan:
     return Plan(id=row.id, name=row.name, tagline=row.tagline or "",
                 price_monthly_usd=float(row.price_monthly_usd or 0),
@@ -285,13 +309,16 @@ def plan_dict(plan: Plan) -> dict:
 
 
 def effective_plan(db: Session, workspace: Workspace) -> Plan:
+    owner = db.get(User, workspace.owner_id)
+    guest = owner is not None and owner.auth_provider == AuthProvider.GUEST
     if not settings.billing_enabled:
-        return PLANS["studio"]
+        return GUEST_PLAN if guest else PLANS["studio"]
     sub = db.query(Subscription).filter_by(workspace_id=workspace.id).one_or_none()
     # past_due keeps the plan while Stripe retries the card (grace period); unpaid or canceled drop to Free.
     if not sub or sub.status not in {"active", "trialing", "past_due"}:
-        return PLANS["free"]
-    return PLANS.get(sub.plan, PLANS["free"])
+        return GUEST_PLAN if guest else PLANS["free"]
+    plan = PLANS.get(sub.plan, PLANS["free"])
+    return GUEST_PLAN if guest and plan.id == "free" else plan  # a guest who subscribed has the plan they bought
 
 
 def post_room(db: Session, workspace_id, plan: Plan, source_id=None) -> int:
@@ -304,26 +331,37 @@ def post_room(db: Session, workspace_id, plan: Plan, source_id=None) -> int:
 
     base = select(func.count()).select_from(Document).where(Document.workspace_id == workspace_id, Document.path.is_not(None))
     total = db.scalar(base) or 0
+    limit = plan.indexed_posts
+    if plan.id == GUEST_PLAN.id:
+        from app.services.guests import post_limit
+
+        limit = post_limit(db, workspace_id)
     if source_id is None:
-        return max(plan.indexed_posts - total, 0)
+        return max(limit - total, 0)
     own = db.scalar(base.where(Document.source_id == source_id)) or 0
-    return max(plan.indexed_posts - (total - own), own)
+    return max(limit - (total - own), own)
 
 
 def plan_order() -> list[str]:
     return PLANS.order()
 
 
+def plan_rank(plan: Plan) -> int:
+    """Where the plan stands in plan_order. A guest stands with Free: the next plan up is the first one for sale."""
+    order = plan_order()
+    return order.index("free" if plan.id == GUEST_PLAN.id else plan.id)
+
+
 def next_plan(plan: Plan) -> Plan | None:
     order = plan_order()
-    i = order.index(plan.id)
+    i = plan_rank(plan)
     return PLANS[order[i + 1]] if i + 1 < len(order) else None
 
 
 def upgrade_for(plan: Plan, kind: str | None = None) -> str | None:
     """Cheapest plan above this one that raises the limit named by kind (or simply the next tier)."""
     order = plan_order()
-    for pid in order[order.index(plan.id) + 1:]:
+    for pid in order[plan_rank(plan) + 1:]:
         candidate = PLANS[pid]
         if kind is None:
             return pid

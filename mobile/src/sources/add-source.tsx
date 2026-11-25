@@ -10,6 +10,8 @@ import { Trans } from "react-i18next";
 import { File } from "expo-file-system";
 import { useRef, useState } from "react";
 import { Alert, Platform, StyleSheet, Text, TextInput, View } from "react-native";
+import { useAuth } from "@/account/auth";
+import { useUpgrade } from "@/account/upgrade";
 import { track } from "@/lib/analytics";
 import { webUrl } from "@/lib/platform";
 import { Pressable } from "@/ui/pressable";
@@ -103,6 +105,10 @@ export function AddSource({
   const usage = useQuery({ queryKey: ["settings", "usage"], queryFn: settingsApi.usage });
   const limit = usage.data?.limits.indexed_posts ?? -1;
   const room = limit < 0 ? null : Math.max(0, limit - (usage.data?.used.indexed_posts ?? 0));
+  // A guest with no room left is asked to sign up or subscribe at every try, rather than told only after picking files.
+  const { user } = useAuth();
+  const upgrade = useUpgrade();
+  const full = Boolean(user?.is_guest) && room === 0;
   const link = value.trim();
   const mode = override ?? (looksLikeArticle(value) ? "url" : "feed");
   const verdict = classifyUrl(value);
@@ -144,6 +150,7 @@ export function AddSource({
   const pick = async () => {
     setError("");
     setNotice("");
+    if (full) return upgrade();
     const picked = await DocumentPicker.getDocumentAsync({ multiple: true, type: PICK_TYPES, copyToCacheDirectory: true }).catch(() => null);
     if (!picked || picked.canceled) return;
     const fresh: Picked[] = [];
@@ -190,6 +197,7 @@ export function AddSource({
   const addSample = async () => {
     setError("");
     setNotice("");
+    if (full) return upgrade();
     const loaded = await Promise.all(
       SAMPLE_DOCUMENTS.map(async ({ name, path }): Promise<Picked | null> => {
         const url = `${webUrl()}${path}`;

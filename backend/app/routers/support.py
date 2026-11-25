@@ -19,7 +19,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
-from app.auth import Ctx, get_ctx
+from app.auth import Ctx, get_ctx, require_account
 from app.config import settings
 from app.llm.postprocess import strip_em_dashes
 from app.models import SupportConversation, SupportMessage
@@ -240,7 +240,7 @@ def latest(ctx: Ctx = Depends(get_ctx)):
 
 
 @router.post("/escalate", status_code=status.HTTP_202_ACCEPTED)
-def escalate(body: EscalateIn, ctx: Ctx = Depends(get_ctx)):
+def escalate(body: EscalateIn, ctx: Ctx = Depends(require_account)):
     from_email = body.email.strip()
     if not _EMAIL.match(from_email):
         raise HTTPException(422, "Please enter a valid email address.")

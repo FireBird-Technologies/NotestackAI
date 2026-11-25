@@ -56,8 +56,8 @@ from app.pipeline.chat_judge import judge_message
 from app.pipeline.generate import NothingToDo
 from app.pipeline.ingest import FeedNotFound, UnreadableFile, entry_from_upload, extract_article, ingest_source, store_entries
 from app.pipeline.memory import learn_from_message
-from app.services import launchpad, report_suggestions, tts, video_quota, video_status
-from app.services.account_purge import purge_deleted_accounts
+from app.services import guests, launchpad, report_suggestions, tts, video_quota, video_status
+from app.services.account_purge import erase_requested_accounts, purge_deleted_accounts
 from app.services.email import email_service
 from app.services.email_verification import purge_old_codes
 from app.services.jobs import (
@@ -396,6 +396,7 @@ HANDLERS: dict[str, Callable[[Session, Job], object]] = {
 
 
 def mark_artifact_failed(db: Session, job: Job, error: str) -> None:
+    guests.give_back(db, job)
     # A failed "add a visual" job leaves the report as it was; the job's own error tells the page what went wrong.
     if job.artifact_id and job.kind != "report_block":
         artifact = db.get(Artifact, job.artifact_id)
@@ -403,6 +404,13 @@ def mark_artifact_failed(db: Session, job: Job, error: str) -> None:
             artifact.status = "failed"
             artifact.content_json = {**(artifact.content_json or {}), "error": error[:500]}
             db.commit()
+
+
+def _workspace_erased(db: Session, workspace_id: uuid.UUID) -> None:
+    """The account was erased while its job ran: take away any file the job wrote after that."""
+    db.rollback()
+    if workspace_id and db.scalar(select(Workspace.id).where(Workspace.id == workspace_id)) is None:
+        storage.delete_prefix(f"ws/{workspace_id}/")
 
 
 def run_job(
@@ -415,6 +423,7 @@ def run_job(
         job = db.get(Job, job_id)
         if not job:
             return
+        workspace_id = job.workspace_id
         handler = handlers.get(job.kind)
         if not handler:
             update_job(db, job, status="failed", error=f"No handler for job kind {job.kind!r}")
@@ -426,6 +435,8 @@ def run_job(
         except PermanentJobError as exc:
             db.rollback()
             job = db.get(Job, job_id)
+            if job is None:
+                return _workspace_erased(db, workspace_id)
             update_job(db, job, status="failed", error=str(exc), message=str(exc)[:500])
             mark_artifact_failed(db, job, str(exc))
             return
@@ -433,6 +444,8 @@ def run_job(
             # Roll back first: after a failed flush, touching `job` raises PendingRollbackError.
             db.rollback()
             job = db.get(Job, job_id)
+            if job is None:
+                return _workspace_erased(db, workspace_id)
             log.exception("job %s (%s) attempt %s failed", job_id, job.kind, job.attempts)
             if not retry_or_fail(db, job, f"{type(exc).__name__}: {exc}"):
                 mark_artifact_failed(db, job, f"{type(exc).__name__}: {exc}")
@@ -440,6 +453,8 @@ def run_job(
         if outcome is HANDED_OFF:
             return
         done = outcome if isinstance(outcome, Done) else Done()
+        if not db.scalar(select(Job.id).where(Job.id == job_id)):
+            return _workspace_erased(db, workspace_id)
         update_job(db, job, status="done", progress=1.0, message=done.message, result=done.result)
 
 
@@ -448,7 +463,8 @@ def recover_stale(session_factory: Callable[[], Session] = SessionLocal) -> int:
         jobs = stale_jobs(db)
         for job in jobs:
             log.warning("job %s stale (worker %s), requeueing", job.id, job.locked_by)
-            retry_or_fail(db, job, "Worker stopped responding")
+            if not retry_or_fail(db, job, "Worker stopped responding"):
+                guests.give_back(db, job)
         db.commit()
         return len(jobs)
 
@@ -557,8 +573,14 @@ def daily_cleanup(session_factory: Callable[[], Session] = SessionLocal) -> None
     with session_factory() as db:
         purge_old_codes(db)
     with session_factory() as db:
+        guests.retire_inactive(db)  # guests not seen in 90 days: erased by the next erase_requested run
         purge_deleted_accounts(db)  # accounts deleted 30+ days ago: their data goes for good (no emails)
     sweep_orphan_uploads(session_factory)  # upload files whose record was deleted, and unfinished uploads
+
+
+def erase_requested(session_factory: Callable[[], Session] = SessionLocal) -> None:
+    with session_factory() as db:
+        erase_requested_accounts(db)
 
 
 @dataclass
@@ -594,6 +616,7 @@ PERIODIC = [
     Periodic("sync_engagement", 3600, launchpad.sync_engagement),
     Periodic("update_email_batch", 1800, update_email_batch, first_after=30),  # a campaign's daily batch, in its send hour
     Periodic("topics_backfill", 900, topics_backfill),
+    Periodic("erase_requested", 300, erase_requested),  # iOS deletions whose erase did not finish at once
     Periodic("daily_cleanup", 24 * 3600, daily_cleanup),
     Periodic("video_period_reset", 3600, video_quota.reset_due_video_periods),
     # Videos that changed on blog2video while nobody watched (or our server was down): finished, failed, ran again

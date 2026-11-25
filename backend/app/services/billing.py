@@ -12,8 +12,8 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models import Artifact, CalendarItem, Document, Notebook, Source, Subscription, User, VoiceProfile, Workspace
-from app.services.plans import PLANS, Plan, effective_plan, next_plan, plan_dict
-from app.services.usage import month_usage
+from app.services.plans import GUEST_PLAN, PLANS, Plan, effective_plan, next_plan, plan_dict
+from app.services.usage import plan_usage
 from app.services.video_quota import sync_video_quota, video_usage
 
 log = logging.getLogger(__name__)
@@ -60,6 +60,13 @@ def _more_meters(db: Session, workspace: Workspace, plan: Plan, used: dict) -> l
             ("reports", "Reports", used["reports"], plan.reports),
             ("infographics", "Infographics", used["infographics"], plan.infographics),
             ("chat_messages", "Chat messages", used["chat_messages"], plan.chat_messages)]
+    if plan.id == GUEST_PLAN.id:
+        from app.services import guests
+
+        room = guests.post_limit(db, workspace.id)
+        rows[0] = ("indexed_posts", "Posts indexed", plan.indexed_posts - max(room - posts, 0), plan.indexed_posts)
+        rows.append(("voice_designs", "Voice designs", used["voice_designs"], guests.LIMITS["voice_designs"]))
+        rows.append(("study_items", "Study items", used["study_items"], guests.LIMITS["study_items"]))
     return [{"key": k, "label": label, "unit": "", "used": _capped(u, limit), "limit": limit,
              "pct": 0 if limit < 0 else round(min(1.0, u / max(limit, 1)), 3)} for k, label, u, limit in rows]
 
@@ -144,7 +151,7 @@ def build_nudges(db: Session, workspace: Workspace, plan: Plan, meters: list[dic
 
 def billing_status(db: Session, workspace: Workspace) -> dict:
     plan = effective_plan(db, workspace)
-    used = month_usage(db, workspace.id, plan.lifetime)
+    used = plan_usage(db, workspace, plan)
     videos = video_usage(db, workspace)
     used["videos"] = videos["used"]
     sources = _count(db, Source, workspace.id)

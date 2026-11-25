@@ -1,16 +1,17 @@
 import json
 import logging
 import secrets
+import uuid
 from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
 
 import httpx
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -21,6 +22,7 @@ from app.auth import (
     decode_token_full,
     encode_signed,
     get_current_user,
+    get_guest,
     load_user_from_token,
 )
 from app.config import settings
@@ -29,6 +31,8 @@ from app.models import AuthProvider, SocialAccount, User, VerificationPurpose, W
 from app.services import apple_auth as apple
 from app.services import auth_identity as ident
 from app.services import email_verification as ev
+from app.services import guests
+from app.services.account_purge import erase_requested_accounts
 from app.services.crypto import decrypt, encrypt
 from app.services.email import email_service
 from app.services.social.health import erase_account
@@ -54,7 +58,8 @@ def _sent_or_fail(db: Session, sent: bool, email: str, purpose: VerificationPurp
 def _serialize_user(user: User) -> dict:
     return {
         "id": str(user.id),
-        "email": user.email,
+        "email": "" if guests.is_guest(user) else user.email,
+        "is_guest": guests.is_guest(user),
         "name": user.name,
         "avatar_url": user.avatar_url,
         "auth_provider": user.auth_provider.value,
@@ -89,6 +94,24 @@ def _finalize_login(db: Session, user: User, created: bool) -> dict:
     return _login_result(user, created)
 
 
+# Guests: the iOS app without an account
+
+
+class GuestIn(BaseModel):
+    device_id: uuid.UUID  # random, made by the app and kept in the iPhone's Keychain
+    device_token: str | None = Field(None, max_length=8000)  # Apple DeviceCheck
+
+
+@router.post("/guest")
+def guest_login(body: GuestIn, request: Request, db: Session = Depends(get_db)):
+    """Use the app without an account. The same iPhone always gets its own guest back."""
+    if not settings.guest_mode_enabled or not guests.from_ios(request):
+        raise HTTPException(403, {"code": "guest_unavailable", "message": "Create a free account to continue."})
+    opened = guests.open_guest(db, device_id=str(body.device_id), device_token=body.device_token,
+                               ip=guests.client_ip(request))
+    return {**_login_result(opened.user, opened.created), "allowance": opened.allowance, "verified": opened.verified}
+
+
 # Google
 
 
@@ -97,7 +120,7 @@ class GoogleIn(BaseModel):
 
 
 @router.post("/google")
-def google_login(body: GoogleIn, db: Session = Depends(get_db)):
+def google_login(body: GoogleIn, db: Session = Depends(get_db), guest: User | None = Depends(get_guest)):
     if not settings.google_client_id:
         raise HTTPException(503, "Google sign in is not configured")
     try:
@@ -116,7 +139,8 @@ def google_login(body: GoogleIn, db: Session = Depends(get_db)):
         raise HTTPException(401, "Google email is not verified")
     try:
         resolved = ident.resolve_or_create_google_user(
-            db, email=info["email"], google_id=info["sub"], name=info.get("name"), avatar_url=info.get("picture")
+            db, email=info["email"], google_id=info["sub"], name=info.get("name"), avatar_url=info.get("picture"),
+            guest=guest,
         )
     except ident.IdentityError as exc:
         raise _err(exc) from exc
@@ -306,7 +330,7 @@ def _apple_signup_token(
 
 
 @router.post("/apple")
-def apple_login(body: AppleIn, db: Session = Depends(get_db)):
+def apple_login(body: AppleIn, db: Session = Depends(get_db), guest: User | None = Depends(get_guest)):
     if not (settings.apple_configured and settings.apple_bundle_id_list):
         raise HTTPException(503, "Apple sign in is not configured")
     try:
@@ -325,6 +349,7 @@ def apple_login(body: AppleIn, db: Session = Depends(get_db)):
             name=name,
             is_private_email=info.is_private_email,
             warn_hidden=body.warn_hidden_email,
+            guest=guest,
         )
     except ident.HiddenEmailSignup as exc:
         raise HTTPException(
@@ -346,7 +371,7 @@ class AppleConfirmIn(BaseModel):
 
 
 @router.post("/apple/confirm")
-def apple_confirm(body: AppleConfirmIn, db: Session = Depends(get_db)):
+def apple_confirm(body: AppleConfirmIn, db: Session = Depends(get_db), guest: User | None = Depends(get_guest)):
     """The person was told about their hidden email and chose to carry on. Asking twice finds the same account."""
     try:
         saved = decode_token_full(body.signup_token, expected_type="apple_signup")
@@ -356,7 +381,8 @@ def apple_confirm(body: AppleConfirmIn, db: Session = Depends(get_db)):
         ) from exc
     try:
         resolved = ident.resolve_or_create_apple_user(
-            db, apple_id=saved["apple_id"], email=saved["email"], name=saved["name"], is_private_email=True
+            db, apple_id=saved["apple_id"], email=saved["email"], name=saved["name"], is_private_email=True,
+            guest=guest,
         )
     except ident.IdentityError as exc:
         db.rollback()
@@ -525,12 +551,13 @@ def register_start(body: RegisterStartIn, db: Session = Depends(get_db)):
 
 
 @router.post("/email/register/verify")
-def register_verify(body: CodeIn, db: Session = Depends(get_db)):
+def register_verify(body: CodeIn, db: Session = Depends(get_db), guest: User | None = Depends(get_guest)):
     email = ident.normalize_email(body.email)
     try:
         record = ev.consume_code(db, email, VerificationPurpose.SIGNUP, body.code)
         user = ident.create_password_user(
-            db, email=email, name=record.pending_name, password_hash=record.pending_password_hash or ""
+            db, email=email, name=record.pending_name, password_hash=record.pending_password_hash or "",
+            guest=guest,
         )
     except (ident.IdentityError, ev.VerificationError) as exc:
         raise _err(exc) from exc
@@ -635,6 +662,9 @@ class RefreshIn(BaseModel):
 @router.post("/refresh")
 def refresh(body: RefreshIn, db: Session = Depends(get_db)):
     user = load_user_from_token(db, body.refresh_token, expected_type="refresh")
+    if guests.is_guest(user):  # what tells a guest still in use from one nobody came back to
+        user.last_login_at = datetime.now(UTC)
+        db.commit()
     return {"access_token": create_access_token(user.id, user.token_version)}
 
 
@@ -651,7 +681,10 @@ def logout(user: User = Depends(get_current_user), db: Session = Depends(get_db)
 
 
 @router.post("/delete-account")
-def delete_account(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def delete_account(request: Request, background: BackgroundTasks, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Deleted from the iOS app, the account and everything in it is erased now. From anywhere else it is closed now
+    and its data removed 30 days later. (account_purge.py) `erased` says how it went on iOS, for the app to tell the
+    person."""
     # An Apple account: revoke our access to the person's Apple ID too (App Store 5.1.1(v)). Best effort: the account
     # is deleted either way.
     if user.auth_provider == AuthProvider.APPLE and user.apple_refresh_token:
@@ -674,5 +707,10 @@ def delete_account(user: User = Depends(get_current_user), db: Session = Depends
     for account in accounts:
         erase_account(db, account, "The Notestack account that owned this connection was deleted.")
     ident.soft_delete(db, user)
-    db.commit()
-    return {"ok": True}
+    erase_now = guests.from_ios(request)
+    if erase_now:
+        user.erase_requested_at = datetime.now(UTC)
+    db.commit()  # closed, whatever happens to the erase: the worker finishes one that fails
+    if not erase_now:
+        return {"ok": True}
+    return {"ok": True, "erased": erase_requested_accounts(db, only=user.id, later=background.add_task) == 1}

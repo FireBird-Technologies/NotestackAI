@@ -26,6 +26,7 @@ class AuthProvider(str, enum.Enum):
     GOOGLE = "google"
     EMAIL = "email"
     APPLE = "apple"
+    GUEST = "guest"  # the iOS app used without an account (services/guests.py)
 
 
 class User(IdMixin, TimestampMixin, Base):
@@ -47,6 +48,9 @@ class User(IdMixin, TimestampMixin, Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # When the deleted account's data was removed for good (services/account_purge.py); the row itself is kept.
     purged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Deleted from the iOS app: erased at once, this row too (services/account_purge.py). Set so that an erase that could
+    # not finish is tried again by the worker.
+    erase_requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     email_unsubscribed: Mapped[bool] = mapped_column(Boolean, default=False)
     welcome_email_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -136,3 +140,29 @@ class BillingEvent(Base):
     id: Mapped[str] = mapped_column(String(100), primary_key=True)  # Stripe event id (evt_...)
     type: Mapped[str] = mapped_column(String(80))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class GuestDevice(IdMixin, TimestampMixin, Base):
+    """One iPhone that used the app without an account, and what it has used of the guest allowance. The allowance
+    belongs to the device and never resets, so this row outlives the guest: deleting the guest's data, or signing up,
+    does not give it back. It holds no personal data: the device id is a random one the app made, kept as an HMAC."""
+
+    __tablename__ = "guest_devices"
+
+    device_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    guest_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("users.id", ondelete="SET NULL"), index=True)
+    verified: Mapped[bool] = mapped_column(Boolean, default=False)  # Apple's DeviceCheck vouched for the device
+    epoch: Mapped[int] = mapped_column(Integer, default=1)  # GUEST_EPOCH the counters below are for
+    exhausted: Mapped[bool] = mapped_column(Boolean, default=False)  # no free allowance, whatever the counters say
+    chat_messages: Mapped[int] = mapped_column(Integer, default=0)
+    audio_overviews: Mapped[int] = mapped_column(Integer, default=0)
+    reports: Mapped[int] = mapped_column(Integer, default=0)
+    infographics: Mapped[int] = mapped_column(Integer, default=0)
+    launch_kits: Mapped[int] = mapped_column(Integer, default=0)
+    study_items: Mapped[int] = mapped_column(Integer, default=0)
+    videos: Mapped[int] = mapped_column(Integer, default=0)
+    video_edits: Mapped[int] = mapped_column(Integer, default=0)  # AI edits to the video
+    voice_designs: Mapped[int] = mapped_column(Integer, default=0)  # designed voices saved
+    voice_tries: Mapped[int] = mapped_column(Integer, default=0)  # times previews of one were made
+    extras: Mapped[int] = mapped_column(Integer, default=0)  # voice previews, post writing help
+    posts: Mapped[int] = mapped_column(Integer, default=0)  # indexed, then removed: removing one gives nothing back

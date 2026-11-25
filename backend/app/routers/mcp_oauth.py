@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.auth import decode_token_full, get_current_user
+from app.auth import decode_token_full, get_current_user, require_account_user
 from app.db import get_db
 from app.mcp import provider
 from app.models import Artifact, McpClient, McpGrant, McpWidgetState, User, Workspace, WorkspaceMember
@@ -96,7 +96,7 @@ def get_request(request_id: uuid.UUID, user: User = Depends(get_current_user), d
 
 
 @router.post("/requests/{request_id}/decision")
-def decide(request_id: uuid.UUID, body: DecisionIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def decide(request_id: uuid.UUID, body: DecisionIn, user: User = Depends(require_account_user), db: Session = Depends(get_db)):
     try:
         redirect = provider.decide(db, request_id, user, body.approve, body.scopes)
     except provider.BadScopes as exc:

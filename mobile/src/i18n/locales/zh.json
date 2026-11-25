@@ -80,16 +80,21 @@
     "account": {
       "title": "账户",
       "deletingWarning": "删除账户：{{warning}}",
-      "signOutEverywhere": "在所有设备上退出登录",
       "delete": "删除账户",
-      "deleting": "正在删除账户...",
+      "deleting": "正在删除...",
       "deleteTitle": "永久删除账户？",
       "deleteMessage": "你的账户将立即关闭，你的笔记本、来源以及你创建的所有内容将在 30 天内被永久删除。此操作无法撤销。",
+      "deleteMessageNow": "你的账户、笔记本、来源和所有创作内容将立即被永久删除。此操作无法撤销。",
       "deleteFailed": "无法删除账户，请重试。",
       "cancelFirstTitle": "请先取消订阅",
       "cancelFirstMessage": "在你取消 App Store 订阅之前，Apple 会继续向你收取 Notestack 的费用，即使账户已被删除。我们无法替你取消。",
       "cancelSubscription": "取消订阅",
-      "cancelledDelete": "我已取消，删除"
+      "cancelledDelete": "我已取消，删除",
+      "deletedTitle": "账户已删除",
+      "deletedBody": "你的账户及其中的所有内容已被永久删除。",
+      "closedTitle": "账户已关闭",
+      "closedBody": "你的账户已关闭。你的内容将在 30 天内被永久删除。",
+      "finishingBody": "你的账户已关闭，正在删除中，将在几分钟内完成。"
     }
   },
   "ui": {
@@ -194,13 +199,40 @@
     "useExisting": "使用我现有的账户",
     "continueApple": "使用 Apple 继续"
   },
+  "guest": {
+    "continue": "以访客身份继续",
+    "keep": "继续以访客身份使用",
+    "keepsWork": "创建账户会保留你的作品。登录已有账户则不会带入这些作品。",
+    "usedTitle": "免费额度已用完",
+    "usedBody": "这台 iPhone 的访客免费额度已用完。你仍可浏览、订阅或创建免费账户。",
+    "name": "访客",
+    "using": "正在不使用账户的情况下使用 Notestack",
+    "createAccount": "创建免费账户",
+    "limitTitle": "你已达到访客上限",
+    "limitBody": "创建免费账户以保留作品并使用更多功能，或不使用账户直接订阅。",
+    "subscribe": "不使用账户订阅",
+    "subscribeNote": "没有账户时，你的作品只保存在这台 iPhone 上。换新 iPhone 后，“恢复购买”可恢复你的方案，但无法恢复作品。",
+    "accountTitle": "此功能需要账户",
+    "accountBody": "此功能会将其他服务连接到 Notestack，因此需要账户。账户免费，你的作品也会保留。",
+    "deleteData": "删除我的数据",
+    "deleteTitle": "要永久删除你的数据吗？",
+    "deleteMessage": "你的笔记本、来源和所有创作内容将立即被永久删除。此操作无法撤销，也不会恢复免费额度。",
+    "exit": "退出访客模式",
+    "exitBody": "你的作品会保留在这台 iPhone 上：选择“以访客身份继续”即可回到这里。若要将其转到账户，请在退出前创建账户。",
+    "planLeftTitle": "你的订阅仍在访客模式中",
+    "planLeftBody": "你是以访客身份订阅的，因此此账户尚未拥有该方案。在方案页点按“{{restore}}”即可转到此账户。",
+    "planLeftElsewhere": "此账户已有在其他渠道付费的方案，因此你以访客身份购买的方案会保留在访客模式中。你可以在 Apple 订阅中取消它。",
+    "deletedTitle": "数据已删除",
+    "deletedBody": "你的数据已被永久删除。"
+  },
   "consent": {
     "title": "Notestack 使用 AI 服务",
     "body": "为了正常运行，Notestack 会将你的内容和请求发送给以下第三方服务：<0>Z.ai、TypeSafe、ElevenLabs、Blog2Video 和 Firecrawl</0>。你可以在设置中撤回授权。",
     "allow": "允许并继续",
     "signingOut": "正在退出...",
     "noThanks": "不用了",
-    "note": "选择“不用了”会退出登录，因为没有这些服务 Notestack 就无法运行。"
+    "note": "选择“不用了”会退出登录，因为没有这些服务 Notestack 就无法运行。",
+    "noteGuest": "选择“不用了”会返回起始页，因为 Notestack 离不开这些服务。"
   },
   "plans": {
     "monthly": "月付",

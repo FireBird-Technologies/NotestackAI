@@ -15,7 +15,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import UsageCounter, Workspace
-from app.services.plans import VIDEO_LIMITS, Plan, effective_plan, plan_limit_error
+from app.services import guests
+from app.services.plans import GUEST_PLAN, VIDEO_LIMITS, Plan, effective_plan, plan_limit_error
 
 LABELS = {
     "ai_edits": ("AI edits", "this month"),
@@ -49,6 +50,13 @@ def used(db: Session, workspace_id: uuid.UUID, metric: str) -> int:
 def take(db: Session, workspace: Workspace, metric: str, n: int = 1, plan: Plan | None = None) -> None:
     """Use n units of metric, or raise the 402 that opens the upgrade popup."""
     plan = plan or effective_plan(db, workspace)
+    if plan.id == GUEST_PLAN.id and metric == "ai_edits":  # the device's, and never monthly (services/guests.py)
+        for _ in range(n):
+            if not guests.reserve(db, workspace, "video_edits"):
+                db.rollback()
+                raise guests.limit_error("video_edits")
+        db.commit()
+        return
     limit = int(plan.video_limits.get(metric, 0))
     period = period_key(metric)
     _ensure_row(db, workspace.id, period, metric)
@@ -66,6 +74,11 @@ def take(db: Session, workspace: Workspace, metric: str, n: int = 1, plan: Plan 
 
 def give_back(db: Session, workspace_id: uuid.UUID, metric: str, n: int = 1) -> None:
     """Undo a take whose blog2video call failed."""
+    if metric == "ai_edits" and guests.on_guest_plan(db, workspace_id):
+        for _ in range(n):
+            guests.unreserve(db, workspace_id, "video_edits")
+        db.commit()
+        return
     db.execute(update(UsageCounter)
                .where(UsageCounter.workspace_id == workspace_id, UsageCounter.period == period_key(metric),
                       UsageCounter.metric == metric)
@@ -78,5 +91,7 @@ def report(db: Session, workspace: Workspace) -> dict:
     plan = effective_plan(db, workspace)
     rows = {(r.period, r.metric): r.used for r in db.scalars(
         select(UsageCounter).where(UsageCounter.workspace_id == workspace.id))}
+    if plan.id == GUEST_PLAN.id:
+        rows[(period_key("ai_edits"), "ai_edits")] = guests.used(guests.device_of(db, workspace.id), "video_edits")
     return {"limits": {m: {"used": rows.get((period_key(m), m), 0), "limit": int(plan.video_limits.get(m, 0))}
                        for m in VIDEO_LIMITS}}

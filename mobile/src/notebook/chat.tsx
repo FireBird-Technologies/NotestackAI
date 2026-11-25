@@ -12,6 +12,8 @@ import { FlatList, Keyboard, KeyboardAvoidingView, ScrollView, StyleSheet, Text,
 import { Pressable } from "@/ui/pressable";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { useAuth } from "@/account/auth";
+import { guestLimitReached } from "@/account/guest-limit";
 import { planQuery } from "@/account/plan";
 import { track } from "@/lib/analytics";
 import { useBottomInset } from "@/lib/insets";
@@ -103,6 +105,7 @@ export function ChatTab({ notebook, chatId, onStarted, onNextStep, onNeedPosts }
 }) {
   const queryClient = useQueryClient();
   const upgrade = useUpgrade();
+  const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const bottomInset = useBottomInset();
   const asked = useRef(0); // numbers this screen's questions, for their turns' keys
@@ -156,7 +159,8 @@ export function ChatTab({ notebook, chatId, onStarted, onNextStep, onNeedPosts }
 
   const ask = async (input: string) => {
     const text = input.trim();
-    if (!text || busy || outOfChat) return;
+    if (!text || busy) return;
+    if (outOfChat) return upgrade(); // every try says so, starters and the send button too
     setQuestion("");
     setBusy(true);
     const n = ++asked.current;
@@ -170,6 +174,7 @@ export function ChatTab({ notebook, chatId, onStarted, onNextStep, onNeedPosts }
     let limited = false;
     let answerId: string | undefined;
     let newChatId: string | null = null;
+    let last = false; // that was the last question of a guest's allowance
     let action: ChatAction | undefined; // "create a report": its settings open once the stream is done
     // Whether the saved list has this question's answer. The growth check: the same question may have been asked before.
     const holdsAnswer = (msgs: { id: string; role: string; text: string }[]) =>
@@ -205,6 +210,7 @@ export function ChatTab({ notebook, chatId, onStarted, onNextStep, onNeedPosts }
             patch({ text: d.text as string, citations: d.citations as Citation[], status: undefined, action, savedId: answerId });
             const left = d.quota as ChatQuota | null | undefined;
             if (left !== undefined) setAnswerQuota(left);
+            last = Boolean(user?.is_guest && left && left.left <= 0);
           }
         },
         { method: "POST", body: JSON.stringify({ question: text, chat_id: chatId }) },
@@ -262,7 +268,8 @@ export function ChatTab({ notebook, chatId, onStarted, onNextStep, onNeedPosts }
         }
       }
       // "Create a report": its settings open now, as on the web (after the stream, so the switch can't cut it short).
-      if (action) onNextStep(action.artifact, action.settings);
+      if (last) guestLimitReached();
+      else if (action) onNextStep(action.artifact, action.settings);
     }
   };
 
@@ -291,7 +298,7 @@ export function ChatTab({ notebook, chatId, onStarted, onNextStep, onNeedPosts }
             <Pressable
               key={s}
               onPress={() => void ask(s)}
-              disabled={off}
+              disabled={busy || !posts}
               accessibilityRole="button"
               style={({ pressed }) => [styles.starter, pressed && styles.pressed]}>
               <Text style={styles.starterText}>{s}</Text>

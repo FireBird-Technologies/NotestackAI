@@ -13,7 +13,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.auth import Ctx, decode_token_full, encode_signed, get_ctx
+from app.auth import Ctx, decode_token_full, encode_signed, get_ctx, require_account
 from app.config import settings
 from app.db import get_db
 from app.mcp_client import composio
@@ -222,7 +222,7 @@ def _composio_link(row: OutboundMcpConnection) -> str:
 
 
 @router.post("/composio/start")
-def start_composio_connection(body: ComposioStart, ctx: Ctx = Depends(get_ctx)):
+def start_composio_connection(body: ComposioStart, ctx: Ctx = Depends(require_account)):
     """Create or resume one user-scoped app connection hosted by Composio."""
     try:
         app = composio.app_info(body.app_slug)
@@ -270,7 +270,7 @@ def start_composio_connection(body: ComposioStart, ctx: Ctx = Depends(get_ctx)):
 
 
 @router.post("/connections/{connection_id}/composio/start")
-def restart_composio_connection(connection_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
+def restart_composio_connection(connection_id: uuid.UUID, ctx: Ctx = Depends(require_account)):
     row = _get(ctx, connection_id)
     if row.provider != composio.MCP_PROVIDER:
         raise HTTPException(400, "This is not a Composio connection.")
@@ -280,7 +280,7 @@ def restart_composio_connection(connection_id: uuid.UUID, ctx: Ctx = Depends(get
 
 
 @router.post("/connections/{connection_id}/composio/complete")
-def complete_composio_connection(connection_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
+def complete_composio_connection(connection_id: uuid.UUID, ctx: Ctx = Depends(require_account)):
     """Verify the returned account by discovering its MCP tools, then make it available to research chat."""
     row = _get(ctx, connection_id)
     if row.provider != composio.MCP_PROVIDER:
@@ -381,7 +381,7 @@ def widget_call_tool(connection_id: uuid.UUID, tool_name: str, body: WidgetToolC
 
 
 @router.post("/connections", status_code=201)
-def create_connection(body: ConnectionCreate, ctx: Ctx = Depends(get_ctx)):
+def create_connection(body: ConnectionCreate, ctx: Ctx = Depends(require_account)):
     if not settings.outbound_mcp_enabled:
         raise HTTPException(404, "Outbound MCP is disabled")
     name = body.name.strip()
@@ -481,7 +481,7 @@ def refresh_connection(connection_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
 
 
 @router.post("/connections/{connection_id}/oauth/start")
-def oauth_start(connection_id: uuid.UUID, body: OAuthStart | None = None, ctx: Ctx = Depends(get_ctx)):
+def oauth_start(connection_id: uuid.UUID, body: OAuthStart | None = None, ctx: Ctx = Depends(require_account)):
     row = _get(ctx, connection_id)
     if row.provider == composio.MCP_PROVIDER:
         raise HTTPException(400, "Use the Composio authorization flow for this connection.")

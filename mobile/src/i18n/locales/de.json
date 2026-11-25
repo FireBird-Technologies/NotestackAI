@@ -80,16 +80,21 @@
     "account": {
       "title": "Konto",
       "deletingWarning": "Beim Löschen deines Kontos: {{warning}}",
-      "signOutEverywhere": "Überall abmelden",
       "delete": "Konto löschen",
-      "deleting": "Konto wird gelöscht...",
+      "deleting": "Wird gelöscht...",
       "deleteTitle": "Konto endgültig löschen?",
       "deleteMessage": "Dein Konto wird jetzt geschlossen, und deine Notizbücher, Quellen und alles, was du erstellt hast, werden innerhalb von 30 Tagen dauerhaft gelöscht. Das kann nicht rückgängig gemacht werden.",
+      "deleteMessageNow": "Dein Konto, deine Notizbücher, Quellen und alles, was du erstellt hast, werden jetzt endgültig gelöscht. Das lässt sich nicht rückgängig machen.",
       "deleteFailed": "Konto konnte nicht gelöscht werden. Versuche es erneut.",
       "cancelFirstTitle": "Kündige zuerst dein Abo",
       "cancelFirstMessage": "Apple berechnet dir Notestack weiter, bis du dein App Store-Abo kündigst, auch nachdem das Konto gelöscht wurde. Wir können es nicht für dich kündigen.",
       "cancelSubscription": "Abo kündigen",
-      "cancelledDelete": "Ich habe gekündigt, löschen"
+      "cancelledDelete": "Ich habe gekündigt, löschen",
+      "deletedTitle": "Konto gelöscht",
+      "deletedBody": "Dein Konto und alles darin wurden endgültig gelöscht.",
+      "closedTitle": "Konto geschlossen",
+      "closedBody": "Dein Konto ist geschlossen. Deine Inhalte werden innerhalb von 30 Tagen endgültig gelöscht.",
+      "finishingBody": "Dein Konto ist geschlossen und wird jetzt gelöscht. Das ist in wenigen Minuten abgeschlossen."
     }
   },
   "ui": {
@@ -194,13 +199,40 @@
     "useExisting": "Mein bestehendes Konto verwenden",
     "continueApple": "Weiter mit Apple"
   },
+  "guest": {
+    "continue": "Als Gast fortfahren",
+    "keep": "Als Gast weitermachen",
+    "keepsWork": "Wenn du ein Konto erstellst, bleibt deine Arbeit erhalten. Bei der Anmeldung mit einem bestehenden Konto wird sie nicht übernommen.",
+    "usedTitle": "Gratis-Kontingent aufgebraucht",
+    "usedBody": "Dieses iPhone hat sein kostenloses Gastkontingent aufgebraucht. Du kannst dich weiter umsehen, ein Abo abschließen oder ein kostenloses Konto erstellen.",
+    "name": "Gast",
+    "using": "Du nutzt Notestack ohne Konto",
+    "createAccount": "Kostenloses Konto erstellen",
+    "limitTitle": "Du hast das Gastlimit erreicht",
+    "limitBody": "Erstelle ein kostenloses Konto, um deine Arbeit zu behalten und mehr zu machen, oder schließe ein Abo ohne Konto ab.",
+    "subscribe": "Ohne Konto abonnieren",
+    "subscribeNote": "Ohne Konto bleibt deine Arbeit auf diesem iPhone. Auf einem neuen iPhone stellt „Käufe wiederherstellen“ deinen Tarif wieder her, aber nicht deine Arbeit.",
+    "accountTitle": "Dafür brauchst du ein Konto",
+    "accountBody": "Hier wird ein anderer Dienst mit Notestack verbunden, dafür ist ein Konto nötig. Es ist kostenlos und deine Arbeit bleibt erhalten.",
+    "deleteData": "Meine Daten löschen",
+    "deleteTitle": "Deine Daten endgültig löschen?",
+    "deleteMessage": "Deine Notizbücher, Quellen und alles, was du erstellt hast, werden jetzt endgültig gelöscht. Das lässt sich nicht rückgängig machen und erneuert das Gratis-Kontingent nicht.",
+    "exit": "Gastmodus beenden",
+    "exitBody": "Deine Arbeit bleibt mit diesem iPhone verbunden: Mit „Als Gast fortfahren“ kehrst du zu ihr zurück. Um sie in ein Konto zu übernehmen, erstelle das Konto vor dem Beenden.",
+    "planLeftTitle": "Dein Abo gehört noch zum Gastmodus",
+    "planLeftBody": "Du hast als Gast abonniert, daher hat dieses Konto den Tarif noch nicht. Tippe bei den Tarifen auf {{restore}}, um ihn hierher zu übertragen.",
+    "planLeftElsewhere": "Dieses Konto hat bereits einen anderswo abgerechneten Tarif, daher bleibt der als Gast gekaufte beim Gastmodus. Du kannst ihn in deinen Apple-Abos kündigen.",
+    "deletedTitle": "Daten gelöscht",
+    "deletedBody": "Deine Daten wurden endgültig gelöscht."
+  },
   "consent": {
     "title": "Notestack nutzt KI-Dienste",
     "body": "Damit es funktioniert, sendet Notestack deine Inhalte und Anfragen an diese Drittanbieter: <0>Z.ai, TypeSafe, ElevenLabs, Blog2Video und Firecrawl</0>. Du kannst die Berechtigung in den Einstellungen widerrufen.",
     "allow": "Erlauben und weiter",
     "signingOut": "Wird abgemeldet...",
     "noThanks": "Nein danke",
-    "note": "„Nein danke“ meldet dich ab, da Notestack ohne sie nicht funktioniert."
+    "note": "„Nein danke“ meldet dich ab, da Notestack ohne sie nicht funktioniert.",
+    "noteGuest": "Wenn du ablehnst, kommst du zurück zum Start, da Notestack ohne sie nicht funktioniert."
   },
   "plans": {
     "monthly": "Monatlich",

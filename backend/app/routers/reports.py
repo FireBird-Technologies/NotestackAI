@@ -10,7 +10,7 @@ from app.models import Artifact
 from app.pipeline.report import EMBED_KINDS, keep_visual, remove_block
 from app.routers.artifacts import get_artifact_or_404
 from app.routers.videos import FocusIn, _focus_material
-from app.services import report_suggestions
+from app.services import guests, report_suggestions
 from app.services.artifacts import active_block_jobs, latest_jobs, serialize_artifact
 from app.services.jobs import create_job
 from app.services.report_templates import INTERACTIVE, TEMPLATES
@@ -94,6 +94,8 @@ def add_block(artifact_id: uuid.UUID, body: AddBlockIn, ctx: Ctx = Depends(get_c
     params = {"artifact_id": str(a.id), "kind": body.kind, "theme": body.theme, "after_block_id": body.after_block_id,
               "suggestion_id": body.suggestion_id, "brief": body.brief.strip(),
               "existing_artifact_id": str(body.existing_artifact_id) if body.existing_artifact_id else None}
+    if not body.existing_artifact_id:
+        params.update(guests.reserved(ctx.db, ctx.workspace, body.kind))
     job = create_job(ctx.db, ctx.workspace.id, "report_block", params, artifact_id=a.id, max_attempts=1)
     return serialize_artifact(a, job)
 

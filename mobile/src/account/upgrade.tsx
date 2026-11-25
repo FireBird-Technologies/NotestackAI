@@ -1,11 +1,15 @@
 import { managedElsewhere, POPULAR_PLAN, type BillingPlace } from "@notestack/shared/billing";
-import { api, PLAN_LIMIT_EVENT, type PlanLimitDetail } from "@notestack/shared/client";
+import { ACCOUNT_REQUIRED_EVENT, api, PLAN_LIMIT_EVENT, type PlanLimitDetail } from "@notestack/shared/client";
 import { FALLBACK_PLANS, type Cycle, type Plan } from "@notestack/shared/content/marketing";
 import type { BillingStatus } from "@notestack/shared/types";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { router } from "expo-router";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Platform, StyleSheet, Text, View } from "react-native";
 
+import { useAuth } from "@/account/auth";
+import { GUEST_LIMIT_EVENT } from "@/account/guest-limit";
+import { useGuestPlanLeft } from "@/account/guest-plan-prompt";
 import { planQuery } from "@/account/plan";
 import { track } from "@/lib/analytics";
 import { on } from "@/lib/platform";
@@ -13,7 +17,8 @@ import { CycleToggle, defaultPlanTab, PlanCard, PlanTabs, SubscriptionTerms } fr
 import { buy, identify, isStorePlan, manageSubscriptions, purchasesReady, restore } from "@/account/purchases";
 import { useStorePrices } from "@/account/store-prices";
 import { colors } from "@/ui/theme";
-import { ErrorText, Loading } from "@/ui";
+import { Button, ErrorText, Loading } from "@/ui";
+import { closeHosts, hostOpen, onHostsChange, OverlayContext, topHost } from "@/ui/sheet-host";
 import { PillButton, Sheet } from "@/ui/widgets";
 import i18n from "@/i18n";
 import { Trans } from "react-i18next";
@@ -21,11 +26,19 @@ import { Trans } from "react-i18next";
 /** Where this app sells and manages plans: its phone's store. */
 const HERE: BillingPlace = Platform.OS === "ios" ? "app_store" : "play_store";
 
-type Opening = { message?: string };
+/**
+ * `message` says why (a limit that was hit). A guest is asked to sign up, sign in or subscribe, every time, wherever an
+ * account would see the plans; `plans` goes straight to them (View plans). `account`: what was asked for needs an
+ * account, which no plan changes.
+ */
+type Opening = { message?: string; plans?: boolean; account?: boolean };
+
+/** How long a sheet takes to slide away; iOS presents nothing until it has. */
+const SHEET_GONE_MS = 600;
 
 const UpgradeContext = createContext<{ open: (o?: Opening) => void } | null>(null);
 
-/** Opens the upgrade sheet: the plans, and where to buy them. `message` says why (a limit that was hit). */
+/** Opens the upgrade sheet: the plans, and where to buy them (for a guest, how to go on: see Opening). */
 export function useUpgrade() {
   const ctx = useContext(UpgradeContext);
   if (!ctx) throw new Error("useUpgrade must be used inside UpgradeProvider");
@@ -37,29 +50,84 @@ export function useUpgrade() {
  * limit (402, PLAN_LIMIT_EVENT) opens it with the limit's message and the plan that lifts it.
  */
 export function UpgradeProvider({ children }: { children: ReactNode }) {
-  const [opening, setOpening] = useState<Opening | null>(null);
-  const open = useCallback((o: Opening = {}) => {
-    track("paywall_view", { limit: "manual" });
-    setOpening(o);
-  }, []);
+  // `host`: the open sheet it is shown in, null for the screen (ui/sheet-host.tsx).
+  const [shown, setShown] = useState<{ opening: Opening; host: number | null } | null>(null);
+  const show = useCallback((opening: Opening) => setShown({ opening, host: topHost() }), []);
+  const open = useCallback(
+    (o: Opening = {}) => {
+      track("paywall_view", { limit: "manual" });
+      show(o);
+    },
+    [show],
+  );
   useEffect(
     () =>
       on(PLAN_LIMIT_EVENT, (detail) => {
         const d = detail as PlanLimitDetail;
         if (d.left === undefined) {
           track("paywall_view", { limit: d.kind ?? "unknown" });
-          setOpening({ message: d.message });
+          show({ message: d.message });
         }
       }),
-    [],
+    [show],
+  );
+  const openPlans = useCallback(() => show({ plans: true }), [show]);
+  useGuestPlanLeft(openPlans);
+  useEffect(() => on(GUEST_LIMIT_EVENT, () => show({})), [show]);
+  useEffect(() => on(ACCOUNT_REQUIRED_EVENT, () => show({ account: true })), [show]);
+
+  // The sheet it was in has closed under it: once that has gone, it is shown over what is left.
+  const host = shown?.host ?? null;
+  useEffect(() => {
+    if (host === null) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const off = onHostsChange(() => {
+      if (hostOpen(host)) return;
+      clearTimeout(timer);
+      timer = setTimeout(() => setShown((s) => (s ? { ...s, host: topHost() } : s)), SHEET_GONE_MS);
+    });
+    return () => {
+      off();
+      clearTimeout(timer);
+    };
+  }, [host]);
+
+  const { user } = useAuth();
+  const opening = shown?.opening;
+  // Once they have signed up there is nothing left to ask.
+  const asking = Boolean(user?.is_guest && opening && !opening.plans);
+  const goTo = (path: "/sign-up" | "/sign-in") => {
+    const over = topHost() !== null;
+    setShown(null);
+    closeHosts();
+    setTimeout(() => router.navigate(path), over ? SHEET_GONE_MS : 0);
+  };
+
+  const sheet = (
+    <Sheet
+      prompt
+      visible={shown !== null}
+      title={asking ? i18n.t(opening?.account ? "guest.accountTitle" : "guest.limitTitle") : i18n.t("plans.sheetTitle")}
+      onClose={() => setShown(null)}>
+      {opening && asking ? (
+        <GuestAsk
+          opening={opening}
+          onSignUp={() => goTo("/sign-up")}
+          onSignIn={() => goTo("/sign-in")}
+          onSubscribe={() => setShown((s) => (s ? { ...s, opening: { plans: true } } : s))}
+        />
+      ) : opening ? (
+        <Paywall opening={opening} />
+      ) : null}
+    </Sheet>
   );
   const value = useMemo(() => ({ open }), [open]);
   return (
     <UpgradeContext.Provider value={value}>
-      {children}
-      <Sheet visible={opening !== null} title={i18n.t("plans.sheetTitle")} onClose={() => setOpening(null)}>
-        {opening ? <Paywall opening={opening} /> : null}
-      </Sheet>
+      <OverlayContext.Provider value={{ host, node: host === null ? null : sheet }}>
+        {children}
+        {host === null ? sheet : null}
+      </OverlayContext.Provider>
     </UpgradeContext.Provider>
   );
 }
@@ -79,7 +147,33 @@ export function NestedPlansSheet({ visible, onClose }: { visible: boolean; onClo
   );
 }
 
+/** A guest who ran out, or asked for what needs an account: sign up, sign in, or subscribe without one. Closing it is fine too. */
+function GuestAsk({
+  opening,
+  onSignUp,
+  onSignIn,
+  onSubscribe,
+}: {
+  opening: Opening;
+  onSignUp: () => void;
+  onSignIn: () => void;
+  onSubscribe: () => void;
+}) {
+  const billing = useQuery(planQuery);
+  const sellable = purchasesReady && Boolean(billing.data?.billing_enabled);
+  return (
+    <View style={styles.stack}>
+      {opening.message ? <Text style={styles.reason}>{opening.message}</Text> : null}
+      <Text style={styles.current}>{i18n.t(opening.account ? "guest.accountBody" : "guest.limitBody")}</Text>
+      <PillButton variant="primary" title={i18n.t("guest.createAccount")} onPress={onSignUp} />
+      {!opening.account && sellable ? <PillButton title={i18n.t("guest.subscribe")} onPress={onSubscribe} /> : null}
+      <Button title={i18n.t("auth.haveAccount")} variant="link" onPress={onSignIn} />
+    </View>
+  );
+}
+
 function Paywall({ opening }: { opening: Opening }) {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [cycle, setCycle] = useState<Cycle>("annual");
   // One plan at a time, behind tabs; null until picked, which opens on the most popular plan.
@@ -138,6 +232,7 @@ function Paywall({ opening }: { opening: Opening }) {
         <Trans i18nKey="plans.youAreOn" values={{ name: s.plan.name }} components={[<Text key="name" style={styles.strong} />]} />
       </Text>
 
+      {user?.is_guest ? <Text style={styles.current}>{i18n.t("guest.subscribeNote")}</Text> : null}
       {elsewhere ? <Text style={styles.elsewhere}>{elsewhere.text}</Text> : null}
 
       <CycleToggle cycle={cycle} onChange={setCycle} plans={plans} />

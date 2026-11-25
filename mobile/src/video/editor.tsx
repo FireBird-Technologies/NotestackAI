@@ -7,6 +7,7 @@ import { Image } from "expo-image";
 import { router } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { useGuestLimitWhenDone } from "@/account/guest-limit";
 import { Pressable } from "@/ui/pressable";
 import { WebView } from "react-native-webview";
 
@@ -463,6 +464,8 @@ export function VideoEditor({ id, renderOnOpen = false, fresh = false }: { id: s
   if ((genRunning || (!status && storedGenerating)) && !finishing) setFinishing(true);
   const genReady = !!status && isReady(status) && !(status.status in JOBS);
   const finishingNow = finishing && genReady;
+  // The making of it only: a later edit or render is not the video a guest was waiting on.
+  useGuestLimitWhenDone(genRunning || (!status && storedGenerating) || finishingNow, "video");
   const media = project ? mediaOf(project.project) : null;
   usePoll<VideoProject | LegacyVideo>(
     finishingNow && !media?.complete

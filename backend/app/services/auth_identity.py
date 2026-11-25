@@ -2,6 +2,7 @@
 email accounts never get linked to Google."""
 
 import logging
+import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -10,7 +11,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from app.models import ArtifactShare, AuthProvider, McpGrant, Subscription, User, Workspace, WorkspaceMember
-from app.services.plans import PLANS
+from app.services.plans import GUEST_PLAN, PLANS
 
 log = logging.getLogger(__name__)
 
@@ -70,12 +71,17 @@ def _ensure_active(user: User) -> None:
         raise IdentityError("account_deleted", "This account was deleted.", 403)
 
 
+HIDDEN_WORKSPACE_NAME = "My workspace"
+
+
+def _workspace_name(user: User) -> str:
+    first = (user.name or user.email.split("@")[0]).split(" ")[0]
+    return f"{first}'s workspace"
+
+
 def _bootstrap_workspace(db: Session, user: User, *, hidden_email: bool = False) -> None:
-    if user.name or not hidden_email:
-        first = (user.name or user.email.split("@")[0]).split(" ")[0]
-        workspace_name = f"{first}'s workspace"
-    else:
-        workspace_name = "My workspace"  # a hidden email's address is random letters, not something to call anyone
+    # A hidden email's address is random letters, not something to call anyone
+    workspace_name = _workspace_name(user) if user.name or not hidden_email else HIDDEN_WORKSPACE_NAME
     workspace = Workspace(name=workspace_name, owner_id=user.id)
     db.add(workspace)
     db.flush()
@@ -85,8 +91,49 @@ def _bootstrap_workspace(db: Session, user: User, *, hidden_email: bool = False)
                         videos_period_start=datetime.now(UTC)))
 
 
+def create_guest_user(db: Session) -> User:
+    """A guest (services/guests.py): no name, no address, and nothing is ever mailed to it."""
+    from app.services.guests import EMAIL_DOMAIN
+
+    user = User(email=f"guest-{uuid.uuid4()}@{EMAIL_DOMAIN}", auth_provider=AuthProvider.GUEST, email_unsubscribed=True)
+    db.add(user)
+    db.flush()
+    _bootstrap_workspace(db, user, hidden_email=True)
+    db.flush()
+    sub = db.scalar(select(Subscription).join(Workspace, Workspace.id == Subscription.workspace_id)
+                    .where(Workspace.owner_id == user.id))
+    if sub:
+        sub.video_plan, sub.video_limit = GUEST_PLAN.id, GUEST_PLAN.videos
+    return user
+
+
+def _new_user(db: Session, guest: User | None, *, hidden_email: bool = False, **fields) -> User:
+    """A new account. Made by a guest, it is the guest's own row, so its workspace, work and plan come with it."""
+    if guest is None or guest.auth_provider != AuthProvider.GUEST:
+        user = User(**fields)
+        db.add(user)
+        db.flush()
+        _bootstrap_workspace(db, user, hidden_email=hidden_email)
+        return user
+    from app.services import guests
+    from app.services.billing import resync_sources
+
+    for key, value in fields.items():
+        setattr(guest, key, value)
+    guest.email_unsubscribed = False
+    guest.token_version += 1  # the guest's own tokens end; the new account gets fresh ones
+    guests.release(db, guest)
+    db.flush()
+    workspace = db.scalar(select(Workspace).where(Workspace.owner_id == guest.id))
+    if workspace:
+        if workspace.name == HIDDEN_WORKSPACE_NAME and (guest.name or not hidden_email):
+            workspace.name = _workspace_name(guest)
+        resync_sources(db, workspace.id)  # more posts fit now
+    return guest
+
+
 def resolve_or_create_google_user(
-    db: Session, *, email: str, google_id: str, name: str | None, avatar_url: str | None
+    db: Session, *, email: str, google_id: str, name: str | None, avatar_url: str | None, guest: User | None = None
 ) -> Resolved:
     email = normalize_email(email)
     user = db.scalar(select(User).where(User.google_id == google_id)) or find_user(db, email)
@@ -97,12 +144,8 @@ def resolve_or_create_google_user(
         user.name = user.name or name
         user.avatar_url = avatar_url or user.avatar_url
         return Resolved(user, False)
-    user = User(
-        email=email, name=name, avatar_url=avatar_url, auth_provider=AuthProvider.GOOGLE, google_id=google_id
-    )
-    db.add(user)
-    db.flush()
-    _bootstrap_workspace(db, user)
+    user = _new_user(db, guest, email=email, name=name, avatar_url=avatar_url, auth_provider=AuthProvider.GOOGLE,
+                     google_id=google_id)
     return Resolved(user, True)
 
 
@@ -114,6 +157,7 @@ def resolve_or_create_apple_user(
     name: str | None,
     is_private_email: bool = False,
     warn_hidden: bool = False,
+    guest: User | None = None,
 ) -> Resolved:
     """Sign in with Apple. Apple sends the email (and the name, on the device) only the first time: later sign ins are
     found by Apple's id alone. One provider per account: an email that already signs in another way is refused. With
@@ -140,14 +184,13 @@ def resolve_or_create_apple_user(
         raise HiddenEmailSignup
     # Whether Apple sent a name is the question when an account has none; the name itself stays out of the logs.
     log.info("Apple sign up: name %s, email %s", "sent" if name else "missing", "hidden" if is_private_email else "shared")
-    user = User(email=normalize_email(email), name=name, auth_provider=AuthProvider.APPLE, apple_id=apple_id)
-    db.add(user)
-    db.flush()
-    _bootstrap_workspace(db, user, hidden_email=is_private_email)
+    user = _new_user(db, guest, hidden_email=is_private_email, email=normalize_email(email), name=name,
+                     auth_provider=AuthProvider.APPLE, apple_id=apple_id)
     return Resolved(user, True)
 
 
-def create_password_user(db: Session, *, email: str, name: str | None, password_hash: str) -> User:
+def create_password_user(db: Session, *, email: str, name: str | None, password_hash: str,
+                         guest: User | None = None) -> User:
     email = normalize_email(email)
     existing = find_user(db, email)
     if existing:
@@ -155,11 +198,7 @@ def create_password_user(db: Session, *, email: str, name: str | None, password_
         if existing.auth_provider != AuthProvider.EMAIL:
             raise wrong_provider_error(existing)
         raise IdentityError("exists", "An account with this email already exists. Sign in instead.", 409)
-    user = User(email=email, name=name, auth_provider=AuthProvider.EMAIL, password_hash=password_hash)
-    db.add(user)
-    db.flush()
-    _bootstrap_workspace(db, user)
-    return user
+    return _new_user(db, guest, email=email, name=name, auth_provider=AuthProvider.EMAIL, password_hash=password_hash)
 
 
 def resolve_password_user(db: Session, *, email: str, password: str) -> User:
