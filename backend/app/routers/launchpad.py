@@ -19,7 +19,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.auth import Ctx, decode_token_full, encode_signed, get_ctx
+from app.auth import Ctx, decode_token_full, encode_signed, get_ctx, require_account
 from app.config import settings
 from app.db import get_db
 from app.llm import run as llm_run
@@ -35,6 +35,7 @@ from app.models import (
     Workspace,
 )
 from app.pipeline.passages import voice_text
+from app.services import guests
 from app.services import launchpad as lp
 from app.services.artifacts import TYPE_LABELS, download_name
 from app.services.crypto import decrypt, encrypt
@@ -347,6 +348,8 @@ def assist_post(body: PostAssistIn, ctx: Ctx = Depends(get_ctx)):
     if body.action != "generate" and not current:
         raise HTTPException(422, {"code": "no_text", "message": "Write something before asking AI to rework it."})
     limit = min(LIMITS.get(body.platform, 3000), 3000)
+    if guests.take(ctx.db, ctx.workspace, "extras"):
+        ctx.db.commit()
     result = llm_run.predict(
         SocialPostAssistant,
         db=ctx.db,
@@ -366,6 +369,8 @@ def assist_post(body: PostAssistIn, ctx: Ctx = Depends(get_ctx)):
 
 @router.post("/calendar")
 def create_item(body: ItemIn, ctx: Ctx = Depends(get_ctx)):
+    if not body.draft:  # goes out from a connected account, or as an emailed reminder: both need an account
+        require_account(ctx)
     _require_review_social_access(ctx, body.platform)
     when = datetime.now(UTC) if body.publish_now else body.utc()
     if when is None:
@@ -439,6 +444,8 @@ def update_item(item_id: uuid.UUID, body: ItemPatch, ctx: Ctx = Depends(get_ctx)
         _require_connected(item.platform, account, artifact)
         if (body.status or "scheduled") == "scheduled" and _aware(item.scheduled_at) <= datetime.now(UTC):
             raise HTTPException(409, {"code": "missed", "message": "Pick a time that is still ahead."})
+        if (body.status or "scheduled") == "scheduled":
+            require_account(ctx)
         item.status = body.status or "scheduled"
     elif item.platform in CONNECTED_ONLY and body.model_fields_set & {"social_account_id", "artifact_id"}:
         _require_connected(item.platform, account, artifact)
@@ -459,7 +466,7 @@ def delete_item(item_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
 
 
 @router.post("/calendar/{item_id}/publish")
-def publish_now(item_id: uuid.UUID, ctx: Ctx = Depends(get_ctx)):
+def publish_now(item_id: uuid.UUID, ctx: Ctx = Depends(require_account)):
     """Publish a scheduled post now. A plain (threadpool) endpoint: its database calls and an inline publish must
     never hold up the event loop, and with it every other request."""
     item = _item(ctx, item_id)
@@ -707,7 +714,7 @@ class BlueskyIn(BaseModel):
 
 
 @router.post("/social/bluesky")
-async def connect_bluesky(body: BlueskyIn, ctx: Ctx = Depends(get_ctx)):
+async def connect_bluesky(body: BlueskyIn, ctx: Ctx = Depends(require_account)):
     try:
         session = await run_in_threadpool(bluesky.create_session, body.handle, body.app_password)
     except SocialError as exc:
@@ -852,7 +859,7 @@ def _client_of(state: str | None) -> str:
 
 @router.post("/social/{platform}/start")
 def oauth_start(platform: Literal["x", "facebook", "instagram", "threads", "linkedin"], client: Literal["web", "app"] = "web",
-                ctx: Ctx = Depends(get_ctx)):
+                ctx: Ctx = Depends(require_account)):
     """Returns the provider URL. The SPA (or the mobile app, `client=app`) calls this with its bearer token, then opens
     `url`; the callback sends the ticket back to whichever started it."""
     _require_review_social_access(ctx, platform)
@@ -938,7 +945,7 @@ class LinkIn(BaseModel):
 
 
 @router.post("/social/complete")
-def oauth_complete(body: LinkIn, ctx: Ctx = Depends(get_ctx)):
+def oauth_complete(body: LinkIn, ctx: Ctx = Depends(require_account)):
     try:
         saved = decode_token_full(body.ticket, expected_type="social_link")
     except HTTPException as exc:

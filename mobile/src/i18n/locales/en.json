@@ -80,16 +80,21 @@
     "account": {
       "title": "Account",
       "deletingWarning": "Deleting your account: {{warning}}",
-      "signOutEverywhere": "Sign out everywhere",
       "delete": "Delete account",
-      "deleting": "Deleting account...",
+      "deleting": "Deleting...",
       "deleteTitle": "Delete account for good?",
       "deleteMessage": "Your account is closed now, and your notebooks, sources and everything you made are permanently deleted within 30 days. This can't be undone.",
+      "deleteMessageNow": "Your account, notebooks, sources and everything you made are permanently deleted now. This can't be undone.",
       "deleteFailed": "Could not delete the account. Try again.",
       "cancelFirstTitle": "Cancel your subscription first",
       "cancelFirstMessage": "Apple keeps charging you for Notestack until you cancel your App Store subscription, even after the account is deleted. We can't cancel it for you.",
       "cancelSubscription": "Cancel subscription",
-      "cancelledDelete": "I've cancelled it, delete"
+      "cancelledDelete": "I've cancelled it, delete",
+      "deletedTitle": "Account deleted",
+      "deletedBody": "Your account and everything in it have been permanently deleted.",
+      "closedTitle": "Account closed",
+      "closedBody": "Your account is closed. Your content will be permanently deleted within 30 days.",
+      "finishingBody": "Your account is closed and is being deleted now. This finishes in a few minutes."
     }
   },
   "ui": {
@@ -194,13 +199,40 @@
     "useExisting": "Use my existing account",
     "continueApple": "Continue with Apple"
   },
+  "guest": {
+    "continue": "Continue as a guest",
+    "keep": "Keep using as a guest",
+    "keepsWork": "Creating an account keeps your work. Signing in to an account you already have won't bring it over.",
+    "usedTitle": "Free allowance used",
+    "usedBody": "This iPhone has used its free guest allowance. You can still look around, subscribe, or create a free account.",
+    "name": "Guest",
+    "using": "Using Notestack without an account",
+    "createAccount": "Create a free account",
+    "limitTitle": "You've reached the guest limit",
+    "limitBody": "Create a free account to keep your work and do more, or subscribe without an account.",
+    "subscribe": "Subscribe without an account",
+    "subscribeNote": "Without an account, your work stays on this iPhone. On a new iPhone, Restore purchases brings back your plan, but not your work.",
+    "accountTitle": "This needs an account",
+    "accountBody": "It connects another service to Notestack, so it needs an account. It's free, and your work comes with you.",
+    "deleteData": "Delete my data",
+    "deleteTitle": "Delete your data for good?",
+    "deleteMessage": "Your notebooks, sources and everything you made are permanently deleted now. This can't be undone, and it doesn't renew the free allowance.",
+    "exit": "Exit guest mode",
+    "exitBody": "Your work stays with this iPhone: choose Continue as a guest to come back to it. To move it to an account, create the account before you exit.",
+    "planLeftTitle": "Your subscription is still with guest mode",
+    "planLeftBody": "You subscribed as a guest, so this account doesn't have that plan yet. Tap {{restore}} in the plans to move it here.",
+    "planLeftElsewhere": "This account already has a plan billed somewhere else, so the one you bought as a guest stays with guest mode. You can cancel it in your Apple subscriptions.",
+    "deletedTitle": "Data deleted",
+    "deletedBody": "Your data has been permanently deleted."
+  },
   "consent": {
     "title": "Notestack uses AI services",
     "body": "To work, Notestack sends your content and requests to these third-party services: <0>Z.ai, TypeSafe, ElevenLabs, Blog2Video and Firecrawl</0>. You can withdraw permission in Settings.",
     "allow": "Allow and continue",
     "signingOut": "Signing out...",
     "noThanks": "No thanks",
-    "note": "No thanks signs you out, as Notestack can't work without them."
+    "note": "No thanks signs you out, as Notestack can't work without them.",
+    "noteGuest": "No thanks takes you back to the start, as Notestack can't work without them."
   },
   "plans": {
     "monthly": "Monthly",

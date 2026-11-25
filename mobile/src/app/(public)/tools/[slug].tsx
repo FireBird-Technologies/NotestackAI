@@ -2,7 +2,7 @@ import { getTool, type ToolDef } from "@notestack/shared/content/tools";
 import { buildPodcastScript, scriptToText } from "@notestack/shared/podcastScript";
 import { router, useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
-import { Share, StyleSheet, Text, TextInput, View } from "react-native";
+import { Platform, Share, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { useAuth } from "@/account/auth";
 import {
@@ -21,7 +21,7 @@ import { colors, fonts, radius } from "@/ui/theme";
 import { Button } from "@/ui";
 import i18n from "@/i18n";
 
-/** A free tool: its pitch and sections, with the script builder for anyone signed in (as on the web). */
+/** A free tool: its pitch and sections, with the script builder for anyone signed in (as on the web), and for everyone on iOS. */
 export default function ToolScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const tool = getTool(slug);
@@ -41,7 +41,8 @@ export default function ToolScreen() {
       <Eyebrow>{tool.eyebrow}</Eyebrow>
       <PageTitle>{tool.heroTitle}</PageTitle>
       <Lede>{tool.heroDescription}</Lede>
-      {user ? <ScriptWidget tool={tool} /> : <SignInGate tool={tool} />}
+      {/* It runs on the phone: App Review refuses asking for an account to use it (5.1.1(v)). */}
+      {user || Platform.OS === "ios" ? <ScriptWidget tool={tool} /> : <SignInGate tool={tool} />}
       {tool.sections.map((s) => (
         <ContentSection key={s.heading} {...s} />
       ))}
@@ -51,7 +52,7 @@ export default function ToolScreen() {
   );
 }
 
-/** Every free tool needs an account, as on the web. */
+/** On Android every free tool needs an account, as on the web. */
 function SignInGate({ tool }: { tool: ToolDef }) {
   return (
     <Card highlight>
@@ -65,6 +66,7 @@ function SignInGate({ tool }: { tool: ToolDef }) {
 
 /** Paste a post, get a two host script built only from its sentences (lib shared with the web). */
 function ScriptWidget({ tool }: { tool: ToolDef }) {
+  const { user } = useAuth();
   const [text, setText] = useState("");
   const script = useMemo(() => buildPodcastScript(text), [text]);
   const words = text.trim() ? text.trim().split(/\s+/).length : 0;
@@ -106,7 +108,7 @@ function ScriptWidget({ tool }: { tool: ToolDef }) {
             onPress={() => void Share.share({ message: scriptToText(script), title: `${tool.slug}-script` })}
           />
           <Text style={publicText.small}>{i18n.t("marketing.hearIt")}</Text>
-          <Button title={i18n.t("marketing.makeAudio")} onPress={() => router.navigate("/notebooks")} />
+          <Button title={i18n.t("marketing.makeAudio")} onPress={() => router.navigate(user ? "/notebooks" : "/sign-in")} />
         </View>
       ) : null}
     </Card>

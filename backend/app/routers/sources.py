@@ -24,8 +24,9 @@ from app.pipeline.ingest import (
     rebuild_index,
     store_entries,
 )
+from app.services import guests
 from app.services.jobs import create_job, pending_job, queue_for_documents, serialize_job
-from app.services.plans import effective_plan, plan_limit_error, post_room
+from app.services.plans import GUEST_PLAN, effective_plan, plan_limit_error, post_room
 from app.services.storage import storage
 from app.services.url_policy import classify_url
 
@@ -312,6 +313,8 @@ async def create_source(body: SourceIn, ctx: Ctx = Depends(get_ctx)):
     )
     if 0 <= plan.sources <= count:
         raise plan_limit_error(plan, "sources", f"Your plan includes {plan.sources} sources.")
+    if plan.id == GUEST_PLAN.id:
+        _require_room(ctx)  # nothing in it would be indexed: say so now, as for a link or a file
     source = Source(workspace_id=ctx.workspace.id, feed_url=found.feed_url, platform=found.platform,
                     site_url=found.site_url, title=found.title)
     _into(ctx, body.notebook_id)  # checked before the source is saved
@@ -356,6 +359,7 @@ def remove_documents(ctx: Ctx, docs: list[Document]) -> None:
         if d.raw_html_key:
             storage.delete_prefix(d.raw_html_key.rsplit("/", 1)[0])
     ids = [d.id for d in docs]
+    guests.posts_removed(ctx.db, ctx.workspace, len(paths))
     ctx.db.execute(delete(NotebookDocument).where(NotebookDocument.document_id.in_(ids)))
     ctx.db.execute(delete(Document).where(Document.id.in_(ids)))
     ctx.db.flush()

@@ -8,6 +8,8 @@ export type Platform = {
     set(key: string, value: string): void;
     remove(key: string): void;
   };
+  /** The phone's system, sent to the API as X-Client-Platform. The web leaves it out. */
+  client?: string;
   /** App-wide signals such as PLAN_LIMIT_EVENT and SESSION_EXPIRED_EVENT. */
   emit(event: string, detail?: unknown): void;
   /** A fetch whose responses can be read as a stream (streamSSE needs res.body). */

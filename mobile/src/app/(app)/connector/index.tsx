@@ -1,8 +1,10 @@
 import * as Clipboard from "expo-clipboard";
 import { Image } from "expo-image";
+import { router } from "expo-router";
 import { useEffect, useState, type ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
+import { useAuth } from "@/account/auth";
 import { ConnectedApps } from "@/sources/connected-apps";
 import { MCP_SERVER_URL } from "@/sources/connector-modal";
 import { colors, fonts, radius } from "@/ui/theme";
@@ -14,6 +16,7 @@ import { Trans } from "react-i18next";
 /** Connect to Notestack (web: pages/Connector.tsx): how to add Notestack to Claude or ChatGPT, and the apps added. */
 export default function Connector() {
   const [copied, setCopied] = useState(false);
+  const { user } = useAuth();
 
   useEffect(() => {
     if (!copied) return;
@@ -25,6 +28,19 @@ export default function Connector() {
     await Clipboard.setStringAsync(MCP_SERVER_URL);
     setCopied(true);
   };
+
+  // Another app signs in to Notestack to connect, which a guest has no account for.
+  if (user?.is_guest) {
+    return (
+      <Page>
+        <PageHead eyebrow={i18n.t("connector.eyebrow")} title={i18n.t("connector.title")} />
+        <Section title={i18n.t("guest.accountTitle")}>
+          <Text style={pageStyles.body}>{i18n.t("guest.accountBody")}</Text>
+          <PillButton variant="primary" title={i18n.t("guest.createAccount")} onPress={() => router.navigate("/sign-up")} />
+        </Section>
+      </Page>
+    );
+  }
 
   return (
     <Page>

@@ -36,6 +36,18 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expiration_hours: int = 72
     jwt_refresh_expiration_days: int = 30
+    # Guests: the iOS app without an account (services/guests.py). The allowance is once per device; raising the epoch
+    # (1 to 3) gives every device one fresh allowance, so it can be raised twice, ever. Caps are new guests a day, in all
+    # and from devices Apple could not vouch for.
+    guest_mode_enabled: bool = True
+    guest_epoch: int = Field(1, ge=1, le=3)
+    guest_daily_cap: int = 100000
+    guest_daily_cap_unverified: int = 1000
+    # Apple DeviceCheck: a key (.p8) with DeviceCheck turned on, of the team in APPLE_TEAM_ID. Builds run from Xcode use
+    # Apple's development server; TestFlight and the App Store use production.
+    devicecheck_key_id: str = ""
+    devicecheck_private_key: str = ""
+    devicecheck_development: bool = False
     google_client_id: str = ""
     # Setting the secret switches Google sign in from the GIS popup to the redirect flow
     # (server side code exchange). The redirect URI must be listed on the OAuth client.
@@ -364,6 +376,10 @@ class Settings(BaseSettings):
     @property
     def apple_redirect_url(self) -> str:
         return self.apple_redirect_uri or f"{self.api_url.rstrip('/')}/api/auth/apple/callback"
+
+    @property
+    def devicecheck_configured(self) -> bool:
+        return bool(self.apple_team_id and self.devicecheck_key_id and self.devicecheck_private_key)
 
     @property
     def apple_configured(self) -> bool:

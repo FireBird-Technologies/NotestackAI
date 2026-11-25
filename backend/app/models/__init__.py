@@ -45,7 +45,16 @@ from app.models.mcp import (
     OutboundMcpOAuthClient,
 )
 from app.models.support import SupportConversation, SupportMessage
-from app.models.user import AuthProvider, BillingEvent, PlanRecord, Subscription, User, Workspace, WorkspaceMember
+from app.models.user import (
+    AuthProvider,
+    BillingEvent,
+    GuestDevice,
+    PlanRecord,
+    Subscription,
+    User,
+    Workspace,
+    WorkspaceMember,
+)
 
 __all__ = [
     "McpAuthRequest",
@@ -64,6 +73,7 @@ __all__ = [
     "ArtifactFeedback",
     "ArtifactShare",
     "AuthProvider",
+    "GuestDevice",
     "B2VCustomVoice",
     "B2VStyle",
     "B2VTemplate",

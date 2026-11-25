@@ -25,7 +25,8 @@ import { createStyles, CustomTopic, FocusCards, Foot, Hint, Label, Select } from
 import { voicesQuery } from "@/create/media";
 import { colors, fonts, radius } from "@/ui/theme";
 import { ErrorText, formatDate, Loading } from "@/ui";
-import { NestedPlansSheet } from "@/account/upgrade";
+import { useAuth } from "@/account/auth";
+import { NestedPlansSheet, useUpgrade } from "@/account/upgrade";
 import { pageStyles, PillButton } from "@/ui/widgets";
 import i18n, { resolveLanguage, tKey } from "@/i18n";
 
@@ -105,6 +106,8 @@ export function VideoDialog({ notebook, initial, onCreate }: {
   const [custom, setCustom] = useState(initial?.focus ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const { user } = useAuth();
+  const upgrade = useUpgrade();
   const [limitHit, setLimitHit] = useState(false);
   const [form, setForm] = useState<VideoOptions>(() => ({
     ...VIDEO_DEFAULTS,
@@ -207,7 +210,7 @@ export function VideoDialog({ notebook, initial, onCreate }: {
 
   const submit = async () => {
     setError("");
-    if (left === 0) return setLimitHit(true);
+    if (left === 0) return user?.is_guest ? upgrade() : setLimitHit(true);
     const from = sourceFields();
     if (!from) return;
     const o: VideoOptions = { ...options };

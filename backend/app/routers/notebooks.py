@@ -59,6 +59,7 @@ from app.services.artifacts import latest_jobs, serialize_artifact
 from app.services.jobs import create_job, record_usage
 from app.services.memory import list_facts, profile_text
 from app.services.notebook_titles import visible_notebook_title
+from app.services.plans import GUEST_PLAN
 from app.services.storage import storage
 from app.services.usage import chat_quota, check_limit, record_chat_message
 
@@ -732,6 +733,8 @@ async def chat(notebook_id: uuid.UUID, body: ChatIn, ctx: Ctx = Depends(get_ctx)
     db = ctx.db
     # Administrators may configure a capped plan: refuse with a real 402 before the stream starts.
     plan = check_limit(db, ctx.workspace, "chat_messages")
+    if plan.id == GUEST_PLAN.id:
+        db.commit()  # check_limit took it from the device's allowance; the stream below has a transaction of its own
     trace = ChatTrace(notebook=nb.title, message=body.question)
     workspace_id = ctx.workspace.id
 

@@ -65,7 +65,8 @@ function RootNavigator() {
   const segments = useSegments() as string[];
   const top = segments[0];
   useEffect(() => {
-    if (ready && user && top && top !== "(auth)" && signInPending()) router.replace("/");
+    // A guest keeps the sign in screens, so they do not drop on their own: leave them here.
+    if (ready && user && top && (top !== "(auth)" || user.is_guest) && signInPending()) router.replace("/");
   }, [ready, user, top, signInPending]);
 
   // Segments are the route's pattern (notebooks/[id]), so no real id reaches analytics; groups like (app) say nothing.
@@ -92,7 +93,8 @@ function RootNavigator() {
           <Stack.Screen name="(app)" />
           <Stack.Screen name="onboarding" />
         </Stack.Protected>
-        <Stack.Protected guard={!user}>
+        {/* A guest can still sign up or in. */}
+        <Stack.Protected guard={!user || Boolean(user.is_guest)}>
           <Stack.Screen name="(auth)" />
         </Stack.Protected>
       </Stack>

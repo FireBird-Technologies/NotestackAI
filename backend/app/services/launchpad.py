@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db import SessionLocal
-from app.models import Artifact, CalendarItem, Document, EngagementEvent, SocialAccount, TrackedLink, User, Workspace
+from app.models import Artifact, AuthProvider, CalendarItem, Document, EngagementEvent, SocialAccount, TrackedLink, User, Workspace
 from app.services.email import email_service
 from app.services.jobs import create_job
 from app.services.social import AUTO_POST, PLATFORM_LABELS, SocialError, module
@@ -54,7 +54,7 @@ def track_links(db: Session, item: CalendarItem, text: str) -> str:
 def owner_email(db: Session, workspace_id) -> str | None:
     ws = db.get(Workspace, workspace_id)
     user = db.get(User, ws.owner_id) if ws else None
-    return user.email if user and user.is_active else None
+    return user.email if user and user.is_active and user.auth_provider != AuthProvider.GUEST else None
 
 
 def publish_item(db: Session, item: CalendarItem) -> CalendarItem:

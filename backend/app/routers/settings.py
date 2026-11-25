@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 
 from app.auth import Ctx, get_ctx
 from app.config import settings as app_settings
+from app.services.guests import is_guest
 from app.services.plans import effective_plan, plan_dict
 from app.services.usage import usage_report
 
@@ -19,7 +20,8 @@ class SettingsIn(BaseModel):
 
 def _serialize(ctx: Ctx) -> dict:
     return {
-        "user": {"name": ctx.user.name, "email": ctx.user.email, "auth_provider": ctx.user.auth_provider.value,
+        "user": {"name": ctx.user.name, "email": "" if is_guest(ctx.user) else ctx.user.email,
+                 "is_guest": is_guest(ctx.user), "auth_provider": ctx.user.auth_provider.value,
                  "email_unsubscribed": ctx.user.email_unsubscribed},
         "workspace": {"id": str(ctx.workspace.id), "name": ctx.workspace.name,
                       "training_opt_in": ctx.workspace.training_opt_in,

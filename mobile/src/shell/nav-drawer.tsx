@@ -8,6 +8,7 @@ import Animated, { FadeIn, FadeOut, SlideInLeft, SlideInRight, SlideOutLeft, Sli
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAuth } from "@/account/auth";
+import { confirmExitGuest } from "@/account/exit-guest";
 import { planQuery } from "@/account/plan";
 import { setPlan } from "@/lib/analytics";
 import { useBottomInset } from "@/lib/insets";
@@ -110,20 +111,32 @@ function SidePanel({ onClose }: { onClose: () => void }) {
           <View style={styles.spacer} />
           <PlanCard onPlans={() => {
             onClose();
-            upgrade();
+            upgrade({ plans: true });
           }} />
           <NavItem item={SETTINGS} active={current === "settings"} onPress={() => go("settings")} />
           <Text style={styles.email} numberOfLines={1}>
-            {user?.email}
+            {user?.is_guest ? i18n.t("guest.name") : user?.email}
           </Text>
+          {user?.is_guest ? (
+            <Pressable
+              onPress={() => {
+                onClose();
+                router.navigate("/sign-up");
+              }}
+              accessibilityRole="button"
+              style={styles.signOut}>
+              <Text style={styles.signOutText}>{i18n.t("guest.createAccount")}</Text>
+            </Pressable>
+          ) : null}
           <Pressable
             onPress={() => {
+              if (user?.is_guest) return confirmExitGuest(logout, onClose);
               onClose();
               void logout();
             }}
             accessibilityRole="button"
             style={styles.signOut}>
-            <Text style={styles.signOutText}>{i18n.t("nav.signOut")}</Text>
+            <Text style={styles.signOutText}>{i18n.t(user?.is_guest ? "guest.exit" : "nav.signOut")}</Text>
           </Pressable>
         </ScrollView>
       </Animated.View>

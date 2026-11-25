@@ -15,6 +15,7 @@ import { type ReactNode, useState } from "react";
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Pressable } from "@/ui/pressable";
 
+import { isMaking } from "@/artifacts/making";
 import { AudioOnlyDialog, SHARE_WHAT, ShareDialog } from "@/artifacts/card-dialogs";
 import { extOf, fileName, type FileSource, saveFile } from "@/lib/downloads";
 import {
@@ -82,11 +83,6 @@ function canPost(a: Artifact): boolean {
 
 function canShare(a: Artifact): boolean {
   return SHAREABLE.has(a.type) && (a.status === "ready" || (a.type === "video" && Boolean(a.url)));
-}
-
-/** Still being made: the list asks again until it is ready or failed. */
-export function isMaking(a: Artifact): boolean {
-  return a.status !== "ready" && a.status !== "failed" && a.status !== "draft" && a.status !== "review";
 }
 
 function clock(seconds: number | undefined): string {

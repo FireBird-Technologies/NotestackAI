@@ -6,13 +6,24 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import Artifact, Document, UsageEvent, Workspace
-from app.services.plans import Plan, effective_plan, plan_limit_error
+from app.services.plans import GUEST_PLAN, Plan, effective_plan, plan_limit_error, post_room
 from app.services.video_quota import video_usage
 
 
 def month_start(now: datetime | None = None) -> datetime:
     now = now or datetime.now(UTC)
     return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
+def plan_usage(db: Session, workspace: Workspace, plan: Plan) -> dict:
+    """What counts against the plan. A guest's allowance is the device's, counted there (services/guests.py)."""
+    out = month_usage(db, workspace.id, plan.lifetime)
+    if plan.id == GUEST_PLAN.id:
+        from app.services import guests
+
+        device = guests.device_of(db, workspace.id)
+        out.update({kind: guests.used(device, kind) for kind in guests.LIMITS})
+    return out
 
 
 def month_usage(db: Session, workspace_id, lifetime: bool = False) -> dict:
@@ -50,12 +61,14 @@ def month_usage(db: Session, workspace_id, lifetime: bool = False) -> dict:
 
 def usage_report(db: Session, workspace: Workspace) -> dict:
     plan = effective_plan(db, workspace)
-    used = month_usage(db, workspace.id, plan.lifetime)
+    used = plan_usage(db, workspace, plan)
     videos = video_usage(db, workspace)
     used["videos"] = videos["used"]
     used["indexed_posts"] = db.scalar(
         select(func.count()).select_from(Document).where(Document.workspace_id == workspace.id, Document.path.is_not(None))
     ) or 0
+    if plan.id == GUEST_PLAN.id:  # a removed post still counts, so the app's "room left" is the server's
+        used["indexed_posts"] = plan.indexed_posts - min(post_room(db, workspace.id, plan), plan.indexed_posts)
     return {
         "plan": plan.id,
         "used": used,
@@ -75,12 +88,19 @@ def usage_report(db: Session, workspace: Workspace) -> dict:
 
 
 def check_limit(db: Session, workspace: Workspace, kind: str, amount: float = 1) -> Plan:
-    """Raise 402 plan_limit when this request would go over the allowance (monthly, or in total on Free)."""
+    """Raise 402 plan_limit when this request would go over the allowance (monthly, or in total on Free). For a guest
+    this also takes it from the device's allowance, in the caller's transaction."""
     plan = effective_plan(db, workspace)
     limit = {"audio_minutes": plan.audio_minutes, "audio_overviews": plan.audio_overviews,
              "launch_kits": plan.launch_kits, "reports": plan.reports, "infographics": plan.infographics,
              "chat_messages": plan.chat_messages}[kind]
     if limit < 0:  # unlimited: no need to count (this runs before every chat message)
+        return plan
+    if plan.id == GUEST_PLAN.id:
+        from app.services import guests
+
+        if not guests.reserve(db, workspace, kind):
+            raise guests.limit_error(kind)
         return plan
     used = month_usage(db, workspace.id, plan.lifetime)
     if used[kind] + amount > limit:
@@ -106,6 +126,6 @@ def chat_quota(db: Session, workspace: Workspace) -> dict | None:
     plan = effective_plan(db, workspace)
     if plan.chat_messages < 0:
         return None
-    used = month_usage(db, workspace.id, plan.lifetime)["chat_messages"]
+    used = plan_usage(db, workspace, plan)["chat_messages"]
     # Shown as at most the limit: thousands of messages still read "10 of 10 used", never "1,240 of 10"
     return {"used": min(used, plan.chat_messages), "limit": plan.chat_messages, "left": max(plan.chat_messages - used, 0)}

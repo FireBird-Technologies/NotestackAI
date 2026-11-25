@@ -6,10 +6,15 @@ export type User = {
   email: string;
   name: string | null;
   avatar_url: string | null;
-  auth_provider: "google" | "email" | "apple";
+  auth_provider: "google" | "email" | "apple" | "guest";
+  /** The iOS app used without an account: no name or email. */
+  is_guest?: boolean;
 };
 
 export type LoginResult = { access_token: string; refresh_token: string; user: User; created: boolean };
+
+/** A guest session (iOS). `allowance` false: this iPhone took its free allowance before. `verified`: Apple vouched for it. */
+export type GuestResult = LoginResult & { allowance: boolean; verified: boolean };
 
 /** Which sign in buttons to show. Apple: "native" when only the iOS app can use it, "redirect" when the web can too. */
 export type Providers = { google: "redirect" | "popup" | null; apple?: "native" | "redirect" | null };
@@ -42,6 +47,8 @@ export function afterSignUp(next: string): string {
 export const authApi = {
   me: () => api<User>("/api/auth/me"),
   providers: () => api<Providers>("/api/auth/providers"),
+  guest: (deviceId: string, deviceToken: string | null) =>
+    post<GuestResult>("/api/auth/guest", { device_id: deviceId, device_token: deviceToken }),
   google: (credential: string) => post<LoginResult>("/api/auth/google", { credential }),
   apple: (body: AppleSignIn) => post<LoginResult>("/api/auth/apple", body),
   /** Carry on with a hidden email, once the person has been asked (the token comes with apple_hidden_email). */
@@ -65,5 +72,6 @@ export const authApi = {
   /** Takes the token explicitly: sign out clears local tokens before revoking on the server. */
   logout: (access: string) =>
     api<{ ok: true }>("/api/auth/logout", { method: "POST", headers: { Authorization: `Bearer ${access}` } }, false),
-  deleteAccount: () => post<{ ok: true }>("/api/auth/delete-account"),
+  /** `erased` (iOS only): everything is already gone; false, it is closed and being erased. */
+  deleteAccount: () => post<{ ok: true; erased?: boolean }>("/api/auth/delete-account"),
 };

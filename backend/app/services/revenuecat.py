@@ -18,7 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models import BillingEvent, Subscription, User, Workspace
+from app.models import AuthProvider, BillingEvent, Subscription, User, Workspace
 
 log = logging.getLogger(__name__)
 
@@ -187,6 +187,6 @@ def handle_event(db: Session, body: dict) -> str:
             workspace = db.get(Workspace, ws)
             owner = db.get(User, workspace.owner_id) if workspace else None
             store = event.get("store", "").lower()
-            if owner:
+            if owner and owner.auth_provider != AuthProvider.GUEST:  # a guest has no address; the App Store tells them
                 email_service.send_payment_action(owner.email, "failed", MANAGE_URLS.get(store, MANAGE_URLS["app_store"]))
     return "synced"

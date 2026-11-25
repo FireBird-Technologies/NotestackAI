@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db import get_db
-from app.models import User, Workspace, WorkspaceMember
+from app.models import AuthProvider, User, Workspace, WorkspaceMember
 
 _bearer = HTTPBearer(auto_error=False)
 _UNAUTHORIZED = HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired token")
@@ -84,6 +84,17 @@ def get_current_user(
     return load_user_from_token(db, creds.credentials)
 
 
+def get_guest(
+    creds: HTTPAuthorizationCredentials | None = Depends(_bearer), db: Session = Depends(get_db)
+) -> User | None:
+    """The guest this request is signed in as, for signing up to keep their work. None for anyone else, or no one."""
+    try:
+        user = load_user_from_token(db, creds.credentials) if creds else None
+    except HTTPException:
+        return None
+    return user if user and user.auth_provider == AuthProvider.GUEST else None
+
+
 @dataclass
 class Ctx:
     user: User
@@ -103,3 +114,19 @@ def get_ctx(user: User = Depends(get_current_user), db: Session = Depends(get_db
     if not workspace:
         raise HTTPException(status.HTTP_409_CONFLICT, "No workspace for user")
     return Ctx(user=user, workspace=workspace, db=db)
+
+
+ACCOUNT_REQUIRED = {"code": "account_required", "message": "Create a free account to use this."}
+
+
+def require_account_user(user: User = Depends(get_current_user)) -> User:
+    if user.auth_provider == AuthProvider.GUEST:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, ACCOUNT_REQUIRED)
+    return user
+
+
+def require_account(ctx: Ctx = Depends(get_ctx)) -> Ctx:
+    """For what belongs to an account by nature: other services connected to it. Features are limited by plan, never
+    by whether there is an account (App Store 5.1.1(v))."""
+    require_account_user(ctx.user)
+    return ctx

@@ -5,7 +5,7 @@ import SkyCanvas from "../components/SkyCanvas";
 import { useMeta } from "./Blog";
 import "../styles/legal.css";
 
-const UPDATED = "November 10, 2026";
+const UPDATED = "November 25, 2026";
 
 function LegalPage({ eyebrow, title, description, children }: {
   eyebrow: string;
@@ -65,6 +65,12 @@ export function PrivacyPolicy() {
           We collect authorised app scopes, encrypted connection tokens, pages visited, features used, timestamps, IP
           address, browser type, device identifiers, and error or security logs.
         </p>
+        <h3>Using the iOS app without an account</h3>
+        <p>
+          You can use our iOS app as a guest, without giving a name or email address. To apply the free allowance once
+          per device, the app keeps a random identifier on your iPhone, we keep a one-way coded form of it with how much
+          of the allowance was used, and we use Apple's DeviceCheck service. We do not use these to identify or track you.
+        </p>
         <h3>Payment information</h3>
         <p>
           Payment transactions are processed by our third-party payment processor on the web, and by Apple (App Store) or
@@ -116,11 +122,14 @@ export function PrivacyPolicy() {
         <p>
           We retain your account information and User Content for as long as your account is active or as needed to provide
           the Service. You may delete content or request deletion of your account. We may retain certain information as
-          required by law or for legitimate security, billing, dispute, or backup purposes. When you delete your account,
-          it is closed and your public links stop working at once, and your notebooks, sources, uploads, chats, generated
+          required by law or for legitimate security, billing, dispute, or backup purposes. When you delete your account from
+          our iOS app, your account and its content are permanently deleted straight away, and we keep no record of the
+          account. When you delete it on the web or from our Android app, it is closed and your public links stop working at once, and your notebooks, sources, uploads, chats, generated
           content, voice samples and connections are permanently deleted within 30 days. After that we keep only a minimal
           record of the account (its email address and the dates it was created and deleted) so it is not reused or
-          recreated by mistake; it is not used for anything else. See <Link to="/delete-account">how to delete your
+          recreated by mistake; it is not used for anything else. For guests of the iOS app, the coded device identifier and
+          the allowance used are kept after the guest's content is deleted, so the free allowance is given only once.
+          Content of guests not seen for 90 days, and without a subscription, is deleted. See <Link to="/delete-account">how to delete your
           account</Link>. Unfinished uploads and
           verification records are normally removed after one day. MCP access tokens normally expire after one hour and
           refresh access after 30 days.
@@ -403,7 +412,13 @@ export function DeleteAccountPage() {
       <section>
         <h2>What is deleted</h2>
         <p>
-          Your account is closed at once: you are signed out everywhere and your public links stop working. Within 30
+          <strong>From the iPhone app:</strong> your account and everything in it (notebooks, sources, uploads, chats,
+          generated content, voice samples and connected apps) are permanently deleted straight away. We keep no record of
+          the account. If you use the app as a guest, choose <strong>Delete my data</strong> in the same place; only an
+          anonymous, coded record that this device used its free allowance is kept.
+        </p>
+        <p>
+          <strong>On the web or from the Android app:</strong> your account is closed at once: you are signed out everywhere and your public links stop working. Within 30
           days your notebooks, sources, uploads, chats, generated content, voice samples and connected apps are
           permanently deleted. We keep only a minimal record of the account (its email address and the dates it was
           created and deleted). Read our <Link to="/privacy">privacy policy</Link> for details.

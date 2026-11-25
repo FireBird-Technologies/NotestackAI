@@ -21,6 +21,8 @@ import { File } from "expo-file-system";
 import { SymbolView } from "expo-symbols";
 import { useEffect, useState } from "react";
 import { StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { useAuth } from "@/account/auth";
+import { checkGuestLimit } from "@/account/guest-limit";
 import { Pressable } from "@/ui/pressable";
 
 import { useVoicePlayer, voicePreviewUrl as previewUrl } from "@/lib/audio";
@@ -304,6 +306,8 @@ const PROMPT_IDEAS = [
 
 /** Make a new voice: describe it, build it from options, or clone your own (web: GenerateVoicePanel). */
 function AddVoices({ state, onSaved, onClone }: { state: VoiceState; onSaved: () => void; onClone: () => void }) {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [mode, setMode] = useState<GenMode>("prompt");
   const [opts, setOpts] = useState<VoiceDesignInput>({ gender: "female", age: "middle-aged", persona: "warm", pace: "measured", accent: "American" });
   const [prompt, setPrompt] = useState("");
@@ -315,6 +319,7 @@ function AddVoices({ state, onSaved, onClone }: { state: VoiceState; onSaved: ()
   const { playing, play } = useVoicePlayer();
 
   const generate = async () => {
+    const before = { result, picked };
     setBusy("generate");
     setError("");
     setResult(null);
@@ -324,6 +329,11 @@ function AddVoices({ state, onSaved, onClone }: { state: VoiceState; onSaved: ()
       setResult(res);
       setPicked(res.previews[0]?.generated_voice_id ?? null);
     } catch (e) {
+      // Out of tries: the last previews can still be saved, so they stay.
+      if (e instanceof ApiError && e.status === 402) {
+        setResult(before.result);
+        setPicked(before.picked);
+      }
       setError(e instanceof ApiError ? e.message : i18n.t("voices.previewsFailed"));
     } finally {
       setBusy(null);
@@ -337,6 +347,8 @@ function AddVoices({ state, onSaved, onClone }: { state: VoiceState; onSaved: ()
     try {
       await voiceApi.saveDesign({ generated_voice_id: picked, name: name.trim(), description: result.description });
       onSaved();
+      // Once this sheet has slid away: iOS presents nothing over one that is closing.
+      if (user?.is_guest) setTimeout(() => void checkGuestLimit(queryClient, "voice_design"), 600);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : i18n.t("voices.saveFailed"));
     } finally {

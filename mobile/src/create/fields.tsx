@@ -5,9 +5,12 @@ import { useQuery } from "@tanstack/react-query";
 import { SymbolView } from "expo-symbols";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Modal, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useAuth } from "@/account/auth";
+import { useUpgrade } from "@/account/upgrade";
 import { Pressable } from "@/ui/pressable";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { SheetHost } from "@/ui/sheet-host";
 import { colors, fonts, radius } from "@/ui/theme";
 import { formatDate } from "@/ui";
 import { pageStyles } from "@/ui/widgets";
@@ -239,6 +242,7 @@ export function ListSheet({ visible, title, onClose, children }: { visible: bool
           </Pressable>
         </View>
         {children}
+        <SheetHost visible={visible} onClose={onClose} />
       </SafeAreaView>
     </Modal>
   );
@@ -270,6 +274,8 @@ export function SourcesMenu({
   onChatIds: (ids: string[]) => void;
   maxChats: number;
 }) {
+  const { user } = useAuth();
+  const upgrade = useUpgrade();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const needle = q.trim().toLowerCase();
@@ -349,11 +355,12 @@ export function SourcesMenu({
           {posts.map((d) => {
             const on = postIds.includes(d.id);
             const off = d.locked || (!on && postIds.length >= maxPosts);
+            const ask = d.locked && Boolean(user?.is_guest); // a guest's tap on a post past the limit asks them to sign up
             return (
               <Pressable
                 key={`p:${d.id}`}
-                disabled={off}
-                onPress={() => toggle(postIds, d.id, maxPosts, onPostIds)}
+                disabled={off && !ask}
+                onPress={() => (ask ? upgrade() : toggle(postIds, d.id, maxPosts, onPostIds))}
                 accessibilityRole="checkbox"
                 accessibilityState={{ checked: on, disabled: off }}
                 style={[styles.pickRow, on && styles.pickRowOn, d.locked && styles.off]}>

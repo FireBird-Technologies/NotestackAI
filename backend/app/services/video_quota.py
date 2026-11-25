@@ -6,6 +6,7 @@ blog2video charges every video to our own account; it does not know our workspac
 - keep video_plan and video_limit equal to the effective plan, and set videos_used back to 0 each month on plans
   with a monthly allowance: on Stripe renewal (invoice.paid, see stripe_billing.handle_event), and monthly for
   workspaces with no renewal to wait for (billing disabled, annual plans between renewals).
+- A guest's one video is the device's (services/guests.py): that is what is checked, shown and given back.
 - Free's allowance is a lifetime total (plan.videos_monthly False): never reset. When a workspace drops to such a
   plan, videos_used becomes its lifetime count of videos that were not refunded.
 
@@ -26,7 +27,8 @@ from app.config import settings
 from app.db import SessionLocal
 from app.models import B2VVideo, Subscription, Workspace
 from app.services import blog2video as b2v
-from app.services.plans import PLANS, effective_plan
+from app.services import guests
+from app.services.plans import GUEST_PLAN, PLANS, effective_plan
 
 log = logging.getLogger(__name__)
 
@@ -84,7 +86,7 @@ def _renews_by_provider(sub: Subscription) -> bool:
 
 
 def monthly(sub: Subscription) -> bool:
-    plan = PLANS.get(sub.video_plan)
+    plan = GUEST_PLAN if sub.video_plan == GUEST_PLAN.id else PLANS.get(sub.video_plan)
     return plan.videos_monthly if plan else True
 
 
@@ -100,7 +102,10 @@ def video_usage(db: Session, workspace: Workspace) -> dict:
     db.refresh(sub)  # videos_used changes under us (reserves and refunds from other requests)
     reset = resets_at(sub)
     start = _aware(sub.videos_period_start)
-    return {"used": sub.videos_used, "limit": sub.video_limit, "plan": sub.video_plan,
+    used = sub.videos_used
+    if sub.video_plan == GUEST_PLAN.id:
+        used = guests.used(guests.device_of(db, workspace.id), "videos")
+    return {"used": used, "limit": sub.video_limit, "plan": sub.video_plan,
             "period_start": start.isoformat() if start else None, "resets_at": reset.isoformat() if reset else None}
 
 
@@ -128,6 +133,13 @@ def reset_due_video_periods(session_factory: Callable[[], Session] = SessionLoca
 def reserve(db: Session, workspace_id: uuid.UUID) -> bool:
     """Take one video from the allowance, atomically: two requests can not both take the last one.
     False = none left (do not call blog2video)."""
+    if guests.on_guest_plan(db, workspace_id):
+        taken_by_device = guests.reserve(db, db.get(Workspace, workspace_id), "videos")
+        if taken_by_device:
+            db.execute(update(Subscription).where(Subscription.workspace_id == workspace_id)
+                       .values(videos_used=Subscription.videos_used + 1))
+        db.commit()
+        return taken_by_device
     taken = db.execute(update(Subscription)
                        .where(Subscription.workspace_id == workspace_id,
                               Subscription.videos_used < Subscription.video_limit)
@@ -136,8 +148,14 @@ def reserve(db: Session, workspace_id: uuid.UUID) -> bool:
     return taken == 1
 
 
+def _give_back_to_device(db: Session, workspace_id: uuid.UUID) -> None:
+    if guests.on_guest_plan(db, workspace_id):
+        guests.unreserve(db, workspace_id, "videos")
+
+
 def unreserve(db: Session, workspace_id: uuid.UUID) -> None:
     """Give back a reservation that never got a b2v_videos row."""
+    _give_back_to_device(db, workspace_id)
     db.execute(update(Subscription).where(Subscription.workspace_id == workspace_id)
                .values(videos_used=case((Subscription.videos_used > 0, Subscription.videos_used - 1), else_=0)))
     db.commit()
@@ -152,6 +170,7 @@ def refund(db: Session, row: B2VVideo, status: str | None = None) -> bool:
     won = db.execute(update(B2VVideo).where(B2VVideo.id == row.id, B2VVideo.quota_state == "charged")
                      .values(**values)).rowcount == 1
     if won:
+        _give_back_to_device(db, row.workspace_id)
         db.execute(update(Subscription).where(Subscription.workspace_id == row.workspace_id)
                    .values(videos_used=case((Subscription.videos_used > 0, Subscription.videos_used - 1),
                                             else_=0)))
@@ -180,6 +199,8 @@ def recharge(db: Session, row: B2VVideo) -> bool:
     won = db.execute(update(B2VVideo).where(B2VVideo.id == row.id, B2VVideo.quota_state == "refunded")
                      .values(quota_state="kept", updated_at=datetime.now(UTC))).rowcount == 1
     if won:
+        if guests.on_guest_plan(db, row.workspace_id):
+            guests.reserve(db, db.get(Workspace, row.workspace_id), "videos")
         db.execute(update(Subscription).where(Subscription.workspace_id == row.workspace_id)
                    .values(videos_used=Subscription.videos_used + 1))
     db.commit()

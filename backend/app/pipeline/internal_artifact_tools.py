@@ -12,6 +12,7 @@ from app.config import settings
 from app.db import SessionLocal
 from app.infographics.themes import theme_id as infographic_theme_id
 from app.models import Notebook, Workspace
+from app.services import guests
 from app.services.artifacts import start_artifact
 from app.services.usage import check_limit
 from app.slides.themes import theme_id as slide_theme_id
@@ -56,6 +57,7 @@ def start_flashcards(
                 "count": count if count in {"fewer", "standard", "more"} else "standard",
                 "difficulty": difficulty if difficulty in {"easy", "medium", "hard"} else "medium",
                 "language": (language or "").strip()[:40] or None,
+                **guests.reserved(db, db.get(Workspace, workspace_id), "quiz"),
             },
             job_kind="flashcards",
         )
@@ -100,6 +102,7 @@ def start_quiz(
                 "difficulty": difficulty if difficulty in {"easy", "medium", "hard"} else "medium",
                 "question_types": ["multiple_choice", "multiple_select"],
                 "language": (language or "").strip()[:40] or None,
+                **guests.reserved(db, db.get(Workspace, workspace_id), "quiz"),
             },
             job_kind="quiz",
         )
@@ -181,6 +184,7 @@ def start_from_chat(
             })
         elif artifact_type == "mind_map":
             params = {"document_ids": [], "focus": focus}
+        params.update(guests.reserved(db, workspace, artifact_type))
 
         artifact, _job = start_artifact(
             db,
