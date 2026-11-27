@@ -41,8 +41,20 @@
 
 .legal-copy section {
   display: grid;
+  grid-template-columns: minmax(0, 1fr); /* long code lines scroll inside their block instead of widening the page */
   gap: 8px;
   scroll-margin-top: 100px;
+}
+
+.legal-copy pre {
+  margin: 0;
+  padding: 12px 14px;
+  overflow-x: auto;
+  border: 1px solid var(--blue-60);
+  border-radius: 8px;
+  color: var(--white);
+  font-size: 0.8125rem;
+  line-height: 1.6;
 }
 
 .legal-copy h2 {
