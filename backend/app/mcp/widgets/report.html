@@ -69,7 +69,9 @@
     if (!o || d > 6) return null;
     if (typeof o === "string") { try { return find(JSON.parse(o), d + 1); } catch (e) { return null; } }
     if (typeof o !== "object") return null;
-    if (o.kind === "report") return o;
+    // The report payload always carries its blocks. Other objects in the result (such as the model's view of the job,
+    // whose kind is also "report") do not, and must not be mistaken for it.
+    if (o.kind === "report" && Array.isArray(o.blocks)) return o;
     for (var k in o) { var f = find(o[k], d + 1); if (f) return f; }
     return null;
   }
