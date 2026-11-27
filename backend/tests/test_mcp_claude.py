@@ -96,3 +96,24 @@ async def test_the_connected_app_decides_the_wording_over_http(http, auth, live,
     tools = {x["name"]: x for x in (await rpc("tools/list", id_=2))["tools"]}
     assert (tools["find_content"].get("title") == "Find content") is claude
     assert tools["start_notestack"]["description"].startswith("Required readiness") is not claude
+
+
+def test_the_report_widget_reads_the_report_not_the_job_beside_it():
+    """Claude hands a widget the whole tool result, model text first. That text holds the job, whose kind is also
+    "report"; the widget must still pick the payload with the report's blocks, or it says "being written" forever."""
+    import json
+    import shutil
+    import subprocess
+    from pathlib import Path
+
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node is not installed")
+    src = (Path(__file__).parents[1] / "app/mcp/widgets/report.html").read_text(encoding="utf-8")
+    find = src[src.index("function find(o, d)"):src.index("function embedded")]
+    view = {"id": "a", "type": "report", "status": "ready", "job": {"id": "j", "kind": "report", "status": "done"}}
+    result = {"content": [{"type": "text", "text": json.dumps(view)}], "isError": False,
+              "structuredContent": {"kind": "report", "status": "ready", "title": "A Tour", "blocks": [{"type": "prose", "text": "hi"}]}}
+    script = f"{find}\nconst got = find({json.dumps(result)}, 0);\nprocess.stdout.write(JSON.stringify(got));"
+    got = json.loads(subprocess.run([node, "-e", script], capture_output=True, text=True, check=True).stdout)
+    assert got["title"] == "A Tour" and len(got["blocks"]) == 1
