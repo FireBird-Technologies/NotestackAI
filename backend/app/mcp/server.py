@@ -5,10 +5,11 @@ documents). McpRoutes lets exactly those paths through to it, so every other URL
 
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions, RevocationOptions
 from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
 
 from app.config import settings
-from app.mcp import policy, tokens, tools
+from app.mcp import claude_profile, common, policy, tokens, tools
 from app.mcp.provider import NotestackProvider
 
 INSTRUCTIONS = (
@@ -30,6 +31,34 @@ PATHS = {"/mcp", "/authorize", "/token", "/register", "/revoke", "/.well-known/o
          "/.well-known/oauth-protected-resource/mcp"}
 
 
+class NotestackMCP(FastMCP):
+    """FastMCP that shows Claude its own titles, descriptions and instructions (see claude_profile). Every other app
+    gets exactly what the base class gives."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        initialization = self._mcp_server.create_initialization_options
+
+        def create_initialization_options(*a, **kw):
+            options = initialization(*a, **kw)
+            if common.is_claude():
+                options = options.model_copy(update={"instructions": claude_profile.INSTRUCTIONS})
+            return options
+
+        self._mcp_server.create_initialization_options = create_initialization_options
+
+    async def list_tools(self):
+        listed = await super().list_tools()
+        if not common.is_claude():
+            return listed
+        return [claude_profile.adapt(t) for t in listed if t.name not in claude_profile.HIDDEN]
+
+    async def call_tool(self, name, arguments):
+        if name in claude_profile.HIDDEN and common.is_claude():
+            raise ToolError(claude_profile.NOT_AVAILABLE["message"])
+        return await super().call_tool(name, arguments)
+
+
 def build() -> FastMCP:
     from urllib.parse import urlparse
 
@@ -37,7 +66,7 @@ def build() -> FastMCP:
     host = urlparse(base).netloc
     if settings.env == "production" and not base.startswith("https://"):
         raise RuntimeError("API_URL must be the public https address when MCP is enabled in production.")
-    server = FastMCP(
+    server = NotestackMCP(
         "Notestack",
         instructions=INSTRUCTIONS,
         auth_server_provider=NotestackProvider(),

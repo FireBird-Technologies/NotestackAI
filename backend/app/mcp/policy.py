@@ -52,3 +52,21 @@ def display_host(uri: str) -> str:
     if parsed.scheme in ("http", "https"):
         return parsed.netloc
     return f"{parsed.scheme}://"
+
+
+CLAUDE_HOSTS = {"claude.ai", "claude.com"}
+
+
+def connected_app(info: dict | None) -> str:
+    """Which assistant a registered client is, for the descriptions it is shown: "claude" or "other".
+
+    Claude's web, desktop and mobile apps return to claude.ai; Claude Code names itself Claude and returns to a loopback
+    address. This only picks wording, never permissions, so a client that merely claims the name gains nothing."""
+    info = info or {}
+    hosts = {urlparse(str(u)).hostname or "" for u in info.get("redirect_uris") or []}
+    if hosts & CLAUDE_HOSTS:
+        return "claude"
+    name = str(info.get("client_name") or "").strip().casefold()
+    if name.startswith("claude") and hosts and hosts <= LOOPBACK_HOSTS:
+        return "claude"
+    return "other"

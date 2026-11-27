@@ -228,7 +228,7 @@ class NotestackProvider:
             return None
 
         def check(db: Session):
-            """The app's name when this is a live connection, otherwise None."""
+            """The app's name and kind when this is a live connection, otherwise None."""
             try:
                 grant = db.get(McpGrant, uuid.UUID(claims["gid"]))
             except (KeyError, ValueError):
@@ -241,14 +241,17 @@ class NotestackProvider:
                 grant.last_used_at = _now()
                 db.commit()
             client = db.get(McpClient, grant.client_id)
-            return ((client.info.get("client_name") if client else None) or "App").strip()[:30] or "App"
+            info = client.info if client else None
+            name = ((info or {}).get("client_name") or "App").strip()[:30] or "App"
+            return name, policy.connected_app(info)
 
-        name = await store.run(check)
-        if name is None:
+        found = await store.run(check)
+        if found is None:
             return None
+        name, app = found
         return AccessToken(token=token, client_id=claims["cid"], scopes=claims.get("scope", "").split(),
                            expires_at=int(claims.get("exp", time.time())), resource=claims["aud"], subject=claims["sub"],
-                           claims={"gid": claims["gid"], "tv": claims["tv"], "cn": name})
+                           claims={"gid": claims["gid"], "tv": claims["tv"], "cn": name, "app": app})
 
     async def revoke_token(self, token) -> None:
         def revoke(db: Session):

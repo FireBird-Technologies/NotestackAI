@@ -1,0 +1,17 @@
+{
+  "name": "notestack",
+  "description": "Notestack plugins for Claude Code.",
+  "owner": {
+    "name": "Firebird Technologies",
+    "url": "https://notestack.ai"
+  },
+  "plugins": [
+    {
+      "name": "notestack",
+      "source": "./notestack",
+      "description": "Search your Notestack archive, ask cited questions about your own writing, and create quizzes, flashcards, reports and more.",
+      "category": "productivity",
+      "tags": ["notes", "writing", "research"]
+    }
+  ]
+}

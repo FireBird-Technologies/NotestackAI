@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from mcp.server.auth.provider import AccessToken
 
 from app.mcp import loopback
-from app.mcp.common import EMPTY_ARCHIVE, ToolError, archive_is_empty, shown, uid
+from app.mcp.common import ToolError, archive_is_empty, empty_answer, shown, uid
 
 MAX_POSTS = 300  # maximum posts in one generated selection
 PAGE = 200
@@ -42,8 +42,8 @@ async def current_assistant_notebook(access: AccessToken) -> dict | None:
 async def default_notebook(access: AccessToken) -> Resolved:
     """Nothing was named, so the writer chooses: a notebook, or posts. Never guessed."""
     if await archive_is_empty(access):
-        raise ToolError(EMPTY_ARCHIVE["error"], EMPTY_ARCHIVE["message"],
-                        next_tool=EMPTY_ARCHIVE["next_tool"], tell_the_writer=EMPTY_ARCHIVE["tell_the_writer"])
+        empty = empty_answer()
+        raise ToolError(empty["error"], empty["message"], next_tool=empty["next_tool"], tell_the_writer=empty["tell_the_writer"])
     notebooks = await loopback.data("GET", "/api/notebooks", access)
     raise ToolError(
         "choose_scope",

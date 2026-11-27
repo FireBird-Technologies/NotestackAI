@@ -1,0 +1,19 @@
+{
+  "name": "notestack",
+  "displayName": "Notestack",
+  "version": "1.0.0",
+  "description": "Search your Notestack posts, notebooks and topics, ask questions answered from your own writing with citations, and create quizzes, flashcards, reports, mind maps, infographics, slide decks, audio overviews and videos.",
+  "author": {
+    "name": "Firebird Technologies",
+    "url": "https://notestack.ai"
+  },
+  "homepage": "https://notestack.ai",
+  "repository": "https://github.com/FireBird-Technologies/notestack-claude-plugin",
+  "license": "MIT",
+  "keywords": ["notes", "writing", "newsletter", "research", "study", "notebooks"],
+  "icon": "./assets/logo.png",
+  "documentationUrl": "https://notestack.ai/claude",
+  "supportUrl": "https://notestack.ai/support",
+  "privacyPolicyUrl": "https://notestack.ai/privacy",
+  "termsOfServiceUrl": "https://notestack.ai/terms"
+}
