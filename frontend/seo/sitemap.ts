@@ -15,6 +15,7 @@ const STATIC_PAGES: { path: string; priority: string; changefreq: string }[] = [
   { path: "/blogs", priority: "0.9", changefreq: "weekly" },
   { path: "/tools", priority: "0.8", changefreq: "monthly" },
   { path: "/support", priority: "0.4", changefreq: "yearly" },
+  { path: "/claude", priority: "0.5", changefreq: "monthly" },
   { path: "/privacy", priority: "0.3", changefreq: "yearly" },
   { path: "/terms", priority: "0.3", changefreq: "yearly" },
   ...tools.map((t) => ({ path: `/tools/${t.slug}`, priority: "0.8", changefreq: "monthly" })),
