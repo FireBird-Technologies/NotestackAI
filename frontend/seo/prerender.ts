@@ -224,6 +224,14 @@ function routes(): Rendered[] {
       ),
     },
     {
+      path: "/claude",
+      title: "Use Notestack with Claude | Notestack",
+      description: "Connect Notestack to Claude and Claude Code to search your archive, ask cited questions and create study material.",
+      body: page(
+        `<article><p>Help center</p><h1>Use Notestack with Claude</h1><section><h2>What you can do</h2><p>With Notestack connected, Claude can find your posts, notebooks, topics and sources, answer questions using only your own writing (with citations to the exact post), and create reports, quizzes, flashcards, mind maps, infographics, slide decks, audio overviews and videos from the posts you choose. Results open right in the chat. You need a Notestack account; generating uses your plan's allowances.</p></section><section><h2>Connect in Claude (web, desktop and mobile)</h2><p>MCP server URL: <code>https://api.notestack.ai/mcp</code></p><ol><li>Open Claude and go to Settings, then Connectors.</li><li>Choose Add custom connector and paste the URL above.</li><li>Leave Client ID and Client Secret empty, then connect and approve Notestack.</li></ol></section><section><h2>Connect in Claude Code</h2><p>Install the Notestack plugin with <code>/plugin marketplace add FireBird-Technologies/notestack-claude-plugin</code> and <code>/plugin install notestack@notestack</code>, or add the server directly with <code>claude mcp add --transport http notestack https://api.notestack.ai/mcp</code>. Then run <code>/mcp</code> and sign in to Notestack.</p></section><section><h2>Permissions and your data</h2><ul><li>Read: search your posts, topics and notebooks, and ask questions about your writing.</li><li>Create and edit: create notebooks, import sources and generate reports, quizzes, audio and more.</li><li>Share: create public preview links for generated items, only when you ask.</li></ul><p>Claude only reaches your own Notestack workspace, through the permissions you approve. Questions you ask are saved as chats in your notebooks. Read the <a href="/privacy">privacy policy</a>.</p></section><section><h2>Disconnect</h2><p>End the connection at any time in Notestack under Connectors, then Connected apps, or remove the connector in Claude's settings. Access stops straight away.</p></section><section><h2>Troubleshooting</h2><ul><li>If Claude says your library is empty, add a blog, newsletter, feed or file in the form it shows.</li><li>If sign-in fails, remove the connector in Claude and add it again.</li><li>If you hit a plan limit, Claude shows what ran out and a link to upgrade.</li></ul><p>Still stuck? Visit <a href="/support">support</a>.</p></section></article>`,
+      ),
+    },
+    {
       path: "/delete-account",
       title: "Delete your account | Notestack",
       description: "How to delete your Notestack account and what happens to your data.",
