@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "notestack": {
+      "type": "http",
+      "url": "https://api.notestack.ai/mcp"
+    }
+  }
+}

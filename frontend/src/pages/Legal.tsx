@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { ConnectorSetup } from "../components/ConnectorModal";
 import { PublicFooter, PublicNav } from "../components/PublicChrome";
 import SkyCanvas from "../components/SkyCanvas";
 import { useMeta } from "./Blog";
@@ -382,6 +383,67 @@ export function SupportPage() {
           You can manage connected apps, privacy choices, and account deletion in Settings. Read our
           {" "}<Link to="/privacy">privacy policy</Link> or <Link to="/terms">terms of service</Link>.
         </p>
+      </section>
+    </LegalPage>
+  );
+}
+
+export function ClaudePage() {
+  return (
+    <LegalPage
+      eyebrow="Help center"
+      title="Use Notestack with Claude"
+      description="Connect Notestack to Claude and Claude Code to search your archive, ask cited questions and create study material."
+    >
+      <section>
+        <h2>What you can do</h2>
+        <p>
+          With Notestack connected, Claude can find your posts, notebooks, topics and sources, answer questions using only
+          your own writing (with citations to the exact post), and create reports, quizzes, flashcards, mind maps,
+          infographics, slide decks, audio overviews and videos from the posts you choose. Results open right in the chat.
+          You need a Notestack account; generating uses your plan's allowances.
+        </p>
+      </section>
+      <section>
+        <h2>Connect in Claude (web, desktop and mobile)</h2>
+        <ConnectorSetup />
+      </section>
+      <section>
+        <h2>Connect in Claude Code</h2>
+        <p>Install the Notestack plugin:</p>
+        <pre><code>{"/plugin marketplace add FireBird-Technologies/notestack-claude-plugin\n/plugin install notestack@notestack"}</code></pre>
+        <p>Or add the server directly:</p>
+        <pre><code>claude mcp add --transport http notestack https://api.notestack.ai/mcp</code></pre>
+        <p>Then run <code>/mcp</code> in Claude Code and sign in to Notestack in the browser window that opens.</p>
+      </section>
+      <section>
+        <h2>Permissions and your data</h2>
+        <p>When you connect, Notestack asks you to approve what Claude may do:</p>
+        <ul>
+          <li><strong>Read</strong>: search your posts, topics and notebooks, and ask questions about your writing.</li>
+          <li><strong>Create and edit</strong>: create notebooks, import sources and generate reports, quizzes, audio and more.</li>
+          <li><strong>Share</strong>: create public preview links for generated items, only when you ask.</li>
+        </ul>
+        <p>
+          Claude only reaches your own Notestack workspace, through the permissions you approve. Questions you ask are
+          saved as chats in your notebooks. Read the <Link to="/privacy">privacy policy</Link> for how we handle data.
+        </p>
+      </section>
+      <section>
+        <h2>Disconnect</h2>
+        <p>
+          End the connection at any time in Notestack under <strong>Connectors → Connected apps</strong>, or remove the
+          connector in Claude's settings. Access stops straight away.
+        </p>
+      </section>
+      <section>
+        <h2>Troubleshooting</h2>
+        <ul>
+          <li>If Claude says your library is empty, add a blog, newsletter, feed or file in the form it shows.</li>
+          <li>If sign-in fails, remove the connector in Claude and add it again.</li>
+          <li>If you hit a plan limit, Claude shows what ran out and a link to upgrade.</li>
+        </ul>
+        <p>Still stuck? Visit <Link to="/support">support</Link>.</p>
       </section>
     </LegalPage>
   );

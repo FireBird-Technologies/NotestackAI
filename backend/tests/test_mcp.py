@@ -18,6 +18,7 @@ from tests.test_buildout import auth, connect, docs, feed  # noqa: F401  (fixtur
 
 BASE = "http://localhost:8000"
 CLAUDE = "https://claude.ai/api/mcp/auth_callback"
+CHATGPT = "https://chatgpt.com/connector/oauth/x"
 
 
 @pytest.fixture()
@@ -662,7 +663,7 @@ async def test_connect_then_use_the_tools_over_http(http, client, auth, run_jobs
                         content_json={"title": "Map", "root": {"label": "Root", "note": "n", "children": [{"label": "Branch"}]}})
     db_session.add(mind_map)
     db_session.commit()
-    t = await sign_in(http, auth)
+    t = await sign_in(http, auth, redirect=CHATGPT)  # the original wording; Claude's is checked in test_mcp_claude
     h = {**bearer(t["access_token"]), "Accept": "application/json, text/event-stream", "Content-Type": "application/json"}
 
     async def rpc(method, params=None, id_=1, headers=h):

@@ -47,12 +47,28 @@ EMPTY_ARCHIVE = {
 }
 
 
+def is_claude(access=None) -> bool:
+    """True when the caller is one of Claude's apps, which are shown their own wording (see claude_profile)."""
+    access = access or get_access_token()
+    return bool(access and (access.claims or {}).get("app") == "claude")
+
+
+def empty_answer() -> dict:
+    """The empty-library answer, in the wording this caller is shown."""
+    if is_claude():
+        from app.mcp import claude_profile
+
+        return dict(claude_profile.EMPTY_ARCHIVE)
+    return dict(EMPTY_ARCHIVE)
+
+
 def empty_archive(for_what: str = "") -> dict:
     """The empty-library answer, naming what the writer was trying to do so the connector can offer the next step."""
-    out = dict(EMPTY_ARCHIVE)
+    out = empty_answer()
     if for_what:
         out["for_what"] = for_what
-        out["next_step"] = f"Call connect_sources with for_what='{for_what}'."
+        out["next_step"] = (f"connect_sources with for_what='{for_what}' shows the form." if is_claude()
+                            else f"Call connect_sources with for_what='{for_what}'.")
     return out
 
 

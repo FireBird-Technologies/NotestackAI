@@ -11,11 +11,11 @@ from app.config import settings
 from app.mcp import loopback, options, scope, views, widgets
 from app.mcp.common import (
     DATA,
-    EMPTY_ARCHIVE,
     SCOPE_HELP,
     VISUAL,
     ToolError,
     archive_is_empty,
+    empty_answer,
     guarded,
     shown,
     token,
@@ -86,7 +86,7 @@ def register(mcp: FastMCP) -> None:
     async def list_notebooks() -> dict:
         access = token()
         if await archive_is_empty(access):
-            return dict(EMPTY_ARCHIVE)
+            return empty_answer()
         rows = await loopback.data("GET", "/api/notebooks", access)
         return {"notebooks": [{k: n.get(k) for k in ("title", "description", "document_count", "chat_count",
                                                       "artifact_count", "is_archive", "updated_at")} | {"title": shown(n.get("title"))}
@@ -123,7 +123,7 @@ def register(mcp: FastMCP) -> None:
     async def list_sources() -> dict:
         access = token()
         if await archive_is_empty(access):
-            return dict(EMPTY_ARCHIVE)
+            return empty_answer()
         rows = await loopback.data("GET", "/api/sources", access)
         return {"sources": [{"id": s["id"], "title": s["title"], "platform": s["platform"], "url": s["site_url"] or s["feed_url"],
                              "posts": s["document_count"] - s["locked_count"], "locked_posts": s["locked_count"],
@@ -259,7 +259,7 @@ def register(mcp: FastMCP) -> None:
     async def choose_notebook(for_what: str = "") -> dict:
         access = token()
         if await archive_is_empty(access):
-            return dict(EMPTY_ARCHIVE)
+            return empty_answer()
         notebooks = await loopback.data("GET", "/api/notebooks", access)
         docs = (await loopback.data("GET", "/api/documents", access, params={"limit": widgets.MAX_PICK_POSTS, "indexed_only": "true"}))["items"]
         current = await scope.current_assistant_notebook(access)
